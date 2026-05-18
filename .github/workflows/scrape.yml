@@ -1,0 +1,43 @@
+name: Daily Grade Scrape
+
+on:
+  schedule:
+    - cron: '0 13 * * *'  # 6am PT (UTC-7)
+  workflow_dispatch:  # manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scraper
+        env:
+          AERIES_EMAIL: ${{ secrets.AERIES_EMAIL }}
+          AERIES_PASSWORD: ${{ secrets.AERIES_PASSWORD }}
+          STUDENT_1_SN: ${{ secrets.STUDENT_1_SN }}
+          STUDENT_1_NAME: ${{ secrets.STUDENT_1_NAME }}
+          STUDENT_1_SCHOOL_CODE: ${{ secrets.STUDENT_1_SCHOOL_CODE }}
+          STUDENT_2_SN: ${{ secrets.STUDENT_2_SN }}
+          STUDENT_2_NAME: ${{ secrets.STUDENT_2_NAME }}
+          STUDENT_2_SCHOOL_CODE: ${{ secrets.STUDENT_2_SCHOOL_CODE }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+        run: python scraper.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add grades_data.json
+          git diff --cached --quiet || git commit -m "Update grades data"
+          git push
