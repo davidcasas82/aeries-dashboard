@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-05-18T15:33:03.653649",
+  "last_updated": "2026-05-18T22:56:17.167037",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -2090,16 +2090,16 @@
         }
       ],
       "ai_summary": {
-        "status": "Daniel is at a C average in three classes with multiple missing assignments dragging down his grades. Engineering Geo and Tech of Biology need the most immediate attention due to low 70s scores and overdue work worth 20+ points each. Turning in missing assignments could raise those grades to B range quickly.",
+        "status": "Daniel is holding steady with B's in Eng 9 and Mkt Adv GrphDes but is struggling in three C-range classes with multiple missing assignments. Engineering Geo (74%) and Tech of Biology (75.5%) need the most immediate attention due to overdue work worth 20+ points each that could meaningfully lift his grades.",
         "classes": [
           {
             "class_name": "Engineering Geo",
             "current_grade": "C 74%",
-            "status": "Grade is low with three missing assignments from April still unscored.",
+            "status": "Recent perfect score on volume work but three missing assignments are dragging the grade down.",
             "recent": [
               {
                 "date": "Thu, May 14",
-                "event": "7.5-7.6 Stuffed Animal Volume and Density score posted 10.0/10.0 (100%)"
+                "event": "7.5-7.6 Stuffed Animal Volume and Density calculation - 10.0/10.0 (100%)"
               }
             ],
             "upcoming": [
@@ -2122,70 +2122,70 @@
             "action_items": [
               {
                 "priority": "high",
-                "issue": "Two PoW assignments from April unscored and worth 20 pts total",
-                "parent_action": "Ask Daniel to submit the 4 - PoW - Process and 4 - PoW - Product assignments immediately, as completing them could raise his grade by 5-7 points"
+                "issue": "Two PoW assignments from April 23 still unscored (20 pts total)",
+                "parent_action": "Ask Daniel to submit or resubmit the 4 - PoW - Process and 4 - PoW - Product right away; completing them could raise the grade several points."
               }
             ]
           },
           {
             "class_name": "Tech of Biology",
             "current_grade": "C 75.5%",
-            "status": "Four missing assignments including recent LT 5.1 are hurting the grade.",
+            "status": "Four missing assignments including recent ones are keeping the grade low.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "CRAAP Test and LT 5.1 Assessment unscored worth 15 pts total",
-                "parent_action": "Check if Daniel can still submit the CRAAP Test (5 pts) and LT 5.1 Assessment (10 pts) to boost the grade toward a B"
+                "issue": "CRAAP Test (5 pts) and LT 5.1 Assessment (10 pts) both past due",
+                "parent_action": "Check if Daniel submitted the CRAAP Test from April 23 and the LT 5.1 Assessment from May 15; turning both in could add up to 15 points."
               }
             ]
           },
           {
-            "class_name": "WrldHis by Dsgn",
+            "class_name": "WrldHis",
             "current_grade": "C 77.6%",
-            "status": "Multiple missing items from mid-May are keeping the grade in C territory.",
+            "status": "Four missing assignments need resolution to stabilize the grade.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "29.2 assignment unscored and past due worth 9 pts",
-                "parent_action": "Ask Daniel to turn in the 29.2 assignment right away to recover those points and improve his overall average"
+                "issue": "29.2 assignment from May 13 still unscored (9 pts)",
+                "parent_action": "Confirm whether Daniel turned in the 29.2 assignment and follow up with teacher Chase if it shows as missing."
               }
             ]
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "current_grade": "B 83%",
-            "status": "Five missing assignments noted but only one detailed as overdue.",
+            "status": "One recent low score and multiple missing items to address.",
             "recent": [
               {
                 "date": "Fri, May 8",
-                "event": "LT7.1 - Brag Sheet score posted 7.0/10.0 (70%)"
+                "event": "LT7.1 - Brag Sheet - 7.0/10.0 (70%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "medium",
-                "issue": "LT7.3 - Resume Update unscored worth 10 pts",
-                "parent_action": "Confirm Daniel submits the LT7.3 - Resume Update to avoid further grade drop"
+                "issue": "LT7.3 - Resume Update past due (10 pts)",
+                "parent_action": "Ask Daniel to complete and turn in the LT7.3 Resume Update immediately."
               }
             ]
           },
           {
-            "class_name": "Eng 9 Entre",
+            "class_name": "Eng 9",
             "current_grade": "B 83.8%",
-            "status": "Solid recent performance with a bonus opportunity this week.",
+            "status": "Solid recent performance with one low-stakes bonus opportunity left.",
             "recent": [
               {
                 "date": "Fri, May 15",
-                "event": "LT 6.4 score posted 9.0/10.0 (90%)"
+                "event": "LT 6.4: I will present ideas in a clear, organized \u2014 9.0/10.0 (90%)"
               },
               {
                 "date": "Fri, May 15",
-                "event": "Collaboration score posted 9.0/10.0 (90%)"
+                "event": "Collaboration: I will collaborate with my peers ac \u2014 9.0/10.0 (90%)"
               }
             ],
             "upcoming": [
@@ -2198,7 +2198,7 @@
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-18T15:33:26.791232"
+        "generated_at": "2026-05-18T22:56:35.993370"
       }
     },
     {
@@ -4083,12 +4083,12 @@
         }
       ],
       "ai_summary": {
-        "status": "Leah stands at an A in Lang Arts but Bus Algebra 1 is a C at 76.8% with five missing assignments worth 50 pts total; PE 8 also needs attention due to a 50-pt past-due assignment. Focus first on recovering points in Algebra to lift the grade above a C.",
+        "status": "Leah stands at a solid A in Lang Arts but Bus Algebra 1 at C 76.8% with five missing assignments requires the most urgent focus; PE 8 also has a significant past-due item that needs resolution.",
         "classes": [
           {
             "class_name": "Bus Algebra 1",
             "current_grade": "C 76.8%",
-            "status": "Multiple past-due quadratics assignments are dragging the grade down to a C.",
+            "status": "Multiple missing LT assignments from last week are dragging the grade down.",
             "recent": [],
             "upcoming": [
               {
@@ -4100,49 +4100,44 @@
             "action_items": [
               {
                 "priority": "high",
-                "issue": "Five missing LT 8.1-8.5 assignments on quadratics due 05/14 worth 10 pts each",
-                "parent_action": "Confirm with Leah that the five 10-pt quadratics assignments (LT 8.1 through 8.5) have been completed and submitted"
-              },
-              {
-                "priority": "high",
-                "issue": "Missing work totals 50 pts and could raise the grade several points if turned in",
-                "parent_action": "Ask the teacher about late submission policy for the 50 pts in missing quadratics work"
+                "issue": "Five missing LT assignments worth 10 pts each (50 pts total) past due since May 14",
+                "parent_action": "Ask Leah to submit LT 8.1 through LT 8.5 immediately; completing them could raise the grade by 5-7 points."
               }
             ]
           },
           {
             "class_name": "PE 8",
-            "current_grade": "87.7%",
-            "status": "One major assignment is past due and marked missing.",
+            "current_grade": "B 87.7%",
+            "status": "One major missing assignment is affecting the overall percentage.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "My Fitness Journey 50-pt assignment due 05/15 is unscored",
-                "parent_action": "Check if Leah submitted the My Fitness Journey assignment and request an extension or late credit if needed"
+                "issue": "My Fitness Journey assignment worth 50 pts past due since May 15",
+                "parent_action": "Check if Leah has submitted the My Fitness Journey assignment and follow up with teacher Kelly if it remains unscored."
               }
             ]
           },
           {
-            "class_name": "Lang Arts",
+            "class_name": "DT 8 Lang Arts",
             "current_grade": "A 90.1%",
-            "status": "Strong performance with recent project scores in the A range.",
+            "status": "Consistent high performance on recent projects.",
             "recent": [
               {
                 "date": "Fri, May 15",
-                "event": "Utopian Community Project score posted 4.5/5.0 (90%)"
+                "event": "Utopian Community Project \u2014 4.5/5.0 (90%)"
               },
               {
                 "date": "Tue, May 5",
-                "event": "Utopian Community Project score posted 4.25/5.0 (85%)"
+                "event": "Utopian Community Project \u2014 4.25/5.0 (85%)"
               }
             ],
             "upcoming": [],
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-18T15:33:57.167636"
+        "generated_at": "2026-05-18T22:57:00.713431"
       }
     }
   ]
