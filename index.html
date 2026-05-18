@@ -377,24 +377,30 @@
 
         .ai-section .ai-date-item {
             font-size: 15px;
-            padding: 4px 0 4px 14px;
+            padding: 6px 0 6px 14px;
             line-height: 1.5;
             color: #8e8e93;
-            border-left: 3px solid #3a3a3c;
+            border-left: 3px solid #5ba87b;
+            border-radius: 2px;
+            margin-bottom: 4px;
         }
+
+        .ai-section .ai-date-item:last-child { margin-bottom: 0; }
 
         .ai-section .ai-upcoming-item {
             font-size: 15px;
-            padding: 12px 0;
+            padding: 8px 0 8px 14px;
             line-height: 1.5;
-            border-bottom: 1px solid #2a2a30;
             color: #e8e8e8;
             display: flex;
             gap: 12px;
             align-items: baseline;
+            border-left: 3px solid #5ba87b;
+            border-radius: 2px;
+            margin-bottom: 6px;
         }
 
-        .ai-section .ai-upcoming-item:last-child { border-bottom: none; }
+        .ai-section .ai-upcoming-item:last-child { margin-bottom: 0; }
 
         .ai-section .ai-day-badge {
             font-size: 14px;
@@ -412,28 +418,23 @@
 
         .ai-section li {
             font-size: 15px;
-            padding: 12px 0 12px 14px;
+            padding: 10px 0 10px 14px;
             line-height: 1.5;
             color: #e8e8e8;
-            border-radius: 0;
-            margin-bottom: 0;
+            border-radius: 2px;
+            margin-bottom: 6px;
             background: none;
-            border-left: 3px solid #3a3a3c;
-            border-bottom: 1px solid #2a2a30;
+            border-left: 3px solid #5ba87b;
         }
 
-        .ai-section li:last-child { margin-bottom: 0; border-bottom: none; }
+        .ai-section li:last-child { margin-bottom: 0; }
 
         .ai-section .priority-high {
-            border-left: 3px solid #d4603a;
-            padding-left: 14px;
-            background: none;
+            border-left-color: #d4603a;
         }
 
         .ai-section .priority-medium {
-            border-left: 3px solid #d4a03a;
-            padding-left: 14px;
-            background: none;
+            border-left-color: #d4a03a;
         }
 
         .ai-section .ai-class {
@@ -446,25 +447,23 @@
         }
 
         .ai-section-leverage li {
-            border-left: 3px solid #5ba87b;
-            padding-left: 14px;
-            background: none;
+            border-left-color: #5ba87b;
         }
 
         .ai-class-section {
-            padding: 20px 0 20px 18px;
-            background: none;
-            border-radius: 0;
+            padding: 20px;
+            background: #222228;
+            border-radius: 14px;
             border: none;
-            margin-bottom: 16px;
-            border-left: 3px solid #5ba87b;
+            margin-bottom: 12px;
         }
 
         .ai-class-section:last-child {
             margin-bottom: 0;
         }
 
-        .ai-class-section.has-actions {
+        .ai-class-section.has-actions .ai-class-subsection li,
+        .ai-class-section.has-actions .ai-date-item {
             border-left-color: #d4a03a;
         }
 
@@ -501,9 +500,9 @@
         }
 
         .ai-class-subsection {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid #2a2a30;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255,255,255,0.06);
         }
 
         .ai-class-subsection:first-of-type {
