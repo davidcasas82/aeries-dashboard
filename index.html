@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Casas Grades</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+            background: #f2f2f7;
+            color: #1c1c1e;
+            padding: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        header {
+            margin-bottom: 8px;
+        }
+
+        header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+        .last-updated { font-size: 15px; color: #8e8e93; display: block; margin-top: 4px; }
+
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 28px;
+            border-bottom: 2px solid #e5e5ea;
+        }
+
+        .tab {
+            padding: 14px 28px;
+            border-radius: 0;
+            border: none;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            background: none;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #8e8e93;
+        }
+
+        .tab.active {
+            color: #1c1c1e;
+            border-bottom-color: #007aff;
+            background: none;
+        }
+
+        .tab:hover:not(.active) { color: #1c1c1e; }
+
+        .dashboard { display: none; }
+        .dashboard.active { display: block; }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .summary-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+        }
+
+        .summary-card .label {
+            font-size: 13px;
+            font-weight: 500;
+            color: #8e8e93;
+            text-transform: uppercase;
+            letter-spacing: 0.2px;
+            margin-bottom: 6px;
+        }
+
+        .summary-card .value { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; }
+
+        .section {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+        }
+
+        .section h2 {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section h2 .count {
+            background: rgba(0, 122, 255, 0.10);
+            color: #007aff;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 20px;
+        }
+
+        .week-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #8e8e93;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 12px 0 8px;
+            margin-top: 16px;
+        }
+
+        .week-label:first-child { margin-top: 0; }
+
+        .assignment-row {
+            display: flex;
+            align-items: center;
+            padding: 14px 0;
+            border-bottom: 1px solid #f2f2f7;
+            gap: 14px;
+        }
+
+        .assignment-row:last-child { border-bottom: none; }
+
+        .assignment-date {
+            font-size: 13px;
+            font-weight: 500;
+            color: #8e8e93;
+            min-width: 54px;
+            text-align: center;
+            line-height: 1.35;
+        }
+
+        .assignment-date.overdue { color: #ff3b30; font-weight: 600; }
+        .assignment-date.today { color: #ff9500; font-weight: 600; }
+        .assignment-date.this-week { color: #007aff; font-weight: 500; }
+
+        .assignment-info { flex: 1; min-width: 0; }
+
+        .assignment-info .title {
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: -0.1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #1c1c1e;
+        }
+
+        .assignment-info .class-name {
+            font-size: 13px;
+            color: #8e8e93;
+            margin-top: 2px;
+        }
+
+        .assignment-score {
+            text-align: right;
+            min-width: 72px;
+        }
+
+        .assignment-score .score {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .assignment-score .max {
+            font-size: 12px;
+            color: #8e8e93;
+            margin-top: 1px;
+        }
+
+        .score-high { color: #34c759; }
+        .score-mid { color: #ff9500; }
+        .score-low { color: #ff3b30; }
+        .score-none { color: #aeaeb2; font-weight: 400; }
+
+        .badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 20px;
+            white-space: nowrap;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-missing { background: rgba(255, 59, 48, 0.12); color: #ff3b30; }
+        .badge-upcoming { background: rgba(0, 122, 255, 0.10); color: #007aff; }
+        .badge-due-soon { background: rgba(255, 149, 0, 0.12); color: #ff9500; }
+        .badge-graded { background: rgba(52, 199, 89, 0.12); color: #34c759; }
+
+        .grade-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 0;
+            border-bottom: 1px solid #f2f2f7;
+        }
+
+        .grade-row:last-child { border-bottom: none; }
+        .grade-row .class-info { flex: 1; }
+        .grade-row .class-name { font-size: 16px; font-weight: 500; color: #1c1c1e; }
+        .grade-row .teacher { font-size: 13px; color: #8e8e93; margin-top: 3px; }
+
+        .grade-row .period-badge {
+            font-size: 12px;
+            font-weight: 500;
+            color: #8e8e93;
+            background: #f2f2f7;
+            padding: 4px 10px;
+            border-radius: 8px;
+            margin-right: 14px;
+        }
+
+        .grade-right { display: flex; align-items: center; gap: 10px; }
+
+        .grade-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 60px;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .grade-a { background: rgba(52, 199, 89, 0.12); color: #248a3d; }
+        .grade-b { background: rgba(0, 122, 255, 0.10); color: #0040dd; }
+        .grade-c { background: rgba(255, 149, 0, 0.12); color: #b25000; }
+        .grade-d { background: rgba(255, 59, 48, 0.10); color: #d70015; }
+        .grade-f { background: rgba(255, 59, 48, 0.16); color: #d70015; }
+        .grade-none { background: #f2f2f7; color: #aeaeb2; }
+
+        .missing-badge {
+            background: rgba(255, 59, 48, 0.12);
+            color: #ff3b30;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+
+        .school-name { font-size: 13px; color: #8e8e93; margin-bottom: 16px; }
+        .empty-state { text-align: center; padding: 40px; color: #8e8e93; }
+
+        .nav-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e5e5ea;
+        }
+
+        .nav-tab {
+            padding: 10px 16px;
+            font-size: 15px;
+            font-weight: 500;
+            color: #8e8e93;
+            border: none;
+            background: none;
+            cursor: pointer;
+            border-bottom: 2.5px solid transparent;
+            margin-bottom: -1px;
+            transition: color 0.2s ease, border-color 0.2s ease;
+        }
+
+        .nav-tab.active {
+            color: #007aff;
+            border-bottom-color: #007aff;
+        }
+
+        .nav-tab:hover:not(.active) { color: #1c1c1e; }
+
+        .view { display: none; }
+        .view.active { display: block; }
+
+        /* AI Weekly Briefing */
+        .ai-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 24px;
+            color: #1c1c1e;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+        }
+
+        .ai-card h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1c1c1e;
+            letter-spacing: -0.3px;
+            margin-bottom: 2px;
+        }
+
+        .ai-card .ai-date {
+            font-size: 13px;
+            color: #aeaeb2;
+            margin-bottom: 16px;
+        }
+
+        .ai-card .ai-status {
+            font-size: 15px;
+            line-height: 1.55;
+            color: #1c1c1e;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: #f9f9fb;
+            border-radius: 12px;
+            border-left: 3px solid #5856d6;
+        }
+
+        .ai-sections {
+            display: grid;
+            gap: 16px;
+        }
+
+        .ai-section {
+            background: #f9f9fb;
+            border-radius: 12px;
+            padding: 16px 18px;
+            border: none;
+        }
+
+        .ai-section h3 {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin-bottom: 12px;
+            color: #8e8e93;
+        }
+
+        .ai-section .ai-date-group {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e5e5ea;
+        }
+
+        .ai-section .ai-date-group:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .ai-section .ai-date-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1c1c1e;
+            padding: 0 0 6px;
+            margin-bottom: 4px;
+        }
+
+        .ai-section .ai-date-item {
+            font-size: 14px;
+            padding: 4px 0 4px 12px;
+            line-height: 1.5;
+            color: #3a3a3c;
+            border-left: 2px solid #e5e5ea;
+        }
+
+        .ai-section .ai-upcoming-item {
+            font-size: 14px;
+            padding: 10px 0;
+            line-height: 1.5;
+            border-bottom: 1px solid #e5e5ea;
+            color: #1c1c1e;
+            display: flex;
+            gap: 12px;
+            align-items: baseline;
+        }
+
+        .ai-section .ai-upcoming-item:last-child { border-bottom: none; }
+
+        .ai-section .ai-day-badge {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1c1c1e;
+            white-space: nowrap;
+            min-width: 72px;
+            flex-shrink: 0;
+        }
+
+        .ai-section ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .ai-section li {
+            font-size: 14px;
+            padding: 10px 12px;
+            line-height: 1.5;
+            color: #1c1c1e;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            background: #ffffff;
+        }
+
+        .ai-section li:last-child { margin-bottom: 0; }
+
+        .ai-section .priority-high {
+            border-left: 3px solid #ff3b30;
+            padding-left: 12px;
+            background: rgba(255, 59, 48, 0.04);
+        }
+
+        .ai-section .priority-medium {
+            border-left: 3px solid #ff9500;
+            padding-left: 12px;
+            background: rgba(255, 149, 0, 0.04);
+        }
+
+        .ai-section .ai-class {
+            color: #007aff;
+            font-weight: 600;
+        }
+
+        .ai-section .ai-action {
+            color: #1c1c1e;
+        }
+
+        .ai-section-leverage li {
+            border-left: 3px solid #af52de;
+            padding-left: 12px;
+            background: rgba(175, 82, 222, 0.04);
+        }
+
+        .ai-class-section {
+            padding: 18px 20px;
+        }
+
+        .ai-class-section.has-actions {
+            border-left: 3px solid #ff9500;
+        }
+
+        .ai-class-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .ai-class-header h3 {
+            margin-bottom: 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: #1c1c1e;
+            text-transform: none;
+            letter-spacing: -0.3px;
+        }
+
+        .ai-grade-pill {
+            font-size: 15px;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 10px;
+            background: rgba(0, 122, 255, 0.10);
+            color: #007aff;
+        }
+
+        .ai-class-status {
+            font-size: 14px;
+            color: #3a3a3c;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .ai-class-subsection {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e5e5ea;
+        }
+
+        .ai-class-subsection:first-of-type {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: none;
+        }
+
+        .ai-subsection-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #8e8e93;
+            margin-bottom: 6px;
+        }
+
+        .ai-inline-date {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1c1c1e;
+            margin-right: 6px;
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 16px; }
+            header h1 { font-size: 28px; }
+            .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .tab { padding: 12px 20px; font-size: 16px; }
+            .summary-cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .summary-card { padding: 16px; }
+            .summary-card .value { font-size: 28px; }
+            .ai-card { padding: 20px; }
+            .ai-section { padding: 14px; }
+            .ai-class-header h3 { font-size: 18px; }
+            .assignment-row { flex-wrap: wrap; }
+            .nav-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>Casas Grades</h1>
+            <span class="last-updated" id="lastUpdated"></span>
+        </div>
+    </header>
+
+    <div class="tabs" id="studentTabs"></div>
+    <div id="dashboards"></div>
+
+    <script>
+        const TODAY = new Date();
+        TODAY.setHours(0, 0, 0, 0);
+
+        async function loadData() {
+            try {
+                const resp = await fetch('grades_data.json');
+                if (!resp.ok) throw new Error('No data');
+                return await resp.json();
+            } catch (e) {
+                document.getElementById('dashboards').innerHTML = `
+                    <div class="empty-state">
+                        <p><strong>No grade data found</strong></p>
+                        <p style="margin-top:8px">Run: <code>python scraper.py</code></p>
+                    </div>`;
+                return null;
+            }
+        }
+
+        function parseDate(str) {
+            if (!str) return null;
+            const parts = str.split('/');
+            if (parts.length !== 3) return null;
+            return new Date(parts[2], parts[0] - 1, parts[1]);
+        }
+
+        function formatShortDate(date) {
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        function formatDayOfWeek(date) {
+            return date.toLocaleDateString('en-US', { weekday: 'short' });
+        }
+
+        function getWeekLabel(date) {
+            const diff = Math.floor((date - TODAY) / (1000 * 60 * 60 * 24));
+            if (diff < 0 && diff >= -7) return 'Last Week';
+            if (diff < -7 && diff >= -14) return '2 Weeks Ago';
+            if (diff < -14) return 'Earlier';
+            if (diff >= 0 && diff < 7) return 'This Week';
+            if (diff >= 7 && diff < 14) return 'Next Week';
+            if (diff >= 14 && diff < 21) return 'In 2 Weeks';
+            return 'Later';
+        }
+
+        function getDateClass(date) {
+            const diff = Math.floor((date - TODAY) / (1000 * 60 * 60 * 24));
+            if (diff < 0) return 'overdue';
+            if (diff === 0) return 'today';
+            if (diff <= 7) return 'this-week';
+            return '';
+        }
+
+        function getScoreClass(pct) {
+            if (pct === null || pct === undefined) return 'score-none';
+            if (pct >= 80) return 'score-high';
+            if (pct >= 60) return 'score-mid';
+            return 'score-low';
+        }
+
+        function getGradeClass(pct) {
+            if (!pct && pct !== 0) return 'grade-none';
+            const n = parseFloat(pct);
+            if (isNaN(n)) return 'grade-none';
+            if (n >= 90) return 'grade-a';
+            if (n >= 80) return 'grade-b';
+            if (n >= 70) return 'grade-c';
+            if (n >= 60) return 'grade-d';
+            return 'grade-f';
+        }
+
+        function formatGrade(course) {
+            const mark = course.mark || '';
+            const pct = course.percent;
+            if (mark && pct) return `${mark} (${Math.round(parseFloat(pct))}%)`;
+            if (course.mark_and_score) return course.mark_and_score;
+            if (mark) return mark;
+            if (pct) return `${Math.round(parseFloat(pct))}%`;
+            return '—';
+        }
+
+        function getAllAssignments(student) {
+            const all = [];
+            if (!student.assignments_by_class) return all;
+            for (const ca of student.assignments_by_class) {
+                for (const a of ca.assignments) {
+                    all.push({ ...a, class_name: ca.class_name });
+                }
+            }
+            return all;
+        }
+
+        function renderAiSummary(student) {
+            const s = student.ai_summary;
+            if (!s) return '';
+
+            const dateStr = s.generated_at
+                ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+                : '';
+
+            let html = `<div class="ai-card">`;
+            html += `<h2>Weekly Briefing</h2>`;
+            html += `<div class="ai-date">${dateStr}</div>`;
+            html += `<div class="ai-status">${s.status || ''}</div>`;
+
+            // New class-based layout
+            if (s.classes && s.classes.length) {
+                html += `<div class="ai-sections">`;
+                s.classes.forEach(cls => {
+                    const hasActions = cls.action_items && cls.action_items.length;
+                    html += `<div class="ai-section ai-class-section${hasActions ? ' has-actions' : ''}">`;
+                    html += `<div class="ai-class-header">`;
+                    html += `<h3>${cls.class_name}</h3>`;
+                    if (cls.current_grade) html += `<span class="ai-grade-pill">${cls.current_grade}</span>`;
+                    html += `</div>`;
+                    if (cls.status) html += `<div class="ai-class-status">${cls.status}</div>`;
+
+                    // Recent activity
+                    if (cls.recent && cls.recent.length) {
+                        html += `<div class="ai-class-subsection"><div class="ai-subsection-label">Recently Graded</div>`;
+                        cls.recent.forEach(item => {
+                            html += `<div class="ai-date-item"><span class="ai-inline-date">${item.date}</span> ${item.event}</div>`;
+                        });
+                        html += `</div>`;
+                    }
+
+                    // Upcoming
+                    if (cls.upcoming && cls.upcoming.length) {
+                        html += `<div class="ai-class-subsection"><div class="ai-subsection-label">Upcoming Assignments</div>`;
+                        cls.upcoming.forEach(item => {
+                            html += `<div class="ai-upcoming-item"><span class="ai-day-badge">${item.day}</span><span>${item.assignment}${item.weight_context ? ' — ' + item.weight_context : ''}</span></div>`;
+                        });
+                        html += `</div>`;
+                    }
+
+                    // Action items
+                    if (hasActions) {
+                        html += `<div class="ai-class-subsection"><div class="ai-subsection-label">Action Needed</div><ul>`;
+                        cls.action_items.forEach(item => {
+                            const pClass = item.priority === 'high' ? 'priority-high' : 'priority-medium';
+                            html += `<li class="${pClass}"><span class="ai-action">${item.parent_action}</span></li>`;
+                        });
+                        html += `</ul></div>`;
+                    }
+
+                    html += `</div>`;
+                });
+                html += `</div>`;
+            }
+
+            // Fallback for old schema
+            if (!s.classes) {
+                html += `<div class="ai-sections">`;
+                if (s.whats_happened && s.whats_happened.length) {
+                    html += `<div class="ai-section"><h3>What's Happened</h3>`;
+                    s.whats_happened.forEach(item => {
+                        const event = (typeof item === 'string') ? item : (item.event || '');
+                        const date = (typeof item === 'string') ? '' : (item.date || '');
+                        html += `<div class="ai-date-item">${date ? '<span class="ai-inline-date">' + date + '</span> ' : ''}${event}</div>`;
+                    });
+                    html += `</div>`;
+                }
+                if (s.action_items && s.action_items.length) {
+                    html += `<div class="ai-section"><h3>Action Items</h3><ul>`;
+                    s.action_items.forEach(item => {
+                        const pClass = item.priority === 'high' ? 'priority-high' : 'priority-medium';
+                        html += `<li class="${pClass}"><span class="ai-class">${item.class}:</span> <span class="ai-action">${item.parent_action}</span></li>`;
+                    });
+                    html += `</ul></div>`;
+                }
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+            return html;
+        }
+
+        function renderUpcoming(student) {
+            const assignments = getAllAssignments(student);
+            const upcoming = assignments
+                .filter(a => {
+                    const due = parseDate(a.due_date);
+                    return due && due >= TODAY && !a.grading_complete;
+                })
+                .sort((a, b) => parseDate(a.due_date) - parseDate(b.due_date));
+
+            if (!upcoming.length) return '<p class="empty-state">No upcoming assignments</p>';
+
+            let html = '';
+            let currentWeek = '';
+
+            for (const a of upcoming) {
+                const due = parseDate(a.due_date);
+                const week = getWeekLabel(due);
+                if (week !== currentWeek) {
+                    currentWeek = week;
+                    html += `<div class="week-label">${week}</div>`;
+                }
+
+                const dateClass = getDateClass(due);
+                const hasScore = a.points_earned !== null;
+
+                html += `
+                    <div class="assignment-row">
+                        <div class="assignment-date ${dateClass}">
+                            ${formatDayOfWeek(due)}<br>${formatShortDate(due)}
+                        </div>
+                        <div class="assignment-info">
+                            <div class="title">${a.description}</div>
+                            <div class="class-name">${a.class_name}</div>
+                        </div>
+                        <div class="assignment-score">
+                            ${hasScore
+                                ? `<div class="score ${getScoreClass(a.percentage)}">${a.points_earned}/${a.points_possible}</div>
+                                   <div class="max">${a.percentage ? a.percentage.toFixed(0) + '%' : ''}</div>`
+                                : '<span class="badge badge-upcoming">Upcoming</span>'
+                            }
+                        </div>
+                    </div>`;
+            }
+            return html;
+        }
+
+        function renderRecent(student) {
+            const assignments = getAllAssignments(student);
+            const recent = assignments
+                .filter(a => {
+                    const due = parseDate(a.due_date);
+                    return due && due < TODAY && a.points_earned !== null;
+                })
+                .sort((a, b) => parseDate(b.due_date) - parseDate(a.due_date))
+                .slice(0, 30);
+
+            if (!recent.length) return '<p class="empty-state">No recent graded assignments</p>';
+
+            let html = '';
+            let currentWeek = '';
+
+            for (const a of recent) {
+                const due = parseDate(a.due_date);
+                const week = getWeekLabel(due);
+                if (week !== currentWeek) {
+                    currentWeek = week;
+                    html += `<div class="week-label">${week}</div>`;
+                }
+
+                html += `
+                    <div class="assignment-row">
+                        <div class="assignment-date">
+                            ${formatDayOfWeek(due)}<br>${formatShortDate(due)}
+                        </div>
+                        <div class="assignment-info">
+                            <div class="title">${a.description}</div>
+                            <div class="class-name">${a.class_name}</div>
+                        </div>
+                        <div class="assignment-score">
+                            <div class="score ${getScoreClass(a.percentage)}">${a.points_earned}/${a.points_possible}</div>
+                            <div class="max">${a.percentage ? a.percentage.toFixed(0) + '%' : ''}</div>
+                        </div>
+                    </div>`;
+            }
+            return html;
+        }
+
+        function renderMissing(student) {
+            const assignments = getAllAssignments(student);
+            const missing = assignments
+                .filter(a => {
+                    const due = parseDate(a.due_date);
+                    return due && due < TODAY && a.points_earned === null && !a.grading_complete;
+                })
+                .sort((a, b) => parseDate(b.due_date) - parseDate(a.due_date));
+
+            if (!missing.length) return '<p class="empty-state">No missing assignments — nice!</p>';
+
+            let html = '';
+            for (const a of missing) {
+                const due = parseDate(a.due_date);
+                html += `
+                    <div class="assignment-row">
+                        <div class="assignment-date overdue">
+                            ${formatShortDate(due)}
+                        </div>
+                        <div class="assignment-info">
+                            <div class="title">${a.description}</div>
+                            <div class="class-name">${a.class_name} — ${a.category}</div>
+                        </div>
+                        <div class="assignment-score">
+                            ${a.points_possible ? `<div class="max">Worth ${a.points_possible} pts</div>` : ''}
+                        </div>
+                    </div>`;
+            }
+            return html;
+        }
+
+        function renderGrades(student) {
+            const classes = student.classes || [];
+            return classes.length ? classes.map(c => `
+                <div class="grade-row">
+                    <span class="period-badge">P${c.period}</span>
+                    <div class="class-info">
+                        <div class="class-name">${c.course_name}</div>
+                        <div class="teacher">${c.teacher}</div>
+                    </div>
+                    <div class="grade-right">
+                        ${c.missing_count > 0 ? `<span class="missing-badge">${c.missing_count} missing</span>` : ''}
+                        <span class="grade-badge ${getGradeClass(c.percent)}">${formatGrade(c)}</span>
+                    </div>
+                </div>
+            `).join('') : '<p class="empty-state">No grade data</p>';
+        }
+
+        function renderStudent(student, idx) {
+            const classes = student.classes || [];
+            const classesWithGrades = classes.filter(c => c.percent || c.mark);
+            const avgPercent = classesWithGrades.length
+                ? (classesWithGrades.reduce((s, c) => s + parseFloat(c.percent || 0), 0) / classesWithGrades.length)
+                : null;
+
+            const assignments = getAllAssignments(student);
+            const missingCount = assignments.filter(a => {
+                const due = parseDate(a.due_date);
+                return due && due < TODAY && a.points_earned === null && !a.grading_complete;
+            }).length;
+            const upcomingCount = assignments.filter(a => {
+                const due = parseDate(a.due_date);
+                return due && due >= TODAY && !a.grading_complete;
+            }).length;
+            const lowestClass = classesWithGrades.length
+                ? classesWithGrades.reduce((low, c) => parseFloat(c.percent) < parseFloat(low.percent) ? c : low)
+                : null;
+
+            return `
+                ${renderAiSummary(student)}
+
+                <div class="summary-cards">
+                    <div class="summary-card">
+                        <div class="label">Average</div>
+                        <div class="value">${avgPercent !== null ? Math.round(avgPercent) + '%' : '—'}</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Missing</div>
+                        <div class="value" style="color: ${missingCount > 0 ? '#ff3b30' : '#34c759'}">${missingCount}</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Due Soon</div>
+                        <div class="value">${upcomingCount}</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Lowest Class</div>
+                        <div class="value" style="color: ${lowestClass && parseFloat(lowestClass.percent) < 75 ? '#ff3b30' : lowestClass && parseFloat(lowestClass.percent) < 85 ? '#ff9500' : '#1c1c1e'}; font-size: 20px">${lowestClass ? Math.round(parseFloat(lowestClass.percent)) + '% ' + (lowestClass.mark || '') : '—'}</div>
+                    </div>
+                </div>
+
+                <div class="nav-tabs">
+                    <button class="nav-tab active" onclick="switchView(${idx}, 'upcoming')">Upcoming</button>
+                    <button class="nav-tab" onclick="switchView(${idx}, 'recent')">Recent Scores</button>
+                    <button class="nav-tab" onclick="switchView(${idx}, 'missing')">Missing</button>
+                    <button class="nav-tab" onclick="switchView(${idx}, 'grades')">Grades</button>
+                </div>
+
+                <div class="section">
+                    <div class="view active" id="view-${idx}-upcoming">
+                        <h2>Upcoming Assignments <span class="count">${upcomingCount}</span></h2>
+                        ${renderUpcoming(student)}
+                    </div>
+                    <div class="view" id="view-${idx}-recent">
+                        <h2>Recent Scores</h2>
+                        ${renderRecent(student)}
+                    </div>
+                    <div class="view" id="view-${idx}-missing">
+                        <h2>Missing Assignments</h2>
+                        ${renderMissing(student)}
+                    </div>
+                    <div class="view" id="view-${idx}-grades">
+                        <h2>Grades by Class</h2>
+                        ${renderGrades(student)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function switchView(studentIdx, view) {
+            const container = document.getElementById(`dashboard-${studentIdx}`);
+            container.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            container.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(`view-${studentIdx}-${view}`).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function switchStudent(index) {
+            document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === index));
+            document.querySelectorAll('.dashboard').forEach((d, i) => d.classList.toggle('active', i === index));
+        }
+
+        async function init() {
+            const data = await loadData();
+            if (!data) return;
+
+            const updated = new Date(data.last_updated);
+            document.getElementById('lastUpdated').textContent =
+                `Updated ${updated.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at ${updated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+
+            const tabsEl = document.getElementById('studentTabs');
+            const dashboardsEl = document.getElementById('dashboards');
+
+            data.students.forEach((student, i) => {
+                const tab = document.createElement('button');
+                tab.className = `tab ${i === 0 ? 'active' : ''}`;
+                tab.textContent = student.name;
+                tab.onclick = () => switchStudent(i);
+                tabsEl.appendChild(tab);
+
+                const dashboard = document.createElement('div');
+                dashboard.className = `dashboard ${i === 0 ? 'active' : ''}`;
+                dashboard.id = `dashboard-${i}`;
+                dashboard.innerHTML = renderStudent(student, i);
+                dashboardsEl.appendChild(dashboard);
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
