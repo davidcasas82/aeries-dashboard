@@ -444,7 +444,7 @@ Rules:
                 "temperature": 0.7,
                 "max_tokens": 3000,
             },
-            timeout=30,
+            timeout=90,
         )
 
         if resp.status_code != 200:
