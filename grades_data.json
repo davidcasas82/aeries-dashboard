@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-05-18T22:56:17.167037",
+  "last_updated": "2026-05-19T14:48:43.657381+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -103,12 +103,12 @@
           "period": 8,
           "course_name": "Engineering Geo",
           "teacher": "Stadel, A",
-          "percent": "74.0",
+          "percent": "74.5",
           "mark": "C",
-          "mark_and_score": "C (74.0%)",
+          "mark_and_score": "C (74.5%)",
           "missing_count": 0,
           "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=3708909&amp;Missing=1&amp;Term=S&amp;CDS=30736430000000&amp;SC=95\"><span>3</span></a>",
-          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('3708909', 'Engineering Geo', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 71.84&#37; compared to the average of the last four overall scores 73.47&#37;   Click for Details\" class=\"gradebook-trend-down\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
+          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('3708909', 'Engineering Geo', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 74.08&#37; compared to the average of the last four overall scores 72.76&#37;   Click for Details\" class=\"gradebook-trend-up\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
           "room": "2-211",
           "school_name": "Legacy Magnet Academy"
         }
@@ -1958,25 +1958,25 @@
               "number": "24",
               "description": "4 - PoW - Process",
               "category": "Problem-solving",
-              "points_earned": null,
+              "points_earned": 6.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 60.0,
               "date_assigned": "04/16/2026",
-              "date_completed": "",
+              "date_completed": "04/23/2026",
               "due_date": "04/23/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "25",
               "description": "4 - PoW - Product",
               "category": "Problem-solving",
-              "points_earned": null,
+              "points_earned": 6.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 60.0,
               "date_assigned": "04/16/2026",
-              "date_completed": "",
+              "date_completed": "04/23/2026",
               "due_date": "04/23/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "26",
@@ -2088,118 +2088,7 @@
             }
           ]
         }
-      ],
-      "ai_summary": {
-        "status": "Daniel is holding steady with B's in Eng 9 and Mkt Adv GrphDes but is struggling in three C-range classes with multiple missing assignments. Engineering Geo (74%) and Tech of Biology (75.5%) need the most immediate attention due to overdue work worth 20+ points each that could meaningfully lift his grades.",
-        "classes": [
-          {
-            "class_name": "Engineering Geo",
-            "current_grade": "C 74%",
-            "status": "Recent perfect score on volume work but three missing assignments are dragging the grade down.",
-            "recent": [
-              {
-                "date": "Thu, May 14",
-                "event": "7.5-7.6 Stuffed Animal Volume and Density calculation - 10.0/10.0 (100%)"
-              }
-            ],
-            "upcoming": [
-              {
-                "day": "Thu, May 21",
-                "assignment": "7.1 Identify 3-D from Rotating 2-D",
-                "weight_context": "10 pts"
-              },
-              {
-                "day": "Thu, May 21",
-                "assignment": "7.3 Informal argument for volume formulas of a cylinder",
-                "weight_context": "10 pts"
-              },
-              {
-                "day": "Thu, May 21",
-                "assignment": "7.4-7.5 Describe objects and find their volumes",
-                "weight_context": "10 pts"
-              }
-            ],
-            "action_items": [
-              {
-                "priority": "high",
-                "issue": "Two PoW assignments from April 23 still unscored (20 pts total)",
-                "parent_action": "Ask Daniel to submit or resubmit the 4 - PoW - Process and 4 - PoW - Product right away; completing them could raise the grade several points."
-              }
-            ]
-          },
-          {
-            "class_name": "Tech of Biology",
-            "current_grade": "C 75.5%",
-            "status": "Four missing assignments including recent ones are keeping the grade low.",
-            "recent": [],
-            "upcoming": [],
-            "action_items": [
-              {
-                "priority": "high",
-                "issue": "CRAAP Test (5 pts) and LT 5.1 Assessment (10 pts) both past due",
-                "parent_action": "Check if Daniel submitted the CRAAP Test from April 23 and the LT 5.1 Assessment from May 15; turning both in could add up to 15 points."
-              }
-            ]
-          },
-          {
-            "class_name": "WrldHis",
-            "current_grade": "C 77.6%",
-            "status": "Four missing assignments need resolution to stabilize the grade.",
-            "recent": [],
-            "upcoming": [],
-            "action_items": [
-              {
-                "priority": "high",
-                "issue": "29.2 assignment from May 13 still unscored (9 pts)",
-                "parent_action": "Confirm whether Daniel turned in the 29.2 assignment and follow up with teacher Chase if it shows as missing."
-              }
-            ]
-          },
-          {
-            "class_name": "Mkt Adv GrphDes",
-            "current_grade": "B 83%",
-            "status": "One recent low score and multiple missing items to address.",
-            "recent": [
-              {
-                "date": "Fri, May 8",
-                "event": "LT7.1 - Brag Sheet - 7.0/10.0 (70%)"
-              }
-            ],
-            "upcoming": [],
-            "action_items": [
-              {
-                "priority": "medium",
-                "issue": "LT7.3 - Resume Update past due (10 pts)",
-                "parent_action": "Ask Daniel to complete and turn in the LT7.3 Resume Update immediately."
-              }
-            ]
-          },
-          {
-            "class_name": "Eng 9",
-            "current_grade": "B 83.8%",
-            "status": "Solid recent performance with one low-stakes bonus opportunity left.",
-            "recent": [
-              {
-                "date": "Fri, May 15",
-                "event": "LT 6.4: I will present ideas in a clear, organized \u2014 9.0/10.0 (90%)"
-              },
-              {
-                "date": "Fri, May 15",
-                "event": "Collaboration: I will collaborate with my peers ac \u2014 9.0/10.0 (90%)"
-              }
-            ],
-            "upcoming": [
-              {
-                "day": "Fri, May 22",
-                "assignment": "Bonus LT: I will apply my knowledge of Greek & Lat",
-                "weight_context": "10 pts"
-              }
-            ],
-            "action_items": []
-          }
-        ],
-        "generated_at": "2026-05-18T22:56:35.993370"
-      }
+      ]
     },
     {
       "sn": "1223",
@@ -2275,12 +2164,12 @@
           "period": 6,
           "course_name": "Bus Algebra 1",
           "teacher": "Fancy, D",
-          "percent": "76.8",
+          "percent": "77.9",
           "mark": "C",
-          "mark_and_score": "C (76.8%)",
+          "mark_and_score": "C (77.9%)",
           "missing_count": 0,
           "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=7542191&amp;Missing=1&amp;Term=S&amp;CDS=30736430000000&amp;SC=95\"><span>3</span></a>",
-          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('7542191', 'Bus Algebra 1', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 79.43&#37; compared to the average of the last four overall scores 77.87&#37;   Click for Details\" class=\"gradebook-trend-up\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
+          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('7542191', 'Bus Algebra 1', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 75.7&#37; compared to the average of the last four overall scores 77.69&#37;   Click for Details\" class=\"gradebook-trend-down\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
           "room": "2-224",
           "school_name": "Legacy Magnet Academy"
         },
@@ -4011,11 +3900,11 @@
               "number": "26",
               "description": "LT 8.1 - Graphing Quadratics (Standard Form)",
               "category": "Assessments",
-              "points_earned": null,
+              "points_earned": 10.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 100.0,
               "date_assigned": "05/14/2026",
-              "date_completed": "",
+              "date_completed": "05/14/2026",
               "due_date": "05/14/2026",
               "grading_complete": false
             },
@@ -4023,11 +3912,11 @@
               "number": "27",
               "description": "LT 8.2 - Graphing Quadratics (Intercept form)",
               "category": "Assessments",
-              "points_earned": null,
+              "points_earned": 7.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 70.0,
               "date_assigned": "05/14/2026",
-              "date_completed": "",
+              "date_completed": "05/14/2026",
               "due_date": "05/14/2026",
               "grading_complete": false
             },
@@ -4035,11 +3924,11 @@
               "number": "28",
               "description": "LT 8.3 - Graphing Quadratics (Vertex Form)",
               "category": "Assessments",
-              "points_earned": null,
+              "points_earned": 8.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 80.0,
               "date_assigned": "05/14/2026",
-              "date_completed": "",
+              "date_completed": "05/14/2026",
               "due_date": "05/14/2026",
               "grading_complete": false
             },
@@ -4047,11 +3936,11 @@
               "number": "29",
               "description": "LT 8.4 - Characteristics of Parabolas",
               "category": "Assessments",
-              "points_earned": null,
+              "points_earned": 7.5,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 75.0,
               "date_assigned": "05/14/2026",
-              "date_completed": "",
+              "date_completed": "05/14/2026",
               "due_date": "05/14/2026",
               "grading_complete": false
             },
@@ -4059,11 +3948,11 @@
               "number": "30",
               "description": "LT 8.5 - Max/Min of a Quadratic",
               "category": "Assessments",
-              "points_earned": null,
+              "points_earned": 10.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 100.0,
               "date_assigned": "05/14/2026",
-              "date_completed": "",
+              "date_completed": "05/14/2026",
               "due_date": "05/14/2026",
               "grading_complete": false
             },
@@ -4081,64 +3970,7 @@
             }
           ]
         }
-      ],
-      "ai_summary": {
-        "status": "Leah stands at a solid A in Lang Arts but Bus Algebra 1 at C 76.8% with five missing assignments requires the most urgent focus; PE 8 also has a significant past-due item that needs resolution.",
-        "classes": [
-          {
-            "class_name": "Bus Algebra 1",
-            "current_grade": "C 76.8%",
-            "status": "Multiple missing LT assignments from last week are dragging the grade down.",
-            "recent": [],
-            "upcoming": [
-              {
-                "day": "Tue, May 19",
-                "assignment": "Fluency - Algebra Review Circuit",
-                "weight_context": "5 pts"
-              }
-            ],
-            "action_items": [
-              {
-                "priority": "high",
-                "issue": "Five missing LT assignments worth 10 pts each (50 pts total) past due since May 14",
-                "parent_action": "Ask Leah to submit LT 8.1 through LT 8.5 immediately; completing them could raise the grade by 5-7 points."
-              }
-            ]
-          },
-          {
-            "class_name": "PE 8",
-            "current_grade": "B 87.7%",
-            "status": "One major missing assignment is affecting the overall percentage.",
-            "recent": [],
-            "upcoming": [],
-            "action_items": [
-              {
-                "priority": "high",
-                "issue": "My Fitness Journey assignment worth 50 pts past due since May 15",
-                "parent_action": "Check if Leah has submitted the My Fitness Journey assignment and follow up with teacher Kelly if it remains unscored."
-              }
-            ]
-          },
-          {
-            "class_name": "DT 8 Lang Arts",
-            "current_grade": "A 90.1%",
-            "status": "Consistent high performance on recent projects.",
-            "recent": [
-              {
-                "date": "Fri, May 15",
-                "event": "Utopian Community Project \u2014 4.5/5.0 (90%)"
-              },
-              {
-                "date": "Tue, May 5",
-                "event": "Utopian Community Project \u2014 4.25/5.0 (85%)"
-              }
-            ],
-            "upcoming": [],
-            "action_items": []
-          }
-        ],
-        "generated_at": "2026-05-18T22:57:00.713431"
-      }
+      ]
     }
   ]
 }
