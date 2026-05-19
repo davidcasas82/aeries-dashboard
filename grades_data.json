@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-05-19T14:48:43.657381+00:00",
+  "last_updated": "2026-05-19T14:53:00.061306+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -2088,7 +2088,118 @@
             }
           ]
         }
-      ]
+      ],
+      "ai_summary": {
+        "status": "Daniel holds B averages in Eng 9 and Mkt Adv GrphDes but C's in WrldHis, Tech of Biology, and Engineering Geo, all with multiple missing assignments that are dragging down his grades. Engineering Geo and Tech of Biology need the most immediate attention to prevent further decline before the end of the term.",
+        "classes": [
+          {
+            "class_name": "Engineering Geo",
+            "current_grade": "C 74.5%",
+            "status": "Grade is low with three missing assignments and several high-point tasks due this week.",
+            "recent": [
+              {
+                "date": "Thu, May 14",
+                "event": "7.5-7.6 Stuffed Animal Volume and Density calculation \u2014 10.0/10.0 (100%)"
+              }
+            ],
+            "upcoming": [
+              {
+                "day": "Thu, May 21",
+                "assignment": "7.1 Identify 3-D from Rotating 2-D",
+                "weight_context": "10 pts"
+              },
+              {
+                "day": "Thu, May 21",
+                "assignment": "7.3 Informal argument for volume formulas of a cylinder",
+                "weight_context": "10 pts"
+              },
+              {
+                "day": "Thu, May 21",
+                "assignment": "7.4-7.5 Describe objects and find their volumes",
+                "weight_context": "10 pts"
+              }
+            ],
+            "action_items": [
+              {
+                "priority": "high",
+                "issue": "Three missing assignments are lowering the grade",
+                "parent_action": "Confirm with Daniel that the three missing assignments have been submitted and check the grade impact"
+              }
+            ]
+          },
+          {
+            "class_name": "Tech of Biology",
+            "current_grade": "C 75.5%",
+            "status": "Grade sits at C with four missing assignments including recent ones worth 15 total points.",
+            "recent": [],
+            "upcoming": [],
+            "action_items": [
+              {
+                "priority": "high",
+                "issue": "CRAAP Test (5 pts) and LT 5.1 Assessment (10 pts) are past due and unscored",
+                "parent_action": "Ask Daniel to turn in the CRAAP Test and LT 5.1 Assessment immediately; completing them could raise the grade by 3-4 points"
+              }
+            ]
+          },
+          {
+            "class_name": "WrldHis",
+            "current_grade": "C 77.6%",
+            "status": "Grade is a C with four missing assignments including a recent 9-point task.",
+            "recent": [],
+            "upcoming": [],
+            "action_items": [
+              {
+                "priority": "high",
+                "issue": "29.2 (9 pts) is past due and unscored",
+                "parent_action": "Check if Daniel submitted 29.2 and the other three missing items; turning them in could improve the grade by about 4 points"
+              }
+            ]
+          },
+          {
+            "class_name": "Mkt Adv GrphDes",
+            "current_grade": "B 83.0%",
+            "status": "Solid B but five missing assignments are holding back a higher grade.",
+            "recent": [
+              {
+                "date": "Fri, May 8",
+                "event": "LT7.1 - Brag Sheet \u2014 7.0/10.0 (70%)"
+              }
+            ],
+            "upcoming": [],
+            "action_items": [
+              {
+                "priority": "medium",
+                "issue": "LT7.3 - Resume Update (10 pts) past due and unscored",
+                "parent_action": "Ask Daniel to submit LT7.3 - Resume Update right away to recover the 10 points"
+              }
+            ]
+          },
+          {
+            "class_name": "Eng 9",
+            "current_grade": "B 83.8%",
+            "status": "Steady B with strong recent scores and one small bonus opportunity left.",
+            "recent": [
+              {
+                "date": "Fri, May 15",
+                "event": "LT 6.4: I will present ideas in a clear, organized \u2014 9.0/10.0 (90%)"
+              },
+              {
+                "date": "Fri, May 15",
+                "event": "Collaboration: I will collaborate with my peers ac \u2014 9.0/10.0 (90%)"
+              }
+            ],
+            "upcoming": [
+              {
+                "day": "Fri, May 22",
+                "assignment": "Bonus LT: I will apply my knowledge of Greek & Lat",
+                "weight_context": "10 pts"
+              }
+            ],
+            "action_items": []
+          }
+        ],
+        "generated_at": "2026-05-19T14:53:49.516317+00:00"
+      }
     },
     {
       "sn": "1223",
@@ -2112,12 +2223,12 @@
           "period": 2,
           "course_name": "PE 8",
           "teacher": "Kelly, S",
-          "percent": "87.7",
+          "percent": "90.0",
           "mark": "",
-          "mark_and_score": "87.7%",
+          "mark_and_score": "90.0%",
           "missing_count": 0,
           "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=1516843&amp;Missing=1&amp;Term=S&amp;CDS=30736430000000&amp;SC=95\"><span>2</span></a>",
-          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('1516843', 'PE 8', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 81.58&#37; compared to the average of the last four overall scores 86.35&#37;   Click for Details\" class=\"gradebook-trend-down\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
+          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('1516843', 'PE 8', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 83.44&#37; compared to the average of the last four overall scores 87.38&#37;   Click for Details\" class=\"gradebook-trend-down\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
           "room": "Gym",
           "school_name": "Legacy Magnet Academy"
         },
@@ -2788,11 +2899,11 @@
               "number": "33",
               "description": "My Fitness Journey",
               "category": "Projects",
-              "points_earned": null,
+              "points_earned": 41.0,
               "points_possible": 50.0,
-              "percentage": 0.0,
+              "percentage": 82.0,
               "date_assigned": "05/08/2026",
-              "date_completed": "",
+              "date_completed": "05/15/2026",
               "due_date": "05/15/2026",
               "grading_complete": false
             }
@@ -3970,7 +4081,61 @@
             }
           ]
         }
-      ]
+      ],
+      "ai_summary": {
+        "status": "Leah stands at a solid A in Lang Arts but her C in Bus Algebra 1 needs the most attention due to missing work. Turning in the overdue assignment could provide a quick grade boost in Algebra.",
+        "classes": [
+          {
+            "class_name": "Bus Algebra 1",
+            "current_grade": "C 77.9%",
+            "status": "Grade is at a C with multiple recent scores and one missing assignment due today.",
+            "recent": [
+              {
+                "date": "Thu, May 14",
+                "event": "LT 8.1 - Graphing Quadratics (Standard Form) \u2014 10.0/10.0 (100%) posted"
+              },
+              {
+                "date": "Thu, May 14",
+                "event": "LT 8.2 - Graphing Quadratics (Intercept form) \u2014 7.0/10.0 (70%) posted"
+              },
+              {
+                "date": "Thu, May 14",
+                "event": "LT 8.3 - Graphing Quadratics (Vertex Form) \u2014 8.0/10.0 (80%) posted"
+              },
+              {
+                "date": "Thu, May 14",
+                "event": "LT 8.4 - Characteristics of Parabolas \u2014 7.5/10.0 (75%) posted"
+              },
+              {
+                "date": "Thu, May 14",
+                "event": "LT 8.5 - Max/Min of a Quadratic \u2014 10.0/10.0 (100%) posted"
+              }
+            ],
+            "upcoming": [],
+            "action_items": [
+              {
+                "priority": "high",
+                "issue": "Fluency - Algebra Review Circuit is missing and past due, worth 5 pts",
+                "parent_action": "Ask Leah if she turned in the Fluency - Algebra Review Circuit today; completing it could raise her grade by about 1-2 points depending on total points in the class"
+              }
+            ]
+          },
+          {
+            "class_name": "DT 8 Lang Arts",
+            "current_grade": "A 90.1%",
+            "status": "Strong performance with a recent project score at 90%.",
+            "recent": [
+              {
+                "date": "Fri, May 15",
+                "event": "Utopian Community Project \u2014 4.5/5.0 (90%) posted"
+              }
+            ],
+            "upcoming": [],
+            "action_items": []
+          }
+        ],
+        "generated_at": "2026-05-19T14:54:27.046992+00:00"
+      }
     }
   ]
 }
