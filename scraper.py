@@ -2,7 +2,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -454,7 +454,7 @@ Rules:
         result = resp.json()
         content = result["choices"][0]["message"]["content"]
         summary = json.loads(content)
-        summary["generated_at"] = datetime.now().isoformat()
+        summary["generated_at"] = datetime.now(timezone.utc).isoformat()
         return summary
 
     except requests.exceptions.Timeout:
@@ -468,7 +468,7 @@ Rules:
 def scrape_all():
     session = login()
     data = {
-        "last_updated": datetime.now().isoformat(),
+        "last_updated": datetime.now(timezone.utc).isoformat(),
         "district": "Tustin USD",
         "portal_url": BASE_URL,
         "students": [],
