@@ -956,8 +956,9 @@
             if (!data) return;
 
             const updated = new Date(data.last_updated);
+            const opts = { timeZone: 'America/Los_Angeles' };
             document.getElementById('lastUpdated').textContent =
-                `Updated ${updated.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at ${updated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+                `Updated ${updated.toLocaleDateString('en-US', { ...opts, weekday: 'short', month: 'short', day: 'numeric' })} at ${updated.toLocaleTimeString('en-US', { ...opts, hour: 'numeric', minute: '2-digit' })}`;
 
             const tabsEl = document.getElementById('studentTabs');
             const dashboardsEl = document.getElementById('dashboards');
