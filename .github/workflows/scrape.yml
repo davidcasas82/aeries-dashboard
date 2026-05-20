@@ -2,7 +2,8 @@ name: Daily Grade Scrape
 
 on:
   schedule:
-    - cron: '0 13 * * *'  # 6am PT (UTC-7)
+    - cron: '0 13 * * *'   # 6am PT (UTC-7)
+    - cron: '30 14 * * *'  # 7:30am PT fallback if first run missed
   workflow_dispatch:  # manual trigger
 
 permissions:
