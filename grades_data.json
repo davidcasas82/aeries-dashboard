@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-05-21T12:21:19.922392+00:00",
+  "last_updated": "2026-05-22T11:49:44.845311+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -30,7 +30,7 @@
           "mark_and_score": "B (83.8%)",
           "missing_count": 0,
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
-          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('7263489', 'Eng 9 Entre', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 78.91&#37; compared to the average of the last four overall scores 84.64&#37;   Click for Details\" class=\"gradebook-trend-down\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
+          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('7263489', 'Eng 9 Entre', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 78.8&#37; compared to the average of the last four overall scores 83.57&#37;   Click for Details\" class=\"gradebook-trend-down\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
           "room": "2-225",
           "school_name": "Legacy Magnet Academy"
         },
@@ -77,12 +77,12 @@
           "period": 6,
           "course_name": "Tech of Biology",
           "teacher": "Johnson, D",
-          "percent": "78.1",
+          "percent": "77.0",
           "mark": "C",
-          "mark_and_score": "C (78.1%)",
+          "mark_and_score": "C (77.0%)",
           "missing_count": 0,
           "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=6305119&amp;Missing=1&amp;Term=S&amp;CDS=30736430000000&amp;SC=95\"><span>4</span></a>",
-          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('6305119', 'Tech of Biology', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 78.45&#37; compared to the average of the last four overall scores 75.93&#37;   Click for Details\" class=\"gradebook-trend-up\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
+          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('6305119', 'Tech of Biology', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 76.48&#37; compared to the average of the last four overall scores 75.11&#37;   Click for Details\" class=\"gradebook-trend-up\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
           "room": "2-115",
           "school_name": "Legacy Magnet Academy"
         },
@@ -283,7 +283,7 @@
               "date_assigned": "05/18/2026",
               "date_completed": "05/22/2026",
               "due_date": "05/22/2026",
-              "grading_complete": false
+              "grading_complete": true
             }
           ]
         },
@@ -1689,13 +1689,13 @@
               "number": "20",
               "description": "CRAAP Test",
               "category": "Assessment",
-              "points_earned": null,
+              "points_earned": 3.25,
               "points_possible": 5.0,
-              "percentage": null,
+              "percentage": 65.0,
               "date_assigned": "04/14/2026",
-              "date_completed": "",
+              "date_completed": "04/23/2026",
               "due_date": "04/23/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "21",
@@ -1826,9 +1826,9 @@
               "number": "9",
               "description": "Study Guide completion: 1/22",
               "category": "Completion Tracking",
-              "points_earned": null,
+              "points_earned": 7.0,
               "points_possible": 20.0,
-              "percentage": null,
+              "percentage": 35.0,
               "date_assigned": "01/22/2026",
               "date_completed": "01/23/2026",
               "due_date": "01/23/2026",
@@ -1840,7 +1840,7 @@
               "category": "Completion Tracking",
               "points_earned": null,
               "points_possible": 4.0,
-              "percentage": null,
+              "percentage": 0.0,
               "date_assigned": "01/22/2026",
               "date_completed": "",
               "due_date": "01/23/2026",
@@ -1898,9 +1898,9 @@
               "number": "16",
               "description": "BB 3.2 Build complete bridge",
               "category": "Projects",
-              "points_earned": null,
+              "points_earned": 9.0,
               "points_possible": 10.0,
-              "percentage": null,
+              "percentage": 90.0,
               "date_assigned": "03/16/2026",
               "date_completed": "03/17/2026",
               "due_date": "03/17/2026",
@@ -1910,9 +1910,9 @@
               "number": "17",
               "description": "3 - PoW - Process",
               "category": "Problem-solving",
-              "points_earned": null,
+              "points_earned": 9.0,
               "points_possible": 10.0,
-              "percentage": null,
+              "percentage": 90.0,
               "date_assigned": "03/13/2026",
               "date_completed": "03/20/2026",
               "due_date": "03/20/2026",
@@ -1922,9 +1922,9 @@
               "number": "18",
               "description": "3 - PoW - Product",
               "category": "Problem-solving",
-              "points_earned": null,
+              "points_earned": 9.0,
               "points_possible": 10.0,
-              "percentage": null,
+              "percentage": 90.0,
               "date_assigned": "03/13/2026",
               "date_completed": "03/20/2026",
               "due_date": "03/20/2026",
@@ -2126,31 +2126,31 @@
         }
       ],
       "ai_summary": {
-        "status": "Daniel's grades are mostly in the B range but Engineering Geo (74.5%) and WrldHis by Dsgn (77.7%) need the most attention due to multiple missing assignments. Mkt Adv GrphDes also has five missing items that are dragging down performance.",
+        "status": "Daniel's grades are slipping in multiple classes due to missing assignments, with Engineering Geo at 74.5% and WrldHis at 77.7% needing the most urgent focus. Turning in overdue work in these and other classes could provide quick grade boosts before the end of the term.",
         "classes": [
           {
             "class_name": "Engineering Geo",
             "current_grade": "C 74.5%",
-            "status": "Three assignments due today remain missing and are keeping the grade at a C.",
+            "status": "Three missing assignments from this week are hurting the grade significantly.",
             "recent": [
               {
                 "date": "Thu, May 14",
-                "event": "7.5-7.6 Stuffed Animal Volume and Density calculat \u2014 10.0/10.0 (100%)"
+                "event": "7.5-7.6 Stuffed Animal Volume and Density calculation \u2014 10.0/10.0 (100%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "Three missing assignments worth 30 pts total are past due today",
-                "parent_action": "Ask Daniel to submit 7.1, 7.3, and 7.4-7.5 immediately; completing them could raise the grade to a low B"
+                "issue": "Missing 7.1, 7.3, and 7.4-7.5 assignments worth 30 pts total",
+                "parent_action": "Ask Daniel to submit the three missing assignments from Thu, May 21 immediately \u2014 completing them could raise the grade to a low B"
               }
             ]
           },
           {
-            "class_name": "WrldHis by Dsgn",
+            "class_name": "WrldHis",
             "current_grade": "C 77.7%",
-            "status": "One recent perfect score but four missing items overall are limiting progress.",
+            "status": "One missing assignment and an important upcoming task are key factors.",
             "recent": [
               {
                 "date": "Wed, May 13",
@@ -2161,21 +2161,21 @@
               {
                 "day": "Mon, May 25",
                 "assignment": "30.2",
-                "weight_context": "28 pts / high impact"
+                "weight_context": "28 pts / high importance"
               }
             ],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "30.1 missing and past due worth 9 pts",
-                "parent_action": "Confirm if 30.1 was turned in; submitting it now would add nearly a full point to the overall grade"
+                "issue": "Missing 30.1 worth 9 pts",
+                "parent_action": "Confirm if Daniel submitted 30.1 due Mon, May 18 \u2014 turning it in could improve the grade by about 2 points"
               }
             ]
           },
           {
             "class_name": "Tech of Biology",
-            "current_grade": "C 78.1%",
-            "status": "Strong recent assessment but older missing work is still unresolved.",
+            "current_grade": "C 77.0%",
+            "status": "Recent assessment score is solid but four missing assignments need addressing.",
             "recent": [
               {
                 "date": "Fri, May 15",
@@ -2186,38 +2186,34 @@
             "action_items": [
               {
                 "priority": "medium",
-                "issue": "CRAAP Test missing worth 5 pts from April",
-                "parent_action": "Check with Daniel if the CRAAP Test can still be submitted for partial credit"
+                "issue": "Four missing assignments not detailed in records",
+                "parent_action": "Review missing work list with Daniel and prioritize submitting the highest-point items first"
               }
             ]
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "current_grade": "B 83.5%",
-            "status": "Recent scores are solid but five missing assignments are affecting the average.",
+            "status": "One overdue assignment is the main issue despite a recent strong score.",
             "recent": [
               {
                 "date": "Thu, May 21",
                 "event": "LT7.4 - Elevator Pitch \u2014 9.0/10.0 (90%)"
-              },
-              {
-                "date": "Fri, May 8",
-                "event": "LT7.1 - Brag Sheet \u2014 7.0/10.0 (70%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
-                "priority": "high",
-                "issue": "LT7.3 Resume Update missing worth 10 pts",
-                "parent_action": "Ask Daniel to turn in the LT7.3 Resume Update right away to recover the 10 points"
+                "priority": "medium",
+                "issue": "Missing LT7.3 worth 10 pts",
+                "parent_action": "Ask Daniel about submitting the Resume Update due Fri, May 15 to recover the 10 points"
               }
             ]
           },
           {
-            "class_name": "Eng 9 Entre",
+            "class_name": "Eng 9",
             "current_grade": "B 83.8%",
-            "status": "Recent scores are strong and the class is on track.",
+            "status": "Performance is steady with strong recent scores and no missing work noted.",
             "recent": [
               {
                 "date": "Fri, May 15",
@@ -2228,17 +2224,11 @@
                 "event": "Collaboration: I will collaborate with my peers ac \u2014 9.0/10.0 (90%)"
               }
             ],
-            "upcoming": [
-              {
-                "day": "Fri, May 22",
-                "assignment": "Bonus LT: I will apply my knowledge of Greek & Lat",
-                "weight_context": "bonus points"
-              }
-            ],
+            "upcoming": [],
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-21T12:21:39.799943+00:00"
+        "generated_at": "2026-05-22T11:50:11.403675+00:00"
       }
     },
     {
@@ -4105,7 +4095,7 @@
               "date_assigned": "05/14/2026",
               "date_completed": "05/14/2026",
               "due_date": "05/14/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "27",
@@ -4117,7 +4107,7 @@
               "date_assigned": "05/14/2026",
               "date_completed": "05/14/2026",
               "due_date": "05/14/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "28",
@@ -4129,7 +4119,7 @@
               "date_assigned": "05/14/2026",
               "date_completed": "05/14/2026",
               "due_date": "05/14/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "29",
@@ -4141,7 +4131,7 @@
               "date_assigned": "05/14/2026",
               "date_completed": "05/14/2026",
               "due_date": "05/14/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "30",
@@ -4153,7 +4143,7 @@
               "date_assigned": "05/14/2026",
               "date_completed": "05/14/2026",
               "due_date": "05/14/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "31",
@@ -4171,104 +4161,96 @@
         }
       ],
       "ai_summary": {
-        "status": "Leah stands at a solid B average overall but Bus Algebra 1 (C 77.9%) requires the most urgent attention due to multiple missing assignments. Int Sci Designs and Virt Enterprise also have missing work pulling down their B grades and should be monitored closely this week.",
+        "status": "Leah is doing well overall with an A in Lang Arts, but Bus Algebra 1 (C 77.9%) needs urgent attention due to multiple missing assignments pulling the grade down. Int Sci Designs and PE also have missing work that could boost grades if addressed quickly.",
         "classes": [
           {
             "class_name": "Bus Algebra 1",
             "current_grade": "C 77.9%",
-            "status": "Grade is at risk with three missing assignments and recent quiz scores mostly in the 70-80% range.",
+            "status": "Grade is below B with multiple missing assignments impacting performance.",
             "recent": [
               {
                 "date": "Thu, May 14",
-                "event": "LT 8.1 - Graphing Quadratics (Standard Form) scored 10.0/10.0 (100%)"
+                "event": "LT 8.1 - Graphing Quadratics (Standard Form) \u2014 10.0/10.0 (100%)"
               },
               {
                 "date": "Thu, May 14",
-                "event": "LT 8.5 - Max/Min of a Quadratic scored 10.0/10.0 (100%)"
+                "event": "LT 8.5 - Max/Min of a Quadratic \u2014 10.0/10.0 (100%)"
               },
               {
                 "date": "Thu, May 14",
-                "event": "LT 8.3 - Graphing Quadratics (Vertex Form) scored 8.0/10.0 (80%)"
+                "event": "LT 8.3 - Graphing Quadratics (Vertex Form) \u2014 8.0/10.0 (80%)"
               },
               {
                 "date": "Thu, May 14",
-                "event": "LT 8.4 - Characteristics of Parabolas scored 7.5/10.0 (75%)"
+                "event": "LT 8.2 - Graphing Quadratics (Intercept form) \u2014 7.0/10.0 (70%)"
               },
               {
                 "date": "Thu, May 14",
-                "event": "LT 8.2 - Graphing Quadratics (Intercept form) scored 7.0/10.0 (70%)"
+                "event": "LT 8.4 - Characteristics of Parabolas \u2014 7.5/10.0 (75%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "Fluency - Algebra Review Circuit (5 pts) is missing and past due on 05/19",
-                "parent_action": "Ask Leah to complete and submit the Fluency - Algebra Review Circuit assignment worth 5 pts; submitting it could raise the overall grade by roughly 1.5% assuming current points total around 330."
+                "issue": "Fluency - Algebra Review Circuit past due and unscored (5 pts)",
+                "parent_action": "Ask Leah to submit the Fluency - Algebra Review Circuit immediately as it is worth 5 pts and could raise the overall grade by about 1-2 points if completed."
               }
             ]
           },
           {
             "class_name": "Int Sci Designs",
             "current_grade": "B 84.0%",
-            "status": "Solid performance on recent work but two missing assignments are holding the grade back.",
+            "status": "Solid B but two missing assignments need resolution to improve standing.",
             "recent": [
               {
                 "date": "Fri, May 15",
-                "event": "LT 5.3 EDP Balloon Powered Car Slides scored 4.25/5.0 (85%)"
-              }
-            ],
-            "upcoming": [],
-            "action_items": [
-              {
-                "priority": "high",
-                "issue": "Two missing assignments not yet scored",
-                "parent_action": "Check with Leah on the two missing assignments in Int Sci Designs and confirm submission status to recover the points."
-              }
-            ]
-          },
-          {
-            "class_name": "Virt Enterprise",
-            "current_grade": "B 89.4%",
-            "status": "Strong recent scores on Small Business tasks but two missing assignments need resolution.",
-            "recent": [
-              {
-                "date": "Fri, May 08",
-                "event": "Small Business Task 3 scored 10.0/10.0 (100%)"
-              },
-              {
-                "date": "Fri, May 08",
-                "event": "Small Business Task 2 scored 10.0/10.0 (100%)"
-              },
-              {
-                "date": "Fri, May 08",
-                "event": "Small Business Task 1 scored 10.0/10.0 (100%)"
+                "event": "LT 5.3 EDP Balloon Powered Car Slides \u2014 4.25/5.0 (85%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "medium",
-                "issue": "Two missing assignments not yet scored",
-                "parent_action": "Ask Leah about the status of the two missing assignments in Virt Enterprise to get them turned in promptly."
+                "issue": "Two missing assignments not detailed in data",
+                "parent_action": "Check with Leah on the two missing assignments in Int Sci Designs and confirm submission status."
               }
             ]
           },
           {
-            "class_name": "DT 8 Lang Arts",
-            "current_grade": "A 90.1%",
-            "status": "Strong performance with high score on the recent Utopian Community Project.",
+            "class_name": "PE 8",
+            "current_grade": "90.0%",
+            "status": "Strong performance but two missing items noted.",
             "recent": [
               {
                 "date": "Fri, May 15",
-                "event": "Utopian Community Project scored 4.5/5.0 (90%)"
+                "event": "My Fitness Journey \u2014 41.0/50.0 (82%)"
+              }
+            ],
+            "upcoming": [],
+            "action_items": [
+              {
+                "priority": "medium",
+                "issue": "Two missing assignments",
+                "parent_action": "Confirm with Leah what the two missing PE assignments are and get them turned in soon."
+              }
+            ]
+          },
+          {
+            "class_name": "Lang Arts",
+            "current_grade": "A 90.1%",
+            "status": "Performing well with recent project success.",
+            "recent": [
+              {
+                "date": "Fri, May 15",
+                "event": "Utopian Community Project \u2014 4.5/5.0 (90%)"
               }
             ],
             "upcoming": [],
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-21T12:22:10.464479+00:00"
+        "generated_at": "2026-05-22T11:50:32.306642+00:00"
       }
     }
   ]
