@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-05-23T10:40:04.573247+00:00",
+  "last_updated": "2026-05-24T10:45:35.507937+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -1641,12 +1641,12 @@
         }
       ],
       "ai_summary": {
-        "status": "Daniel's grades are slipping in Engineering Geo (C 74.5%) and Tech of Biology (C 77%), both with multiple missing assignments that need immediate attention. Mkt Adv GrphDes also has missing work despite a B average; Eng 9 Entre is stable at B with no issues.",
+        "status": "Daniel holds B grades in Eng 9 and Mkt Adv GrphDes but C grades in Tech of Biology (77%) and Engineering Geo (74.5%), both with multiple missing assignments. Engineering Geo and Tech of Biology need the most attention to prevent further grade drops.",
         "classes": [
           {
             "class_name": "Engineering Geo",
             "current_grade": "C 74.5%",
-            "status": "Three recent assignments are missing and past due, keeping the grade at C.",
+            "status": "C grade with three missing assignments worth 30 points total that are dragging the average down.",
             "recent": [
               {
                 "date": "Thu, May 14",
@@ -1657,15 +1657,15 @@
             "action_items": [
               {
                 "priority": "high",
-                "issue": "Missing 7.1, 7.3, 7.4-7.5 (30 pts total)",
-                "parent_action": "Ask Daniel to submit the three missing 10-pt assignments from week of May 21; turning them in could raise grade to low B."
+                "issue": "three missing assignments (7.1, 7.3, 7.4-7.5) worth 30 pts total",
+                "parent_action": "Ask Daniel to submit 7.1, 7.3, and 7.4-7.5 immediately \u2014 completing them could raise the grade by ~5-7 points to a C+"
               }
             ]
           },
           {
             "class_name": "Tech of Biology",
             "current_grade": "C 77.0%",
-            "status": "Four missing assignments are dragging down the C grade.",
+            "status": "C grade with four missing assignments and limited recent activity shown.",
             "recent": [
               {
                 "date": "Fri, May 15",
@@ -1676,15 +1676,15 @@
             "action_items": [
               {
                 "priority": "high",
-                "issue": "4 missing assignments (details not listed)",
-                "parent_action": "Check portal for the 4 missing items and have Daniel complete/submit them this weekend."
+                "issue": "four missing assignments not detailed in data",
+                "parent_action": "Review portal with Daniel to identify and submit the four missing Biology assignments ASAP"
               }
             ]
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "current_grade": "B 83.5%",
-            "status": "One missing assignment noted despite overall B average and 5 total missing flagged.",
+            "status": "Solid B but five missing assignments noted, with one specific past-due item.",
             "recent": [
               {
                 "date": "Thu, May 21",
@@ -1694,16 +1694,16 @@
             "upcoming": [],
             "action_items": [
               {
-                "priority": "high",
-                "issue": "LT7.3 - Resume Update missing (10 pts, due 05/15)",
-                "parent_action": "Confirm if LT7.3 Resume Update was submitted; it shows unscored and is worth 10 pts."
+                "priority": "medium",
+                "issue": "LT7.3 Resume Update missing (10 pts) plus four others",
+                "parent_action": "Confirm Daniel submits LT7.3 and checks the other four missing items in Mkt Adv GrphDes"
               }
             ]
           },
           {
-            "class_name": "Eng 9 Entre",
+            "class_name": "Eng 9",
             "current_grade": "B 83.8%",
-            "status": "Solid B with recent high scores on LT 6.4 and collaboration.",
+            "status": "Steady B with strong recent scores on presentations and collaboration.",
             "recent": [
               {
                 "date": "Fri, May 15",
@@ -1718,7 +1718,7 @@
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-23T10:40:20.833986+00:00"
+        "generated_at": "2026-05-24T10:45:47.886094+00:00"
       }
     },
     {
@@ -1799,8 +1799,8 @@
           "mark": "C",
           "mark_and_score": "C (78.5%)",
           "missing_count": 0,
-          "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=7542191&amp;Missing=1&amp;Term=S&amp;CDS=30736430000000&amp;SC=95\"><span>3</span></a>",
-          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('7542191', 'Bus Algebra 1', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 75.96&#37; compared to the average of the last four overall scores 77.85&#37;   Click for Details\" class=\"gradebook-trend-down\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
+          "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=7542191&amp;Missing=1&amp;Term=S&amp;CDS=30736430000000&amp;SC=95\"><span>4</span></a>",
+          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('7542191', 'Bus Algebra 1', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 76.58&#37; compared to the average of the last four overall scores 77.71&#37;   Click for Details\" class=\"gradebook-trend-down\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
           "room": "2-224",
           "school_name": "Legacy Magnet Academy"
         },
@@ -2425,7 +2425,7 @@
               "date_assigned": "05/08/2026",
               "date_completed": "05/15/2026",
               "due_date": "05/15/2026",
-              "grading_complete": false
+              "grading_complete": true
             }
           ]
         },
@@ -3645,18 +3645,18 @@
               "date_assigned": "05/19/2026",
               "date_completed": "",
               "due_date": "05/19/2026",
-              "grading_complete": false
+              "grading_complete": true
             }
           ]
         }
       ],
       "ai_summary": {
-        "status": "Leah is performing well overall with an A in Lang Arts, but Bus Algebra 1 (C 78.5%) and Int Sci Designs (B 84%) need immediate attention due to multiple missing assignments. Focus on recovering points in Algebra to avoid a further grade drop.",
+        "status": "Leah stands at a C in Bus Algebra 1 with 4 missing assignments\u2014that class needs the most urgent focus to avoid further grade drop. Int Sci Designs (B with 2 missing) and the other B classes also require attention to prevent slippage before end of term.",
         "classes": [
           {
             "class_name": "Bus Algebra 1",
             "current_grade": "C 78.5%",
-            "status": "Lowest grade with 3 missing assignments; recent quiz scores are mixed.",
+            "status": "Lowest grade with 4 missing assignments; recent LT 8.x scores are mostly strong but inconsistent.",
             "recent": [
               {
                 "date": "Thu, May 14",
@@ -3683,15 +3683,15 @@
             "action_items": [
               {
                 "priority": "high",
-                "issue": "Fluency - Algebra Review Circuit (5 pts) past due 05/19/2026 and unscored",
-                "parent_action": "Ask Leah to submit the Fluency - Algebra Review Circuit immediately; recovering the 5 pts could raise the grade ~1-2 points depending on total points in class."
+                "issue": "4 missing assignments dragging down to C",
+                "parent_action": "Review the 4 missing Bus Algebra 1 assignments with Leah and confirm submission timeline to raise grade above 80%."
               }
             ]
           },
           {
             "class_name": "Int Sci Designs",
             "current_grade": "B 84.0%",
-            "status": "Solid B but 2 missing assignments are holding back the grade.",
+            "status": "Solid B but 2 missing assignments need resolution.",
             "recent": [
               {
                 "date": "Fri, May 15",
@@ -3703,14 +3703,61 @@
               {
                 "priority": "high",
                 "issue": "2 missing assignments",
-                "parent_action": "Confirm with Leah what the 2 missing assignments are and their due dates/points to get them turned in ASAP."
+                "parent_action": "Ask Leah to identify and complete the 2 missing Int Sci Designs assignments this week."
               }
             ]
           },
           {
-            "class_name": "Lang Arts",
+            "class_name": "DT 8 Soc Sci",
+            "current_grade": "B 87.6%",
+            "status": "B average with 2 missing assignments.",
+            "recent": [],
+            "upcoming": [],
+            "action_items": [
+              {
+                "priority": "medium",
+                "issue": "2 missing assignments",
+                "parent_action": "Check with Leah on the 2 missing DT 8 Soc Sci items and their due dates."
+              }
+            ]
+          },
+          {
+            "class_name": "Virt Enterprise",
+            "current_grade": "B 89.4%",
+            "status": "B average with 2 missing assignments.",
+            "recent": [],
+            "upcoming": [],
+            "action_items": [
+              {
+                "priority": "medium",
+                "issue": "2 missing assignments",
+                "parent_action": "Confirm Leah has plans to submit the 2 missing Virt Enterprise assignments soon."
+              }
+            ]
+          },
+          {
+            "class_name": "PE 8",
+            "current_grade": "90.0%",
+            "status": "Strong average despite 2 missing assignments.",
+            "recent": [
+              {
+                "date": "Fri, May 15",
+                "event": "My Fitness Journey \u2014 41.0/50.0 (82%)"
+              }
+            ],
+            "upcoming": [],
+            "action_items": [
+              {
+                "priority": "medium",
+                "issue": "2 missing assignments",
+                "parent_action": "Follow up on the 2 missing PE 8 assignments to keep the 90% intact."
+              }
+            ]
+          },
+          {
+            "class_name": "DT 8 Lang Arts",
             "current_grade": "A 90.1%",
-            "status": "Strong A with recent high score on project.",
+            "status": "Strong A with recent project on target.",
             "recent": [
               {
                 "date": "Fri, May 15",
@@ -3721,7 +3768,7 @@
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-23T10:40:38.545981+00:00"
+        "generated_at": "2026-05-24T10:46:03.275530+00:00"
       }
     }
   ]
