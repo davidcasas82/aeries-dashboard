@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-05-24T10:45:35.507937+00:00",
+  "last_updated": "2026-05-25T12:37:32.195692+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -103,12 +103,12 @@
           "period": 8,
           "course_name": "Engineering Geo",
           "teacher": "Stadel, A",
-          "percent": "74.5",
+          "percent": "75.6",
           "mark": "C",
-          "mark_and_score": "C (74.5%)",
+          "mark_and_score": "C (75.6%)",
           "missing_count": 0,
           "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=3708909&amp;Missing=1&amp;Term=S&amp;CDS=30736430000000&amp;SC=95\"><span>3</span></a>",
-          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('3708909', 'Engineering Geo', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 74.08&#37; compared to the average of the last four overall scores 72.76&#37;   Click for Details\" class=\"gradebook-trend-up\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
+          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('3708909', 'Engineering Geo', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 75.4&#37; compared to the average of the last four overall scores 73.84&#37;   Click for Details\" class=\"gradebook-trend-up\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
           "room": "2-211",
           "school_name": "Legacy Magnet Academy"
         }
@@ -1605,49 +1605,73 @@
               "number": "32",
               "description": "7.1 Identify 3-D from Rotating 2-D",
               "category": "Learning Targets (Quizzes)",
-              "points_earned": null,
+              "points_earned": 9.5,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 95.0,
               "date_assigned": "05/20/2026",
-              "date_completed": "",
+              "date_completed": "05/21/2026",
               "due_date": "05/21/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "33",
               "description": "7.3 Informal argument for volume formulas of a cylinder, pyramid, and cone",
               "category": "Learning Targets (Quizzes)",
-              "points_earned": null,
+              "points_earned": 8.5,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 85.0,
               "date_assigned": "05/20/2026",
-              "date_completed": "",
+              "date_completed": "05/21/2026",
               "due_date": "05/21/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "34",
               "description": "7.4-7.5 Describe objects and find their volumes",
               "category": "Learning Targets (Quizzes)",
+              "points_earned": 8.0,
+              "points_possible": 10.0,
+              "percentage": 80.0,
+              "date_assigned": "05/20/2026",
+              "date_completed": "05/21/2026",
+              "due_date": "05/21/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "35",
+              "description": "Infographic: Curveball Redesign Challenge",
+              "category": "Projects",
               "points_earned": null,
               "points_possible": 10.0,
               "percentage": 0.0,
-              "date_assigned": "05/20/2026",
+              "date_assigned": "05/11/2026",
               "date_completed": "",
-              "due_date": "05/21/2026",
+              "due_date": "05/22/2026",
               "grading_complete": false
             }
           ]
         }
       ],
       "ai_summary": {
-        "status": "Daniel holds B grades in Eng 9 and Mkt Adv GrphDes but C grades in Tech of Biology (77%) and Engineering Geo (74.5%), both with multiple missing assignments. Engineering Geo and Tech of Biology need the most attention to prevent further grade drops.",
+        "status": "Daniel is holding B averages in Eng 9 and Mkt Adv GrphDes but has C grades in Engineering Geo (75.6%) and Tech of Biology (77.0%), both with multiple missing assignments that are dragging performance. Engineering Geo and Tech of Biology need the most immediate attention to avoid further grade drops.",
         "classes": [
           {
             "class_name": "Engineering Geo",
-            "current_grade": "C 74.5%",
-            "status": "C grade with three missing assignments worth 30 points total that are dragging the average down.",
+            "current_grade": "C 75.6%",
+            "status": "Grade is low with three recent assignments scored and one major missing item from last week.",
             "recent": [
+              {
+                "date": "Thu, May 21",
+                "event": "7.1 Identify 3-D from Rotating 2-D \u2014 9.5/10.0 (95%)"
+              },
+              {
+                "date": "Thu, May 21",
+                "event": "7.3 Informal argument for volume formulas of a cyl \u2014 8.5/10.0 (85%)"
+              },
+              {
+                "date": "Thu, May 21",
+                "event": "7.4-7.5 Describe objects and find their volumes \u2014 8.0/10.0 (80%)"
+              },
               {
                 "date": "Thu, May 14",
                 "event": "7.5-7.6 Stuffed Animal Volume and Density calculat \u2014 10.0/10.0 (100%)"
@@ -1657,8 +1681,8 @@
             "action_items": [
               {
                 "priority": "high",
-                "issue": "three missing assignments (7.1, 7.3, 7.4-7.5) worth 30 pts total",
-                "parent_action": "Ask Daniel to submit 7.1, 7.3, and 7.4-7.5 immediately \u2014 completing them could raise the grade by ~5-7 points to a C+"
+                "issue": "Infographic: Curveball Redesign Challenge (10 pts) still unscored and past due",
+                "parent_action": "Ask Daniel to submit the Infographic assignment immediately; turning it in for full credit could raise the grade roughly 2-3 points"
               }
             ]
           },
@@ -1676,15 +1700,15 @@
             "action_items": [
               {
                 "priority": "high",
-                "issue": "four missing assignments not detailed in data",
-                "parent_action": "Review portal with Daniel to identify and submit the four missing Biology assignments ASAP"
+                "issue": "Four missing assignments not detailed but impacting the 77% grade",
+                "parent_action": "Request the list of four missing assignments from Daniel or the teacher portal and set a plan to complete them this week"
               }
             ]
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "current_grade": "B 83.5%",
-            "status": "Solid B but five missing assignments noted, with one specific past-due item.",
+            "status": "Solid B but five missing assignments are a risk to the average.",
             "recent": [
               {
                 "date": "Thu, May 21",
@@ -1694,16 +1718,16 @@
             "upcoming": [],
             "action_items": [
               {
-                "priority": "medium",
-                "issue": "LT7.3 Resume Update missing (10 pts) plus four others",
-                "parent_action": "Confirm Daniel submits LT7.3 and checks the other four missing items in Mkt Adv GrphDes"
+                "priority": "high",
+                "issue": "LT7.3 - Resume Update (10 pts) past due since Fri, May 15",
+                "parent_action": "Confirm with Daniel whether LT7.3 and the other four missing items were submitted; completing the 10-pt Resume Update would help stabilize the B"
               }
             ]
           },
           {
             "class_name": "Eng 9",
             "current_grade": "B 83.8%",
-            "status": "Steady B with strong recent scores on presentations and collaboration.",
+            "status": "Steady B with strong recent scores on LT 6.4 and collaboration.",
             "recent": [
               {
                 "date": "Fri, May 15",
@@ -1718,7 +1742,7 @@
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-24T10:45:47.886094+00:00"
+        "generated_at": "2026-05-25T12:37:55.452603+00:00"
       }
     },
     {
@@ -3651,98 +3675,51 @@
         }
       ],
       "ai_summary": {
-        "status": "Leah stands at a C in Bus Algebra 1 with 4 missing assignments\u2014that class needs the most urgent focus to avoid further grade drop. Int Sci Designs (B with 2 missing) and the other B classes also require attention to prevent slippage before end of term.",
+        "status": "Leah is mostly on track with an A in Lang Arts but Bus Algebra 1 is a major concern at C with 4 missing assignments. Int Sci Designs also needs attention due to 2 missing items pulling the grade to B. Focus parent effort on recovering the missing work in Bus Algebra 1 for the biggest grade impact.",
         "classes": [
           {
             "class_name": "Bus Algebra 1",
             "current_grade": "C 78.5%",
-            "status": "Lowest grade with 4 missing assignments; recent LT 8.x scores are mostly strong but inconsistent.",
+            "status": "Grade is low with 4 missing assignments and recent quiz scores mixed from 75-100%.",
             "recent": [
               {
                 "date": "Thu, May 14",
-                "event": "LT 8.1 - Graphing Quadratics (Standard Form) \u2014 10.0/10.0 (100%)"
+                "event": "LT 8.1 - Graphing Quadratics (Standard Form) score posted: 10.0/10.0 (100%)"
               },
               {
                 "date": "Thu, May 14",
-                "event": "LT 8.2 - Graphing Quadratics (Intercept form) \u2014 9.0/10.0 (90%)"
+                "event": "LT 8.2 - Graphing Quadratics (Intercept form) score posted: 9.0/10.0 (90%)"
               },
               {
                 "date": "Thu, May 14",
-                "event": "LT 8.3 - Graphing Quadratics (Vertex Form) \u2014 8.0/10.0 (80%)"
+                "event": "LT 8.3 - Graphing Quadratics (Vertex Form) score posted: 8.0/10.0 (80%)"
               },
               {
                 "date": "Thu, May 14",
-                "event": "LT 8.4 - Characteristics of Parabolas \u2014 7.5/10.0 (75%)"
+                "event": "LT 8.4 - Characteristics of Parabolas score posted: 7.5/10.0 (75%)"
               },
               {
                 "date": "Thu, May 14",
-                "event": "LT 8.5 - Max/Min of a Quadratic \u2014 10.0/10.0 (100%)"
+                "event": "LT 8.5 - Max/Min of a Quadratic score posted: 10.0/10.0 (100%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "4 missing assignments dragging down to C",
-                "parent_action": "Review the 4 missing Bus Algebra 1 assignments with Leah and confirm submission timeline to raise grade above 80%."
+                "issue": "4 missing assignments",
+                "parent_action": "Ask Leah for details on the 4 missing assignments and confirm submission plan with Mr. Fancy to recover points before end of term."
               }
             ]
           },
           {
             "class_name": "Int Sci Designs",
             "current_grade": "B 84.0%",
-            "status": "Solid B but 2 missing assignments need resolution.",
+            "status": "Solid B but 2 missing assignments are holding back the grade.",
             "recent": [
               {
                 "date": "Fri, May 15",
-                "event": "LT 5.3 EDP Balloon Powered Car Slides \u2014 4.25/5.0 (85%)"
-              }
-            ],
-            "upcoming": [],
-            "action_items": [
-              {
-                "priority": "high",
-                "issue": "2 missing assignments",
-                "parent_action": "Ask Leah to identify and complete the 2 missing Int Sci Designs assignments this week."
-              }
-            ]
-          },
-          {
-            "class_name": "DT 8 Soc Sci",
-            "current_grade": "B 87.6%",
-            "status": "B average with 2 missing assignments.",
-            "recent": [],
-            "upcoming": [],
-            "action_items": [
-              {
-                "priority": "medium",
-                "issue": "2 missing assignments",
-                "parent_action": "Check with Leah on the 2 missing DT 8 Soc Sci items and their due dates."
-              }
-            ]
-          },
-          {
-            "class_name": "Virt Enterprise",
-            "current_grade": "B 89.4%",
-            "status": "B average with 2 missing assignments.",
-            "recent": [],
-            "upcoming": [],
-            "action_items": [
-              {
-                "priority": "medium",
-                "issue": "2 missing assignments",
-                "parent_action": "Confirm Leah has plans to submit the 2 missing Virt Enterprise assignments soon."
-              }
-            ]
-          },
-          {
-            "class_name": "PE 8",
-            "current_grade": "90.0%",
-            "status": "Strong average despite 2 missing assignments.",
-            "recent": [
-              {
-                "date": "Fri, May 15",
-                "event": "My Fitness Journey \u2014 41.0/50.0 (82%)"
+                "event": "LT 5.3 EDP Balloon Powered Car Slides score posted: 4.25/5.0 (85%)"
               }
             ],
             "upcoming": [],
@@ -3750,25 +3727,25 @@
               {
                 "priority": "medium",
                 "issue": "2 missing assignments",
-                "parent_action": "Follow up on the 2 missing PE 8 assignments to keep the 90% intact."
+                "parent_action": "Check with Leah on the 2 missing items and ask her to submit them ASAP to Ms. Anthony."
               }
             ]
           },
           {
-            "class_name": "DT 8 Lang Arts",
+            "class_name": "Lang Arts",
             "current_grade": "A 90.1%",
-            "status": "Strong A with recent project on target.",
+            "status": "Strong A with recent project at 90%.",
             "recent": [
               {
                 "date": "Fri, May 15",
-                "event": "Utopian Community Project \u2014 4.5/5.0 (90%)"
+                "event": "Utopian Community Project score posted: 4.5/5.0 (90%)"
               }
             ],
             "upcoming": [],
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-24T10:46:03.275530+00:00"
+        "generated_at": "2026-05-25T12:38:16.361272+00:00"
       }
     }
   ]
