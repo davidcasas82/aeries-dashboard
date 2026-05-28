@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-05-27T12:26:33.005893+00:00",
+  "last_updated": "2026-05-28T12:36:03.932548+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -103,12 +103,12 @@
           "period": 8,
           "course_name": "Engineering Geo",
           "teacher": "Stadel, A",
-          "percent": "75.8",
+          "percent": "74.3",
           "mark": "C",
-          "mark_and_score": "C (75.8%)",
+          "mark_and_score": "C (74.3%)",
           "missing_count": 0,
           "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=3708909&amp;Missing=1&amp;Term=S&amp;CDS=30736430000000&amp;SC=95\"><span>3</span></a>",
-          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('3708909', 'Engineering Geo', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 76.05&#37; compared to the average of the last four overall scores 74.84&#37;   Click for Details\" class=\"gradebook-trend-up\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
+          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('3708909', 'Engineering Geo', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 74.08&#37; compared to the average of the last four overall scores 73.17&#37;   Click for Details\" class=\"gradebook-trend-same\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
           "room": "2-211",
           "school_name": "Legacy Magnet Academy"
         }
@@ -1533,9 +1533,9 @@
               "number": "26",
               "description": "6.1 Central & Inscribed angles, and Tangent Lines",
               "category": "Learning Targets (Quizzes)",
-              "points_earned": 8.0,
+              "points_earned": 9.0,
               "points_possible": 10.0,
-              "percentage": 80.0,
+              "percentage": 90.0,
               "date_assigned": "04/29/2026",
               "date_completed": "04/30/2026",
               "due_date": "04/30/2026",
@@ -1557,9 +1557,9 @@
               "number": "28",
               "description": "6.2b Use the circumference and area formulas for circles",
               "category": "Learning Targets (Quizzes)",
-              "points_earned": 9.5,
+              "points_earned": 7.0,
               "points_possible": 10.0,
-              "percentage": 95.0,
+              "percentage": 70.0,
               "date_assigned": "04/29/2026",
               "date_completed": "04/30/2026",
               "due_date": "04/30/2026",
@@ -1569,9 +1569,9 @@
               "number": "29",
               "description": "6.3a Arc Length and Sector Area",
               "category": "Learning Targets (Quizzes)",
-              "points_earned": 6.5,
+              "points_earned": 6.0,
               "points_possible": 10.0,
-              "percentage": 65.0,
+              "percentage": 60.0,
               "date_assigned": "04/29/2026",
               "date_completed": "04/30/2026",
               "due_date": "04/30/2026",
@@ -1581,9 +1581,9 @@
               "number": "30",
               "description": "6.4 Write the equation of a circle",
               "category": "Learning Targets (Quizzes)",
-              "points_earned": 9.0,
+              "points_earned": 7.0,
               "points_possible": 10.0,
-              "percentage": 90.0,
+              "percentage": 70.0,
               "date_assigned": "04/29/2026",
               "date_completed": "04/30/2026",
               "due_date": "04/30/2026",
@@ -1653,17 +1653,13 @@
         }
       ],
       "ai_summary": {
-        "status": "Daniel is holding steady in most classes but needs immediate focus on Engineering Geo (C 75.8%) and Tech of Biology (C 77.0%), both with multiple missing assignments dragging down performance. Mkt Adv GrphDes also has 6 missing items despite a B average.",
+        "status": "Daniel is struggling in Engineering Geo (74.3%) and Tech of Biology (77.0%), both C grades with multiple missing assignments. Mkt Adv GrphDes also has 6 missing items dragging the B down. Eng 9 Entre is stable at B.",
         "classes": [
           {
             "class_name": "Engineering Geo",
-            "current_grade": "C 75.8%",
-            "status": "Grade is low with 3 missing assignments and recent work showing inconsistency.",
+            "current_grade": "C 74.3%",
+            "status": "C grade with 3 missing assignments and recent scores in the 80-95% range.",
             "recent": [
-              {
-                "date": "Fri, May 22",
-                "event": "Infographic: Curveball Redesign Challenge \u2014 9.0/10.0 (90%)"
-              },
               {
                 "date": "Thu, May 21",
                 "event": "7.1 Identify 3-D from Rotating 2-D \u2014 9.5/10.0 (95%)"
@@ -1677,23 +1673,23 @@
                 "event": "7.4-7.5 Describe objects and find their volumes \u2014 8.0/10.0 (80%)"
               },
               {
-                "date": "Thu, May 14",
-                "event": "7.5-7.6 Stuffed Animal Volume and Density calculat \u2014 10.0/10.0 (100%)"
+                "date": "Fri, May 22",
+                "event": "Infographic: Curveball Redesign Challenge \u2014 9.0/10.0 (90%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "3 missing assignments",
-                "parent_action": "Ask Daniel to identify and submit the 3 missing assignments in Engineering Geo, which could raise the grade several points if completed."
+                "issue": "3 missing assignments lowering grade to C",
+                "parent_action": "Ask Daniel what the 3 missing assignments are and confirm submission status immediately"
               }
             ]
           },
           {
             "class_name": "Tech of Biology",
             "current_grade": "C 77.0%",
-            "status": "C grade with 4 missing assignments; recent assessment was strong but overall performance needs improvement.",
+            "status": "C grade with 4 missing assignments despite a recent 90% on LT 5.1.",
             "recent": [
               {
                 "date": "Fri, May 15",
@@ -1704,15 +1700,15 @@
             "action_items": [
               {
                 "priority": "high",
-                "issue": "4 missing assignments",
-                "parent_action": "Check with Daniel on the 4 missing items in Tech of Biology and confirm submission timeline to boost the grade."
+                "issue": "4 missing assignments keeping grade at C",
+                "parent_action": "Review missing work list with Daniel and prioritize turning in any partial credit options"
               }
             ]
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "current_grade": "B 82.0%",
-            "status": "Solid B but 6 missing assignments are a concern and could drop the grade quickly.",
+            "status": "B grade impacted by 6 missing assignments.",
             "recent": [
               {
                 "date": "Thu, May 21",
@@ -1724,14 +1720,14 @@
               {
                 "priority": "high",
                 "issue": "6 missing assignments",
-                "parent_action": "Review the 6 missing assignments in Mkt Adv GrphDes with Daniel and prioritize turning them in this week."
+                "parent_action": "Get the list of 6 missing items from Daniel or teacher and set a plan to complete them this weekend"
               }
             ]
           },
           {
-            "class_name": "Eng 9",
+            "class_name": "Eng 9 Entre",
             "current_grade": "B 83.8%",
-            "status": "B grade with strong recent scores and no missing work noted.",
+            "status": "Solid B with recent high scores on LT 6.4 and Collaboration.",
             "recent": [
               {
                 "date": "Fri, May 15",
@@ -1746,7 +1742,7 @@
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-27T12:26:44.808811+00:00"
+        "generated_at": "2026-05-28T12:36:16.453430+00:00"
       }
     },
     {
@@ -3691,81 +3687,65 @@
         }
       ],
       "ai_summary": {
-        "status": "Leah's overall performance is solid with an A in Lang Arts, but Bus Algebra 1 (C 79.5%) and Int Sci Designs (B 84%) need immediate attention due to missing work dragging down grades. Focus on resolving the 2 missing assignments in each of those classes for the biggest grade impact.",
+        "status": "Leah stands at a C in Bus Algebra 1 and B in Int Sci Designs, both with missing work that needs immediate focus for grade recovery. Lang Arts remains strong at A. Prioritize resolving the missing assignments in the two lower-performing classes.",
         "classes": [
           {
             "class_name": "Bus Algebra 1",
             "current_grade": "C 79.5%",
-            "status": "Lowest grade with 2 missing assignments; recent quiz scores are mixed.",
+            "status": "C grade with 2 missing assignments holds back performance despite a perfect recent score.",
             "recent": [
               {
                 "date": "Tue, May 19",
-                "event": "Fluency - Algebra Review Circuit \u2014 5.0/5.0 (100%) posted"
-              },
-              {
-                "date": "Thu, May 14",
-                "event": "LT 8.5 - Max/Min of a Quadratic \u2014 10.0/10.0 (100%) posted"
-              },
-              {
-                "date": "Thu, May 14",
-                "event": "LT 8.4 - Characteristics of Parabolas \u2014 7.5/10.0 (75%) posted"
-              },
-              {
-                "date": "Thu, May 14",
-                "event": "LT 8.3 - Graphing Quadratics (Vertex Form) \u2014 8.0/10.0 (80%) posted"
-              },
-              {
-                "date": "Thu, May 14",
-                "event": "LT 8.2 - Graphing Quadratics (Intercept form) \u2014 9.0/10.0 (90%) posted"
+                "event": "Fluency - Algebra Review Circuit score posted: 5.0/5.0 (100%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "2 missing assignments not scored",
-                "parent_action": "Ask Leah what the 2 missing assignments are and confirm if they can still be submitted to boost the C grade"
+                "issue": "2 missing assignments dragging down the C",
+                "parent_action": "Ask Leah to identify and submit the 2 missing assignments in Bus Algebra 1 immediately"
               }
             ]
           },
           {
             "class_name": "Int Sci Designs",
-            "current_grade": "B 84%",
-            "status": "Solid recent scores but 2 missing assignments need resolution.",
+            "current_grade": "B 84.0%",
+            "status": "Solid recent scores but 2 missing assignments prevent a higher grade.",
             "recent": [
               {
                 "date": "Fri, May 22",
-                "event": "LT 5.3 Balloon Powered Car Advertisement \u2014 1.0/1.0 (100%) posted"
+                "event": "LT 5.3 Balloon Powered Car Advertisement score posted: 1.0/1.0 (100%)"
               },
               {
                 "date": "Fri, May 15",
-                "event": "LT 5.3 EDP Balloon Powered Car Slides \u2014 4.25/5.0 (85%) posted"
+                "event": "LT 5.3 EDP Balloon Powered Car Slides score posted: 4.25/5.0 (85%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "2 missing assignments not scored",
-                "parent_action": "Check with Leah on the 2 missing Int Sci assignments and their due dates or late submission options"
+                "issue": "2 missing assignments",
+                "parent_action": "Confirm with Leah that the 2 missing Int Sci Designs assignments have been turned in"
               }
             ]
           },
           {
-            "class_name": "Lang Arts",
+            "class_name": "DT 8 Lang Arts",
             "current_grade": "A 90.1%",
-            "status": "Strong performance with no missing work noted.",
+            "status": "Strong A performance with recent high score on project.",
             "recent": [
               {
                 "date": "Fri, May 15",
-                "event": "Utopian Community Project \u2014 4.5/5.0 (90%) posted"
+                "event": "Utopian Community Project score posted: 4.5/5.0 (90%)"
               }
             ],
             "upcoming": [],
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-27T12:26:55.547694+00:00"
+        "generated_at": "2026-05-28T12:36:31.329402+00:00"
       }
     }
   ]
