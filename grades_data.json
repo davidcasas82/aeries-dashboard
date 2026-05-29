@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-05-28T12:36:03.932548+00:00",
+  "last_updated": "2026-05-29T12:21:35.242353+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -1653,66 +1653,47 @@
         }
       ],
       "ai_summary": {
-        "status": "Daniel is struggling in Engineering Geo (74.3%) and Tech of Biology (77.0%), both C grades with multiple missing assignments. Mkt Adv GrphDes also has 6 missing items dragging the B down. Eng 9 Entre is stable at B.",
+        "status": "Daniel is holding B averages in most classes but Engineering Geo (C 74.3%) and Mkt Adv GrphDes (B 82%) need immediate attention due to multiple missing assignments. Focus here for the biggest grade impact before the end of the term.",
         "classes": [
           {
             "class_name": "Engineering Geo",
             "current_grade": "C 74.3%",
-            "status": "C grade with 3 missing assignments and recent scores in the 80-95% range.",
+            "status": "C average with three missing assignments dragging down performance.",
             "recent": [
-              {
-                "date": "Thu, May 21",
-                "event": "7.1 Identify 3-D from Rotating 2-D \u2014 9.5/10.0 (95%)"
-              },
-              {
-                "date": "Thu, May 21",
-                "event": "7.3 Informal argument for volume formulas of a cyl \u2014 8.5/10.0 (85%)"
-              },
-              {
-                "date": "Thu, May 21",
-                "event": "7.4-7.5 Describe objects and find their volumes \u2014 8.0/10.0 (80%)"
-              },
               {
                 "date": "Fri, May 22",
-                "event": "Infographic: Curveball Redesign Challenge \u2014 9.0/10.0 (90%)"
+                "event": "Infographic: Curveball Redesign Challenge \u2014 9.0/10.0 (90%) posted"
+              },
+              {
+                "date": "Thu, May 21",
+                "event": "7.4-7.5 Describe objects and find their volumes \u2014 8.0/10.0 (80%) posted"
+              },
+              {
+                "date": "Thu, May 21",
+                "event": "7.3 Informal argument for volume formulas of a cyl \u2014 8.5/10.0 (85%) posted"
+              },
+              {
+                "date": "Thu, May 21",
+                "event": "7.1 Identify 3-D from Rotating 2-D \u2014 9.5/10.0 (95%) posted"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "3 missing assignments lowering grade to C",
-                "parent_action": "Ask Daniel what the 3 missing assignments are and confirm submission status immediately"
-              }
-            ]
-          },
-          {
-            "class_name": "Tech of Biology",
-            "current_grade": "C 77.0%",
-            "status": "C grade with 4 missing assignments despite a recent 90% on LT 5.1.",
-            "recent": [
-              {
-                "date": "Fri, May 15",
-                "event": "LT 5.1 Assessment \u2014 9.0/10.0 (90%)"
-              }
-            ],
-            "upcoming": [],
-            "action_items": [
-              {
-                "priority": "high",
-                "issue": "4 missing assignments keeping grade at C",
-                "parent_action": "Review missing work list with Daniel and prioritize turning in any partial credit options"
+                "issue": "3 missing assignments",
+                "parent_action": "Ask Daniel to identify and complete the 3 missing assignments in Engineering Geo; even partial credit on 20-30 pts could raise the grade above 80%."
               }
             ]
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "current_grade": "B 82.0%",
-            "status": "B grade impacted by 6 missing assignments.",
+            "status": "Solid B but six missing assignments are a risk.",
             "recent": [
               {
                 "date": "Thu, May 21",
-                "event": "LT7.4 - Elevator Pitch \u2014 9.0/10.0 (90%)"
+                "event": "LT7.4 - Elevator Pitch \u2014 9.0/10.0 (90%) posted"
               }
             ],
             "upcoming": [],
@@ -1720,29 +1701,12 @@
               {
                 "priority": "high",
                 "issue": "6 missing assignments",
-                "parent_action": "Get the list of 6 missing items from Daniel or teacher and set a plan to complete them this weekend"
+                "parent_action": "Confirm Daniel has turned in or plans to complete the 6 missing items; they are likely worth 50+ pts combined and could push the grade into the high B or A range."
               }
             ]
-          },
-          {
-            "class_name": "Eng 9 Entre",
-            "current_grade": "B 83.8%",
-            "status": "Solid B with recent high scores on LT 6.4 and Collaboration.",
-            "recent": [
-              {
-                "date": "Fri, May 15",
-                "event": "LT 6.4: I will present ideas in a clear, organized \u2014 9.0/10.0 (90%)"
-              },
-              {
-                "date": "Fri, May 15",
-                "event": "Collaboration: I will collaborate with my peers ac \u2014 9.0/10.0 (90%)"
-              }
-            ],
-            "upcoming": [],
-            "action_items": []
           }
         ],
-        "generated_at": "2026-05-28T12:36:16.453430+00:00"
+        "generated_at": "2026-05-29T12:21:47.490384+00:00"
       }
     },
     {
@@ -1798,7 +1762,7 @@
           "mark_and_score": "B (87.6%)",
           "missing_count": 0,
           "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=4021168&amp;Missing=1&amp;Term=S&amp;CDS=30736430000000&amp;SC=95\"><span>2</span></a>",
-          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('4021168', 'Soc Sci', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 83.48&#37; compared to the average of the last four overall scores 88.25&#37;   Click for Details\" class=\"gradebook-trend-down\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
+          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('4021168', 'Soc Sci', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 83.83&#37; compared to the average of the last four overall scores 87.67&#37;   Click for Details\" class=\"gradebook-trend-down\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
           "room": "2-112",
           "school_name": "Legacy Magnet Academy"
         },
@@ -1819,12 +1783,12 @@
           "period": 6,
           "course_name": "Bus Algebra 1",
           "teacher": "Fancy, D",
-          "percent": "79.5",
+          "percent": "79.7",
           "mark": "C",
-          "mark_and_score": "C (79.5%)",
+          "mark_and_score": "C (79.7%)",
           "missing_count": 0,
-          "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=7542191&amp;Missing=1&amp;Term=S&amp;CDS=30736430000000&amp;SC=95\"><span>2</span></a>",
-          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('7542191', 'Bus Algebra 1', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 77.69&#37; compared to the average of the last four overall scores 78.48&#37;   Click for Details\" class=\"gradebook-trend-same\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
+          "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=7542191&amp;Missing=1&amp;Term=S&amp;CDS=30736430000000&amp;SC=95\"><span>1</span></a>",
+          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('7542191', 'Bus Algebra 1', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 77.92&#37; compared to the average of the last four overall scores 78.66&#37;   Click for Details\" class=\"gradebook-trend-same\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
           "room": "2-224",
           "school_name": "Legacy Magnet Academy"
         },
@@ -2964,6 +2928,18 @@
               "date_completed": "",
               "due_date": "05/15/2026",
               "grading_complete": true
+            },
+            {
+              "number": "12",
+              "description": "Civil War Storybook",
+              "category": "Classwork",
+              "points_earned": 10.0,
+              "points_possible": 10.0,
+              "percentage": 100.0,
+              "date_assigned": "05/18/2026",
+              "date_completed": "05/28/2026",
+              "due_date": "05/28/2026",
+              "grading_complete": true
             }
           ]
         },
@@ -3603,11 +3579,11 @@
               "number": "25",
               "description": "Fluency - Factoring",
               "category": "Fluency",
-              "points_earned": null,
+              "points_earned": 3.5,
               "points_possible": 5.0,
-              "percentage": 0.0,
+              "percentage": 70.0,
               "date_assigned": "04/24/2026",
-              "date_completed": "",
+              "date_completed": "04/24/2026",
               "due_date": "04/24/2026",
               "grading_complete": true
             },
@@ -3687,39 +3663,35 @@
         }
       ],
       "ai_summary": {
-        "status": "Leah stands at a C in Bus Algebra 1 and B in Int Sci Designs, both with missing work that needs immediate focus for grade recovery. Lang Arts remains strong at A. Prioritize resolving the missing assignments in the two lower-performing classes.",
+        "status": "Leah is performing well overall with an A in Lang Arts, but Bus Algebra 1 (C 79.7%) and Int Sci Designs (B 84%) need the most attention due to missing work pulling down grades. Soc Sci and Virt Enterprise also have missing assignments despite solid B averages.",
         "classes": [
           {
             "class_name": "Bus Algebra 1",
-            "current_grade": "C 79.5%",
-            "status": "C grade with 2 missing assignments holds back performance despite a perfect recent score.",
+            "current_grade": "C 79.7%",
+            "status": "Lowest grade with one missing assignment impacting progress.",
             "recent": [
               {
                 "date": "Tue, May 19",
-                "event": "Fluency - Algebra Review Circuit score posted: 5.0/5.0 (100%)"
+                "event": "Fluency - Algebra Review Circuit \u2014 5.0/5.0 (100%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "2 missing assignments dragging down the C",
-                "parent_action": "Ask Leah to identify and submit the 2 missing assignments in Bus Algebra 1 immediately"
+                "issue": "1 missing assignment",
+                "parent_action": "Ask Leah about the missing assignment details and due date to submit ASAP and estimate grade boost from ~80% toward B range"
               }
             ]
           },
           {
             "class_name": "Int Sci Designs",
-            "current_grade": "B 84.0%",
-            "status": "Solid recent scores but 2 missing assignments prevent a higher grade.",
+            "current_grade": "B 84%",
+            "status": "Two missing assignments at B level with recent perfect score.",
             "recent": [
               {
                 "date": "Fri, May 22",
-                "event": "LT 5.3 Balloon Powered Car Advertisement score posted: 1.0/1.0 (100%)"
-              },
-              {
-                "date": "Fri, May 15",
-                "event": "LT 5.3 EDP Balloon Powered Car Slides score posted: 4.25/5.0 (85%)"
+                "event": "LT 5.3 Balloon Powered Car Advertisement \u2014 1.0/1.0 (100%)"
               }
             ],
             "upcoming": [],
@@ -3727,25 +3699,53 @@
               {
                 "priority": "high",
                 "issue": "2 missing assignments",
-                "parent_action": "Confirm with Leah that the 2 missing Int Sci Designs assignments have been turned in"
+                "parent_action": "Confirm submission status of the two missing items and request makeup options from teacher Anthony"
+              }
+            ]
+          },
+          {
+            "class_name": "DT 8 Soc Sci",
+            "current_grade": "B 87.6%",
+            "status": "Solid B with two missing assignments and recent perfect score.",
+            "recent": [
+              {
+                "date": "Thu, May 28",
+                "event": "Civil War Storybook \u2014 10.0/10.0 (100%)"
+              }
+            ],
+            "upcoming": [],
+            "action_items": [
+              {
+                "priority": "medium",
+                "issue": "2 missing assignments",
+                "parent_action": "Review missing work with Leah and check if they can be turned in late for partial credit"
+              }
+            ]
+          },
+          {
+            "class_name": "Virt Enterprise",
+            "current_grade": "B 89.4%",
+            "status": "B average holding with two missing assignments.",
+            "recent": [],
+            "upcoming": [],
+            "action_items": [
+              {
+                "priority": "medium",
+                "issue": "2 missing assignments",
+                "parent_action": "Ask Leah to identify and complete the two missing assignments to secure the B or push higher"
               }
             ]
           },
           {
             "class_name": "DT 8 Lang Arts",
             "current_grade": "A 90.1%",
-            "status": "Strong A performance with recent high score on project.",
-            "recent": [
-              {
-                "date": "Fri, May 15",
-                "event": "Utopian Community Project score posted: 4.5/5.0 (90%)"
-              }
-            ],
+            "status": "Strong A with no missing work noted.",
+            "recent": [],
             "upcoming": [],
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-28T12:36:31.329402+00:00"
+        "generated_at": "2026-05-29T12:21:58.922797+00:00"
       }
     }
   ]
