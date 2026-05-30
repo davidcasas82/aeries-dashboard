@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-05-29T12:21:35.242353+00:00",
+  "last_updated": "2026-05-30T10:49:33.888998+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -64,12 +64,12 @@
           "period": 5,
           "course_name": "WrldHis by Dsgn",
           "teacher": "Chase, T",
-          "percent": "",
-          "mark": "",
-          "mark_and_score": "",
+          "percent": "78.5",
+          "mark": "C",
+          "mark_and_score": "C (78.5%)",
           "missing_count": 0,
-          "missing_assignments": "",
-          "trend": "",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
+          "trend": "<a href=\"javascript:void(0)\"  class=\"gradebook-trend-click-hint\" onclick=\"createScatterChart('2297048', 'WrldHis by Dsgn', 'S');  return false;\"><img src=\"images/blank.gif\" title=\"Forecasted value of 78.63&#37; compared to the average of the last four overall scores 78.51&#37;   Click for Details\" class=\"gradebook-trend-same\" style=\"margin: 0px 0px -14px 0px; border: 0;\" />Details</a>",
           "room": "2-203",
           "school_name": "Legacy Magnet Academy"
         },
@@ -115,7 +115,7 @@
       ],
       "assignments_by_class": [
         {
-          "class_name": "Eng 9 Entre",
+          "class_name": "<< 2- Eng 9 Entre- Spring  1/6/2026 - 5/29/2026 >>*",
           "assignments": [
             {
               "number": "1",
@@ -288,7 +288,7 @@
           ]
         },
         {
-          "class_name": "Mkt Adv GrphDes",
+          "class_name": "<< 3- Mkt Adv GrphDes- Spring  1/6/2026 - 5/29/2026 >>",
           "assignments": [
             {
               "number": "1",
@@ -617,7 +617,7 @@
           ]
         },
         {
-          "class_name": "PE Course 1",
+          "class_name": "<< 4- PE Course 1- Spring  1/6/2026 - 5/29/2026 >>*",
           "assignments": [
             {
               "number": "1",
@@ -982,7 +982,516 @@
           ]
         },
         {
-          "class_name": "Tech of Biology",
+          "class_name": "<< 5- WrldHis by Dsgn- Spring  1/6/2026 - 5/29/2026 >>*",
+          "assignments": [
+            {
+              "number": "1",
+              "description": "20.1 Ch 20 notes WWI",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "01/07/2026",
+              "date_completed": "01/09/2026",
+              "due_date": "01/09/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "2",
+              "description": "20.2 Trench Warfare - DA",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "01/09/2026",
+              "date_completed": "01/11/2026",
+              "due_date": "01/11/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "3",
+              "description": "Propaganda Poster",
+              "category": "Learning Target - Design",
+              "points_earned": 100.0,
+              "points_possible": 100.0,
+              "percentage": 100.0,
+              "date_assigned": "01/12/2026",
+              "date_completed": "01/16/2026",
+              "due_date": "01/16/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "4",
+              "description": "20.3 Propaganda Whats the Message?",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "01/12/2026",
+              "date_completed": "01/12/2026",
+              "due_date": "01/12/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "5",
+              "description": "20.4 From US Neutrality to War DBQs",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "01/21/2026",
+              "date_completed": "01/21/2026",
+              "due_date": "01/21/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "6",
+              "description": "21.1 Russian Revolution & Civil War Notes",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "01/23/2026",
+              "date_completed": "01/23/2026",
+              "due_date": "01/23/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "7",
+              "description": "20.6 14-points vs Treaty of Versailles",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "01/26/2026",
+              "date_completed": "01/26/2026",
+              "due_date": "01/26/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "8",
+              "description": "Quiz",
+              "category": "Learning Target - History",
+              "points_earned": 85.19,
+              "points_possible": 100.0,
+              "percentage": 85.19,
+              "date_assigned": "01/28/2026",
+              "date_completed": "01/28/2026",
+              "due_date": "01/28/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "9",
+              "description": "21.2 Russian Rev. Primary Source Analysis",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "01/26/2026",
+              "date_completed": "01/26/2026",
+              "due_date": "01/26/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "10",
+              "description": "22.1 Ch 22 Notes",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "01/28/2026",
+              "date_completed": "01/30/2026",
+              "due_date": "01/30/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "11",
+              "description": "22.2 Tensions & Revolutions in Mexico",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "02/02/2026",
+              "date_completed": "02/04/2026",
+              "due_date": "02/04/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "12",
+              "description": "22.3 US Foreign Policy",
+              "category": "Classwork Collaboration",
+              "points_earned": null,
+              "points_possible": 0.0,
+              "percentage": null,
+              "date_assigned": "02/04/2026",
+              "date_completed": "02/06/2026",
+              "due_date": "02/06/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "13",
+              "description": "CER",
+              "category": "Learning Target - History",
+              "points_earned": 100.0,
+              "points_possible": 100.0,
+              "percentage": 100.0,
+              "date_assigned": "02/13/2026",
+              "date_completed": "02/13/2026",
+              "due_date": "02/13/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "14",
+              "description": "23.1 Notes & Map",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "02/18/2026",
+              "date_completed": "02/20/2026",
+              "due_date": "02/20/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "15",
+              "description": "22.4 US Imperialism 6 Country Matrix",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "02/09/2026",
+              "date_completed": "02/11/2026",
+              "due_date": "02/11/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "16",
+              "description": "24.1 Notes",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "02/23/2026",
+              "date_completed": "02/25/2026",
+              "due_date": "02/25/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "17",
+              "description": "Ch 22 Lesson Game TCI",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "02/23/2026",
+              "date_completed": "02/23/2026",
+              "due_date": "02/23/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "18",
+              "description": "Ch 23 Lesson Game TCI",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "02/25/2026",
+              "date_completed": "02/25/2026",
+              "due_date": "02/25/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "19",
+              "description": "Ch 24 Lesson Game TCI",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "02/27/2026",
+              "date_completed": "02/27/2026",
+              "due_date": "02/27/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "20",
+              "description": "Quiz 22-24",
+              "category": "Learning Target - History",
+              "points_earned": 55.88,
+              "points_possible": 100.0,
+              "percentage": 55.88,
+              "date_assigned": "03/02/2026",
+              "date_completed": "03/02/2026",
+              "due_date": "03/02/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "21",
+              "description": "LT 5.1 Research",
+              "category": "Learning Target - History",
+              "points_earned": 70.0,
+              "points_possible": 100.0,
+              "percentage": 70.0,
+              "date_assigned": "03/04/2026",
+              "date_completed": "03/18/2026",
+              "due_date": "03/18/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "22",
+              "description": "25.1 Notes",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "03/11/2026",
+              "date_completed": "03/16/2026",
+              "due_date": "03/16/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "23",
+              "description": "LT 5.2 Design Timeline",
+              "category": "Learning Target - Design",
+              "points_earned": 70.0,
+              "points_possible": 100.0,
+              "percentage": 70.0,
+              "date_assigned": "03/20/2026",
+              "date_completed": "03/27/2026",
+              "due_date": "03/27/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "24",
+              "description": "LT 5.3 Historical Context",
+              "category": "Learning Target - History",
+              "points_earned": 80.0,
+              "points_possible": 100.0,
+              "percentage": 80.0,
+              "date_assigned": "03/20/2026",
+              "date_completed": "03/27/2026",
+              "due_date": "03/27/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "25",
+              "description": "26.1 Notes",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "04/06/2026",
+              "date_completed": "04/06/2026",
+              "due_date": "04/06/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "26",
+              "description": "26.2 Notes",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "04/08/2026",
+              "date_completed": "04/08/2026",
+              "due_date": "04/08/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "27",
+              "description": "DBQs Why did Japan attack Pearl Harbor",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "04/10/2026",
+              "date_completed": "04/12/2026",
+              "due_date": "04/12/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "28",
+              "description": "26.3 Notes",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "04/13/2026",
+              "date_completed": "04/13/2026",
+              "due_date": "04/13/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "29",
+              "description": "26.4 Notes",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "04/15/2026",
+              "date_completed": "04/15/2026",
+              "due_date": "04/15/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "30",
+              "description": "TCI Lesson Game Ch 25",
+              "category": "Classwork Collaboration",
+              "points_earned": 6.0,
+              "points_possible": 9.0,
+              "percentage": 66.67,
+              "date_assigned": "04/17/2026",
+              "date_completed": "04/20/2026",
+              "due_date": "04/20/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "31",
+              "description": "TCI Lesson Game Ch 26",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "04/17/2026",
+              "date_completed": "04/20/2026",
+              "due_date": "04/20/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "32",
+              "description": "Quiz 25-26",
+              "category": "Learning Target - History",
+              "points_earned": 66.67,
+              "points_possible": 100.0,
+              "percentage": 66.67,
+              "date_assigned": "04/22/2026",
+              "date_completed": "04/22/2026",
+              "due_date": "04/22/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "33",
+              "description": "27.1",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "04/27/2026",
+              "date_completed": "04/27/2026",
+              "due_date": "04/27/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "34",
+              "description": "28.1",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "04/29/2026",
+              "date_completed": "04/29/2026",
+              "due_date": "04/29/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "35",
+              "description": "The Red Dot Game",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "05/01/2026",
+              "date_completed": "05/01/2026",
+              "due_date": "05/01/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "36",
+              "description": "28.2",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "05/04/2026",
+              "date_completed": "05/04/2026",
+              "due_date": "05/04/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "37",
+              "description": "29.1",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "05/11/2026",
+              "date_completed": "05/11/2026",
+              "due_date": "05/11/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "38",
+              "description": "29.2",
+              "category": "Classwork Collaboration",
+              "points_earned": 9.0,
+              "points_possible": 9.0,
+              "percentage": 100.0,
+              "date_assigned": "05/13/2026",
+              "date_completed": "05/13/2026",
+              "due_date": "05/13/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "39",
+              "description": "30.1",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 9.0,
+              "percentage": 0.0,
+              "date_assigned": "05/18/2026",
+              "date_completed": "05/18/2026",
+              "due_date": "05/18/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "40",
+              "description": "30.2",
+              "category": "Classwork Collaboration",
+              "points_earned": 0.0,
+              "points_possible": 28.0,
+              "percentage": 0.0,
+              "date_assigned": "05/20/2026",
+              "date_completed": "05/25/2026",
+              "due_date": "05/25/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "41",
+              "description": "Quiz",
+              "category": "Learning Target - History",
+              "points_earned": 78.38,
+              "points_possible": 100.0,
+              "percentage": 78.38,
+              "date_assigned": "05/27/2026",
+              "date_completed": "05/27/2026",
+              "due_date": "05/27/2026",
+              "grading_complete": true
+            },
+            {
+              "number": "42",
+              "description": "CW Poster",
+              "category": "Classwork Collaboration",
+              "points_earned": 40.0,
+              "points_possible": 40.0,
+              "percentage": 100.0,
+              "date_assigned": "05/15/2026",
+              "date_completed": "05/15/2026",
+              "due_date": "05/15/2026",
+              "grading_complete": true
+            }
+          ]
+        },
+        {
+          "class_name": "<< 6- Tech of Biology- Spring  1/6/2026 - 5/29/2026 >>*",
           "assignments": [
             {
               "number": "1",
@@ -1239,7 +1748,7 @@
           ]
         },
         {
-          "class_name": "Engineering Geo",
+          "class_name": "<< 8- Engineering Geo- Spring  1/6/2026 - 5/29/2026 >>*",
           "assignments": [
             {
               "number": "1",
@@ -1653,12 +2162,12 @@
         }
       ],
       "ai_summary": {
-        "status": "Daniel is holding B averages in most classes but Engineering Geo (C 74.3%) and Mkt Adv GrphDes (B 82%) need immediate attention due to multiple missing assignments. Focus here for the biggest grade impact before the end of the term.",
+        "status": "Daniel is struggling most in Engineering Geo (74.3%) and WrldHis (78.5%), both C grades with missing work dragging them down. Mkt Adv GrphDes has 6 missing assignments but is holding at a B. Focus parent effort on recovering points in the two C classes for biggest grade impact.",
         "classes": [
           {
             "class_name": "Engineering Geo",
             "current_grade": "C 74.3%",
-            "status": "C average with three missing assignments dragging down performance.",
+            "status": "Lowest grade with 3 missing assignments; recent work is mostly strong but zeros will hurt final average.",
             "recent": [
               {
                 "date": "Fri, May 22",
@@ -1681,15 +2190,42 @@
             "action_items": [
               {
                 "priority": "high",
-                "issue": "3 missing assignments",
-                "parent_action": "Ask Daniel to identify and complete the 3 missing assignments in Engineering Geo; even partial credit on 20-30 pts could raise the grade above 80%."
+                "issue": "3 missing assignments totaling unknown points",
+                "parent_action": "Ask Daniel which 3 assignments are missing in Engineering Geo and confirm submission status immediately"
+              }
+            ]
+          },
+          {
+            "class_name": "WrldHis",
+            "current_grade": "C 78.5%",
+            "status": "C grade with two zero scores from recent assignments that appear missing or unscored.",
+            "recent": [
+              {
+                "date": "Wed, May 27",
+                "event": "Quiz \u2014 78.38/100.0 (78%) posted"
+              },
+              {
+                "date": "Mon, May 25",
+                "event": "30.2 \u2014 0.0/28.0 (?) posted"
+              },
+              {
+                "date": "Mon, May 18",
+                "event": "30.1 \u2014 0.0/9.0 (?) posted"
+              }
+            ],
+            "upcoming": [],
+            "action_items": [
+              {
+                "priority": "high",
+                "issue": "30.1 (9 pts) and 30.2 (28 pts) show as zero and likely missing",
+                "parent_action": "Confirm with Daniel if 30.1 and 30.2 were submitted; turning them in could raise grade ~4-5 points"
               }
             ]
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "current_grade": "B 82.0%",
-            "status": "Solid B but six missing assignments are a risk.",
+            "status": "B grade but 6 missing assignments need recovery to avoid dropping.",
             "recent": [
               {
                 "date": "Thu, May 21",
@@ -1699,14 +2235,22 @@
             "upcoming": [],
             "action_items": [
               {
-                "priority": "high",
+                "priority": "medium",
                 "issue": "6 missing assignments",
-                "parent_action": "Confirm Daniel has turned in or plans to complete the 6 missing items; they are likely worth 50+ pts combined and could push the grade into the high B or A range."
+                "parent_action": "Review missing list with Daniel and prioritize turning in highest-point items first"
               }
             ]
+          },
+          {
+            "class_name": "Eng 9",
+            "current_grade": "B 83.8%",
+            "status": "Solid B with no recent issues noted.",
+            "recent": [],
+            "upcoming": [],
+            "action_items": []
           }
         ],
-        "generated_at": "2026-05-29T12:21:47.490384+00:00"
+        "generated_at": "2026-05-30T10:50:01.343485+00:00"
       }
     },
     {
@@ -1808,7 +2352,7 @@
       ],
       "assignments_by_class": [
         {
-          "class_name": "Lang Arts",
+          "class_name": "<< 1- Lang Arts- Spring  1/6/2026 - 5/29/2026 >>*",
           "assignments": [
             {
               "number": "1",
@@ -2053,7 +2597,7 @@
           ]
         },
         {
-          "class_name": "PE 8",
+          "class_name": "<< 2- PE 8- Spring  1/6/2026 - 5/29/2026 >>*",
           "assignments": [
             {
               "number": "1",
@@ -2418,7 +2962,7 @@
           ]
         },
         {
-          "class_name": "Int Sci Designs",
+          "class_name": "<< 3- Int Sci Designs- Spring  1/6/2026 - 5/29/2026 >>*",
           "assignments": [
             {
               "number": "34",
@@ -2795,7 +3339,7 @@
           ]
         },
         {
-          "class_name": "Soc Sci",
+          "class_name": "<< 4- Soc Sci- Spring  1/6/2026 - 5/29/2026 >>*",
           "assignments": [
             {
               "number": "1",
@@ -2944,7 +3488,7 @@
           ]
         },
         {
-          "class_name": "Virt Enterprise",
+          "class_name": "<< 5- Virt Enterprise- Spring  1/6/2026 - 5/29/2026 >>",
           "assignments": [
             {
               "number": "1",
@@ -3285,7 +3829,7 @@
           ]
         },
         {
-          "class_name": "Bus Algebra 1",
+          "class_name": "<< 6- Bus Algebra 1- Spring  1/6/2026 - 5/29/2026 >>*",
           "assignments": [
             {
               "number": "1",
@@ -3663,16 +4207,16 @@
         }
       ],
       "ai_summary": {
-        "status": "Leah is performing well overall with an A in Lang Arts, but Bus Algebra 1 (C 79.7%) and Int Sci Designs (B 84%) need the most attention due to missing work pulling down grades. Soc Sci and Virt Enterprise also have missing assignments despite solid B averages.",
+        "status": "Leah stands at a C in Bus Algebra 1 and Bs in Int Sci Designs and Soc Sci, each with missing work that needs immediate focus for grade recovery. Lang Arts is solid at A with no issues noted. Priority is turning around the Algebra C and clearing the missing assignments across B classes.",
         "classes": [
           {
             "class_name": "Bus Algebra 1",
             "current_grade": "C 79.7%",
-            "status": "Lowest grade with one missing assignment impacting progress.",
+            "status": "Lowest grade with 1 missing assignment pulling it down.",
             "recent": [
               {
                 "date": "Tue, May 19",
-                "event": "Fluency - Algebra Review Circuit \u2014 5.0/5.0 (100%)"
+                "event": "Fluency - Algebra Review Circuit \u2014 5.0/5.0 (100%) posted"
               }
             ],
             "upcoming": [],
@@ -3680,18 +4224,18 @@
               {
                 "priority": "high",
                 "issue": "1 missing assignment",
-                "parent_action": "Ask Leah about the missing assignment details and due date to submit ASAP and estimate grade boost from ~80% toward B range"
+                "parent_action": "Ask Leah which assignment is missing and confirm submission to raise grade toward B"
               }
             ]
           },
           {
             "class_name": "Int Sci Designs",
-            "current_grade": "B 84%",
-            "status": "Two missing assignments at B level with recent perfect score.",
+            "current_grade": "B 84.0%",
+            "status": "Solid B but 2 missing assignments risk dropping it.",
             "recent": [
               {
                 "date": "Fri, May 22",
-                "event": "LT 5.3 Balloon Powered Car Advertisement \u2014 1.0/1.0 (100%)"
+                "event": "LT 5.3 Balloon Powered Car Advertisement \u2014 1.0/1.0 (100%) posted"
               }
             ],
             "upcoming": [],
@@ -3699,18 +4243,18 @@
               {
                 "priority": "high",
                 "issue": "2 missing assignments",
-                "parent_action": "Confirm submission status of the two missing items and request makeup options from teacher Anthony"
+                "parent_action": "Check with Leah on the 2 missing items and have her submit to protect the B average"
               }
             ]
           },
           {
-            "class_name": "DT 8 Soc Sci",
+            "class_name": "Soc Sci",
             "current_grade": "B 87.6%",
-            "status": "Solid B with two missing assignments and recent perfect score.",
+            "status": "B with 2 missing assignments that could impact final grade.",
             "recent": [
               {
                 "date": "Thu, May 28",
-                "event": "Civil War Storybook \u2014 10.0/10.0 (100%)"
+                "event": "Civil War Storybook \u2014 10.0/10.0 (100%) posted"
               }
             ],
             "upcoming": [],
@@ -3718,34 +4262,12 @@
               {
                 "priority": "medium",
                 "issue": "2 missing assignments",
-                "parent_action": "Review missing work with Leah and check if they can be turned in late for partial credit"
+                "parent_action": "Review the 2 missing items with Leah and ensure completion before end of term"
               }
             ]
-          },
-          {
-            "class_name": "Virt Enterprise",
-            "current_grade": "B 89.4%",
-            "status": "B average holding with two missing assignments.",
-            "recent": [],
-            "upcoming": [],
-            "action_items": [
-              {
-                "priority": "medium",
-                "issue": "2 missing assignments",
-                "parent_action": "Ask Leah to identify and complete the two missing assignments to secure the B or push higher"
-              }
-            ]
-          },
-          {
-            "class_name": "DT 8 Lang Arts",
-            "current_grade": "A 90.1%",
-            "status": "Strong A with no missing work noted.",
-            "recent": [],
-            "upcoming": [],
-            "action_items": []
           }
         ],
-        "generated_at": "2026-05-29T12:21:58.922797+00:00"
+        "generated_at": "2026-05-30T10:50:18.211258+00:00"
       }
     }
   ]
