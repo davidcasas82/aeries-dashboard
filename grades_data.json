@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-05-31T11:03:59.278650+00:00",
+  "last_updated": "2026-06-01T15:28:36.638849+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -2150,92 +2150,83 @@
         }
       ],
       "ai_summary": {
-        "status": "Daniel is at a C in both WrldHis and Engineering Geo, with WrldHis showing multiple zero scores on recent assignments that need immediate attention. Mkt Adv GrphDes is a B but has 6 missing assignments that could drop the grade if unresolved. Eng 9 is stable at a B with no noted issues.",
+        "status": "Daniel is struggling in three core classes with C grades and missing work. Engineering Geo (74.3%) and WrldHis by Dsgn (78.5%) need the most immediate attention due to low performance and recent zeros.",
         "classes": [
           {
-            "class_name": "WrldHis",
-            "current_grade": "C 78.5%",
-            "status": "Multiple zero scores on recent work are pulling the grade down sharply.",
+            "class_name": "Engineering Geo",
+            "current_grade": "C 74.3%",
+            "status": "Lowest grade overall with 3 missing assignments pulling the score down.",
             "recent": [
               {
-                "date": "Wed, May 27",
-                "event": "Quiz \u2014 78.38/100.0 (78%) posted"
+                "date": "Thu, May 21",
+                "event": "7.1 Identify 3-D from Rotating 2-D \u2014 9.5/10.0 (95%)"
               },
               {
-                "date": "Mon, May 25",
-                "event": "30.2 \u2014 0.0/28.0 (?) posted"
+                "date": "Thu, May 21",
+                "event": "7.3 Informal argument for volume formulas of a cyl \u2014 8.5/10.0 (85%)"
               },
               {
-                "date": "Mon, May 18",
-                "event": "30.1 \u2014 0.0/9.0 (?) posted"
+                "date": "Thu, May 21",
+                "event": "7.4-7.5 Describe objects and find their volumes \u2014 8.0/10.0 (80%)"
+              },
+              {
+                "date": "Fri, May 22",
+                "event": "Infographic: Curveball Redesign Challenge \u2014 9.0/10.0 (90%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "30.1 and 30.2 show as zero and total 37 points",
-                "parent_action": "Ask Daniel if he submitted 30.1 and 30.2 and confirm submission status immediately"
-              },
-              {
-                "priority": "high",
-                "issue": "Grade is C and at risk of dropping further",
-                "parent_action": "Review all missing work with Daniel and set a plan to complete or resubmit by next week"
+                "issue": "3 missing assignments not scored",
+                "parent_action": "Ask Daniel to identify and submit the 3 missing assignments in Engineering Geo \u2014 they could raise the grade by 5-8 points if completed."
               }
             ]
           },
           {
-            "class_name": "Engineering Geo",
-            "current_grade": "C 74.3%",
-            "status": "Recent assignment scores are solid but 3 missing assignments remain a concern.",
+            "class_name": "WrldHis by Dsgn",
+            "current_grade": "C 78.5%",
+            "status": "Below B with a recent zero on a 28-point assignment dragging the average.",
             "recent": [
               {
-                "date": "Fri, May 22",
-                "event": "Infographic: Curveball Redesign Challenge \u2014 9.0/10.0 (90%) posted"
+                "date": "Mon, May 25",
+                "event": "30.2 \u2014 0.0/28.0 (0%)"
               },
               {
-                "date": "Thu, May 21",
-                "event": "7.4-7.5 Describe objects and find their volumes \u2014 8.0/10.0 (80%) posted"
-              },
-              {
-                "date": "Thu, May 21",
-                "event": "7.3 Informal argument for volume formulas of a cyl \u2014 8.5/10.0 (85%) posted"
-              },
-              {
-                "date": "Thu, May 21",
-                "event": "7.1 Identify 3-D from Rotating 2-D \u2014 9.5/10.0 (95%) posted"
+                "date": "Wed, May 27",
+                "event": "Quiz \u2014 78.38/100.0 (78%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "3 missing assignments noted on gradebook",
-                "parent_action": "Ask Daniel to list the 3 missing assignments and their due dates or point values"
+                "issue": "Zero on 30.2 assignment worth 28 points",
+                "parent_action": "Confirm if Daniel can resubmit or make up the 30.2 assignment to recover up to 7 points in WrldHis by Dsgn."
               }
             ]
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "current_grade": "B 82.0%",
-            "status": "One solid recent score but 6 missing assignments need follow-up.",
+            "status": "Solid B but 6 missing assignments risk dropping the grade before semester end.",
             "recent": [
               {
                 "date": "Thu, May 21",
-                "event": "LT7.4 - Elevator Pitch \u2014 9.0/10.0 (90%) posted"
+                "event": "LT7.4 - Elevator Pitch \u2014 9.0/10.0 (90%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
-                "priority": "high",
-                "issue": "6 missing assignments could lower the B grade",
-                "parent_action": "Have Daniel check the gradebook for the 6 missing items and identify which are highest point value"
+                "priority": "medium",
+                "issue": "6 missing assignments",
+                "parent_action": "Check with Daniel on the status of the 6 missing items in Mkt Adv GrphDes and prioritize turning in any that can still be accepted."
               }
             ]
           }
         ],
-        "generated_at": "2026-05-31T11:04:17.092254+00:00"
+        "generated_at": "2026-06-01T15:28:51.947027+00:00"
       }
     },
     {
@@ -4120,35 +4111,35 @@
         }
       ],
       "ai_summary": {
-        "status": "Leah is performing well overall with an A in Lang Arts but needs attention in Bus Algebra 1 (C with 1 missing) and Int Sci Designs (B with 2 missing). These two classes should be the focus to prevent further grade drops before the end of the term.",
+        "status": "Leah stands at a B/C average overall. Bus Algebra 1 (C 79.7%) and Int Sci Designs (B 84%) need the most attention due to missing work dragging grades down.",
         "classes": [
           {
             "class_name": "Bus Algebra 1",
             "current_grade": "C 79.7%",
-            "status": "Lowest grade with one missing assignment impacting progress.",
+            "status": "Lowest grade with one missing assignment impacting performance.",
             "recent": [
               {
-                "date": "Mon, May 19",
-                "event": "Fluency - Algebra Review Circuit \u2014 5.0/5.0 (100%) posted"
+                "date": "Tue, May 19",
+                "event": "Fluency - Algebra Review Circuit score posted: 5.0/5.0 (100%)"
               }
             ],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "1 missing assignment unknown",
-                "parent_action": "Ask Leah what the missing assignment is and confirm if it can still be submitted for partial credit to raise the grade above 80%"
+                "issue": "1 missing assignment",
+                "parent_action": "Ask Leah which assignment is missing in Bus Algebra 1 and confirm it is submitted to raise the 79.7% grade"
               }
             ]
           },
           {
             "class_name": "Int Sci Designs",
             "current_grade": "B 84.0%",
-            "status": "Solid B but two missing assignments are holding back the grade.",
+            "status": "Solid B but two missing assignments need resolution.",
             "recent": [
               {
                 "date": "Fri, May 22",
-                "event": "LT 5.3 Balloon Powered Car Advertisement \u2014 1.0/1.0 (100%) posted"
+                "event": "LT 5.3 Balloon Powered Car Advertisement score posted: 1.0/1.0 (100%)"
               }
             ],
             "upcoming": [],
@@ -4156,25 +4147,25 @@
               {
                 "priority": "high",
                 "issue": "2 missing assignments",
-                "parent_action": "Check the gradebook with Leah to identify the two missing items and determine submission deadlines"
+                "parent_action": "Check with Leah on the two missing assignments in Int Sci Designs and ensure submission to protect the 84% grade"
               }
             ]
           },
           {
-            "class_name": "Soc Sci",
+            "class_name": "DT 8 Soc Sci",
             "current_grade": "B 87.6%",
-            "status": "On track with recent perfect score on major assignment.",
+            "status": "B grade holding steady with recent strong score.",
             "recent": [
               {
                 "date": "Thu, May 28",
-                "event": "Civil War Storybook \u2014 10.0/10.0 (100%) posted"
+                "event": "Civil War Storybook score posted: 10.0/10.0 (100%)"
               }
             ],
             "upcoming": [],
             "action_items": []
           }
         ],
-        "generated_at": "2026-05-31T11:04:32.324783+00:00"
+        "generated_at": "2026-06-01T15:29:27.682537+00:00"
       }
     }
   ]
