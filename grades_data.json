@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-06-07T11:12:31.281387+00:00",
+  "last_updated": "2026-06-08T13:12:01.964492+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -2150,61 +2150,73 @@
         }
       ],
       "ai_summary": {
-        "status": "Daniel currently holds C grades in three classes, with Engineering Geo (74.3%) and Tech of Biology (77.0%) needing the most attention due to multiple missing assignments. WrldHis by Dsgn shows recent activity including a zero score. Focus efforts on recovering points in the two lowest classes to lift overall performance.",
+        "status": "Daniel is struggling with C grades and multiple missing assignments across several classes. Engineering Geo and Tech of Biology need the most attention right now.",
         "classes": [
           {
             "class_name": "Engineering Geo",
             "current_grade": "C 74.3%",
-            "status": "Class performance is below average with three missing assignments impacting the grade.",
+            "status": "Low grade with 3 missing assignments impacting performance.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "Three missing assignments are pulling the grade down to 74.3%.",
-                "parent_action": "Ask Daniel for details on the three missing assignments and confirm submission status to estimate grade recovery potential."
+                "issue": "3 missing assignments",
+                "parent_action": "Ask Daniel about the 3 missing assignments in Engineering Geo and whether they can still be submitted for partial credit."
               }
             ]
           },
           {
             "class_name": "Tech of Biology",
             "current_grade": "C 77.0%",
-            "status": "Class performance is below average with four missing assignments impacting the grade.",
+            "status": "Has 4 missing assignments affecting the grade.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "Four missing assignments are pulling the grade down to 77.0%.",
-                "parent_action": "Ask Daniel for details on the four missing assignments and confirm submission status to estimate grade recovery potential."
+                "issue": "4 missing assignments",
+                "parent_action": "Check with Daniel on the status of the 4 missing assignments in Tech of Biology to recover points."
               }
             ]
           },
           {
-            "class_name": "WrldHis by Dsgn",
+            "class_name": "WrldHis",
             "current_grade": "C 78.5%",
-            "status": "Recent scores posted include a zero on one assignment and a quiz below 80%.",
+            "status": "Recent quiz performance was average.",
             "recent": [
               {
-                "date": "Mon, May 25",
-                "event": "30.2 scored 0.0/28.0"
-              },
-              {
                 "date": "Wed, May 27",
-                "event": "Quiz scored 78.38/100.0 (78%)"
+                "event": "Quiz score posted 78.38/100.0 (78%)"
               }
             ],
             "upcoming": [],
+            "action_items": []
+          },
+          {
+            "class_name": "Mkt Adv GrphDes",
+            "current_grade": "B 82.0%",
+            "status": "B grade but 6 missing assignments noted.",
+            "recent": [],
+            "upcoming": [],
             "action_items": [
               {
-                "priority": "high",
-                "issue": "Zero score on 30.2 assignment worth 28 points.",
-                "parent_action": "Ask Daniel if he can submit or redo the 30.2 assignment to recover up to 28 points and raise the overall grade."
+                "priority": "medium",
+                "issue": "6 missing assignments",
+                "parent_action": "Review the 6 missing assignments in Mkt Adv GrphDes with Daniel to determine recovery options."
               }
             ]
+          },
+          {
+            "class_name": "Eng 9",
+            "current_grade": "B 83.8%",
+            "status": "Solid B with no noted issues.",
+            "recent": [],
+            "upcoming": [],
+            "action_items": []
           }
         ],
-        "generated_at": "2026-06-07T11:12:57.436726+00:00"
+        "generated_at": "2026-06-08T13:12:37.455143+00:00"
       }
     },
     {
@@ -4089,40 +4101,40 @@
         }
       ],
       "ai_summary": {
-        "status": "Leah is performing well overall with an A in Lang Arts but needs immediate focus on Bus Algebra 1 (C 79.7%) due to a missing assignment. Int Sci Designs, Soc Sci, and Virt Enterprise also have missing work pulling down B averages and should be addressed this week.",
+        "status": "Leah is mostly in good standing with A and B grades, but Bus Algebra 1 at C 79.7% needs immediate focus due to the missing assignment. Int Sci Designs, Soc Sci, and Virt Enterprise also have missing work pulling down B averages.",
         "classes": [
           {
             "class_name": "Bus Algebra 1",
             "current_grade": "C 79.7%",
-            "status": "Lowest grade with 1 missing assignment impacting progress.",
+            "status": "Lowest grade at C with one missing assignment impacting performance.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "1 missing assignment not specified",
-                "parent_action": "Ask Leah which assignment is missing in Bus Algebra 1 and confirm submission status immediately"
+                "issue": "1 missing assignment",
+                "parent_action": "Ask Leah to identify and submit the missing assignment in Bus Algebra 1 to potentially raise the grade above 80%."
               }
             ]
           },
           {
             "class_name": "Int Sci Designs",
             "current_grade": "B 84.0%",
-            "status": "Solid B but 2 missing assignments need resolution to avoid further grade drop.",
+            "status": "Solid B but two missing assignments are holding back the grade.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
                 "issue": "2 missing assignments",
-                "parent_action": "Review missing work details with Leah and have her submit any outstanding Int Sci Designs tasks this week"
+                "parent_action": "Confirm Leah completes and turns in the two missing Int Sci Designs assignments to boost the grade toward an A."
               }
             ]
           },
           {
             "class_name": "DT 8 Soc Sci",
             "current_grade": "B 87.6%",
-            "status": "B average with recent strong performance on Civil War assignment but 2 missing items remain.",
+            "status": "B grade with two missing assignments despite a recent perfect score.",
             "recent": [
               {
                 "date": "Thu, May 28",
@@ -4134,34 +4146,26 @@
               {
                 "priority": "medium",
                 "issue": "2 missing assignments",
-                "parent_action": "Check with Leah on the 2 missing Soc Sci assignments and prioritize completion for grade recovery"
+                "parent_action": "Check with Leah on the two missing Soc Sci assignments to maintain or improve the B average."
               }
             ]
           },
           {
             "class_name": "Virt Enterprise",
             "current_grade": "B 89.4%",
-            "status": "B average holding steady aside from 2 missing assignments.",
+            "status": "Strong B with two missing assignments.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "medium",
                 "issue": "2 missing assignments",
-                "parent_action": "Confirm Leah has identified and is working on the 2 missing Virt Enterprise items"
+                "parent_action": "Follow up on the two missing Virt Enterprise assignments to secure an A."
               }
             ]
-          },
-          {
-            "class_name": "DT 8 Lang Arts",
-            "current_grade": "A 90.1%",
-            "status": "Strong A performance with no missing work noted.",
-            "recent": [],
-            "upcoming": [],
-            "action_items": []
           }
         ],
-        "generated_at": "2026-06-07T11:13:14.738384+00:00"
+        "generated_at": "2026-06-08T13:13:04.998188+00:00"
       }
     }
   ]
