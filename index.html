@@ -608,6 +608,36 @@
             color: #d4a03a;
             border-radius: 0 4px 4px 0;
         }
+
+        .summer-download-btn {
+            background: #5ba87b;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+        .summer-download-btn:hover {
+            background: #4a9068;
+        }
+        .summer-instructions {
+            font-size: 12px;
+            color: #8e8e93;
+            line-height: 1.4;
+            max-width: 420px;
+            background: rgba(255,255,255,0.03);
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #3a3a3c;
+        }
+        .summer-instructions code {
+            background: #2a2a30;
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
     </style>
     </style>
 </head>
@@ -623,7 +653,17 @@
                 <span class="toggle-slider"></span>
                 <span class="toggle-label">Summer Break Mode</span>
             </label>
-            <span class="summer-break-hint">Hides AI briefings • Auto-pauses Grok calls (Jun–Aug)</span>
+            <span class="summer-break-hint">Hides AI briefings • Pauses daily scraping + Grok API</span>
+
+            <button id="downloadDataBtn" class="summer-download-btn" style="display:none;">
+                Download grades_data.json
+            </button>
+            <div id="summerInstructions" class="summer-instructions" style="display:none;">
+                <strong>1.</strong> Flip the toggle above to ON or OFF.<br>
+                <strong>2.</strong> Click the button to download the updated file.<br>
+                <strong>3.</strong> On GitHub, go to your repo → drag the file onto <code>grades_data.json</code> → commit.<br>
+                The next daily run will respect your setting. No coding or separate UIs needed.
+            </div>
         </div>
     </header>
 
@@ -1052,18 +1092,21 @@
             });
         }
 
+        let currentData = null;
+
         function applySummerBreak(active) {
             if (active) {
                 document.body.classList.add('summer-break');
-                // Add or update banner
                 let banner = document.getElementById('summerBreakBanner');
                 if (!banner) {
                     banner = document.createElement('div');
                     banner.id = 'summerBreakBanner';
                     banner.className = 'summer-break-banner';
-                    banner.textContent = '🌴 Summer Break Mode active — AI Daily Briefings are hidden. Grok API calls are paused for vacation.';
+                    banner.textContent = '🌴 Summer Break Mode active — AI Daily Briefings hidden. Daily scraping + Grok API calls paused.';
                     const dashboards = document.getElementById('dashboards');
-                    if (dashboards) dashboards.parentNode.insertBefore(banner, dashboards);
+                    if (dashboards && dashboards.parentNode) {
+                        dashboards.parentNode.insertBefore(banner, dashboards);
+                    }
                 }
             } else {
                 document.body.classList.remove('summer-break');
@@ -1072,33 +1115,73 @@
             }
         }
 
-        // Summer Break Mode toggle (controlled from the website UI)
-        function setupSummerBreakToggle() {
+        function setupSummerBreakToggle(data) {
             const toggle = document.getElementById('summerBreakToggle');
+            const downloadBtn = document.getElementById('downloadDataBtn');
+            const instructions = document.getElementById('summerInstructions');
             if (!toggle) return;
 
-            // Load saved preference (persists in this browser)
-            const saved = localStorage.getItem('summerBreakMode') === 'true';
-            toggle.checked = saved;
-            applySummerBreak(saved);
+            currentData = data || { summer_break: false };
+
+            // Single source of truth: prefer flag that is already in the committed grades_data.json
+            const flagFromData = !!(currentData.summer_break);
+            const saved = localStorage.getItem('summerBreakMode');
+            const initial = (saved !== null) ? (saved === 'true') : flagFromData;
+
+            toggle.checked = initial;
+            currentData.summer_break = initial;
+            applySummerBreak(initial);
 
             toggle.addEventListener('change', () => {
                 const isActive = toggle.checked;
                 localStorage.setItem('summerBreakMode', isActive);
+                currentData.summer_break = isActive;
                 applySummerBreak(isActive);
+
+                // Reveal the one-click download + instructions the first time they use the toggle
+                if (downloadBtn) downloadBtn.style.display = 'inline-block';
+                if (instructions) instructions.style.display = 'block';
             });
 
-            // Also respect a summer_break flag if present in the loaded data
-            // (you can set this in grades_data.json top level to default the toggle)
-            // e.g. { "summer_break": true, "students": [...] }
+            // Download the *current* data object (with the live summer_break flag) as a file
+            if (downloadBtn) {
+                downloadBtn.addEventListener('click', () => {
+                    const jsonStr = JSON.stringify(currentData, null, 2);
+                    const blob = new Blob([jsonStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'grades_data.json';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    alert('Downloaded grades_data.json with summer_break = ' + (currentData.summer_break ? 'true' : 'false') + '\n\n' +
+                          '1. Go to https://github.com/davidcasas82/aeries-dashboard\n' +
+                          '2. Drag the downloaded file onto grades_data.json\n' +
+                          '3. Commit the change\n\n' +
+                          'The next daily run will see the flag and stop scraping + Grok calls. Flip the toggle anytime and repeat.');
+                });
+            }
         }
 
-        // Call setup after the main init has run and dashboards exist
-        // We wrap the original init call
-        const originalInit = init;
+        // Hook into the existing flow
+        const realLoad = loadData;
+        loadData = async function() {
+            const d = await realLoad();
+            // Make sure the data object has the flag
+            if (d && typeof d.summer_break === 'undefined') {
+                d.summer_break = false;
+            }
+            return d;
+        };
+
+        const realInit = init;
         init = async function() {
-            await originalInit();
-            setupSummerBreakToggle();
+            const data = await realInit();   // the original rendering happens
+            // After dashboards are built, wire the toggle using the real data object
+            setupSummerBreakToggle(data);
         };
 
         init();

@@ -467,12 +467,40 @@ Rules:
 
 
 def scrape_all():
+    # Read previous data to check for summer_break flag set from the dashboard UI
+    previous_data = {}
+    if OUTPUT_FILE.exists():
+        try:
+            previous_data = json.loads(OUTPUT_FILE.read_text())
+        except Exception:
+            previous_data = {}
+
+    summer_break = bool(previous_data.get("summer_break", False))
+
+    if summer_break:
+        print("Summer break mode is active (toggled from the dashboard website).")
+        print("Skipping Aeries scraping and Grok API calls for today.")
+        # Preserve previous student data and flag, just update timestamp
+        data = previous_data.copy() if previous_data else {
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "district": "Tustin USD",
+            "portal_url": BASE_URL,
+            "students": [],
+            "summer_break": True,
+        }
+        data["last_updated"] = datetime.now(timezone.utc).isoformat()
+        data["summer_break"] = True
+        OUTPUT_FILE.write_text(json.dumps(data, indent=2))
+        print(f"Data preserved (no new scrape). Written to {OUTPUT_FILE}")
+        return
+
     session = login()
     data = {
         "last_updated": datetime.now(timezone.utc).isoformat(),
         "district": "Tustin USD",
         "portal_url": BASE_URL,
         "students": [],
+        "summer_break": False,  # will be overwritten below if needed
     }
 
     for student in STUDENTS:
@@ -527,9 +555,13 @@ def scrape_all():
 
         data["students"].append(student_data)
 
+    # Preserve whatever summer_break flag the user set from the website toggle
+    data["summer_break"] = summer_break
+
     OUTPUT_FILE.write_text(json.dumps(data, indent=2))
     print(f"\nData written to {OUTPUT_FILE}")
     print(f"Last updated: {data['last_updated']}")
+    print(f"Summer break flag preserved: {summer_break}")
 
 
 if __name__ == "__main__":
