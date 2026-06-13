@@ -15,7 +15,6 @@ BASE_URL = "https://tustinusd.aeries.net"
 EMAIL = os.getenv("AERIES_EMAIL", "")
 PASSWORD = os.getenv("AERIES_PASSWORD", "")
 GROK_API_KEY = os.getenv("GROK_API_KEY", "")
-SUMMER_BREAK = os.getenv("SUMMER_BREAK", "").lower().strip()
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 GROK_MODEL = "grok-3-mini"
 
@@ -528,30 +527,13 @@ def scrape_all():
         }
 
         if GROK_API_KEY:
-            if SUMMER_BREAK == "true":
-                # Force paused via UI toggle (manual workflow dispatch)
-                print("  Summer break active (forced via UI toggle) - skipping AI summary generation (Grok API call paused)")
-            elif SUMMER_BREAK == "false":
-                # Force enabled via UI toggle
-                print("  Generating AI summary... (summer break disabled via UI)")
-                ai_summary = generate_ai_summary(student_data)
-                if ai_summary:
-                    student_data["ai_summary"] = ai_summary
-                    print("  AI summary generated")
-                else:
-                    print("  AI summary skipped")
+            print("  Generating AI summary...")
+            ai_summary = generate_ai_summary(student_data)
+            if ai_summary:
+                student_data["ai_summary"] = ai_summary
+                print("  AI summary generated")
             else:
-                # No explicit toggle (scheduled runs or default) - automatic month-based
-                if datetime.now().month in (6, 7, 8):
-                    print("  Summer break active - skipping AI summary generation (Grok API call paused)")
-                else:
-                    print("  Generating AI summary...")
-                    ai_summary = generate_ai_summary(student_data)
-                    if ai_summary:
-                        student_data["ai_summary"] = ai_summary
-                        print("  AI summary generated")
-                    else:
-                        print("  AI summary skipped")
+                print("  AI summary skipped")
 
         data["students"].append(student_data)
 
