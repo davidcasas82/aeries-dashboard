@@ -542,6 +542,72 @@
             .assignment-row { flex-wrap: wrap; }
             .nav-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         }
+
+        /* Summer Break Mode Toggle */
+        .summer-break-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .summer-break-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .summer-break-toggle input[type="checkbox"] {
+            display: none;
+        }
+        .toggle-slider {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: #3a3a3c;
+            border-radius: 12px;
+            transition: background 0.2s ease;
+        }
+        .toggle-slider:after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: #e8e8e8;
+            border-radius: 50%;
+            transition: transform 0.2s ease;
+        }
+        .summer-break-toggle input:checked + .toggle-slider {
+            background: #5ba87b;
+        }
+        .summer-break-toggle input:checked + .toggle-slider:after {
+            transform: translateX(20px);
+        }
+        .toggle-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #8e8e93;
+        }
+        .summer-break-hint {
+            font-size: 12px;
+            color: #6e6e73;
+        }
+        body.summer-break .ai-card,
+        body.summer-break .ai-card h2 {
+            display: none !important;
+        }
+        .summer-break-banner {
+            background: rgba(212, 96, 58, 0.1);
+            border-left: 3px solid #d4603a;
+            padding: 12px 16px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            color: #d4a03a;
+            border-radius: 0 4px 4px 0;
+        }
     </style>
     </style>
 </head>
@@ -550,6 +616,14 @@
         <div>
             <h1>Casas Family Grade Dashboard</h1>
             <span class="last-updated" id="lastUpdated"></span>
+        </div>
+        <div class="summer-break-controls">
+            <label class="summer-break-toggle">
+                <input type="checkbox" id="summerBreakToggle">
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Summer Break Mode</span>
+            </label>
+            <span class="summer-break-hint">Hides AI briefings • Auto-pauses Grok calls (Jun–Aug)</span>
         </div>
     </header>
 
@@ -977,6 +1051,55 @@
                 dashboardsEl.appendChild(dashboard);
             });
         }
+
+        function applySummerBreak(active) {
+            if (active) {
+                document.body.classList.add('summer-break');
+                // Add or update banner
+                let banner = document.getElementById('summerBreakBanner');
+                if (!banner) {
+                    banner = document.createElement('div');
+                    banner.id = 'summerBreakBanner';
+                    banner.className = 'summer-break-banner';
+                    banner.textContent = '🌴 Summer Break Mode active — AI Daily Briefings are hidden. Grok API calls are paused for vacation.';
+                    const dashboards = document.getElementById('dashboards');
+                    if (dashboards) dashboards.parentNode.insertBefore(banner, dashboards);
+                }
+            } else {
+                document.body.classList.remove('summer-break');
+                const banner = document.getElementById('summerBreakBanner');
+                if (banner) banner.remove();
+            }
+        }
+
+        // Summer Break Mode toggle (controlled from the website UI)
+        function setupSummerBreakToggle() {
+            const toggle = document.getElementById('summerBreakToggle');
+            if (!toggle) return;
+
+            // Load saved preference (persists in this browser)
+            const saved = localStorage.getItem('summerBreakMode') === 'true';
+            toggle.checked = saved;
+            applySummerBreak(saved);
+
+            toggle.addEventListener('change', () => {
+                const isActive = toggle.checked;
+                localStorage.setItem('summerBreakMode', isActive);
+                applySummerBreak(isActive);
+            });
+
+            // Also respect a summer_break flag if present in the loaded data
+            // (you can set this in grades_data.json top level to default the toggle)
+            // e.g. { "summer_break": true, "students": [...] }
+        }
+
+        // Call setup after the main init has run and dashboards exist
+        // We wrap the original init call
+        const originalInit = init;
+        init = async function() {
+            await originalInit();
+            setupSummerBreakToggle();
+        };
 
         init();
     </script>
