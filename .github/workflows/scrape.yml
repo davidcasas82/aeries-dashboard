@@ -3,13 +3,7 @@ name: Daily Grade Scrape
 on:
   schedule:
     - cron: '0 9 * * *'  # 2am PT (UTC-7)
-  workflow_dispatch:  # manual trigger
-    inputs:
-      summer_break:
-        description: 'Activate summer break mode (pause Grok AI summaries for vacation)'
-        required: false
-        default: false
-        type: boolean
+  workflow_dispatch:  # manual trigger (rarely needed; use the website toggle instead)
 
 permissions:
   contents: write
@@ -38,7 +32,6 @@ jobs:
           STUDENT_2_NAME: ${{ secrets.STUDENT_2_NAME }}
           STUDENT_2_SCHOOL_CODE: ${{ secrets.STUDENT_2_SCHOOL_CODE }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
-          SUMMER_BREAK: ${{ github.event.inputs.summer_break || '' }}
         run: python scraper.py
 
       - name: Commit updated data
