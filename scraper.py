@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import re
@@ -29,15 +30,16 @@ for i in range(1, 10):
         "school_code": os.getenv(f"STUDENT_{i}_SCHOOL_CODE", "95"),
     })
 
-if not EMAIL or not PASSWORD:
-    print("ERROR: AERIES_EMAIL and AERIES_PASSWORD must be set in .env")
-    sys.exit(1)
-
-if not STUDENTS:
-    print("ERROR: No students configured in .env (need STUDENT_1_SN at minimum)")
-    sys.exit(1)
-
 OUTPUT_FILE = Path(__file__).parent / "grades_data.json"
+
+
+def require_scrape_config():
+    if not EMAIL or not PASSWORD:
+        print("ERROR: AERIES_EMAIL and AERIES_PASSWORD must be set in .env")
+        sys.exit(1)
+    if not STUDENTS:
+        print("ERROR: No students configured in .env (need STUDENT_1_SN at minimum)")
+        sys.exit(1)
 
 
 def login():
@@ -772,7 +774,52 @@ Critical rules:
         return None
 
 
+def regenerate_grok_summaries():
+    """Re-run Grok briefings against existing grades_data.json (no Aeries scrape)."""
+    if not GROK_API_KEY:
+        print("ERROR: GROK_API_KEY must be set")
+        sys.exit(1)
+
+    if not OUTPUT_FILE.exists():
+        print(f"ERROR: {OUTPUT_FILE} not found — run a full scrape first")
+        sys.exit(1)
+
+    try:
+        data = json.loads(OUTPUT_FILE.read_text())
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Could not parse {OUTPUT_FILE}: {e}")
+        sys.exit(1)
+
+    if data.get("summer_break"):
+        print("Summer break mode is active — skipping Grok API calls.")
+        return
+
+    students = data.get("students", [])
+    if not students:
+        print("ERROR: No students found in grades_data.json")
+        sys.exit(1)
+
+    print(f"Regenerating AI briefings for {len(students)} student(s) from {OUTPUT_FILE.name}...")
+
+    for student in students:
+        name = student.get("name", "Student")
+        print(f"  {name}...")
+        ai_summary = generate_ai_summary(student)
+        if ai_summary:
+            student["ai_summary"] = ai_summary
+            print(f"    AI summary generated ({len(ai_summary.get('classes', []))} classes)")
+        else:
+            print("    WARNING: AI summary failed — keeping previous briefing if any")
+
+    data["last_updated"] = datetime.now(timezone.utc).isoformat()
+    OUTPUT_FILE.write_text(json.dumps(data, indent=2))
+    print(f"\nBriefings written to {OUTPUT_FILE}")
+    print(f"Last updated: {data['last_updated']}")
+
+
 def scrape_all():
+    require_scrape_config()
+
     # Read previous data to check for summer_break flag set from the dashboard UI
     previous_data = {}
     if OUTPUT_FILE.exists():
@@ -854,4 +901,15 @@ def scrape_all():
 
 
 if __name__ == "__main__":
-    scrape_all()
+    parser = argparse.ArgumentParser(description="Aeries grade scraper + Grok briefings")
+    parser.add_argument(
+        "--grok-only",
+        action="store_true",
+        help="Regenerate AI briefings from existing grades_data.json (skip Aeries scrape)",
+    )
+    args = parser.parse_args()
+
+    if args.grok_only:
+        regenerate_grok_summaries()
+    else:
+        scrape_all()
