@@ -3,7 +3,12 @@ name: Daily Grade Scrape
 on:
   schedule:
     - cron: '0 9 * * *'  # 2am PT (UTC-7)
-  workflow_dispatch:  # manual trigger (rarely needed; use the website toggle instead)
+  workflow_dispatch:
+    inputs:
+      grok_only:
+        description: 'Regenerate AI briefings only (skip Aeries scrape)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -32,7 +37,12 @@ jobs:
           STUDENT_2_NAME: ${{ secrets.STUDENT_2_NAME }}
           STUDENT_2_SCHOOL_CODE: ${{ secrets.STUDENT_2_SCHOOL_CODE }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
-        run: python scraper.py
+        run: |
+          if [ "${{ inputs.grok_only }}" = "true" ]; then
+            python scraper.py --grok-only
+          else
+            python scraper.py
+          fi
 
       - name: Commit updated data
         run: |
