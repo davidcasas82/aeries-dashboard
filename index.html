@@ -2,677 +2,1110 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Casas Family Grade Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        :root {
+            --bg: #1a1b1f;
+            --surface: #222228;
+            --surface-raised: #2a2a32;
+            --border: #2a2a30;
+            --text: #e8e8e8;
+            --text-secondary: #8e8e93;
+            --text-muted: #6e6e73;
+            --green: #5ba87b;
+            --amber: #d4a03a;
+            --red: #d4603a;
+            --touch-min: 48px;
+            --top-bar-h: 56px;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
-            background: #1a1b1f;
-            color: #e8e8e8;
-            padding: 24px;
-            max-width: 1200px;
-            margin: 0 auto;
+            background: var(--bg);
+            color: var(--text);
+            font-size: clamp(15px, 2.5vw, 17px);
+            line-height: 1.45;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
         }
 
-        header {
-            margin-bottom: 8px;
-        }
-
-        header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; color: #ffffff; }
-        .last-updated { font-size: 15px; color: #6e6e73; display: block; margin-top: 4px; }
-
-        .tabs {
+        /* ── Sticky top bar ── */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
             display: flex;
+            align-items: center;
+            justify-content: space-between;
             gap: 12px;
-            margin-bottom: 32px;
-            padding-top: 8px;
+            min-height: var(--top-bar-h);
+            padding: 8px 16px;
+            padding-top: calc(8px + env(safe-area-inset-top, 0px));
+            background: rgba(26, 27, 31, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
         }
 
-        .tab {
-            padding: 8px 20px;
-            border-radius: 20px;
-            border: 1.5px solid #3a3a3c;
+        .top-bar-left {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .top-bar-title {
+            font-size: clamp(17px, 3vw, 20px);
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .last-updated {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+
+        .settings-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: var(--touch-min);
+            height: var(--touch-min);
+            border: none;
             background: none;
-            font-size: 16px;
-            font-weight: 500;
+            color: var(--text-secondary);
             cursor: pointer;
-            transition: all 0.2s ease;
-            color: #8e8e93;
+            border-radius: 12px;
+            flex-shrink: 0;
         }
 
-        .tab.active {
-            color: #ffffff;
-            border-color: #6e6e73;
-            background: rgba(255,255,255,0.06);
+        .settings-btn:active {
+            background: rgba(255,255,255,0.08);
         }
 
-        .tab:hover:not(.active) { border-color: #6e6e73; color: #b0b0b4; }
+        .settings-btn svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        /* ── Student segmented control ── */
+        .student-picker {
+            display: flex;
+            gap: 0;
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 3px;
+            margin: 12px 16px 0;
+        }
+
+        .student-seg {
+            flex: 1;
+            min-height: var(--touch-min);
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            font-size: clamp(15px, 2.5vw, 17px);
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .student-seg.active {
+            background: var(--surface-raised);
+            color: #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        }
+
+        /* ── Main content ── */
+        .main-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 16px 16px;
+        }
 
         .dashboard { display: none; }
         .dashboard.active { display: block; }
 
-        .summary-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 12px;
-            margin-bottom: 32px;
+        .scroll-section {
+            margin-top: 28px;
+            padding-top: 4px;
         }
 
-        .summary-card {
-            background: none;
-            border-radius: 0;
-            padding: 0;
+        .scroll-section:first-child {
+            margin-top: 0;
+        }
+
+        .section-heading {
+            font-size: clamp(18px, 3vw, 22px);
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: -0.3px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }
+
+        .section-count {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .section-count.alert {
+            color: var(--red);
+        }
+
+        .section-divider {
             border: none;
-            border-right: 1px solid #2a2a30;
-            padding-right: 16px;
+            border-top: 1px solid var(--border);
+            margin: 20px 0;
         }
 
-        .summary-card:last-child { border-right: none; }
+        .dashboard-section {
+            margin-top: 0;
+        }
 
-        .summary-card .label {
+        .dashboard-section .section-heading {
+            margin-bottom: 12px;
+        }
+
+        /* ── AI Briefing + top chips ── */
+        .briefing-panel {
+            margin-top: 16px;
+        }
+
+        .ai-card {
+            margin-bottom: 0;
+        }
+
+        .ai-card h2 {
+            font-size: clamp(13px, 2vw, 14px);
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: none;
+            letter-spacing: 0;
+            margin-bottom: 8px;
+        }
+
+        .ai-status {
+            font-size: clamp(18px, 3.5vw, 24px);
+            font-weight: 600;
+            line-height: 1.35;
+            color: #fff;
+            letter-spacing: -0.3px;
+            margin-bottom: 8px;
+        }
+
+        .ai-date {
             font-size: 13px;
-            font-weight: 500;
-            color: #6e6e73;
-            text-transform: uppercase;
-            letter-spacing: 0.2px;
+            color: var(--text-muted);
             margin-bottom: 4px;
         }
 
-        .summary-card .value { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; color: #ffffff; }
-
-        .section {
-            background: none;
-            border-radius: 0;
-            padding: 0;
-            margin-bottom: 32px;
-            border: none;
+        .ai-focus-tonight {
+            font-size: clamp(15px, 2.4vw, 16px);
+            font-weight: 600;
+            color: var(--amber);
+            line-height: 1.4;
+            margin-top: 12px;
+            padding: 10px 12px;
+            background: rgba(212, 160, 58, 0.1);
+            border-radius: 10px;
         }
 
-        .section h2 {
-            font-size: 24px;
+        .ai-wins {
+            margin-top: 12px;
+            list-style: none;
+            padding: 0;
+        }
+
+        .ai-wins li {
+            font-size: 14px;
+            color: var(--green);
+            line-height: 1.45;
+            padding: 4px 0 4px 18px;
+            position: relative;
+        }
+
+        .ai-wins li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
             font-weight: 700;
-            letter-spacing: -0.3px;
-            margin-bottom: 18px;
+        }
+
+        .chip-section {
+            border-top: 1px solid var(--border);
+            margin-top: 16px;
+            padding-top: 16px;
+        }
+
+        .chip-section-label {
+            font-size: clamp(13px, 2vw, 14px);
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .chip-section.flush {
+            border-top: none;
+            margin-top: 0;
+            padding-top: 0;
+        }
+
+        .ai-alert-card {
+            background: var(--surface);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--amber);
+        }
+
+        .ai-alert-card.priority-high {
+            border-left-color: var(--red);
+        }
+
+        .ai-alert-header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .ai-alert-header h3 {
+            font-size: clamp(17px, 3vw, 20px);
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: -0.2px;
+        }
+
+        .ai-grade-pill {
+            font-size: clamp(15px, 2.5vw, 17px);
+            font-weight: 700;
+            color: var(--text);
+            white-space: nowrap;
+        }
+
+        .ai-class-status {
+            font-size: clamp(14px, 2.2vw, 15px);
+            color: var(--text-secondary);
+            line-height: 1.45;
+            margin-bottom: 10px;
+        }
+
+        .ai-action-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .ai-action-list li {
+            font-size: clamp(15px, 2.5vw, 16px);
+            line-height: 1.5;
+            color: var(--text);
+            padding: 8px 0;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .ai-action-list li:first-child {
+            border-top: none;
+            padding-top: 0;
+        }
+
+        .ai-detail-block {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .ai-detail-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .ai-detail-item {
+            font-size: clamp(14px, 2.2vw, 15px);
+            color: var(--text-secondary);
+            line-height: 1.45;
+            padding: 4px 0;
+        }
+
+        .ai-detail-item strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .ai-good-section {
+            margin-top: 12px;
+        }
+
+        .ai-good-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--green);
+            margin-bottom: 8px;
+        }
+
+        .ai-good-row {
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 10px;
-            color: #ffffff;
+            padding: 12px 14px;
+            background: var(--surface);
+            border-radius: 12px;
+            margin-bottom: 6px;
+            font-size: clamp(14px, 2.2vw, 15px);
+            color: var(--text-secondary);
+            cursor: pointer;
+            min-height: var(--touch-min);
         }
 
-        .section h2 .count {
-            background: none;
-            color: #6e6e73;
-            font-size: 14px;
+        .ai-good-row:active {
+            background: var(--surface-raised);
+        }
+
+        .ai-good-row .name {
+            color: var(--text);
             font-weight: 500;
-            padding: 0;
-            border-radius: 0;
         }
 
-        .week-label {
-            font-size: 13px;
+        .ai-good-row .grade {
+            font-weight: 700;
+            color: var(--green);
+        }
+
+        .ai-good-expand {
+            display: none;
+            padding: 0 14px 10px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+
+        .ai-good-row.expanded + .ai-good-expand {
+            display: block;
+        }
+
+        /* Legacy schema fallback */
+        .ai-legacy-section {
+            background: var(--surface);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 10px;
+        }
+
+        .ai-legacy-section h3 {
+            font-size: 14px;
             font-weight: 600;
-            color: #6e6e73;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 16px 0 8px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .ai-legacy-item {
+            font-size: clamp(15px, 2.5vw, 16px);
+            line-height: 1.5;
+            color: var(--text);
+            padding: 8px 0;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        body.summer-break .ai-card {
+            display: none !important;
+        }
+
+        body.summer-break .briefing-panel .chip-section {
+            border-top: none;
+            margin-top: 16px;
+            padding-top: 0;
+        }
+
+        /* ── Unified chip rows (grades + stats) ── */
+        .chip-row {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+        }
+
+        .chip-row::-webkit-scrollbar { display: none; }
+
+        .dashboard-chip {
+            flex: 0 0 140px;
+            width: 140px;
+            height: 112px;
+            min-height: 112px;
+            max-height: 112px;
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            box-sizing: border-box;
+            border: 1px solid transparent;
+            overflow: hidden;
+        }
+
+        button.dashboard-chip {
+            appearance: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+            text-align: left;
+            font: inherit;
+            color: inherit;
+        }
+
+        button.dashboard-chip:active {
+            background: var(--surface-raised);
+        }
+
+        .chip-label {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-muted);
+            line-height: 1.25;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .chip-value {
+            font-size: clamp(18px, 3.5vw, 22px);
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
+            margin-top: auto;
+        }
+
+        .chip-unit {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            line-height: 1.25;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dashboard-chip.alert .chip-value { color: var(--red); }
+        .dashboard-chip.warn .chip-value { color: var(--amber); }
+        .dashboard-chip.ok .chip-value { color: var(--green); }
+
+        /* ── Lists ── */
+        .list-panel {
             margin-top: 8px;
         }
 
-        .week-label:first-child { margin-top: 0; }
+        .week-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            padding: 14px 0 6px;
+        }
+
+        .week-label:first-child { padding-top: 4px; }
 
         .assignment-row {
             display: flex;
-            align-items: center;
-            padding: 16px 0;
-            border-bottom: 1px solid #2a2a30;
-            gap: 14px;
+            align-items: flex-start;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--border);
+            gap: 12px;
         }
 
         .assignment-row:last-child { border-bottom: none; }
 
         .assignment-date {
             font-size: 13px;
-            font-weight: 500;
-            color: #6e6e73;
-            min-width: 54px;
+            font-weight: 600;
+            color: var(--text-muted);
+            min-width: 52px;
             text-align: center;
             line-height: 1.35;
+            flex-shrink: 0;
+            padding-top: 2px;
         }
 
-        .assignment-date.overdue { color: #d4603a; font-weight: 600; }
-        .assignment-date.today { color: #d4a03a; font-weight: 600; }
-        .assignment-date.this-week { color: #8e8e93; font-weight: 500; }
+        .assignment-date.overdue { color: var(--red); }
+        .assignment-date.today { color: var(--amber); }
+        .assignment-date.this-week { color: var(--text-secondary); }
 
         .assignment-info { flex: 1; min-width: 0; }
 
         .assignment-info .title {
-            font-size: 17px;
+            font-size: clamp(15px, 2.5vw, 17px);
             font-weight: 500;
-            letter-spacing: -0.1px;
-            white-space: nowrap;
+            color: var(--text);
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            text-overflow: ellipsis;
-            color: #e8e8e8;
         }
 
         .assignment-info .class-name {
-            font-size: 14px;
-            color: #6e6e73;
-            margin-top: 3px;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
         }
 
         .assignment-score {
             text-align: right;
-            min-width: 72px;
+            min-width: 64px;
+            flex-shrink: 0;
         }
 
         .assignment-score .score {
-            font-size: 16px;
-            font-weight: 600;
+            font-size: clamp(16px, 3vw, 20px);
+            font-weight: 700;
         }
 
         .assignment-score .max {
             font-size: 12px;
-            color: #6e6e73;
-            margin-top: 1px;
+            color: var(--text-muted);
+            margin-top: 2px;
         }
 
-        .score-high { color: #5ba87b; }
-        .score-mid { color: #d4a03a; }
-        .score-low { color: #d4603a; }
-        .score-none { color: #6e6e73; font-weight: 400; }
+        .score-high { color: var(--green); }
+        .score-mid { color: var(--amber); }
+        .score-low { color: var(--red); }
+        .score-none { color: var(--text-muted); font-weight: 400; }
 
         .badge {
-            font-size: 11px;
-            font-weight: 600;
-            padding: 4px 10px;
-            border-radius: 20px;
-            white-space: nowrap;
-            letter-spacing: 0.3px;
-        }
-
-        .badge-missing { background: rgba(212, 96, 58, 0.15); color: #d4603a; }
-        .badge-upcoming { background: rgba(142, 142, 147, 0.15); color: #8e8e93; }
-        .badge-due-soon { background: rgba(212, 160, 58, 0.15); color: #d4a03a; }
-        .badge-graded { background: rgba(91, 168, 123, 0.15); color: #5ba87b; }
-
-        .grade-row {
-            display: flex;
-            align-items: center;
-            padding: 16px 0;
-            border-bottom: 1px solid #2a2a30;
-            gap: 14px;
-        }
-
-        .grade-row:last-child { border-bottom: none; }
-        .grade-row .class-info { flex: 1; }
-        .grade-row .class-name { font-size: 17px; font-weight: 500; color: #e8e8e8; }
-        .grade-row .teacher { font-size: 14px; color: #6e6e73; margin-top: 3px; }
-
-        .grade-row .period-badge {
             font-size: 12px;
-            font-weight: 500;
-            color: #6e6e73;
-            background: none;
-            padding: 0;
-            border-radius: 0;
-            margin-right: 14px;
-        }
-
-        .grade-right { display: flex; align-items: center; gap: 10px; }
-
-        .grade-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 60px;
-            padding: 0;
-            border-radius: 0;
-            font-size: 16px;
-            font-weight: 700;
-            background: none;
-        }
-
-        .grade-a { color: #5ba87b; }
-        .grade-b { color: #5ba87b; }
-        .grade-c { color: #d4a03a; }
-        .grade-d { color: #d4603a; }
-        .grade-f { color: #d4603a; }
-        .grade-none { color: #6e6e73; }
-
-        .missing-badge {
-            background: none;
-            color: #d4603a;
-            font-size: 14px;
             font-weight: 600;
-            padding: 0;
-            border-radius: 0;
+            padding: 6px 10px;
+            border-radius: 8px;
+            white-space: nowrap;
         }
 
-        .school-name { font-size: 13px; color: #6e6e73; margin-bottom: 16px; }
-        .empty-state { text-align: center; padding: 40px; color: #6e6e73; }
+        .badge-upcoming { background: rgba(142, 142, 147, 0.2); color: var(--text-secondary); }
 
-        .nav-tabs {
+        .grade-a, .grade-b { color: var(--green); }
+        .grade-c { color: var(--amber); }
+        .grade-d, .grade-f { color: var(--red); }
+        .grade-none { color: var(--text-muted); }
+
+        /* ── Grade chip urgency borders ── */
+        .dashboard-chip.urgency-critical {
+            border-color: rgba(212, 96, 58, 0.5);
+        }
+
+        .dashboard-chip.urgency-watch {
+            border-color: rgba(212, 160, 58, 0.45);
+        }
+
+        .dashboard-chip.urgency-strong {
+            border-color: rgba(91, 168, 123, 0.3);
+        }
+
+        /* ── Class cards ── */
+        .class-cards {
             display: flex;
-            gap: 12px;
-            margin-bottom: 24px;
-            border-bottom: none;
-            padding-bottom: 16px;
-            border-bottom: 1px solid #2a2a30;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
         }
 
-        .nav-tab {
-            padding: 6px 14px;
-            font-size: 15px;
-            font-weight: 500;
-            color: #6e6e73;
-            border: 1.5px solid #3a3a3c;
-            border-radius: 18px;
+        .class-card {
+            background: var(--surface);
+            border-radius: 14px;
+            border: 1px solid transparent;
+            overflow: hidden;
+        }
+
+        .class-card.urgency-critical {
+            border-color: rgba(212, 96, 58, 0.45);
+        }
+
+        .class-card.urgency-watch {
+            border-color: rgba(212, 160, 58, 0.4);
+        }
+
+        .class-card.urgency-strong {
+            border-color: rgba(91, 168, 123, 0.25);
+        }
+
+        .class-card-insight {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .class-card-insight.watch { color: var(--amber); }
+        .class-card-insight.critical { color: var(--red); }
+        .class-card-insight.strong { color: var(--green); }
+
+        .class-card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            min-height: var(--touch-min);
+            padding: 14px 16px;
+            border: none;
             background: none;
             cursor: pointer;
-            transition: all 0.2s ease;
+            text-align: left;
+            color: inherit;
+            font-family: inherit;
         }
 
-        .nav-tab.active {
-            color: #ffffff;
-            border-color: #6e6e73;
-            background: rgba(255,255,255,0.06);
+        .class-card-header:active {
+            background: rgba(255,255,255,0.04);
         }
 
-        .nav-tab:hover:not(.active) { border-color: #6e6e73; color: #b0b0b4; }
+        .class-card-main { flex: 1; min-width: 0; }
 
-        .view { display: none; }
-        .view.active { display: block; }
-
-        /* AI Daily Briefing */
-        .ai-card {
-            background: none;
-            border-radius: 0;
-            padding: 0;
-            margin-bottom: 32px;
-            color: #e8e8e8;
-            border: none;
-            border-bottom: 1px solid #2a2a30;
-            padding-bottom: 32px;
-        }
-
-        .ai-card h2 {
-            font-size: 24px;
-            font-weight: 700;
-            color: #ffffff;
-            letter-spacing: -0.3px;
-            margin-bottom: 2px;
-        }
-
-        .ai-card .ai-date {
-            font-size: 13px;
-            color: #6e6e73;
-            margin-bottom: 20px;
-        }
-
-        .ai-card .ai-status {
-            font-size: 16px;
-            line-height: 1.55;
-            color: #b0b0b4;
-            margin-bottom: 28px;
-            padding: 0 0 0 14px;
-            background: none;
-            border-radius: 0;
-            border-left: 3px solid #5ba87b;
-        }
-
-        .ai-sections {
-            display: grid;
-            gap: 0;
-        }
-
-        .ai-section {
-            background: none;
-            border-radius: 0;
-            padding: 0;
-            border: none;
-            border-bottom: 1px solid #2a2a30;
-            padding-bottom: 20px;
-            margin-bottom: 20px;
-        }
-
-        .ai-section:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-            padding-bottom: 0;
-        }
-
-        .ai-section h3 {
-            font-size: 13px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            margin-bottom: 12px;
-            color: #6e6e73;
-        }
-
-        .ai-section .ai-date-group {
-            margin-bottom: 12px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid #2a2a30;
-        }
-
-        .ai-section .ai-date-group:last-child {
-            margin-bottom: 0;
-            padding-bottom: 0;
-            border-bottom: none;
-        }
-
-        .ai-section .ai-date-label {
-            font-size: 13px;
-            font-weight: 600;
-            color: #e8e8e8;
-            padding: 0 0 6px;
-            margin-bottom: 4px;
-        }
-
-        .ai-section .ai-date-item {
-            font-size: 15px;
-            padding: 6px 0 6px 14px;
-            line-height: 1.5;
-            color: #8e8e93;
-            border-left: 3px solid #5ba87b;
-            border-radius: 2px;
-            margin-bottom: 4px;
-        }
-
-        .ai-section .ai-date-item:last-child { margin-bottom: 0; }
-
-        .ai-section .ai-upcoming-item {
-            font-size: 15px;
-            padding: 8px 0 8px 14px;
-            line-height: 1.5;
-            color: #e8e8e8;
+        .class-card-title {
             display: flex;
-            gap: 12px;
             align-items: baseline;
-            border-left: 3px solid #5ba87b;
-            border-radius: 2px;
-            margin-bottom: 6px;
+            gap: 8px;
         }
 
-        .ai-section .ai-upcoming-item:last-child { margin-bottom: 0; }
-
-        .ai-section .ai-day-badge {
-            font-size: 14px;
+        .class-card-title .period {
+            font-size: 13px;
             font-weight: 600;
-            color: #e8e8e8;
-            white-space: nowrap;
-            min-width: 80px;
+            color: var(--text-muted);
+        }
+
+        .class-card-title .name {
+            font-size: clamp(16px, 2.8vw, 18px);
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: -0.2px;
+        }
+
+        .class-card-sub {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .class-card-sub.muted { color: var(--text-muted); }
+
+        .class-card-grade {
+            text-align: right;
             flex-shrink: 0;
         }
 
-        .ai-section ul {
-            list-style: none;
-            padding: 0;
+        .class-card-grade .letter {
+            font-size: clamp(22px, 4vw, 28px);
+            font-weight: 800;
+            line-height: 1;
         }
 
-        .ai-section li {
-            font-size: 15px;
-            padding: 10px 0 10px 14px;
-            line-height: 1.5;
-            color: #e8e8e8;
-            border-radius: 2px;
-            margin-bottom: 6px;
-            background: none;
-            border-left: 3px solid #5ba87b;
+        .class-card-grade .pct {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 2px;
         }
 
-        .ai-section li:last-child { margin-bottom: 0; }
-
-        .ai-section .priority-high {
-            border-left-color: #d4603a;
+        .class-card-chevron {
+            font-size: 12px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+            transition: transform 0.2s ease;
         }
 
-        .ai-section .priority-medium {
-            border-left-color: #d4a03a;
+        .class-card.expanded .class-card-chevron {
+            transform: rotate(180deg);
         }
 
-        .ai-section .ai-class {
-            color: #5ba87b;
-            font-weight: 600;
-        }
-
-        .ai-section .ai-action {
-            color: #e8e8e8;
-        }
-
-        .ai-section-leverage li {
-            border-left-color: #5ba87b;
-        }
-
-        .ai-class-section {
-            padding: 20px;
-            background: #222228;
-            border-radius: 14px;
-            border: none;
-            margin-bottom: 12px;
-        }
-
-        .ai-class-section:last-child {
-            margin-bottom: 0;
-        }
-
-        .ai-class-section.has-actions .ai-class-subsection li,
-        .ai-class-section.has-actions .ai-date-item {
-            border-left-color: #d4a03a;
-        }
-
-        .ai-class-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 6px;
-        }
-
-        .ai-class-header h3 {
-            margin-bottom: 0;
-            font-size: 22px;
-            font-weight: 700;
-            color: #ffffff;
-            text-transform: none;
-            letter-spacing: -0.3px;
-        }
-
-        .ai-grade-pill {
-            font-size: 16px;
-            font-weight: 700;
-            padding: 0;
-            border-radius: 0;
-            background: none;
-            color: #e8e8e8;
-        }
-
-        .ai-class-status {
-            font-size: 15px;
-            color: #8e8e93;
-            line-height: 1.5;
-            margin-bottom: 14px;
-        }
-
-        .ai-class-subsection {
-            margin-top: 14px;
-            padding-top: 14px;
+        .class-card-body {
+            display: none;
+            padding: 0 16px 16px;
             border-top: 1px solid rgba(255,255,255,0.06);
         }
 
-        .ai-class-subsection:first-of-type {
-            margin-top: 0;
-            padding-top: 0;
-            border-top: none;
+        .class-card.expanded .class-card-body {
+            display: block;
         }
 
-        .ai-subsection-label {
+        .class-subsection {
+            margin-top: 16px;
+        }
+
+        .class-subsection:first-child {
+            margin-top: 12px;
+        }
+
+        .class-subsection-label {
             font-size: 12px;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #6e6e73;
+            color: var(--text-muted);
             margin-bottom: 8px;
         }
 
-        .ai-inline-date {
+        .class-subsection-label.alert { color: var(--red); }
+
+        .class-briefing-block {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 4px;
+        }
+
+        .class-briefing-starter {
+            font-size: clamp(15px, 2.4vw, 16px);
+            font-weight: 500;
+            color: var(--text);
+            line-height: 1.45;
+            margin-bottom: 10px;
+            font-style: italic;
+        }
+
+        .class-briefing-status {
             font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.45;
+            margin-bottom: 10px;
+        }
+
+        .class-briefing-split {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .class-briefing-going-well,
+        .class-briefing-going-wrong {
+            font-size: 14px;
+            line-height: 1.45;
+            padding: 8px 10px;
+            border-radius: 8px;
+        }
+
+        .class-briefing-going-well {
+            color: var(--green);
+            background: rgba(91, 168, 123, 0.1);
+        }
+
+        .class-briefing-going-wrong {
+            color: var(--amber);
+            background: rgba(212, 160, 58, 0.1);
+        }
+
+        .class-briefing-diagnosis,
+        .class-briefing-outlook {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.45;
+            margin-bottom: 8px;
+        }
+
+        .class-briefing-action-row {
+            font-size: 14px;
+            line-height: 1.45;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+
+        .class-briefing-action-row .action-label {
+            font-size: 11px;
             font-weight: 600;
-            color: #e8e8e8;
-            margin-right: 6px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 2px;
         }
 
-        @media (max-width: 600px) {
-            body { padding: 16px; }
-            header h1 { font-size: 28px; }
-            .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-            .tab { padding: 12px 20px; font-size: 16px; }
-            .summary-cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .summary-card { padding: 16px; }
-            .summary-card .value { font-size: 28px; }
-            .ai-card { padding: 20px; }
-            .ai-section { padding: 14px; }
-            .ai-class-header h3 { font-size: 18px; }
-            .ai-class-section { padding: 14px 16px; }
-            .assignment-row { flex-wrap: wrap; }
-            .nav-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .class-briefing-block .ai-action-list li {
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
         }
 
-        /* Summer Break Mode Toggle */
-        .summer-break-controls {
+        .class-aeries-note {
+            font-size: 14px;
+            color: var(--amber);
+            line-height: 1.45;
+            padding: 10px 12px;
+            background: rgba(212, 160, 58, 0.1);
+            border-radius: 10px;
+        }
+
+        .list-panel.compact .assignment-row {
+            padding: 10px 0;
+        }
+
+        .list-panel.compact .assignment-info .class-name {
+            display: none;
+        }
+
+        .assignment-meta {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: var(--text-muted);
+            font-size: clamp(15px, 2.5vw, 17px);
+        }
+
+        .summer-break-banner {
+            background: rgba(212, 96, 58, 0.12);
+            border-left: 4px solid var(--red);
+            padding: 14px 16px;
+            margin: 12px 16px 0;
+            font-size: clamp(14px, 2.2vw, 15px);
+            color: var(--amber);
+            border-radius: 0 10px 10px 0;
+        }
+
+        /* ── Settings drawer ── */
+        .settings-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            background: rgba(0,0,0,0.5);
+        }
+
+        .settings-overlay.open {
+            display: block;
+        }
+
+        .settings-drawer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: min(360px, 100%);
+            background: var(--surface);
+            padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 24px;
+            overflow-y: auto;
+            transform: translateX(100%);
+            transition: transform 0.25s ease;
+        }
+
+        .settings-overlay.open .settings-drawer {
+            transform: translateX(0);
+        }
+
+        .settings-header {
             display: flex;
             align-items: center;
-            gap: 16px;
-            margin-top: 12px;
-            flex-wrap: wrap;
+            justify-content: space-between;
+            margin-bottom: 24px;
         }
+
+        .settings-header h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .settings-close {
+            width: var(--touch-min);
+            height: var(--touch-min);
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            font-size: 28px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+        }
+
+        .settings-section {
+            margin-bottom: 24px;
+        }
+
+        .settings-section h3 {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
         .summer-break-toggle {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             cursor: pointer;
             user-select: none;
+            min-height: var(--touch-min);
         }
-        .summer-break-toggle input[type="checkbox"] {
-            display: none;
-        }
+
+        .summer-break-toggle input[type="checkbox"] { display: none; }
+
         .toggle-slider {
             position: relative;
-            width: 44px;
-            height: 24px;
+            width: 48px;
+            height: 28px;
             background: #3a3a3c;
-            border-radius: 12px;
-            transition: background 0.2s ease;
+            border-radius: 14px;
+            transition: background 0.2s;
+            flex-shrink: 0;
         }
+
         .toggle-slider:after {
             content: '';
             position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 20px;
-            height: 20px;
+            top: 3px;
+            left: 3px;
+            width: 22px;
+            height: 22px;
             background: #e8e8e8;
             border-radius: 50%;
-            transition: transform 0.2s ease;
+            transition: transform 0.2s;
         }
+
         .summer-break-toggle input:checked + .toggle-slider {
-            background: #5ba87b;
+            background: var(--green);
         }
+
         .summer-break-toggle input:checked + .toggle-slider:after {
             transform: translateX(20px);
         }
+
         .toggle-label {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 500;
-            color: #8e8e93;
+            color: var(--text);
         }
+
         .summer-break-hint {
-            font-size: 12px;
-            color: #6e6e73;
-        }
-        body.summer-break .ai-card,
-        body.summer-break .ai-card h2 {
-            display: none !important;
-        }
-        .summer-break-banner {
-            background: rgba(212, 96, 58, 0.1);
-            border-left: 3px solid #d4603a;
-            padding: 12px 16px;
-            margin-bottom: 24px;
-            font-size: 14px;
-            color: #d4a03a;
-            border-radius: 0 4px 4px 0;
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.45;
+            margin-top: 8px;
         }
 
         .summer-download-btn {
-            background: #5ba87b;
-            color: white;
+            display: none;
+            width: 100%;
+            background: var(--green);
+            color: #fff;
             border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 13px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            margin-left: 8px;
+            margin-top: 16px;
+            min-height: var(--touch-min);
         }
-        .summer-download-btn:hover {
-            background: #4a9068;
-        }
+
         .summer-instructions {
-            font-size: 12px;
-            color: #8e8e93;
-            line-height: 1.4;
-            max-width: 420px;
-            background: rgba(255,255,255,0.03);
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid #3a3a3c;
+            display: none;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-top: 12px;
+            background: rgba(255,255,255,0.04);
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
         }
+
         .summer-instructions code {
-            background: #2a2a30;
-            padding: 1px 4px;
-            border-radius: 3px;
+            background: var(--bg);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 12px;
         }
-    </style>
+
+        /* ── Responsive ── */
+        @media (min-width: 481px) {
+            .chip-row {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, 140px);
+                overflow-x: visible;
+            }
+        }
+
+        @media (min-width: 901px) {
+            .main-content {
+                padding: 0 24px 24px;
+            }
+
+            .student-picker {
+                max-width: 400px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+        }
     </style>
 </head>
 <body>
-    <header>
-        <div>
-            <h1>Casas Family Grade Dashboard</h1>
+    <header class="top-bar">
+        <div class="top-bar-left">
+            <div class="top-bar-title">Grade Dashboard</div>
             <span class="last-updated" id="lastUpdated"></span>
         </div>
-        <div class="summer-break-controls">
-            <label class="summer-break-toggle">
-                <input type="checkbox" id="summerBreakToggle">
-                <span class="toggle-slider"></span>
-                <span class="toggle-label">Summer Break Mode</span>
-            </label>
-            <span class="summer-break-hint">Hides AI briefings • Pauses daily scraping + Grok API</span>
-
-            <button id="downloadDataBtn" class="summer-download-btn" style="display:none;">
-                Download grades_data.json
-            </button>
-            <div id="summerInstructions" class="summer-instructions" style="display:none;">
-                <strong>1.</strong> Flip the toggle above to ON or OFF.<br>
-                <strong>2.</strong> Click the button to download the updated file.<br>
-                <strong>3.</strong> On GitHub, go to your repo → drag the file onto <code>grades_data.json</code> → commit.<br>
-                The next daily run will respect your setting. No coding or separate UIs needed.
-            </div>
-        </div>
+        <button class="settings-btn" id="settingsBtn" aria-label="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+            </svg>
+        </button>
     </header>
 
-    <div class="tabs" id="studentTabs"></div>
-    <div id="dashboards"></div>
+    <div class="student-picker" id="studentPicker"></div>
+
+    <div class="main-content">
+        <div id="dashboards"></div>
+    </div>
+
+    <div class="settings-overlay" id="settingsOverlay">
+        <div class="settings-drawer">
+            <div class="settings-header">
+                <h2>Settings</h2>
+                <button class="settings-close" id="settingsClose" aria-label="Close">&times;</button>
+            </div>
+            <div class="settings-section">
+                <h3>School Year</h3>
+                <label class="summer-break-toggle">
+                    <input type="checkbox" id="summerBreakToggle">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label">Summer Break Mode</span>
+                </label>
+                <p class="summer-break-hint">Hides AI briefings and pauses daily scraping + Grok API calls.</p>
+                <button id="downloadDataBtn" class="summer-download-btn">Download grades_data.json</button>
+                <div id="summerInstructions" class="summer-instructions">
+                    <strong>1.</strong> Flip the toggle above to ON or OFF.<br>
+                    <strong>2.</strong> Click the button to download the updated file.<br>
+                    <strong>3.</strong> On GitHub, drag the file onto <code>grades_data.json</code> and commit.<br>
+                    The next daily run will respect your setting.
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
         const TODAY = new Date();
         TODAY.setHours(0, 0, 0, 0);
+
+        let currentData = null;
 
         async function loadData() {
             try {
@@ -741,16 +1174,6 @@
             return 'grade-f';
         }
 
-        function formatGrade(course) {
-            const mark = course.mark || '';
-            const pct = course.percent;
-            if (mark && pct) return `${mark} (${Math.round(parseFloat(pct))}%)`;
-            if (course.mark_and_score) return course.mark_and_score;
-            if (mark) return mark;
-            if (pct) return `${Math.round(parseFloat(pct))}%`;
-            return '—';
-        }
-
         function getAllAssignments(student) {
             const all = [];
             if (!student.assignments_by_class) return all;
@@ -762,106 +1185,453 @@
             return all;
         }
 
-        function renderAiSummary(student) {
+        function parseMissingCount(course) {
+            if (course.missing_count > 0) return course.missing_count;
+            const html = course.missing_assignments || '';
+            const m = html.match(/>(\d+)</);
+            return m ? parseInt(m[1], 10) : 0;
+        }
+
+        function daysUntil(date) {
+            return Math.floor((date - TODAY) / (1000 * 60 * 60 * 24));
+        }
+
+        function isMissingAssignment(a) {
+            const due = parseDate(a.due_date);
+            if (!due || due >= TODAY) return false;
+            // Aeries marks missing work as unscored (null points) even when grading_complete is true
+            return a.points_earned === null;
+        }
+
+        function computeStats(student) {
+            const classes = student.classes || [];
+            const classesWithGrades = classes.filter(c => c.percent || c.mark);
+            const assignments = getAllAssignments(student);
+
+            const missing = assignments.filter(isMissingAssignment);
+
+            const dueThisWeek = assignments.filter(a => {
+                const due = parseDate(a.due_date);
+                if (!due || a.grading_complete) return false;
+                const diff = daysUntil(due);
+                return diff >= 0 && diff <= 7;
+            });
+
+            const recoverablePts = missing.reduce((sum, a) => sum + (a.points_possible || 0), 0);
+
+            let needFocus = 0;
+            let onTrack = 0;
+            for (const c of classesWithGrades) {
+                const pct = parseFloat(c.percent);
+                const mc = parseMissingCount(c);
+                const belowB = !isNaN(pct) && pct < 80;
+                if (mc > 0 || belowB) needFocus++;
+                else if (mc === 0 && !isNaN(pct) && pct >= 80) onTrack++;
+            }
+
+            const dueToday = dueThisWeek.filter(a => daysUntil(parseDate(a.due_date)) === 0).length;
+
+            return {
+                needFocus,
+                dueThisWeek: dueThisWeek.length,
+                dueToday,
+                recoverablePts: Math.round(recoverablePts),
+                onTrack,
+                missingCount: missing.length,
+                upcomingCount: assignments.filter(a => {
+                    const due = parseDate(a.due_date);
+                    return due && due >= TODAY && !a.grading_complete;
+                }).length,
+            };
+        }
+
+        function renderStatChips(stats) {
+            const focusClass = stats.needFocus > 0 ? 'alert' : 'ok';
+            const dueClass = stats.dueToday > 0 ? 'warn' : '';
+            const ptsClass = stats.recoverablePts > 0 ? 'warn' : 'ok';
+            const trackClass = stats.onTrack > 0 ? 'ok' : '';
+
+            return `
+                <section class="dashboard-section">
+                    <div class="chip-section flush">
+                        <div class="chip-section-label">Summary</div>
+                        <div class="chip-row">
+                            <div class="dashboard-chip ${focusClass}">
+                                <div class="chip-label">Classes to discuss</div>
+                                <div class="chip-value">${stats.needFocus}</div>
+                                <div class="chip-unit">below B or missing work</div>
+                            </div>
+                            <div class="dashboard-chip ${dueClass}">
+                                <div class="chip-label">Due this week</div>
+                                <div class="chip-value">${stats.dueThisWeek}</div>
+                                <div class="chip-unit">${stats.dueToday > 0 ? stats.dueToday + ' due today' : 'next 7 days'}</div>
+                            </div>
+                            <div class="dashboard-chip ${ptsClass}">
+                                <div class="chip-label">Recoverable pts</div>
+                                <div class="chip-value">${stats.recoverablePts}</div>
+                                <div class="chip-unit">from missing work</div>
+                            </div>
+                            <div class="dashboard-chip ${trackClass}">
+                                <div class="chip-label">On track</div>
+                                <div class="chip-value">${stats.onTrack}</div>
+                                <div class="chip-unit">B+ with nothing missing</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>`;
+        }
+
+        function renderClassDetails(cls) {
+            let html = '';
+            if (cls.recent && cls.recent.length) {
+                html += `<div class="ai-detail-block"><div class="ai-detail-label">Recently graded</div>`;
+                cls.recent.forEach(item => {
+                    html += `<div class="ai-detail-item"><strong>${item.date}</strong> ${item.event}</div>`;
+                });
+                html += `</div>`;
+            }
+            if (cls.upcoming && cls.upcoming.length) {
+                html += `<div class="ai-detail-block"><div class="ai-detail-label">Upcoming</div>`;
+                cls.upcoming.forEach(item => {
+                    html += `<div class="ai-detail-item"><strong>${item.day}</strong> ${item.assignment}${item.weight_context ? ' — ' + item.weight_context : ''}</div>`;
+                });
+                html += `</div>`;
+            }
+            return html;
+        }
+
+        function renderGradeChips(profiles, idx) {
+            if (!profiles.length) return '';
+
+            return profiles.map(p => {
+                const c = p.classMeta;
+                const g = formatGradeDisplay(c);
+                const gradeClass = getGradeClass(c.percent);
+                const urgency = p.urgency || 'ok';
+                const badge = urgencyBadgeLabel(urgency, p.missingCount);
+                const gradeText = g.pct && g.letter !== g.pct ? `${g.letter} ${g.pct}` : g.letter;
+                const unitText = badge ? `P${p.period} · ${badge}` : `Period ${p.period}`;
+
+                return `
+                    <button type="button" class="dashboard-chip urgency-${urgency}" onclick="jumpToClass(${idx}, ${p.period})">
+                        <div class="chip-label">${c.course_name}</div>
+                        <div class="chip-value ${gradeClass}">${gradeText}</div>
+                        <div class="chip-unit">${unitText}</div>
+                    </button>`;
+            }).join('');
+        }
+
+        function renderAiSummary(student, profiles, idx) {
             const s = student.ai_summary;
-            if (!s) return '';
+            const gradeChips = renderGradeChips(profiles, idx);
+            const gradesSection = gradeChips ? `
+                <div class="chip-section">
+                    <div class="chip-section-label">Grades</div>
+                    <div class="chip-row">${gradeChips}</div>
+                </div>` : '';
+
+            if (!s) {
+                return `
+                    <div class="briefing-panel">
+                        <div class="ai-card"><p class="empty-state">No briefing available</p></div>
+                        ${gradesSection}
+                    </div>`;
+            }
 
             const dateStr = s.generated_at
                 ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
                 : '';
 
-            let html = `<div class="ai-card">`;
-            html += `<h2>Daily Briefing</h2>`;
-            html += `<div class="ai-date">${dateStr}</div>`;
-            html += `<div class="ai-status">${s.status || ''}</div>`;
+            let briefing = `<div class="ai-card">`;
+            briefing += `<h2>Daily Briefing</h2>`;
+            briefing += `<div class="ai-status">${s.status || ''}</div>`;
+            if (dateStr) briefing += `<div class="ai-date">${dateStr}</div>`;
 
-            // New class-based layout
-            if (s.classes && s.classes.length) {
-                html += `<div class="ai-sections">`;
-                s.classes.forEach(cls => {
-                    const hasActions = cls.action_items && cls.action_items.length;
-                    html += `<div class="ai-section ai-class-section${hasActions ? ' has-actions' : ''}">`;
-                    html += `<div class="ai-class-header">`;
-                    html += `<h3>${cls.class_name}</h3>`;
-                    if (cls.current_grade) html += `<span class="ai-grade-pill">${cls.current_grade}</span>`;
-                    html += `</div>`;
-                    if (cls.status) html += `<div class="ai-class-status">${cls.status}</div>`;
-
-                    // Recent activity
-                    if (cls.recent && cls.recent.length) {
-                        html += `<div class="ai-class-subsection"><div class="ai-subsection-label">Recently Graded</div>`;
-                        cls.recent.forEach(item => {
-                            html += `<div class="ai-date-item"><span class="ai-inline-date">${item.date}</span> ${item.event}</div>`;
-                        });
-                        html += `</div>`;
-                    }
-
-                    // Upcoming
-                    if (cls.upcoming && cls.upcoming.length) {
-                        html += `<div class="ai-class-subsection"><div class="ai-subsection-label">Upcoming Assignments</div>`;
-                        cls.upcoming.forEach(item => {
-                            html += `<div class="ai-upcoming-item"><span class="ai-day-badge">${item.day}</span><span>${item.assignment}${item.weight_context ? ' — ' + item.weight_context : ''}</span></div>`;
-                        });
-                        html += `</div>`;
-                    }
-
-                    // Action items
-                    if (hasActions) {
-                        html += `<div class="ai-class-subsection"><div class="ai-subsection-label">Action Needed</div><ul>`;
-                        cls.action_items.forEach(item => {
-                            const pClass = item.priority === 'high' ? 'priority-high' : 'priority-medium';
-                            html += `<li class="${pClass}"><span class="ai-action">${item.parent_action}</span></li>`;
-                        });
-                        html += `</ul></div>`;
-                    }
-
-                    html += `</div>`;
+            if (s.focus_tonight) {
+                briefing += `<div class="ai-focus-tonight">Tonight: ${s.focus_tonight}</div>`;
+            }
+            if (s.wins && s.wins.length) {
+                briefing += `<ul class="ai-wins">`;
+                s.wins.forEach(win => {
+                    briefing += `<li>${win}</li>`;
                 });
-                html += `</div>`;
+                briefing += `</ul>`;
             }
 
-            // Fallback for old schema
+            // Legacy schema only — modern per-class detail lives inside class cards
             if (!s.classes) {
-                html += `<div class="ai-sections">`;
                 if (s.whats_happened && s.whats_happened.length) {
-                    html += `<div class="ai-section"><h3>What's Happened</h3>`;
+                    briefing += `<div class="ai-legacy-section"><h3>What's happened</h3>`;
                     s.whats_happened.forEach(item => {
                         const event = (typeof item === 'string') ? item : (item.event || '');
                         const date = (typeof item === 'string') ? '' : (item.date || '');
-                        html += `<div class="ai-date-item">${date ? '<span class="ai-inline-date">' + date + '</span> ' : ''}${event}</div>`;
+                        briefing += `<div class="ai-legacy-item">${date ? date + ' — ' : ''}${event}</div>`;
                     });
-                    html += `</div>`;
+                    briefing += `</div>`;
                 }
                 if (s.action_items && s.action_items.length) {
-                    html += `<div class="ai-section"><h3>Action Items</h3><ul>`;
+                    briefing += `<div class="ai-legacy-section"><h3>Action items</h3>`;
                     s.action_items.forEach(item => {
-                        const pClass = item.priority === 'high' ? 'priority-high' : 'priority-medium';
-                        html += `<li class="${pClass}"><span class="ai-class">${item.class}:</span> <span class="ai-action">${item.parent_action}</span></li>`;
+                        briefing += `<div class="ai-legacy-item"><strong>${item.class}:</strong> ${item.parent_action}</div>`;
                     });
-                    html += `</ul></div>`;
+                    briefing += `</div>`;
+                }
+            }
+
+            briefing += `</div>`;
+            return `<div class="briefing-panel">${briefing}${gradesSection}</div>`;
+        }
+
+        function renderAiClassBriefing(profile) {
+            const ai = profile.aiClass;
+            if (!ai) return '';
+
+            const hasGoing = !!(ai.going_well || ai.going_wrong);
+            const hasDiagnosis = !!ai.diagnosis;
+            const hasOutlook = !!ai.grade_outlook;
+            const hasActions = ai.action_items && ai.action_items.length;
+            const hasStarter = !!ai.conversation_starter;
+            const hasStudentAction = !!ai.student_action;
+            const hasParentSupport = !!ai.parent_support;
+            const hasStatus = ai.status && ai.status !== profile.urgency_reason
+                && ai.status !== ai.going_wrong;
+            const hasAiActivity = (ai.recent && ai.recent.length) || (ai.upcoming && ai.upcoming.length);
+
+            if (!hasGoing && !hasDiagnosis && !hasOutlook && !hasActions && !hasStarter
+                && !hasStudentAction && !hasParentSupport && !hasStatus && !hasAiActivity) {
+                return '';
+            }
+
+            let html = `<div class="class-subsection class-briefing-block">`;
+            html += `<div class="class-subsection-label">Briefing</div>`;
+
+            if (hasGoing) {
+                html += `<div class="class-briefing-split">`;
+                if (ai.going_well) {
+                    html += `<div class="class-briefing-going-well">${ai.going_well}</div>`;
+                }
+                if (ai.going_wrong) {
+                    html += `<div class="class-briefing-going-wrong">${ai.going_wrong}</div>`;
                 }
                 html += `</div>`;
             }
 
+            if (hasDiagnosis) {
+                html += `<div class="class-briefing-diagnosis">${ai.diagnosis}</div>`;
+            }
+            if (hasOutlook) {
+                html += `<div class="class-briefing-outlook">${ai.grade_outlook}</div>`;
+            }
+            if (hasStarter) {
+                html += `<div class="class-briefing-starter">"${ai.conversation_starter}"</div>`;
+            }
+            if (hasStudentAction) {
+                html += `<div class="class-briefing-action-row"><div class="action-label">Tonight</div>${ai.student_action}</div>`;
+            }
+            if (hasParentSupport) {
+                html += `<div class="class-briefing-action-row"><div class="action-label">How to help</div>${ai.parent_support}</div>`;
+            }
+            if (hasStatus) {
+                html += `<div class="class-briefing-status">${ai.status}</div>`;
+            }
+            if (hasActions) {
+                html += `<ul class="ai-action-list">`;
+                ai.action_items.forEach(item => {
+                    const names = item.assignment_names && item.assignment_names.length
+                        ? ` (${item.assignment_names.join(', ')})` : '';
+                    html += `<li>${item.parent_action || item.issue || ''}${names}</li>`;
+                });
+                html += `</ul>`;
+            }
+            html += renderClassDetails(ai);
             html += `</div>`;
             return html;
         }
 
-        function renderUpcoming(student) {
-            const assignments = getAllAssignments(student);
-            const upcoming = assignments
+        function extractPeriodFromLabel(label) {
+            const m = label.match(/<<\s*(\d+)-/);
+            if (m) return parseInt(m[1], 10);
+            const m2 = label.match(/^(\d+)-/);
+            return m2 ? parseInt(m2[1], 10) : null;
+        }
+
+        function normalizeName(str) {
+            return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        }
+
+        function filterMissingAssignments(assignments) {
+            return assignments
+                .filter(isMissingAssignment)
+                .sort((a, b) => parseDate(b.due_date) - parseDate(a.due_date));
+        }
+
+        function filterUpcomingAssignments(assignments) {
+            return assignments
                 .filter(a => {
                     const due = parseDate(a.due_date);
                     return due && due >= TODAY && !a.grading_complete;
                 })
                 .sort((a, b) => parseDate(a.due_date) - parseDate(b.due_date));
+        }
 
-            if (!upcoming.length) return '<p class="empty-state">No upcoming assignments</p>';
+        function filterRecentAssignments(assignments, limit) {
+            return assignments
+                .filter(a => {
+                    const due = parseDate(a.due_date);
+                    return due && due < TODAY && a.points_earned !== null;
+                })
+                .sort((a, b) => parseDate(b.due_date) - parseDate(a.due_date))
+                .slice(0, limit || 8);
+        }
 
-            let html = '';
+        function buildClassProfiles(student) {
+            const byPeriod = {};
+            for (const ca of student.assignments_by_class || []) {
+                const period = extractPeriodFromLabel(ca.class_name);
+                if (period === null) continue;
+                if (!byPeriod[period]) byPeriod[period] = [];
+                const tagged = ca.assignments.map(a => ({ ...a, class_name: ca.class_name }));
+                byPeriod[period].push(...tagged);
+            }
+
+            const profiles = [];
+            for (const c of student.classes || []) {
+                let assignments = byPeriod[c.period] || [];
+
+                if (!assignments.length) {
+                    const courseNorm = normalizeName(c.course_name);
+                    for (const ca of student.assignments_by_class || []) {
+                        const caPeriod = extractPeriodFromLabel(ca.class_name);
+                        if (caPeriod === c.period) {
+                            assignments = ca.assignments.map(a => ({ ...a, class_name: ca.class_name }));
+                            break;
+                        }
+                        const labelNorm = normalizeName(ca.class_name);
+                        if (courseNorm && labelNorm.includes(courseNorm)) {
+                            assignments = ca.assignments.map(a => ({ ...a, class_name: ca.class_name }));
+                            break;
+                        }
+                    }
+                }
+
+                const hasGrade = !!(c.percent || c.mark);
+                if (!hasGrade && !assignments.length) continue;
+
+                const missing = filterMissingAssignments(assignments);
+                const aeriesMissing = parseMissingCount(c);
+                const missingCount = assignments.length ? missing.length : aeriesMissing;
+                const upcoming = filterUpcomingAssignments(assignments);
+                const recent = filterRecentAssignments(assignments, 8);
+
+                profiles.push({
+                    classMeta: c,
+                    assignments,
+                    missing,
+                    upcoming,
+                    recent,
+                    missingCount,
+                    period: c.period,
+                });
+            }
+
+            return profiles;
+        }
+
+        function findAiClass(student, courseName) {
+            const classes = student.ai_summary?.classes;
+            if (!classes) return null;
+
+            const cn = normalizeName(courseName);
+            let best = null;
+            let bestLen = 0;
+
+            for (const cls of classes) {
+                const an = normalizeName(cls.class_name);
+                if (!an) continue;
+                if (cn.includes(an) || an.includes(cn)) {
+                    if (an.length > bestLen) {
+                        best = cls;
+                        bestLen = an.length;
+                    }
+                }
+            }
+            return best;
+        }
+
+        function urgencyToRank(urgency) {
+            const ranks = { critical: 4, watch: 3, ok: 2, strong: 1 };
+            return ranks[urgency] || 2;
+        }
+
+        function inferUrgency(profile, aiClass) {
+            if (aiClass?.urgency) return aiClass.urgency.toLowerCase();
+
+            const pct = parseFloat(profile.classMeta.percent);
+            const mc = profile.missingCount;
+            const belowB = !isNaN(pct) && pct < 80;
+            const belowC = !isNaN(pct) && pct < 70;
+            const hasActions = aiClass?.action_items?.length > 0;
+            const hasHighAction = aiClass?.action_items?.some(a => a.priority === 'high');
+
+            if (belowC || (belowB && (mc > 0 || hasHighAction))) return 'critical';
+            if ((mc > 0 || hasActions) && !isNaN(pct) && pct >= 80) return 'watch';
+            if (!isNaN(pct) && pct >= 90 && mc === 0 && !hasActions) return 'strong';
+            return 'ok';
+        }
+
+        function inferUrgencyReason(profile, urgency) {
+            const mc = profile.missingCount;
+            const mark = profile.classMeta.mark || '';
+            const pct = profile.classMeta.percent ? Math.round(parseFloat(profile.classMeta.percent)) + '%' : '';
+
+            if (urgency === 'watch') {
+                return `${mark} ${pct} looks fine — ${mc} missing assignment${mc === 1 ? '' : 's'} to discuss`.trim();
+            }
+            if (urgency === 'critical') {
+                return mc > 0
+                    ? `Grade at risk with ${mc} missing assignment${mc === 1 ? '' : 's'}`
+                    : 'Grade needs improvement';
+            }
+            if (urgency === 'strong') return 'On track — nothing missing';
+            return '';
+        }
+
+        function enrichProfiles(student, profiles) {
+            return profiles.map(p => {
+                const aiClass = findAiClass(student, p.classMeta.course_name);
+                const urgency = inferUrgency(p, aiClass);
+                return {
+                    ...p,
+                    aiClass,
+                    urgency,
+                    urgency_reason: aiClass?.urgency_reason || aiClass?.status || inferUrgencyReason(p, urgency),
+                    conversation_starter: aiClass?.conversation_starter || '',
+                    issue_type: aiClass?.issue_type || '',
+                    urgencyRank: urgencyToRank(urgency),
+                };
+            }).sort((a, b) => {
+                if (b.urgencyRank !== a.urgencyRank) return b.urgencyRank - a.urgencyRank;
+                return a.period - b.period;
+            });
+        }
+
+        function urgencyBadgeLabel(urgency, missingCount) {
+            const labels = { critical: 'Critical', watch: 'Watch', strong: 'On track', ok: '' };
+            const base = labels[urgency] || '';
+            if (!base) return '';
+            if ((urgency === 'watch' || urgency === 'critical') && missingCount > 0) {
+                return `${base} · ${missingCount} missing`;
+            }
+            return base;
+        }
+
+        function renderUpcomingList(assignments, compact) {
+            if (!assignments.length) return '';
+            const panelClass = compact ? 'list-panel compact' : 'list-panel';
+            let html = `<div class="${panelClass}">`;
             let currentWeek = '';
 
-            for (const a of upcoming) {
+            for (const a of assignments) {
                 const due = parseDate(a.due_date);
                 const week = getWeekLabel(due);
                 if (week !== currentWeek) {
@@ -879,36 +1649,53 @@
                         </div>
                         <div class="assignment-info">
                             <div class="title">${a.description}</div>
-                            <div class="class-name">${a.class_name}</div>
+                            ${compact ? '' : `<div class="class-name">${a.class_name}</div>`}
                         </div>
                         <div class="assignment-score">
                             ${hasScore
                                 ? `<div class="score ${getScoreClass(a.percentage)}">${a.points_earned}/${a.points_possible}</div>
                                    <div class="max">${a.percentage ? a.percentage.toFixed(0) + '%' : ''}</div>`
-                                : '<span class="badge badge-upcoming">Upcoming</span>'
+                                : '<span class="badge badge-upcoming">Due</span>'
                             }
                         </div>
                     </div>`;
             }
-            return html;
+            return html + '</div>';
         }
 
-        function renderRecent(student) {
-            const assignments = getAllAssignments(student);
-            const recent = assignments
-                .filter(a => {
-                    const due = parseDate(a.due_date);
-                    return due && due < TODAY && a.points_earned !== null;
-                })
-                .sort((a, b) => parseDate(b.due_date) - parseDate(a.due_date))
-                .slice(0, 30);
+        function renderMissingList(assignments, compact) {
+            if (!assignments.length) return '';
+            const panelClass = compact ? 'list-panel compact' : 'list-panel';
+            let html = `<div class="${panelClass}">`;
+            for (const a of assignments) {
+                const due = parseDate(a.due_date);
+                html += `
+                    <div class="assignment-row">
+                        <div class="assignment-date overdue">
+                            ${formatShortDate(due)}
+                        </div>
+                        <div class="assignment-info">
+                            <div class="title">${a.description}</div>
+                            ${compact
+                                ? `<div class="assignment-meta">${a.category}</div>`
+                                : `<div class="class-name">${a.class_name} — ${a.category}</div>`
+                            }
+                        </div>
+                        <div class="assignment-score">
+                            ${a.points_possible ? `<div class="max">Worth ${a.points_possible} pts</div>` : ''}
+                        </div>
+                    </div>`;
+            }
+            return html + '</div>';
+        }
 
-            if (!recent.length) return '<p class="empty-state">No recent graded assignments</p>';
-
-            let html = '';
+        function renderRecentList(assignments, compact) {
+            if (!assignments.length) return '';
+            const panelClass = compact ? 'list-panel compact' : 'list-panel';
+            let html = `<div class="${panelClass}">`;
             let currentWeek = '';
 
-            for (const a of recent) {
+            for (const a of assignments) {
                 const due = parseDate(a.due_date);
                 const week = getWeekLabel(due);
                 if (week !== currentWeek) {
@@ -923,7 +1710,7 @@
                         </div>
                         <div class="assignment-info">
                             <div class="title">${a.description}</div>
-                            <div class="class-name">${a.class_name}</div>
+                            ${compact ? '' : `<div class="class-name">${a.class_name}</div>`}
                         </div>
                         <div class="assignment-score">
                             <div class="score ${getScoreClass(a.percentage)}">${a.points_earned}/${a.points_possible}</div>
@@ -931,168 +1718,140 @@
                         </div>
                     </div>`;
             }
+            return html + '</div>';
+        }
+
+        function formatGradeDisplay(c) {
+            const mark = c.mark || '';
+            const pct = c.percent ? Math.round(parseFloat(c.percent)) : null;
+            if (mark && pct) return { letter: mark, pct: pct + '%' };
+            if (mark) return { letter: mark, pct: '' };
+            if (pct) return { letter: pct + '%', pct: '' };
+            return { letter: '—', pct: '' };
+        }
+
+        function renderClassCardBody(profile) {
+            let html = renderAiClassBriefing(profile);
+
+            const missingHtml = renderMissingList(profile.missing, true);
+            const upcomingHtml = renderUpcomingList(profile.upcoming, true);
+            const recentHtml = renderRecentList(profile.recent, true);
+
+            if (missingHtml) {
+                html += `<div class="class-subsection"><div class="class-subsection-label alert">Missing</div>${missingHtml}</div>`;
+            }
+
+            if (upcomingHtml) {
+                html += `<div class="class-subsection"><div class="class-subsection-label">Upcoming</div>${upcomingHtml}</div>`;
+            }
+
+            if (recentHtml) {
+                html += `<div class="class-subsection"><div class="class-subsection-label">Recent scores</div>${recentHtml}</div>`;
+            }
+
+            if (!html) {
+                html = '<p class="empty-state" style="padding:24px 0">Nothing to show for this class right now.</p>';
+            }
+
             return html;
         }
 
-        function renderMissing(student) {
-            const assignments = getAllAssignments(student);
-            const missing = assignments
-                .filter(a => {
-                    const due = parseDate(a.due_date);
-                    return due && due < TODAY && a.points_earned === null && !a.grading_complete;
-                })
-                .sort((a, b) => parseDate(b.due_date) - parseDate(a.due_date));
+        function renderClassCards(profiles, idx) {
+            if (!profiles.length) return '';
 
-            if (!missing.length) return '<p class="empty-state">No missing assignments — nice!</p>';
+            const cards = profiles.map(p => {
+                const c = p.classMeta;
+                const g = formatGradeDisplay(c);
+                const gradeClass = getGradeClass(c.percent);
+                const urgency = p.urgency || 'ok';
+                const insight = p.aiClass?.going_wrong || p.urgency_reason || p.conversation_starter || '';
 
-            let html = '';
-            for (const a of missing) {
-                const due = parseDate(a.due_date);
-                html += `
-                    <div class="assignment-row">
-                        <div class="assignment-date overdue">
-                            ${formatShortDate(due)}
-                        </div>
-                        <div class="assignment-info">
-                            <div class="title">${a.description}</div>
-                            <div class="class-name">${a.class_name} — ${a.category}</div>
-                        </div>
-                        <div class="assignment-score">
-                            ${a.points_possible ? `<div class="max">Worth ${a.points_possible} pts</div>` : ''}
+                return `
+                    <div class="class-card urgency-${urgency}" id="class-${idx}-${p.period}">
+                        <button type="button" class="class-card-header" onclick="toggleClassCard(${idx}, ${p.period})">
+                            <div class="class-card-main">
+                                <div class="class-card-title">
+                                    <span class="period">P${p.period}</span>
+                                    <span class="name">${c.course_name}</span>
+                                </div>
+                                ${c.teacher ? `<div class="class-card-sub muted">${c.teacher}</div>` : ''}
+                                ${insight ? `<div class="class-card-insight ${urgency}">${insight}</div>` : ''}
+                            </div>
+                            <div class="class-card-grade">
+                                <div class="letter ${gradeClass}">${g.letter}</div>
+                                ${g.pct ? `<div class="pct">${g.pct}</div>` : ''}
+                            </div>
+                            <span class="class-card-chevron">▼</span>
+                        </button>
+                        <div class="class-card-body">
+                            ${renderClassCardBody(p)}
                         </div>
                     </div>`;
-            }
-            return html;
+            }).join('');
+
+            return `
+                <section class="scroll-section">
+                    <h2 class="section-heading">By class</h2>
+                    <div class="class-cards">${cards}</div>
+                </section>`;
         }
 
-        function renderGrades(student) {
-            const classes = student.classes || [];
-            return classes.length ? classes.map(c => `
-                <div class="grade-row">
-                    <span class="period-badge">P${c.period}</span>
-                    <div class="class-info">
-                        <div class="class-name">${c.course_name}</div>
-                        <div class="teacher">${c.teacher}</div>
-                    </div>
-                    <div class="grade-right">
-                        ${c.missing_count > 0 ? `<span class="missing-badge">${c.missing_count} missing</span>` : ''}
-                        <span class="grade-badge ${getGradeClass(c.percent)}">${formatGrade(c)}</span>
-                    </div>
-                </div>
-            `).join('') : '<p class="empty-state">No grade data</p>';
+        function toggleClassCard(studentIdx, period) {
+            const card = document.getElementById(`class-${studentIdx}-${period}`);
+            if (!card) return;
+            const dashboard = document.getElementById(`dashboard-${studentIdx}`);
+            const wasExpanded = card.classList.contains('expanded');
+
+            dashboard.querySelectorAll('.class-card.expanded').forEach(el => {
+                if (el !== card) el.classList.remove('expanded');
+            });
+
+            card.classList.toggle('expanded', !wasExpanded);
+        }
+
+        function jumpToClass(studentIdx, period) {
+            const card = document.getElementById(`class-${studentIdx}-${period}`);
+            if (!card) return;
+
+            const dashboard = document.getElementById(`dashboard-${studentIdx}`);
+            dashboard.querySelectorAll('.class-card.expanded').forEach(el => el.classList.remove('expanded'));
+            card.classList.add('expanded');
+
+            const topBar = document.querySelector('.top-bar');
+            const offset = (topBar ? topBar.offsetHeight : 0) + 12;
+            const y = card.getBoundingClientRect().top + window.scrollY - offset;
+            window.scrollTo({ top: y, behavior: 'smooth' });
         }
 
         function renderStudent(student, idx) {
-            const classes = student.classes || [];
-            const classesWithGrades = classes.filter(c => c.percent || c.mark);
-            const avgPercent = classesWithGrades.length
-                ? (classesWithGrades.reduce((s, c) => s + parseFloat(c.percent || 0), 0) / classesWithGrades.length)
-                : null;
-
-            const assignments = getAllAssignments(student);
-            const missingCount = assignments.filter(a => {
-                const due = parseDate(a.due_date);
-                return due && due < TODAY && a.points_earned === null && !a.grading_complete;
-            }).length;
-            const upcomingCount = assignments.filter(a => {
-                const due = parseDate(a.due_date);
-                return due && due >= TODAY && !a.grading_complete;
-            }).length;
-            const lowestClass = classesWithGrades.length
-                ? classesWithGrades.reduce((low, c) => parseFloat(c.percent) < parseFloat(low.percent) ? c : low)
-                : null;
+            const stats = computeStats(student);
+            const profiles = enrichProfiles(student, buildClassProfiles(student));
 
             return `
-                ${renderAiSummary(student)}
-
-                <div class="summary-cards">
-                    <div class="summary-card">
-                        <div class="label">Average</div>
-                        <div class="value">${avgPercent !== null ? Math.round(avgPercent) + '%' : '—'}</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="label">Missing</div>
-                        <div class="value" style="color: ${missingCount > 0 ? '#d4603a' : '#5ba87b'}">${missingCount}</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="label">Due Soon</div>
-                        <div class="value">${upcomingCount}</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="label">Lowest Class</div>
-                        <div class="value" style="color: ${lowestClass && parseFloat(lowestClass.percent) < 75 ? '#d4603a' : lowestClass && parseFloat(lowestClass.percent) < 85 ? '#d4a03a' : '#e8e8e8'}; font-size: 20px">${lowestClass ? Math.round(parseFloat(lowestClass.percent)) + '% ' + (lowestClass.mark || '') : '—'}</div>
-                    </div>
-                </div>
-
-                <div class="nav-tabs">
-                    <button class="nav-tab active" onclick="switchView(${idx}, 'upcoming')">Upcoming</button>
-                    <button class="nav-tab" onclick="switchView(${idx}, 'recent')">Recent Scores</button>
-                    <button class="nav-tab" onclick="switchView(${idx}, 'missing')">Missing</button>
-                    <button class="nav-tab" onclick="switchView(${idx}, 'grades')">Grades</button>
-                </div>
-
-                <div class="section">
-                    <div class="view active" id="view-${idx}-upcoming">
-                        <h2>Upcoming Assignments <span class="count">${upcomingCount}</span></h2>
-                        ${renderUpcoming(student)}
-                    </div>
-                    <div class="view" id="view-${idx}-recent">
-                        <h2>Recent Scores</h2>
-                        ${renderRecent(student)}
-                    </div>
-                    <div class="view" id="view-${idx}-missing">
-                        <h2>Missing Assignments</h2>
-                        ${renderMissing(student)}
-                    </div>
-                    <div class="view" id="view-${idx}-grades">
-                        <h2>Grades by Class</h2>
-                        ${renderGrades(student)}
-                    </div>
-                </div>
-            `;
-        }
-
-        function switchView(studentIdx, view) {
-            const container = document.getElementById(`dashboard-${studentIdx}`);
-            container.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            container.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-            document.getElementById(`view-${studentIdx}-${view}`).classList.add('active');
-            event.target.classList.add('active');
+                ${renderAiSummary(student, profiles, idx)}
+                <hr class="section-divider">
+                ${renderStatChips(stats)}
+                <hr class="section-divider">
+                ${renderClassCards(profiles, idx)}`;
         }
 
         function switchStudent(index) {
-            document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === index));
+            document.querySelectorAll('.student-seg').forEach((t, i) => t.classList.toggle('active', i === index));
             document.querySelectorAll('.dashboard').forEach((d, i) => d.classList.toggle('active', i === index));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        async function init() {
-            const data = await loadData();
-            if (!data) return;
+        function setupSettings() {
+            const overlay = document.getElementById('settingsOverlay');
+            const openBtn = document.getElementById('settingsBtn');
+            const closeBtn = document.getElementById('settingsClose');
 
-            const updated = new Date(data.last_updated);
-            const opts = { timeZone: 'America/Los_Angeles' };
-            document.getElementById('lastUpdated').textContent =
-                `Updated ${updated.toLocaleDateString('en-US', { ...opts, weekday: 'short', month: 'short', day: 'numeric' })} at ${updated.toLocaleTimeString('en-US', { ...opts, hour: 'numeric', minute: '2-digit' })}`;
-
-            const tabsEl = document.getElementById('studentTabs');
-            const dashboardsEl = document.getElementById('dashboards');
-
-            data.students.forEach((student, i) => {
-                const tab = document.createElement('button');
-                tab.className = `tab ${i === 0 ? 'active' : ''}`;
-                tab.textContent = student.name;
-                tab.onclick = () => switchStudent(i);
-                tabsEl.appendChild(tab);
-
-                const dashboard = document.createElement('div');
-                dashboard.className = `dashboard ${i === 0 ? 'active' : ''}`;
-                dashboard.id = `dashboard-${i}`;
-                dashboard.innerHTML = renderStudent(student, i);
-                dashboardsEl.appendChild(dashboard);
+            openBtn.addEventListener('click', () => overlay.classList.add('open'));
+            closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) overlay.classList.remove('open');
             });
         }
-
-        let currentData = null;
 
         function applySummerBreak(active) {
             if (active) {
@@ -1102,11 +1861,9 @@
                     banner = document.createElement('div');
                     banner.id = 'summerBreakBanner';
                     banner.className = 'summer-break-banner';
-                    banner.textContent = '🌴 Summer Break Mode active — AI Daily Briefings hidden. Daily scraping + Grok API calls paused.';
-                    const dashboards = document.getElementById('dashboards');
-                    if (dashboards && dashboards.parentNode) {
-                        dashboards.parentNode.insertBefore(banner, dashboards);
-                    }
+                    banner.textContent = 'Summer Break Mode active — AI briefings hidden. Daily scraping + Grok API paused.';
+                    const picker = document.getElementById('studentPicker');
+                    picker.parentNode.insertBefore(banner, picker.nextSibling);
                 }
             } else {
                 document.body.classList.remove('summer-break');
@@ -1123,7 +1880,6 @@
 
             currentData = data || { summer_break: false };
 
-            // Single source of truth: prefer flag that is already in the committed grades_data.json
             const flagFromData = !!(currentData.summer_break);
             const saved = localStorage.getItem('summerBreakMode');
             const initial = (saved !== null) ? (saved === 'true') : flagFromData;
@@ -1132,57 +1888,80 @@
             currentData.summer_break = initial;
             applySummerBreak(initial);
 
+            if (saved !== null || initial) {
+                downloadBtn.style.display = 'block';
+                instructions.style.display = 'block';
+            }
+
             toggle.addEventListener('change', () => {
                 const isActive = toggle.checked;
                 localStorage.setItem('summerBreakMode', isActive);
                 currentData.summer_break = isActive;
                 applySummerBreak(isActive);
-
-                // Reveal the one-click download + instructions the first time they use the toggle
-                if (downloadBtn) downloadBtn.style.display = 'inline-block';
-                if (instructions) instructions.style.display = 'block';
+                downloadBtn.style.display = 'block';
+                instructions.style.display = 'block';
             });
 
-            // Download the *current* data object (with the live summer_break flag) as a file
-            if (downloadBtn) {
-                downloadBtn.addEventListener('click', () => {
-                    const jsonStr = JSON.stringify(currentData, null, 2);
-                    const blob = new Blob([jsonStr], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'grades_data.json';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+            downloadBtn.addEventListener('click', () => {
+                const jsonStr = JSON.stringify(currentData, null, 2);
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'grades_data.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
 
-                    alert('Downloaded grades_data.json with summer_break = ' + (currentData.summer_break ? 'true' : 'false') + '\n\n' +
-                          '1. Go to https://github.com/davidcasas82/aeries-dashboard\n' +
-                          '2. Drag the downloaded file onto grades_data.json\n' +
-                          '3. Commit the change\n\n' +
-                          'The next daily run will see the flag and stop scraping + Grok calls. Flip the toggle anytime and repeat.');
-                });
-            }
+                alert('Downloaded grades_data.json with summer_break = ' + (currentData.summer_break ? 'true' : 'false') + '\n\n' +
+                      '1. Go to https://github.com/davidcasas82/aeries-dashboard\n' +
+                      '2. Drag the downloaded file onto grades_data.json\n' +
+                      '3. Commit the change\n\n' +
+                      'The next daily run will see the flag and stop scraping + Grok calls.');
+            });
         }
 
-        // Hook into the existing flow
-        const realLoad = loadData;
-        loadData = async function() {
-            const d = await realLoad();
-            // Make sure the data object has the flag
-            if (d && typeof d.summer_break === 'undefined') {
-                d.summer_break = false;
-            }
-            return d;
-        };
+        async function init() {
+            const data = await loadData();
+            if (!data) return null;
 
-        const realInit = init;
-        init = async function() {
-            const data = await realInit();   // the original rendering happens
-            // After dashboards are built, wire the toggle using the real data object
+            if (typeof data.summer_break === 'undefined') {
+                data.summer_break = false;
+            }
+            currentData = data;
+
+            const updated = new Date(data.last_updated);
+            const opts = { timeZone: 'America/Los_Angeles' };
+            const now = new Date();
+            const isToday = updated.toLocaleDateString('en-US', opts) === now.toLocaleDateString('en-US', opts);
+            const timeStr = updated.toLocaleTimeString('en-US', { ...opts, hour: 'numeric', minute: '2-digit' });
+            document.getElementById('lastUpdated').textContent = isToday
+                ? `Updated today ${timeStr}`
+                : `Updated ${updated.toLocaleDateString('en-US', { ...opts, month: 'short', day: 'numeric' })} ${timeStr}`;
+
+            const pickerEl = document.getElementById('studentPicker');
+            const dashboardsEl = document.getElementById('dashboards');
+
+            data.students.forEach((student, i) => {
+                const seg = document.createElement('button');
+                seg.className = `student-seg ${i === 0 ? 'active' : ''}`;
+                seg.textContent = student.name;
+                seg.addEventListener('click', () => switchStudent(i));
+                pickerEl.appendChild(seg);
+
+                const dashboard = document.createElement('div');
+                dashboard.className = `dashboard ${i === 0 ? 'active' : ''}`;
+                dashboard.id = `dashboard-${i}`;
+                dashboard.innerHTML = renderStudent(student, i);
+                dashboardsEl.appendChild(dashboard);
+            });
+
+            setupSettings();
             setupSummerBreakToggle(data);
-        };
+
+            return data;
+        }
 
         init();
     </script>

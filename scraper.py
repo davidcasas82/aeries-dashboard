@@ -294,138 +294,441 @@ def parse_class_summary(raw_data):
     return classes
 
 
-def build_student_context(student_data):
-    """Build a compact text summary of a student's data for the AI prompt."""
-    today = datetime.now()
-    lines = []
+def extract_period_from_label(label):
+    m = re.search(r"<<\s*(\d+)-", label or "")
+    if m:
+        return int(m.group(1))
+    m2 = re.match(r"^(\d+)-", label or "")
+    return int(m2.group(1)) if m2 else None
 
-    lines.append(f"Student: {student_data['name']}")
-    lines.append(f"Date: {today.strftime('%B %d, %Y')}")
-    lines.append("")
 
-    # Grades overview with real missing counts
-    lines.append("CURRENT GRADES:")
-    for c in student_data["classes"]:
-        if not c["percent"]:
-            continue
-        missing = 0
-        missing_html = c.get("missing_assignments", "")
-        if "MissingAssignment" in str(missing_html):
-            m = re.search(r">(\d+)<", missing_html)
-            if m:
-                missing = int(m.group(1))
-        missing_str = f" [{missing} MISSING]" if missing > 0 else ""
-        lines.append(
-            f"  P{c['period']} {c['course_name']}: {c['percent']}% "
-            f"({c['mark'] or 'no letter grade'}){missing_str} — {c['teacher']}"
+def parse_due_date(date_str):
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%m/%d/%Y")
+    except ValueError:
+        return None
+
+
+def parse_trend_html(trend_html):
+    """Extract forecast direction and percentages from Aeries trend HTML."""
+    if not trend_html:
+        return None
+
+    direction = "same"
+    for cls, label in (
+        ("up", "gradebook-trend-up"),
+        ("down", "gradebook-trend-down"),
+        ("same", "gradebook-trend-same"),
+    ):
+        if cls in trend_html:
+            direction = label.replace("gradebook-trend-", "")
+            break
+
+    title_match = re.search(r'title="([^"]+)"', trend_html)
+    forecast = None
+    recent_avg = None
+    if title_match:
+        title = title_match.group(1).replace("&#37;", "%")
+        forecast_match = re.search(
+            r"Forecasted value of ([\d.]+)%", title, re.IGNORECASE
         )
+        recent_match = re.search(
+            r"average of the last four overall scores ([\d.]+)%", title, re.IGNORECASE
+        )
+        if forecast_match:
+            forecast = float(forecast_match.group(1))
+        if recent_match:
+            recent_avg = float(recent_match.group(1))
 
-    # Assignments by class — recent, upcoming, and missing
-    lines.append("")
-    lines.append("ASSIGNMENTS BY CLASS:")
+    return {
+        "direction": direction,
+        "forecast_pct": forecast,
+        "recent_four_avg_pct": recent_avg,
+    }
+
+
+def is_missing_assignment(assignment, today):
+    due = parse_due_date(assignment.get("due_date"))
+    if not due or due >= today:
+        return False
+    return assignment.get("points_earned") is None
+
+
+def assignments_for_period(student_data, period):
+    grouped = {}
     for ca in student_data.get("assignments_by_class", []):
-        recent = []
-        upcoming = []
-        missing = []
-
-        for a in ca["assignments"]:
-            if not a["due_date"]:
-                continue
-            try:
-                due = datetime.strptime(a["due_date"], "%m/%d/%Y")
-            except ValueError:
-                continue
-
-            days_diff = (due - today).days
-
-            if a["points_earned"] is not None and -14 <= days_diff < 0:
-                recent.append(a)
-            elif days_diff >= 0 and days_diff <= 14 and not a["grading_complete"]:
-                upcoming.append(a)
-            elif days_diff < 0 and a["points_earned"] is None and not a["grading_complete"]:
-                missing.append(a)
-
-        if not recent and not upcoming and not missing:
+        p = extract_period_from_label(ca.get("class_name", ""))
+        if p is None:
             continue
+        grouped.setdefault(p, []).extend(ca.get("assignments", []))
+    return grouped.get(period, [])
 
-        lines.append(f"\n  {ca['class_name']}:")
 
-        if recent:
-            lines.append("    Recent scores:")
-            for a in recent[-5:]:
-                pct = f"{a['percentage']:.0f}%" if a["percentage"] else "?"
-                lines.append(
-                    f"      {a['description'][:50]} — "
-                    f"{a['points_earned']}/{a['points_possible']} ({pct}) "
-                    f"due {a['due_date']}"
-                )
+def build_category_breakdown(assignments):
+    """Average score by assignment category for graded work."""
+    buckets = {}
+    for a in assignments:
+        if a.get("points_earned") is None or a.get("percentage") is None:
+            continue
+        cat = (a.get("category") or "Other").strip() or "Other"
+        buckets.setdefault(cat, []).append(a["percentage"])
 
-        if upcoming:
-            lines.append("    Upcoming:")
-            for a in upcoming:
-                pts = f" (worth {a['points_possible']} pts)" if a["points_possible"] else ""
-                lines.append(
-                    f"      {a['description'][:50]} — due {a['due_date']}{pts}"
-                )
+    breakdown = {}
+    for cat, pcts in buckets.items():
+        breakdown[cat] = {
+            "avg_pct": round(sum(pcts) / len(pcts), 1),
+            "count": len(pcts),
+        }
+    return breakdown
 
-        if missing:
-            lines.append("    MISSING/UNSCORED (past due):")
-            for a in missing[-5:]:
-                pts = f" (worth {a['points_possible']} pts)" if a["points_possible"] else ""
-                lines.append(
-                    f"      {a['description'][:50]} — was due {a['due_date']}{pts}"
-                )
 
-    return "\n".join(lines)
+def is_assessment_category(category):
+    c = (category or "").lower()
+    return any(k in c for k in ("assess", "test", "quiz", "exam", "unit"))
+
+
+def compute_score_trajectory(assignments):
+    """Compare avg of last 3 graded scores vs prior 3."""
+    graded = [
+        a for a in assignments
+        if a.get("points_earned") is not None and a.get("percentage") is not None
+    ]
+    graded.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
+
+    if len(graded) < 4:
+        return "insufficient_data"
+
+    recent = [a["percentage"] for a in graded[-3:]]
+    prior = [a["percentage"] for a in graded[-6:-3]] if len(graded) >= 6 else [a["percentage"] for a in graded[:-3]]
+
+    if not prior:
+        return "insufficient_data"
+
+    recent_avg = sum(recent) / len(recent)
+    prior_avg = sum(prior) / len(prior)
+    diff = recent_avg - prior_avg
+
+    if diff >= 5:
+        return "improving"
+    if diff <= -5:
+        return "slipping"
+    return "flat"
+
+
+def detect_performance_pattern(grade_pct, missing_count, category_breakdown, score_trajectory):
+    """Rule-based tag for Grok to interpret."""
+    has_missing = missing_count > 0
+    low_grade = grade_pct is not None and grade_pct < 80
+    strong_grade = grade_pct is not None and grade_pct >= 90 and not has_missing
+
+    assessment_avgs = []
+    other_avgs = []
+    for cat, info in category_breakdown.items():
+        if is_assessment_category(cat):
+            assessment_avgs.append(info["avg_pct"])
+        else:
+            other_avgs.append(info["avg_pct"])
+
+    test_weakness = False
+    if assessment_avgs and other_avgs:
+        assess_avg = sum(assessment_avgs) / len(assessment_avgs)
+        other_avg = sum(other_avgs) / len(other_avgs)
+        if assess_avg < 75 and other_avg >= 80:
+            test_weakness = True
+        elif other_avg - assess_avg >= 12:
+            test_weakness = True
+
+    if strong_grade and score_trajectory != "slipping":
+        return "on_track"
+    if not low_grade and has_missing:
+        return "completion_gap"
+    if low_grade and has_missing:
+        return "both"
+    if test_weakness:
+        return "test_weakness"
+    if low_grade:
+        return "low_performance"
+    if score_trajectory == "slipping":
+        return "slipping_trend"
+    return "mixed"
+
+
+def infer_urgency_from_analytics(grade_pct, missing_count, trend, performance_pattern):
+    if grade_pct is None:
+        return "ok", "on_track"
+
+    if grade_pct >= 90 and missing_count == 0 and performance_pattern == "on_track":
+        return "strong", "on_track"
+    if grade_pct >= 80 and missing_count == 0 and performance_pattern not in ("slipping_trend", "low_performance"):
+        return "ok", "on_track"
+    if grade_pct >= 80 and missing_count > 0:
+        return "watch", "missing_backlog"
+    if grade_pct < 80 and missing_count > 0:
+        return "critical", "both"
+    if grade_pct < 70:
+        return "critical", "low_grade"
+    if grade_pct < 80:
+        return "critical", "low_grade"
+    if trend and trend.get("direction") == "down":
+        return "watch", "slipping_trend"
+    return "ok", "on_track"
+
+
+def format_assignment_entry(assignment, today, kind):
+    due = parse_due_date(assignment.get("due_date"))
+    entry = {
+        "name": assignment.get("description", ""),
+        "category": assignment.get("category", ""),
+        "due_date": assignment.get("due_date", ""),
+        "points_possible": assignment.get("points_possible"),
+    }
+    if due:
+        entry["due_weekday"] = due.strftime("%a")
+        if kind == "missing":
+            entry["days_overdue"] = (today - due).days
+        elif kind == "upcoming":
+            entry["days_until_due"] = (due - today).days
+    if kind == "recent":
+        entry["points_earned"] = assignment.get("points_earned")
+        entry["percentage"] = assignment.get("percentage")
+    return entry
+
+
+def analyze_class(class_meta, assignments, today):
+    grade_pct = safe_float(class_meta.get("percent"))
+    mark = class_meta.get("mark") or ""
+
+    missing = [
+        a for a in assignments
+        if is_missing_assignment(a, today)
+    ]
+    missing.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
+
+    recoverable_points = sum(
+        a.get("points_possible") or 0 for a in missing
+    )
+
+    recent = []
+    upcoming = []
+    for a in assignments:
+        due = parse_due_date(a.get("due_date"))
+        if not due:
+            continue
+        days_diff = (due - today).days
+        if a.get("points_earned") is not None and -14 <= days_diff < 0:
+            recent.append(a)
+        elif 0 <= days_diff <= 14 and not a.get("grading_complete"):
+            upcoming.append(a)
+
+    recent.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min, reverse=True)
+    upcoming.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
+
+    category_breakdown = build_category_breakdown(assignments)
+    score_trajectory = compute_score_trajectory(assignments)
+    trend = parse_trend_html(class_meta.get("trend", ""))
+    performance_pattern = detect_performance_pattern(
+        grade_pct, len(missing), category_breakdown, score_trajectory
+    )
+    urgency, issue_type = infer_urgency_from_analytics(
+        grade_pct, len(missing), trend, performance_pattern
+    )
+
+    return {
+        "period": class_meta.get("period"),
+        "course_name": class_meta.get("course_name", ""),
+        "teacher": class_meta.get("teacher", ""),
+        "current_grade_pct": grade_pct,
+        "current_grade_mark": mark,
+        "trend": trend,
+        "missing_assignments": [
+            format_assignment_entry(a, today, "missing") for a in missing
+        ],
+        "recoverable_points": round(recoverable_points, 1),
+        "category_breakdown": category_breakdown,
+        "recent_scores": [
+            format_assignment_entry(a, today, "recent") for a in recent[:8]
+        ],
+        "upcoming": [
+            format_assignment_entry(a, today, "upcoming") for a in upcoming[:8]
+        ],
+        "performance_pattern": performance_pattern,
+        "score_trajectory": score_trajectory,
+        "suggested_urgency": urgency,
+        "issue_type": issue_type,
+    }
+
+
+def build_class_analytics(student_data):
+    """Pre-compute per-class facts for Grok interpretation."""
+    today = datetime.now()
+    student_name = student_data.get("name", "Student")
+    class_analytics = []
+
+    for class_meta in student_data.get("classes", []):
+        if not class_meta.get("percent"):
+            continue
+        period = class_meta.get("period")
+        assignments = assignments_for_period(student_data, period)
+        class_analytics.append(analyze_class(class_meta, assignments, today))
+
+    total_recoverable = sum(c.get("recoverable_points", 0) for c in class_analytics)
+    missing_class_count = sum(1 for c in class_analytics if c.get("missing_assignments"))
+    low_grade_count = sum(
+        1 for c in class_analytics
+        if c.get("current_grade_pct") is not None and c["current_grade_pct"] < 80
+    )
+
+    if missing_class_count >= 2:
+        dominant_theme = (
+            f"missing_work_backlog in {missing_class_count} of "
+            f"{len(class_analytics)} graded classes"
+        )
+    elif low_grade_count >= 2:
+        dominant_theme = f"low_grades in {low_grade_count} classes"
+    elif any(c.get("performance_pattern") == "test_weakness" for c in class_analytics):
+        dominant_theme = "assessment_scores lagging behind other work"
+    else:
+        dominant_theme = "mixed or stable performance"
+
+    wins = []
+    for c in class_analytics:
+        if (
+            c.get("current_grade_pct") is not None
+            and c["current_grade_pct"] >= 85
+            and not c.get("missing_assignments")
+            and c.get("score_trajectory") != "slipping"
+        ):
+            wins.append({
+                "class_name": c["course_name"],
+                "grade": f"{c.get('current_grade_mark') or ''} {c['current_grade_pct']}%".strip(),
+                "note": "no missing work, stable or improving",
+            })
+
+    urgency_rank = {"critical": 0, "watch": 1, "ok": 2, "strong": 3}
+    classes_needing_focus = sorted(
+        [
+            {
+                "class_name": c["course_name"],
+                "urgency": c["suggested_urgency"],
+                "issue_type": c["issue_type"],
+                "recoverable_points": c.get("recoverable_points", 0),
+            }
+            for c in class_analytics
+            if c["suggested_urgency"] in ("critical", "watch")
+        ],
+        key=lambda x: (
+            urgency_rank.get(x["urgency"], 2),
+            -x.get("recoverable_points", 0),
+        ),
+    )
+
+    return {
+        "student_name": student_name,
+        "date": today.strftime("%A, %B %d, %Y"),
+        "dominant_theme": dominant_theme,
+        "total_recoverable_pts": round(total_recoverable, 1),
+        "classes_needing_focus": classes_needing_focus,
+        "wins_hints": wins[:3],
+        "classes": class_analytics,
+    }
+
+
+def build_student_context(student_data):
+    """Build Grok user message from precomputed analytics."""
+    analytics = build_class_analytics(student_data)
+    return (
+        "PRECOMPUTED_ANALYTICS (source of truth — do not redo arithmetic):\n"
+        f"{json.dumps(analytics, indent=2)}\n\n"
+        "Interpret these facts into a family briefing. Use assignment names, "
+        "scores, and trends from this JSON. Do not invent assignments or scores."
+    )  # kept for standalone testing
 
 
 def generate_ai_summary(student_data):
-    """Call Grok API to generate a parent-facing weekly summary."""
+    """Call Grok API to generate a family-facing daily briefing."""
     if not GROK_API_KEY:
         return None
 
-    context = build_student_context(student_data)
+    student_name = student_data.get("name", "the student")
+    analytics = build_class_analytics(student_data)
+    context = (
+        "PRECOMPUTED_ANALYTICS (source of truth — do not redo arithmetic):\n"
+        f"{json.dumps(analytics, indent=2)}\n\n"
+        "Interpret these facts into a family briefing. Use assignment names, "
+        "scores, and trends from this JSON. Do not invent assignments or scores."
+    )
 
     today = datetime.now()
     today_dow = today.strftime("%A")
-    system_prompt = f"""You are a direct, no-nonsense academic advisor helping a parent monitor their child's school performance. Your job is to give a clear weekly status briefing organized by class — what's happening, what needs attention, and where to focus effort for maximum grade impact.
+    system_prompt = f"""You are an experienced high school teacher and academic coach writing a daily briefing for a family. The student ({student_name}) will read this alongside their parent.
 
 Today is {today_dow}, {today.strftime('%B %d, %Y')}.
 
+You receive PRECOMPUTED_ANALYTICS with per-class facts already calculated (trends, missing assignments, category averages, recoverable points, performance patterns). Your job is to INTERPRET those facts — not redo math.
+
+VOICE: Use "{student_name}" in third person throughout (e.g. "{student_name} is missing…", "{student_name} scored…"). Never use "you". Be direct, specific, and encouraging — not accusatory.
+
 Respond ONLY with valid JSON matching this exact schema:
 {{
-  "status": "2-3 sentence executive summary of where this student stands right now — highlight the 1-2 classes that need the most attention",
+  "status": "2-3 sentences: cross-class PATTERN from dominant_theme — not a list of every grade",
+  "focus_tonight": "single highest-leverage thing {student_name} should address tonight",
+  "wins": ["1-2 specific positives with evidence from the data"],
   "classes": [
     {{
-      "class_name": "short name (e.g. Engineering Geo, Eng 9, WrldHis)",
-      "current_grade": "letter and % (e.g. B- 74%)",
-      "status": "one sentence — how this class is going right now",
+      "class_name": "short name matching course_name in analytics",
+      "current_grade": "letter and % (e.g. B 82%)",
+      "urgency": "critical | watch | ok | strong",
+      "urgency_reason": "one short glance line — WHY this urgency (use suggested_urgency as guide)",
+      "issue_type": "low_grade | missing_backlog | both | on_track | slipping_trend | test_weakness",
+      "going_well": "one evidence-based positive — REQUIRED even for struggling classes",
+      "going_wrong": "one evidence-based concern with named assignments when applicable",
+      "diagnosis": "1-2 sentences: habit vs skill vs timing, grounded in performance_pattern and category_breakdown. Prefix inferences with 'Pattern suggests'",
+      "grade_outlook": "use recoverable_points and trend.forecast_pct — rough impact if work is turned in or trend continues",
+      "conversation_starter": "one curious, non-accusatory opener using {student_name}'s name",
+      "student_action": "what {student_name} should do tonight — specific, named assignments",
+      "parent_support": "one line on how parent can help without micromanaging",
+      "status": "one sentence summary of how this class is going",
       "recent": [
-        {{"date": "Day, Mon DD", "event": "score posted, assignment turned in, etc."}}
+        {{"date": "Day, Mon DD", "event": "assignment name — score (from recent_scores)"}}
       ],
       "upcoming": [
-        {{"day": "Day, Mon DD", "assignment": "name", "weight_context": "points / importance"}}
+        {{"day": "Day, Mon DD", "assignment": "name", "weight_context": "points / days until due"}}
       ],
       "action_items": [
-        {{"priority": "high or medium", "issue": "what's wrong", "parent_action": "specific thing to do"}}
+        {{
+          "priority": "high or medium",
+          "issue": "what's wrong",
+          "assignment_names": ["named assignments when issue is missing work"],
+          "parent_action": "specific support step for parent"
+        }}
       ]
     }}
   ]
 }}
 
-Rules:
-- ALL dates must include day of week: "Wed, May 21" not just "05/21/2026".
-- Only include classes that have graded assignments or notable activity. Skip electives/PE with no grade data.
-- Order classes by priority: classes with missing work or grades below B come first.
-- "recent" = assignments graded in the last 7-10 days in that class (scores posted). Most recent first. Include the score.
-- "upcoming" = assignments due this week and next week in that class. Include day of week.
-- "action_items" = specific things the parent should follow up on for this class. Only include if there IS an action needed.
-- Be specific and actionable. "Talk to your kid about missing work" is useless. "Ask Daniel if he turned in the 29.1 and 29.2 assignments — they show as unscored and are worth 20pts total" is useful.
-- For classes with action items, do rough math: if missing assignments are worth X pts, estimate what turning them in would do to the grade.
-- Classes where everything is fine (A, no missing work, nothing upcoming): include with a brief positive status but empty action_items array. Keep the entry short.
-- Max 2-3 action items per class. Focus on highest-impact actions."""
+Urgency rules (drives dashboard colors — match suggested_urgency unless you have strong reason not to):
+- "critical": grade below 70%, OR grade below 80% WITH missing work, OR failing trend with multiple missing high-point items
+- "watch": grade is B or better (80%+) BUT missing assignments exist — backlog NOT performance
+- "ok": B or better, no missing work, nothing urgent due soon
+- "strong": A or 90%+, no missing, clearly on track
 
-    user_prompt = f"Here is the current academic data:\n\n{context}"
+Critical rules:
+- MUST name specific assignments from missing_assignments — never say only "3 missing assignments"
+- MUST populate recent and upcoming from precomputed lists when non-empty (do not return empty arrays when data exists)
+- MUST reference trend.direction and trend.forecast_pct when trend data is present
+- MUST use category_breakdown to separate test weakness from homework/completion gaps
+- MUST NOT give generic advice ("discuss study strategies") without citing a specific score or assignment
+- MUST include going_well for every class — find a real positive in recent_scores or category_breakdown
+- When performance_pattern is completion_gap, emphasize backlog over grade panic
+- If data is thin for a class, say what is unknown rather than inventing causes
+- Order classes by priority: critical/watch first, then ok, then strong
+- Include ALL classes from analytics.classes in the output
+- ALL dates must include day of week: "Wed, May 21"
+- Max 2 action_items per class; only when action is truly needed"""
+
+    user_prompt = context
 
     try:
         resp = requests.post(
@@ -441,10 +744,10 @@ Rules:
                     {"role": "user", "content": user_prompt},
                 ],
                 "response_format": {"type": "json_object"},
-                "temperature": 0.7,
-                "max_tokens": 3000,
+                "temperature": 0.4,
+                "max_tokens": 5000,
             },
-            timeout=90,
+            timeout=120,
         )
 
         if resp.status_code != 200:
@@ -455,6 +758,10 @@ Rules:
         content = result["choices"][0]["message"]["content"]
         summary = json.loads(content)
         summary["generated_at"] = datetime.now(timezone.utc).isoformat()
+        summary["analytics_snapshot"] = {
+            "dominant_theme": analytics.get("dominant_theme"),
+            "total_recoverable_pts": analytics.get("total_recoverable_pts"),
+        }
         return summary
 
     except requests.exceptions.Timeout:
