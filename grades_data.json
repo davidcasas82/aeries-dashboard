@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-06-25T11:44:00.438025+00:00",
+  "last_updated": "2026-06-26T11:47:47.840145+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -2150,33 +2150,33 @@
         }
       ],
       "ai_summary": {
-        "status": "Missing work backlog affects 5 of 6 classes with 100 total recoverable points; Engineering Geo, Tech of Biology, and WrldHis by Dsgn show critical urgency from combined low grades and incomplete assignments while the other three classes are on watch due to backlog or slipping trends.",
-        "focus_tonight": "Submit the five missing assignments in Engineering Geo (Snorkl, 1 - PoW - PROCESS, 1 - PoW - PRODUCT, BB 2 Bill of Materials, *BB 4 Desmos Wire Blueprint) to recover 34 points.",
+        "status": "Missing work backlog affects 5 of 6 classes, driving the dominant pattern of completion gaps that threaten grades even where category performance is solid. Engineering Geo holds the largest recoverable points at 34, followed by PE at 30 and Mkt Adv GrphDes at 24. Trends are mostly flat or slipping except in Tech of Biology which shows slight improvement.",
+        "focus_tonight": "Submit the five missing Engineering Geo assignments (Snorkl, 1 - PoW - PROCESS, 1 - PoW - PRODUCT, BB 2 Bill of Materials, *BB 4 Desmos Wire Blueprint) to recover 34 points.",
         "wins": [
-          "Tech of Biology shows an improving trend with forecast at 76.48% and recent four avg 75.11%.",
-          "PE Course 1 maintains strong category averages including Fitness at 94.0% and Psychomotor at 100.0%."
+          "PE Course 1 Fitness category average sits at 94% across 15 items despite missing work.",
+          "Tech of Biology trend direction is up with recent four average rising to 75.11%."
         ],
         "classes": [
           {
             "class_name": "Engineering Geo",
             "current_grade": "C 74.3%",
             "urgency": "critical",
-            "urgency_reason": "Grade below 80% with 5 missing high-point items totaling 34 recoverable points",
+            "urgency_reason": "C grade with 34 recoverable points from multiple high-point missing items",
             "issue_type": "both",
-            "going_well": "Projects category average at 86.7% across 3 assignments",
-            "going_wrong": "Missing Snorkl, 1 - PoW - PROCESS, 1 - PoW - PRODUCT, BB 2 Bill of Materials, and *BB 4 Desmos Wire Blueprint",
-            "diagnosis": "Pattern suggests completion_gap in Completion Tracking (35.0%) and Problem-solving (75.0%) rather than skill deficits in Learning Targets (76.2%) or Projects.",
-            "grade_outlook": "Turning in the 34 recoverable points could raise grade above 80% while flat trend at 74.08% forecast keeps it near C without action",
-            "conversation_starter": "Daniel, what stands out when you look at the missing items in Engineering Geo?",
-            "student_action": "Complete and submit Snorkl, 1 - PoW - PROCESS, 1 - PoW - PRODUCT, BB 2 Bill of Materials, and *BB 4 Desmos Wire Blueprint tonight",
-            "parent_support": "Ask Daniel which assignment he wants to tackle first and offer a quiet workspace for 30 minutes",
-            "status": "Critical due to backlog and C grade with flat trajectory",
+            "going_well": "Projects category average reaches 86.7% across 3 items.",
+            "going_wrong": "Five missing items including Snorkl (4 pts), 1 - PoW - PROCESS (10 pts), and 1 - PoW - PRODUCT (10 pts) remain overdue 101-154 days.",
+            "diagnosis": "Pattern suggests completion_gap rather than skill deficit, as Learning Targets average 76.2% while Completion Tracking lags at 35%.",
+            "grade_outlook": "Turning in the 34 recoverable points could lift the grade above 80% if trend holds at 74.08 forecast.",
+            "conversation_starter": "Daniel, which of the Engineering Geo missing items feels quickest to finish first?",
+            "student_action": "Complete and submit Snorkl, 1 - PoW - PROCESS, 1 - PoW - PRODUCT, BB 2 Bill of Materials, and *BB 4 Desmos Wire Blueprint tonight.",
+            "parent_support": "Ask Daniel which assignment he plans to tackle first and offer a quiet workspace.",
+            "status": "C grade held down by long-overdue completion items despite decent project work.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "Five missing assignments blocking 34 points",
+                "issue": "34 points locked behind five overdue assignments",
                 "assignment_names": [
                   "Snorkl",
                   "1 - PoW - PROCESS",
@@ -2184,7 +2184,7 @@
                   "BB 2 Bill of Materials",
                   "*BB 4 Desmos Wire Blueprint"
                 ],
-                "parent_action": "Check in after dinner to confirm submissions are uploaded"
+                "parent_action": "Check that Daniel has the assignment links open before he starts."
               }
             ]
           },
@@ -2192,29 +2192,29 @@
             "class_name": "Tech of Biology",
             "current_grade": "C 77.0%",
             "urgency": "critical",
-            "urgency_reason": "Grade below 80% with 4 missing Practice items totaling 12 recoverable points",
+            "urgency_reason": "C grade plus 12 recoverable points from four missing Practice items",
             "issue_type": "both",
-            "going_well": "Trend direction is up with forecast at 76.48%",
-            "going_wrong": "Missing Protein Synthesis Gizmos, Week 4 & 5 Warm-Ups, Unicorn Genetics, and Week 13 & 14 Warm-Ups",
-            "diagnosis": "Pattern suggests completion_gap in Practice category (63.3%) despite improving trajectory and Assessment avg of 76.4%.",
-            "grade_outlook": "Recovering 12 points could stabilize near 78% while upward trend supports modest gains if backlog clears",
-            "conversation_starter": "Daniel, how do the Practice assignments in Tech of Biology compare to the Assessment scores?",
-            "student_action": "Submit Protein Synthesis Gizmos, Week 4 & 5 Warm-Ups, Unicorn Genetics, and Week 13 & 14 Warm-Ups tonight",
-            "parent_support": "Remind Daniel to set a 20-minute timer for each short Practice item",
-            "status": "Critical from missing Practice work despite improving trend",
+            "going_well": "Assessment category holds at 76.4% and overall trend is improving.",
+            "going_wrong": "Four Practice assignments (Protein Synthesis Gizmos, Week 4 & 5 Warm-Ups, Unicorn Genetics, Week 13 & 14 Warm-Ups) overdue 70-143 days.",
+            "diagnosis": "Pattern suggests completion_gap in Practice category (63.3%) while Assessments remain stronger.",
+            "grade_outlook": "Recovering 12 points would stabilize near the current 76.48 forecast if upward trend continues.",
+            "conversation_starter": "Daniel, do any of the Biology warm-up or Gizmo assignments look straightforward to finish?",
+            "student_action": "Submit Protein Synthesis Gizmos, Week 4 & 5 Warm-Ups, Unicorn Genetics, and Week 13 & 14 Warm-Ups.",
+            "parent_support": "Remind Daniel to check the online portal for the exact submission links.",
+            "status": "C grade with improving trend but Practice backlog still unresolved.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "Four missing Practice assignments worth 12 points",
+                "issue": "12 points behind four overdue Practice items",
                 "assignment_names": [
                   "Protein Synthesis Gizmos",
                   "Week 4 & 5 Warm-Ups",
                   "Unicorn Genetics",
                   "Week 13 & 14 Warm-Ups"
                 ],
-                "parent_action": "Offer to review completed work before submission"
+                "parent_action": "Offer to review the submitted work for completeness before upload."
               }
             ]
           },
@@ -2222,16 +2222,16 @@
             "class_name": "WrldHis by Dsgn",
             "current_grade": "C 78.5%",
             "urgency": "critical",
-            "urgency_reason": "Grade at 78.5% with missing Classwork Collaboration item and low category avg of 49.0%",
+            "urgency_reason": "C grade with Classwork Collaboration average at 49%",
             "issue_type": "both",
-            "going_well": "Learning Target - Design average at 85.0%",
-            "going_wrong": "Missing 22.3 US Foreign Policy in Classwork Collaboration",
-            "diagnosis": "Pattern suggests both low performance in Classwork Collaboration (49.0%) and a single missing item, with stable trend at 78.63% forecast.",
-            "grade_outlook": "Zero recoverable points means outlook stays near 78-79% unless Classwork Collaboration improves",
-            "conversation_starter": "Daniel, what makes the Classwork Collaboration category different from the Design targets?",
-            "student_action": "Review and resubmit or complete 22.3 US Foreign Policy if possible",
-            "parent_support": "Ask Daniel to show the Classwork Collaboration average and discuss one way to raise it",
-            "status": "Critical from low Classwork Collaboration performance and C grade",
+            "going_well": "Learning Target - Design category average is 85% across 2 items.",
+            "going_wrong": "22.3 US Foreign Policy missing for 140 days with Classwork Collaboration dragging at 49%.",
+            "diagnosis": "Pattern suggests both low performance in Classwork Collaboration and a single missing item.",
+            "grade_outlook": "No recoverable points listed so outlook remains near 78.63 forecast unless collaboration improves.",
+            "conversation_starter": "Daniel, what made the 22.3 US Foreign Policy assignment difficult to complete?",
+            "student_action": "Locate and submit 22.3 US Foreign Policy if still possible.",
+            "parent_support": "Ask Daniel what support he needs to finish the remaining history item.",
+            "status": "C grade limited by weak Classwork Collaboration performance.",
             "recent": [],
             "upcoming": [],
             "action_items": []
@@ -2240,29 +2240,29 @@
             "class_name": "PE Course 1",
             "current_grade": "90.5%",
             "urgency": "watch",
-            "urgency_reason": "A-range grade but 4 missing Fitness and Projects items totaling 30 recoverable points",
+            "urgency_reason": "A grade but 30 recoverable points from four missing Fitness and Projects items",
             "issue_type": "missing_backlog",
-            "going_well": "Fitness average at 94.0% and Psychomotor at 100.0%",
-            "going_wrong": "Missing Vertical Jump, Fly-10, MFJ Jan Goals, and MFJ Feb Goals",
-            "diagnosis": "Pattern suggests completion_gap in Projects (67.5%) and older Fitness items despite strong overall performance and same trend.",
-            "grade_outlook": "Recovering 30 points would secure A while forecast at 88.39% shows minor slip without action",
-            "conversation_starter": "Daniel, which of the missing PE items feels easiest to finish first?",
-            "student_action": "Submit Vertical Jump, Fly-10, MFJ Jan Goals, and MFJ Feb Goals",
-            "parent_support": "Suggest Daniel schedule these short fitness logs during a break this evening",
-            "status": "Watch due to missing backlog despite 90.5% grade",
+            "going_well": "Fitness category average 94% and Psychomotor/Affective both at 100%.",
+            "going_wrong": "Vertical Jump, Fly-10, MFJ Jan Goals, and MFJ Feb Goals overdue 119-147 days.",
+            "diagnosis": "Pattern suggests completion_gap isolated to Projects and Fitness submissions while core categories remain strong.",
+            "grade_outlook": "Recovering 30 points would protect the current high grade against the 88.39 forecast.",
+            "conversation_starter": "Daniel, which of the PE fitness logs or goal sheets can be finished fastest?",
+            "student_action": "Submit Vertical Jump, Fly-10, MFJ Jan Goals, and MFJ Feb Goals.",
+            "parent_support": "Confirm Daniel has access to the fitness tracking forms.",
+            "status": "Strong grade undermined only by missing fitness and project submissions.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "medium",
-                "issue": "Four missing Fitness and Projects assignments worth 30 points",
+                "issue": "30 points behind four overdue items",
                 "assignment_names": [
                   "Vertical Jump",
                   "Fly-10",
                   "MFJ Jan Goals",
                   "MFJ Feb Goals"
                 ],
-                "parent_action": "Check that Daniel has access to the fitness tracking sheet"
+                "parent_action": "Check that Daniel sets a 20-minute timer to complete each form."
               }
             ]
           },
@@ -2270,16 +2270,16 @@
             "class_name": "Mkt Adv GrphDes",
             "current_grade": "B 82.0%",
             "urgency": "watch",
-            "urgency_reason": "B grade but 9 missing Assignments and Learning Target items totaling 24 recoverable points",
+            "urgency_reason": "B grade with 24 recoverable points from nine missing assignments",
             "issue_type": "missing_backlog",
-            "going_well": "Learning Target average at 89.0% and Oral Presentations at 87.5%",
-            "going_wrong": "Missing Steps 4-5 Checkpoint, 2/27 - Sub Work, PHB #15-21, SWOT Analysis, Checkpoint #2 & #3, Q&A - Notes, Sub Work - Shark Tank Notes, LT7.2 - College Personal Branding, and LT7.3 - Resume Update",
-            "diagnosis": "Pattern suggests completion_gap across Assignments (83.3%) and Learning Target items with down trend at 80.56% forecast.",
-            "grade_outlook": "Recovering 24 points could hold B or push higher while downward trend risks slipping below 80% without action",
-            "conversation_starter": "Daniel, how many of the missing Mkt Adv GrphDes items are quick checkpoints versus bigger projects?",
-            "student_action": "Prioritize and submit LT7.2 - College Personal Branding and LT7.3 - Resume Update first",
-            "parent_support": "Help Daniel sort the list by points possible and due date order",
-            "status": "Watch from missing backlog with B grade and downward trend",
+            "going_well": "Learning Target category average 89% across 5 items.",
+            "going_wrong": "Nine missing items including LT7.2 - College Personal Branding (10 pts) and LT7.3 - Resume Update (10 pts) overdue 42-143 days.",
+            "diagnosis": "Pattern suggests completion_gap with most missing items carrying zero or low points.",
+            "grade_outlook": "Recovering 24 points would keep the grade above 80% per the 80.56 forecast.",
+            "conversation_starter": "Daniel, are the branding and resume updates the highest-value items left in Marketing?",
+            "student_action": "Submit LT7.2 - College Personal Branding and LT7.3 - Resume Update first.",
+            "parent_support": "Ask Daniel to show the two 10-point assignments he plans to finish tonight.",
+            "status": "B grade with backlog of mostly low-point missing work.",
             "recent": [],
             "upcoming": [],
             "action_items": []
@@ -2288,22 +2288,22 @@
             "class_name": "Eng 9 Entre",
             "current_grade": "B 83.8%",
             "urgency": "watch",
-            "urgency_reason": "B grade with no missing work but downward trend forecast at 78.8%",
+            "urgency_reason": "B grade with downward trend and no missing assignments listed",
             "issue_type": "slipping_trend",
-            "going_well": "Assessments average at 88.3% across 12 items",
-            "going_wrong": "Recent four avg 83.57% with down direction and forecast dropping to 78.8%",
-            "diagnosis": "Pattern suggests slipping_trend in overall performance despite strong Assessments, with no completion issues.",
-            "grade_outlook": "No recoverable points; continued down trend risks B- or lower without intervention on recent patterns",
-            "conversation_starter": "Daniel, what changed in the last four assessments that pulled the average down?",
-            "student_action": "Review the most recent assessment feedback and note one improvement area",
-            "parent_support": "Ask Daniel to share one thing he noticed about the recent assessment scores",
-            "status": "Watch due to slipping trend with no missing work",
+            "going_well": "Assessments category average 88.3% across 12 items.",
+            "going_wrong": "Trend direction down with forecast dropping to 78.8%.",
+            "diagnosis": "Pattern suggests slipping_trend in overall performance despite strong assessment results.",
+            "grade_outlook": "Continued downward trend risks falling to low B or C per 78.8 forecast.",
+            "conversation_starter": "Daniel, what recent change in English class might explain the lower recent scores?",
+            "student_action": "Review the last four assessment scores and note any patterns.",
+            "parent_support": "Invite Daniel to share one thing that felt harder on recent assessments.",
+            "status": "B grade showing a slipping trend with no current missing work.",
             "recent": [],
             "upcoming": [],
             "action_items": []
           }
         ],
-        "generated_at": "2026-06-25T11:44:21.325253+00:00",
+        "generated_at": "2026-06-26T11:48:06.357716+00:00",
         "analytics_snapshot": {
           "dominant_theme": "missing_work_backlog in 5 of 6 graded classes",
           "total_recoverable_pts": 100.0
@@ -4192,37 +4192,37 @@
         }
       ],
       "ai_summary": {
-        "status": "Missing work backlog affects 5 of 6 classes, with 62 recoverable points total; Bus Algebra 1 shows both low grade and missing work while the other four watches are completion gaps only. DT 8 Lang Arts remains on track with no missing assignments.",
-        "focus_tonight": "Submit the LT 10.5 - Two Way Tables assignment in Bus Algebra 1 to recover 10 points and stabilize the C.",
+        "status": "Leah shows a dominant pattern of missing_work_backlog across 5 of 6 classes totaling 62 recoverable points, with Bus Algebra 1 standing out as critical due to both low grade and backlog while the other four watches stem purely from completion gaps.",
+        "focus_tonight": "Complete and submit the LT 10.5 - Two Way Tables assignment in Bus Algebra 1 to recover 10 points and stabilize the C grade.",
         "wins": [
-          "DT 8 Lang Arts holds an A 90.1% with no missing work and stable trend at 89.95 forecast.",
-          "Virt Enterprise trend is up with forecast improving to 90.4% despite backlog."
+          "DT 8 Lang Arts holds an A 90.1% with no missing assignments and a stable trend at 89.95% forecast.",
+          "Virt Enterprise trend is improving upward to a 90.4% forecast despite backlog."
         ],
         "classes": [
           {
             "class_name": "Bus Algebra 1",
             "current_grade": "C 79.7%",
             "urgency": "critical",
-            "urgency_reason": "Grade below 80% with missing high-point assignment and flat trend",
+            "urgency_reason": "Grade below 80% with missing high-point fluency work and flat trend",
             "issue_type": "both",
-            "going_well": "Fluency category at 90.0% across 3 assignments",
-            "going_wrong": "LT 10.5 - Two Way Tables missing (10 points, 139 days overdue)",
-            "diagnosis": "Pattern suggests completion_gap combined with assessment performance at 79.4%",
-            "grade_outlook": "Turning in the missing assignment could raise grade toward 82-84% if trend holds at 77.92 forecast",
-            "conversation_starter": "Leah, what made the Fluency work feel stronger than the Assessments?",
-            "student_action": "Complete and submit LT 10.5 - Two Way Tables tonight",
-            "parent_support": "Ask Leah to show the assignment portal confirmation once submitted",
-            "status": "Critical due to combined grade and backlog issues",
+            "going_well": "Fluency category average is strong at 90.0% across 3 assignments.",
+            "going_wrong": "Missing LT 10.5 - Two Way Tables (10 points, 140 days overdue) in Fluency.",
+            "diagnosis": "Pattern suggests a completion_gap combined with assessment performance at 79.4% across 27 items, not pure skill deficit.",
+            "grade_outlook": "Turning in the 10 recoverable points could lift the grade toward 82-84% if trend holds at 77.92% forecast.",
+            "conversation_starter": "Leah, what do you remember about the Two Way Tables lesson from February?",
+            "student_action": "Locate and submit LT 10.5 - Two Way Tables tonight.",
+            "parent_support": "Ask Leah if she needs the assignment link or a quiet spot to finish it.",
+            "status": "Bus Algebra 1 is the only critical class due to the combination of C grade and backlog.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "high",
-                "issue": "missing high-point assignment",
+                "issue": "missing fluency assignment dragging grade",
                 "assignment_names": [
                   "LT 10.5 - Two Way Tables"
                 ],
-                "parent_action": "Remind Leah to check submission status in the portal before bed"
+                "parent_action": "Check if Leah can access the assignment file this evening."
               }
             ]
           },
@@ -4230,27 +4230,27 @@
             "class_name": "PE 8",
             "current_grade": "B 90.0%",
             "urgency": "watch",
-            "urgency_reason": "B grade with 20 recoverable points from backlog and downward trend",
+            "urgency_reason": "B grade with 20 recoverable points from multiple long-overdue fitness and project items",
             "issue_type": "missing_backlog",
-            "going_well": "Fitness category strong at 90.7% across 14 assignments",
-            "going_wrong": "Five missing items including MFJ Jan Goals and MFJ Feb Goals (20 points total)",
-            "diagnosis": "Pattern suggests completion_gap as performance remains high where work is submitted",
-            "grade_outlook": "Recovering 20 points could prevent drop below 85% given 83.44 forecast",
-            "conversation_starter": "Leah, which of the Fitness tasks felt easiest to complete?",
-            "student_action": "Submit MFJ Jan Goals and MFJ Feb Goals first",
-            "parent_support": "Offer to review goal sheets with Leah for 10 minutes",
-            "status": "Watch due to backlog despite solid category averages",
+            "going_well": "Fitness category remains high at 90.7% across 14 assignments.",
+            "going_wrong": "Five missing items including Mile, Vertical Jump, Fly-10, MFJ Jan Goals, and MFJ Feb Goals totaling 20 points.",
+            "diagnosis": "Pattern suggests completion_gap rather than skill issues given strong category averages in Fitness and Psychomotor.",
+            "grade_outlook": "Recovering the 20 points could prevent the down trend from reaching the 83.44% forecast.",
+            "conversation_starter": "Leah, do any of the January fitness logs feel doable to finish quickly?",
+            "student_action": "Prioritize submitting MFJ Jan Goals and MFJ Feb Goals for 20 points.",
+            "parent_support": "Offer to review the goal sheets with Leah if she wants a second set of eyes.",
+            "status": "PE 8 is on watch solely because of the missing backlog despite solid performance.",
             "recent": [],
             "upcoming": [],
             "action_items": [
               {
                 "priority": "medium",
-                "issue": "multiple overdue projects",
+                "issue": "multiple overdue fitness and project assignments",
                 "assignment_names": [
                   "MFJ Jan Goals",
                   "MFJ Feb Goals"
                 ],
-                "parent_action": "Help Leah locate the goal templates in her files"
+                "parent_action": "Remind Leah the due dates were months ago but points are still recoverable."
               }
             ]
           },
@@ -4258,44 +4258,34 @@
             "class_name": "Virt Enterprise",
             "current_grade": "B 89.4%",
             "urgency": "watch",
-            "urgency_reason": "B grade with 20 recoverable points from backlog",
+            "urgency_reason": "B grade with 20 recoverable points from two overdue presentations",
             "issue_type": "missing_backlog",
-            "going_well": "Presentation category at 97.9% across 7 assignments",
-            "going_wrong": "Task 2 Presentation and Task 7 Presentation both missing (20 points total)",
-            "diagnosis": "Pattern suggests completion_gap with upward trend to 90.4 forecast",
-            "grade_outlook": "Submitting the two presentations could push grade above 90%",
-            "conversation_starter": "Leah, how did the Presentation scores stay so high?",
-            "student_action": "Finish and submit Task 2 Presentation and Task 7 Presentation",
-            "parent_support": "Check if Leah needs a quiet space to record the presentations",
-            "status": "Watch due to backlog but improving trajectory",
+            "going_well": "Presentation category average is excellent at 97.9% across 7 assignments.",
+            "going_wrong": "Missing Task 2 Presentation and Task 7 Presentation (10 points each, 115 days overdue).",
+            "diagnosis": "Pattern suggests completion_gap as Entrepreneurial Learning Target and Presentation categories are both above 92%.",
+            "grade_outlook": "Submitting the 20 points would support the upward trend toward the 90.4% forecast.",
+            "conversation_starter": "Leah, which of the Task presentations feels closest to ready?",
+            "student_action": "Submit Task 2 Presentation and Task 7 Presentation tonight.",
+            "parent_support": "Ask Leah if she wants to talk through the presentation outlines.",
+            "status": "Virt Enterprise is improving but held back by the presentation backlog.",
             "recent": [],
             "upcoming": [],
-            "action_items": [
-              {
-                "priority": "medium",
-                "issue": "overdue presentations",
-                "assignment_names": [
-                  "Task 2 Presentation",
-                  "Task 7 Presentation"
-                ],
-                "parent_action": "Ask Leah to share the presentation drafts for quick feedback"
-              }
-            ]
+            "action_items": []
           },
           {
             "class_name": "DT 8 Soc Sci",
             "current_grade": "B 87.6%",
             "urgency": "watch",
-            "urgency_reason": "B grade with 10 recoverable points and downward trend",
+            "urgency_reason": "B grade with 10 recoverable points from two Classwork items and a down trend",
             "issue_type": "missing_backlog",
-            "going_well": "Projects and Assessments at 88.9% across 9 items",
-            "going_wrong": "A Dividing Nation (part 1) and A Dividing Nation (part 2) missing (10 points)",
-            "diagnosis": "Pattern suggests completion_gap with Classwork perfect at 100%",
-            "grade_outlook": "Recovering 10 points may hold grade near 85% despite 83.83 forecast",
-            "conversation_starter": "Leah, what helped the Projects and Assessments stay strong?",
-            "student_action": "Submit both parts of A Dividing Nation",
-            "parent_support": "Review the dividing nation topic together for 5 minutes",
-            "status": "Watch due to recent missing classwork items",
+            "going_well": "Projects and Assessments average 88.9% across 9 items.",
+            "going_wrong": "Missing A Dividing Nation (part 1) and A Dividing Nation (part 2) worth 5 points each.",
+            "diagnosis": "Pattern suggests completion_gap since Classwork and Projects categories show solid averages.",
+            "grade_outlook": "Recovering 10 points could offset the down trend and keep the grade above 83.83% forecast.",
+            "conversation_starter": "Leah, how much of the Dividing Nation work is already started?",
+            "student_action": "Finish and submit both parts of A Dividing Nation.",
+            "parent_support": "Check if Leah needs any history notes to complete the parts.",
+            "status": "DT 8 Soc Sci is on watch due to the Classwork backlog and slipping trend.",
             "recent": [],
             "upcoming": [],
             "action_items": []
@@ -4304,16 +4294,16 @@
             "class_name": "Int Sci Designs",
             "current_grade": "B 84.0%",
             "urgency": "watch",
-            "urgency_reason": "B grade with small backlog of 2 points",
+            "urgency_reason": "B grade with small 2-point backlog in Science Literacy",
             "issue_type": "missing_backlog",
-            "going_well": "Science Literacy perfect at 100% across 20 assignments",
-            "going_wrong": "LT 4.1 Types of Waves and LT 4.2 Uncanny Attractions Lab missing (2 points)",
-            "diagnosis": "Pattern suggests completion_gap with Assessments & Projects at 83.6%",
-            "grade_outlook": "Small recovery keeps forecast near 83%",
-            "conversation_starter": "Leah, how did you keep Science Literacy scores at 100%?",
-            "student_action": "Submit the two Science Literacy tasks",
-            "parent_support": "Confirm Leah has access to the wave lab materials",
-            "status": "Watch due to minor backlog",
+            "going_well": "Science Literacy category is perfect at 100% across 20 assignments.",
+            "going_wrong": "Missing LT 4.1 Types of Waves and LT 4.2 Uncanny Attractions Lab (1 point each).",
+            "diagnosis": "Pattern suggests completion_gap given the flawless Science Literacy performance.",
+            "grade_outlook": "The 2 recoverable points would help maintain the stable 83.16% forecast.",
+            "conversation_starter": "Leah, are the wave types and lab assignments quick to wrap up?",
+            "student_action": "Submit LT 4.1 Types of Waves and LT 4.2 Uncanny Attractions Lab.",
+            "parent_support": "Confirm Leah has the lab materials or notes handy.",
+            "status": "Int Sci Designs is stable on watch only because of two tiny missing items.",
             "recent": [],
             "upcoming": [],
             "action_items": []
@@ -4322,22 +4312,22 @@
             "class_name": "DT 8 Lang Arts",
             "current_grade": "A 90.1%",
             "urgency": "strong",
-            "urgency_reason": "A grade, no missing work, stable trend",
+            "urgency_reason": "A grade, no missing work, and stable trend",
             "issue_type": "on_track",
-            "going_well": "Overall average stable near 90% with no missing assignments",
-            "going_wrong": "Projects and Assessments category at 70.5%",
-            "diagnosis": "Pattern suggests on_track performance with consistent recent_four_avg at 90.47",
-            "grade_outlook": "Trend forecast at 89.95 indicates continued A if pattern holds",
-            "conversation_starter": "Leah, what has kept your Lang Arts grade so steady?",
-            "student_action": "Continue current submission habits",
-            "parent_support": "Celebrate the A with Leah this weekend",
-            "status": "Strong with no issues",
+            "going_well": "Overall grade holds at 90.1% with forecast near 89.95%.",
+            "going_wrong": "Projects and Assessments category sits at 70.5% across 11 items.",
+            "diagnosis": "Pattern suggests on_track performance with no completion issues.",
+            "grade_outlook": "Continued stability at the 89.95% forecast is expected with no missing work.",
+            "conversation_starter": "Leah, what part of Lang Arts feels strongest right now?",
+            "student_action": "Continue current habits with no specific assignments needed tonight.",
+            "parent_support": "Celebrate the A with Leah and ask what is working well.",
+            "status": "DT 8 Lang Arts is the strongest class with no backlog or urgent concerns.",
             "recent": [],
             "upcoming": [],
             "action_items": []
           }
         ],
-        "generated_at": "2026-06-25T11:44:39.293718+00:00",
+        "generated_at": "2026-06-26T11:48:23.056624+00:00",
         "analytics_snapshot": {
           "dominant_theme": "missing_work_backlog in 5 of 6 graded classes",
           "total_recoverable_pts": 62.0
