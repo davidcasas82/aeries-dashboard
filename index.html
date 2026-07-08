@@ -141,7 +141,7 @@
         .dashboard.active { display: block; }
 
         .scroll-section {
-            margin-top: 28px;
+            margin-top: 24px;
             padding-top: 4px;
         }
 
@@ -160,33 +160,9 @@
             gap: 8px;
         }
 
-        .section-count {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-muted);
-        }
-
-        .section-count.alert {
-            color: var(--red);
-        }
-
-        .section-divider {
-            border: none;
-            border-top: 1px solid var(--border);
-            margin: 20px 0;
-        }
-
-        .dashboard-section {
-            margin-top: 0;
-        }
-
-        .dashboard-section .section-heading {
-            margin-bottom: 12px;
-        }
-
-        /* ── AI Briefing + top chips ── */
+        /* ── AI Briefing + grade chips ── */
         .briefing-panel {
-            margin-top: 16px;
+            margin-top: 12px;
         }
 
         .ai-card {
@@ -199,33 +175,44 @@
             color: var(--text-muted);
             text-transform: none;
             letter-spacing: 0;
+            margin-bottom: 4px;
+        }
+
+        .ai-date {
+            font-size: 12px;
+            color: var(--text-muted);
             margin-bottom: 8px;
         }
 
         .ai-status {
-            font-size: clamp(18px, 3.5vw, 24px);
+            font-size: clamp(17px, 3.2vw, 22px);
             font-weight: 600;
             line-height: 1.35;
             color: #fff;
             letter-spacing: -0.3px;
-            margin-bottom: 8px;
-        }
-
-        .ai-date {
-            font-size: 13px;
-            color: var(--text-muted);
             margin-bottom: 4px;
         }
 
         .ai-focus-tonight {
             font-size: clamp(15px, 2.4vw, 16px);
-            font-weight: 600;
-            color: var(--amber);
+            font-weight: 500;
+            color: var(--text);
             line-height: 1.4;
-            margin-top: 12px;
-            padding: 10px 12px;
+            margin-top: 14px;
+            padding: 12px 14px;
             background: rgba(212, 160, 58, 0.1);
-            border-radius: 10px;
+            border-radius: 12px;
+            border-left: 3px solid var(--amber);
+        }
+
+        .ai-focus-tonight .focus-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            color: var(--amber);
+            margin-bottom: 4px;
         }
 
         .ai-wins {
@@ -250,9 +237,8 @@
         }
 
         .chip-section {
-            border-top: 1px solid var(--border);
-            margin-top: 16px;
-            padding-top: 16px;
+            margin-top: 18px;
+            padding-top: 4px;
         }
 
         .chip-section-label {
@@ -262,154 +248,12 @@
             margin-bottom: 10px;
         }
 
-        .chip-section.flush {
-            border-top: none;
-            margin-top: 0;
-            padding-top: 0;
-        }
-
-        .ai-alert-card {
-            background: var(--surface);
-            border-radius: 14px;
-            padding: 16px;
-            margin-bottom: 10px;
-            border-left: 4px solid var(--amber);
-        }
-
-        .ai-alert-card.priority-high {
-            border-left-color: var(--red);
-        }
-
-        .ai-alert-header {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 6px;
-        }
-
-        .ai-alert-header h3 {
-            font-size: clamp(17px, 3vw, 20px);
-            font-weight: 700;
-            color: #fff;
-            letter-spacing: -0.2px;
-        }
-
-        .ai-grade-pill {
-            font-size: clamp(15px, 2.5vw, 17px);
-            font-weight: 700;
-            color: var(--text);
-            white-space: nowrap;
-        }
-
-        .ai-class-status {
-            font-size: clamp(14px, 2.2vw, 15px);
-            color: var(--text-secondary);
-            line-height: 1.45;
-            margin-bottom: 10px;
-        }
-
-        .ai-action-list {
-            list-style: none;
-            padding: 0;
-        }
-
-        .ai-action-list li {
-            font-size: clamp(15px, 2.5vw, 16px);
-            line-height: 1.5;
-            color: var(--text);
-            padding: 8px 0;
-            border-top: 1px solid rgba(255,255,255,0.06);
-        }
-
-        .ai-action-list li:first-child {
-            border-top: none;
-            padding-top: 0;
-        }
-
-        .ai-detail-block {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid rgba(255,255,255,0.06);
-        }
-
-        .ai-detail-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-        }
-
-        .ai-detail-item {
-            font-size: clamp(14px, 2.2vw, 15px);
-            color: var(--text-secondary);
-            line-height: 1.45;
-            padding: 4px 0;
-        }
-
-        .ai-detail-item strong {
-            color: var(--text);
-            font-weight: 600;
-        }
-
-        .ai-good-section {
-            margin-top: 12px;
-        }
-
-        .ai-good-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--green);
-            margin-bottom: 8px;
-        }
-
-        .ai-good-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            padding: 12px 14px;
-            background: var(--surface);
-            border-radius: 12px;
-            margin-bottom: 6px;
-            font-size: clamp(14px, 2.2vw, 15px);
-            color: var(--text-secondary);
-            cursor: pointer;
-            min-height: var(--touch-min);
-        }
-
-        .ai-good-row:active {
-            background: var(--surface-raised);
-        }
-
-        .ai-good-row .name {
-            color: var(--text);
-            font-weight: 500;
-        }
-
-        .ai-good-row .grade {
-            font-weight: 700;
-            color: var(--green);
-        }
-
-        .ai-good-expand {
-            display: none;
-            padding: 0 14px 10px;
-            font-size: 14px;
-            color: var(--text-secondary);
-            line-height: 1.45;
-        }
-
-        .ai-good-row.expanded + .ai-good-expand {
-            display: block;
-        }
-
         /* Legacy schema fallback */
         .ai-legacy-section {
             background: var(--surface);
             border-radius: 14px;
             padding: 16px;
-            margin-bottom: 10px;
+            margin-top: 12px;
         }
 
         .ai-legacy-section h3 {
@@ -432,9 +276,7 @@
         }
 
         body.summer-break .briefing-panel .chip-section {
-            border-top: none;
             margin-top: 16px;
-            padding-top: 0;
         }
 
         /* ── Unified chip rows (grades + stats) ── */
@@ -508,10 +350,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-
-        .dashboard-chip.alert .chip-value { color: var(--red); }
-        .dashboard-chip.warn .chip-value { color: var(--amber); }
-        .dashboard-chip.ok .chip-value { color: var(--green); }
 
         /* ── Lists ── */
         .list-panel {
@@ -651,8 +489,12 @@
         .class-card-insight {
             font-size: 13px;
             color: var(--text-secondary);
-            margin-top: 4px;
+            margin-top: 6px;
             line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
         .class-card-insight.watch { color: var(--amber); }
@@ -682,7 +524,8 @@
 
         .class-card-title {
             display: flex;
-            align-items: baseline;
+            align-items: center;
+            flex-wrap: wrap;
             gap: 8px;
         }
 
@@ -699,13 +542,15 @@
             letter-spacing: -0.2px;
         }
 
-        .class-card-sub {
-            font-size: 13px;
-            color: var(--text-muted);
-            margin-top: 4px;
+        .class-card-missing {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--red);
+            background: rgba(212, 96, 58, 0.12);
+            padding: 3px 8px;
+            border-radius: 999px;
+            white-space: nowrap;
         }
-
-        .class-card-sub.muted { color: var(--text-muted); }
 
         .class-card-grade {
             text-align: right;
@@ -769,73 +614,39 @@
             margin-bottom: 4px;
         }
 
-        .class-briefing-starter {
-            font-size: clamp(15px, 2.4vw, 16px);
-            font-weight: 500;
-            color: var(--text);
-            line-height: 1.45;
-            margin-bottom: 10px;
-            font-style: italic;
-        }
-
-        .class-briefing-status {
-            font-size: 14px;
+        .class-briefing-story {
+            font-size: clamp(14px, 2.3vw, 15px);
             color: var(--text-secondary);
             line-height: 1.45;
             margin-bottom: 10px;
-        }
-
-        .class-briefing-split {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-
-        .class-briefing-going-well,
-        .class-briefing-going-wrong {
-            font-size: 14px;
-            line-height: 1.45;
-            padding: 8px 10px;
-            border-radius: 8px;
-        }
-
-        .class-briefing-going-well {
-            color: var(--green);
-            background: rgba(91, 168, 123, 0.1);
-        }
-
-        .class-briefing-going-wrong {
-            color: var(--amber);
-            background: rgba(212, 160, 58, 0.1);
-        }
-
-        .class-briefing-diagnosis,
-        .class-briefing-outlook {
-            font-size: 14px;
-            color: var(--text-secondary);
-            line-height: 1.45;
-            margin-bottom: 8px;
         }
 
         .class-briefing-action-row {
             font-size: 14px;
             line-height: 1.45;
             color: var(--text);
-            margin-bottom: 6px;
+            margin-bottom: 8px;
+        }
+
+        .class-briefing-action-row:last-child {
+            margin-bottom: 0;
         }
 
         .class-briefing-action-row .action-label {
             font-size: 11px;
-            font-weight: 600;
+            font-weight: 700;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.3px;
             margin-bottom: 2px;
         }
 
-        .class-briefing-block .ai-action-list li {
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        .class-briefing-ask {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.45;
+            margin-top: 4px;
+            font-style: italic;
         }
 
         .class-aeries-note {
@@ -1174,26 +985,11 @@
             return 'grade-f';
         }
 
-        function getAllAssignments(student) {
-            const all = [];
-            if (!student.assignments_by_class) return all;
-            for (const ca of student.assignments_by_class) {
-                for (const a of ca.assignments) {
-                    all.push({ ...a, class_name: ca.class_name });
-                }
-            }
-            return all;
-        }
-
         function parseMissingCount(course) {
             if (course.missing_count > 0) return course.missing_count;
             const html = course.missing_assignments || '';
             const m = html.match(/>(\d+)</);
             return m ? parseInt(m[1], 10) : 0;
-        }
-
-        function daysUntil(date) {
-            return Math.floor((date - TODAY) / (1000 * 60 * 60 * 24));
         }
 
         function isMissingAssignment(a) {
@@ -1203,101 +999,30 @@
             return a.points_earned === null;
         }
 
-        function computeStats(student) {
-            const classes = student.classes || [];
-            const classesWithGrades = classes.filter(c => c.percent || c.mark);
-            const assignments = getAllAssignments(student);
-
-            const missing = assignments.filter(isMissingAssignment);
-
-            const dueThisWeek = assignments.filter(a => {
-                const due = parseDate(a.due_date);
-                if (!due || a.grading_complete) return false;
-                const diff = daysUntil(due);
-                return diff >= 0 && diff <= 7;
-            });
-
-            const recoverablePts = missing.reduce((sum, a) => sum + (a.points_possible || 0), 0);
-
-            let needFocus = 0;
-            let onTrack = 0;
-            for (const c of classesWithGrades) {
-                const pct = parseFloat(c.percent);
-                const mc = parseMissingCount(c);
-                const belowB = !isNaN(pct) && pct < 80;
-                if (mc > 0 || belowB) needFocus++;
-                else if (mc === 0 && !isNaN(pct) && pct >= 80) onTrack++;
+        function normalizeAiClass(ai) {
+            if (!ai) return null;
+            // New schema fields, with fallbacks for older briefings still in grades_data.json
+            const snap = (ai.snap || ai.urgency_reason || '').trim();
+            // Prefer new story; for older briefings use status or a short well/wrong pair (skip jargon diagnosis)
+            const story = (ai.story || '').trim()
+                || (ai.status || '').trim()
+                || [ai.going_well, ai.going_wrong].filter(Boolean).join(' ').trim();
+            const doTonight = (ai.do_tonight || ai.student_action || '').trim();
+            let parentTip = (ai.parent_tip || ai.parent_support || '').trim();
+            // Older schema often duplicated parent tips in action_items
+            if (!parentTip && ai.action_items && ai.action_items.length) {
+                parentTip = (ai.action_items[0].parent_action || '').trim();
             }
-
-            const dueToday = dueThisWeek.filter(a => daysUntil(parseDate(a.due_date)) === 0).length;
-
+            // Skip forced conversation starters from older schema unless new field is present
+            const ask = (ai.ask || '').trim();
             return {
-                needFocus,
-                dueThisWeek: dueThisWeek.length,
-                dueToday,
-                recoverablePts: Math.round(recoverablePts),
-                onTrack,
-                missingCount: missing.length,
-                upcomingCount: assignments.filter(a => {
-                    const due = parseDate(a.due_date);
-                    return due && due >= TODAY && !a.grading_complete;
-                }).length,
+                ...ai,
+                snap,
+                story,
+                do_tonight: doTonight,
+                parent_tip: parentTip,
+                ask,
             };
-        }
-
-        function renderStatChips(stats) {
-            const focusClass = stats.needFocus > 0 ? 'alert' : 'ok';
-            const dueClass = stats.dueToday > 0 ? 'warn' : '';
-            const ptsClass = stats.recoverablePts > 0 ? 'warn' : 'ok';
-            const trackClass = stats.onTrack > 0 ? 'ok' : '';
-
-            return `
-                <section class="dashboard-section">
-                    <div class="chip-section flush">
-                        <div class="chip-section-label">Summary</div>
-                        <div class="chip-row">
-                            <div class="dashboard-chip ${focusClass}">
-                                <div class="chip-label">Classes to discuss</div>
-                                <div class="chip-value">${stats.needFocus}</div>
-                                <div class="chip-unit">below B or missing work</div>
-                            </div>
-                            <div class="dashboard-chip ${dueClass}">
-                                <div class="chip-label">Due this week</div>
-                                <div class="chip-value">${stats.dueThisWeek}</div>
-                                <div class="chip-unit">${stats.dueToday > 0 ? stats.dueToday + ' due today' : 'next 7 days'}</div>
-                            </div>
-                            <div class="dashboard-chip ${ptsClass}">
-                                <div class="chip-label">Recoverable pts</div>
-                                <div class="chip-value">${stats.recoverablePts}</div>
-                                <div class="chip-unit">from missing work</div>
-                            </div>
-                            <div class="dashboard-chip ${trackClass}">
-                                <div class="chip-label">On track</div>
-                                <div class="chip-value">${stats.onTrack}</div>
-                                <div class="chip-unit">B+ with nothing missing</div>
-                            </div>
-                        </div>
-                    </div>
-                </section>`;
-        }
-
-        function renderClassDetails(cls) {
-            let html = '';
-            if (cls.recent && cls.recent.length) {
-                html += `<div class="ai-detail-block"><div class="ai-detail-label">Recently graded</div>`;
-                cls.recent.forEach(item => {
-                    html += `<div class="ai-detail-item"><strong>${item.date}</strong> ${item.event}</div>`;
-                });
-                html += `</div>`;
-            }
-            if (cls.upcoming && cls.upcoming.length) {
-                html += `<div class="ai-detail-block"><div class="ai-detail-label">Upcoming</div>`;
-                cls.upcoming.forEach(item => {
-                    html += `<div class="ai-detail-item"><strong>${item.day}</strong> ${item.assignment}${item.weight_context ? ' — ' + item.weight_context : ''}</div>`;
-                });
-                html += `</div>`;
-            }
-            return html;
         }
 
         function renderGradeChips(profiles, idx) {
@@ -1341,14 +1066,15 @@
             const dateStr = s.generated_at
                 ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
                 : '';
+            const headline = (s.headline || s.status || '').trim();
 
             let briefing = `<div class="ai-card">`;
             briefing += `<h2>Daily Briefing</h2>`;
-            briefing += `<div class="ai-status">${s.status || ''}</div>`;
             if (dateStr) briefing += `<div class="ai-date">${dateStr}</div>`;
+            if (headline) briefing += `<div class="ai-status">${headline}</div>`;
 
             if (s.focus_tonight) {
-                briefing += `<div class="ai-focus-tonight">Tonight: ${s.focus_tonight}</div>`;
+                briefing += `<div class="ai-focus-tonight"><span class="focus-label">Tonight</span>${s.focus_tonight}</div>`;
             }
             if (s.wins && s.wins.length) {
                 briefing += `<ul class="ai-wins">`;
@@ -1358,7 +1084,7 @@
                 briefing += `</ul>`;
             }
 
-            // Legacy schema only — modern per-class detail lives inside class cards
+            // Very old schema without per-class objects
             if (!s.classes) {
                 if (s.whats_happened && s.whats_happened.length) {
                     briefing += `<div class="ai-legacy-section"><h3>What's happened</h3>`;
@@ -1383,67 +1109,33 @@
         }
 
         function renderAiClassBriefing(profile) {
-            const ai = profile.aiClass;
+            const ai = normalizeAiClass(profile.aiClass);
             if (!ai) return '';
 
-            const hasGoing = !!(ai.going_well || ai.going_wrong);
-            const hasDiagnosis = !!ai.diagnosis;
-            const hasOutlook = !!ai.grade_outlook;
-            const hasActions = ai.action_items && ai.action_items.length;
-            const hasStarter = !!ai.conversation_starter;
-            const hasStudentAction = !!ai.student_action;
-            const hasParentSupport = !!ai.parent_support;
-            const hasStatus = ai.status && ai.status !== profile.urgency_reason
-                && ai.status !== ai.going_wrong;
-            const hasAiActivity = (ai.recent && ai.recent.length) || (ai.upcoming && ai.upcoming.length);
+            const story = ai.story;
+            const doTonight = ai.do_tonight;
+            const parentTip = ai.parent_tip;
+            const ask = ai.ask;
 
-            if (!hasGoing && !hasDiagnosis && !hasOutlook && !hasActions && !hasStarter
-                && !hasStudentAction && !hasParentSupport && !hasStatus && !hasAiActivity) {
-                return '';
-            }
+            // Avoid restating snap if story is identical or empty and no actions
+            const storyDistinct = story && story !== ai.snap;
+            if (!storyDistinct && !doTonight && !parentTip && !ask) return '';
 
             let html = `<div class="class-subsection class-briefing-block">`;
-            html += `<div class="class-subsection-label">Briefing</div>`;
 
-            if (hasGoing) {
-                html += `<div class="class-briefing-split">`;
-                if (ai.going_well) {
-                    html += `<div class="class-briefing-going-well">${ai.going_well}</div>`;
-                }
-                if (ai.going_wrong) {
-                    html += `<div class="class-briefing-going-wrong">${ai.going_wrong}</div>`;
-                }
-                html += `</div>`;
+            if (storyDistinct) {
+                html += `<div class="class-briefing-story">${story}</div>`;
+            }
+            if (doTonight) {
+                html += `<div class="class-briefing-action-row"><div class="action-label">Tonight</div>${doTonight}</div>`;
+            }
+            if (parentTip) {
+                html += `<div class="class-briefing-action-row"><div class="action-label">Parent</div>${parentTip}</div>`;
+            }
+            if (ask) {
+                html += `<div class="class-briefing-ask">Try: “${ask}”</div>`;
             }
 
-            if (hasDiagnosis) {
-                html += `<div class="class-briefing-diagnosis">${ai.diagnosis}</div>`;
-            }
-            if (hasOutlook) {
-                html += `<div class="class-briefing-outlook">${ai.grade_outlook}</div>`;
-            }
-            if (hasStarter) {
-                html += `<div class="class-briefing-starter">"${ai.conversation_starter}"</div>`;
-            }
-            if (hasStudentAction) {
-                html += `<div class="class-briefing-action-row"><div class="action-label">Tonight</div>${ai.student_action}</div>`;
-            }
-            if (hasParentSupport) {
-                html += `<div class="class-briefing-action-row"><div class="action-label">How to help</div>${ai.parent_support}</div>`;
-            }
-            if (hasStatus) {
-                html += `<div class="class-briefing-status">${ai.status}</div>`;
-            }
-            if (hasActions) {
-                html += `<ul class="ai-action-list">`;
-                ai.action_items.forEach(item => {
-                    const names = item.assignment_names && item.assignment_names.length
-                        ? ` (${item.assignment_names.join(', ')})` : '';
-                    html += `<li>${item.parent_action || item.issue || ''}${names}</li>`;
-                });
-                html += `</ul>`;
-            }
-            html += renderClassDetails(ai);
             html += `</div>`;
             return html;
         }
@@ -1598,15 +1290,15 @@
 
         function enrichProfiles(student, profiles) {
             return profiles.map(p => {
-                const aiClass = findAiClass(student, p.classMeta.course_name);
+                const rawAi = findAiClass(student, p.classMeta.course_name);
+                const aiClass = normalizeAiClass(rawAi);
                 const urgency = inferUrgency(p, aiClass);
+                const snap = (aiClass?.snap || inferUrgencyReason(p, urgency) || '').trim();
                 return {
                     ...p,
                     aiClass,
                     urgency,
-                    urgency_reason: aiClass?.urgency_reason || aiClass?.status || inferUrgencyReason(p, urgency),
-                    conversation_starter: aiClass?.conversation_starter || '',
-                    issue_type: aiClass?.issue_type || '',
+                    snap,
                     urgencyRank: urgencyToRank(urgency),
                 };
             }).sort((a, b) => {
@@ -1764,7 +1456,10 @@
                 const g = formatGradeDisplay(c);
                 const gradeClass = getGradeClass(c.percent);
                 const urgency = p.urgency || 'ok';
-                const insight = p.aiClass?.going_wrong || p.urgency_reason || p.conversation_starter || '';
+                const insight = p.snap || '';
+                const missingBadge = p.missingCount > 0
+                    ? `<span class="class-card-missing">${p.missingCount} missing</span>`
+                    : '';
 
                 return `
                     <div class="class-card urgency-${urgency}" id="class-${idx}-${p.period}">
@@ -1773,8 +1468,8 @@
                                 <div class="class-card-title">
                                     <span class="period">P${p.period}</span>
                                     <span class="name">${c.course_name}</span>
+                                    ${missingBadge}
                                 </div>
-                                ${c.teacher ? `<div class="class-card-sub muted">${c.teacher}</div>` : ''}
                                 ${insight ? `<div class="class-card-insight ${urgency}">${insight}</div>` : ''}
                             </div>
                             <div class="class-card-grade">
@@ -1824,14 +1519,10 @@
         }
 
         function renderStudent(student, idx) {
-            const stats = computeStats(student);
             const profiles = enrichProfiles(student, buildClassProfiles(student));
 
             return `
                 ${renderAiSummary(student, profiles, idx)}
-                <hr class="section-divider">
-                ${renderStatChips(stats)}
-                <hr class="section-divider">
                 ${renderClassCards(profiles, idx)}`;
         }
 
