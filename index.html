@@ -502,11 +502,20 @@
             border-radius: var(--radius);
             border: 1px solid var(--border);
             overflow: hidden;
-            transition: border-color 0.15s, box-shadow 0.15s;
+            transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+            /* Keep natural height in grid so neighbors don't stretch open */
+            align-self: start;
+            width: 100%;
         }
 
         .class-card:hover {
             border-color: var(--border-strong);
+        }
+
+        .class-card.expanded {
+            border-color: rgba(106, 168, 255, 0.45);
+            box-shadow: 0 0 0 1px rgba(106, 168, 255, 0.2), 0 8px 24px rgba(0, 0, 0, 0.28);
+            background: var(--surface-raised);
         }
 
         .class-card.urgency-critical {
@@ -1150,11 +1159,7 @@
                 display: grid;
                 grid-template-columns: 1fr 1fr;
                 gap: 12px;
-            }
-
-            .class-card.urgency-critical,
-            .class-card.urgency-watch {
-                /* Prefer focus items to span when alone — keep simple 2-col */
+                align-items: start;
             }
 
             .settings-drawer {
@@ -1223,6 +1228,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 12px;
+            align-items: start;
         }
 
         body.car-mode .briefing-layout {
