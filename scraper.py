@@ -33,6 +33,34 @@ for i in range(1, 10):
 OUTPUT_FILE = Path(__file__).parent / "grades_data.json"
 
 
+def env_truthy(name):
+    """Return True/False if env var is set to a boolean-ish value, else None."""
+    raw = os.getenv(name)
+    if raw is None or str(raw).strip() == "":
+        return None
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+def is_summer_break(previous_data=None):
+    """
+    Summer break pauses Aeries scraping and Grok API calls.
+
+    Source of truth in CI: GitHub Actions variable SUMMER_BREAK (true/false).
+    Local fallback: summer_break field in grades_data.json.
+    """
+    env = env_truthy("SUMMER_BREAK")
+    if env is not None:
+        return env
+    if previous_data is None:
+        previous_data = {}
+        if OUTPUT_FILE.exists():
+            try:
+                previous_data = json.loads(OUTPUT_FILE.read_text())
+            except Exception:
+                previous_data = {}
+    return bool(previous_data.get("summer_break", False))
+
+
 def require_scrape_config():
     if not EMAIL or not PASSWORD:
         print("ERROR: AERIES_EMAIL and AERIES_PASSWORD must be set in .env")
@@ -772,8 +800,11 @@ def regenerate_grok_summaries():
         print(f"ERROR: Could not parse {OUTPUT_FILE}: {e}")
         sys.exit(1)
 
-    if data.get("summer_break"):
-        print("Summer break mode is active — skipping Grok API calls.")
+    if is_summer_break(data):
+        print("Summer break mode is active (SUMMER_BREAK) — skipping Grok API calls.")
+        data["summer_break"] = True
+        data["last_updated"] = datetime.now(timezone.utc).isoformat()
+        OUTPUT_FILE.write_text(json.dumps(data, indent=2))
         return
 
     students = data.get("students", [])
@@ -794,6 +825,7 @@ def regenerate_grok_summaries():
             print("    WARNING: AI summary failed — keeping previous briefing if any")
 
     data["last_updated"] = datetime.now(timezone.utc).isoformat()
+    data["summer_break"] = False
     OUTPUT_FILE.write_text(json.dumps(data, indent=2))
     print(f"\nBriefings written to {OUTPUT_FILE}")
     print(f"Last updated: {data['last_updated']}")
@@ -802,7 +834,6 @@ def regenerate_grok_summaries():
 def scrape_all():
     require_scrape_config()
 
-    # Read previous data to check for summer_break flag set from the dashboard UI
     previous_data = {}
     if OUTPUT_FILE.exists():
         try:
@@ -810,12 +841,11 @@ def scrape_all():
         except Exception:
             previous_data = {}
 
-    summer_break = bool(previous_data.get("summer_break", False))
+    summer_break = is_summer_break(previous_data)
 
     if summer_break:
-        print("Summer break mode is active (toggled from the dashboard website).")
+        print("Summer break mode is active (SUMMER_BREAK env or grades_data.json).")
         print("Skipping Aeries scraping and Grok API calls for today.")
-        # Preserve previous student data and flag, just update timestamp
         data = previous_data.copy() if previous_data else {
             "last_updated": datetime.now(timezone.utc).isoformat(),
             "district": "Tustin USD",
@@ -835,7 +865,7 @@ def scrape_all():
         "district": "Tustin USD",
         "portal_url": BASE_URL,
         "students": [],
-        "summer_break": False,  # will be overwritten below if needed
+        "summer_break": False,
     }
 
     for student in STUDENTS:
@@ -873,13 +903,12 @@ def scrape_all():
 
         data["students"].append(student_data)
 
-    # Preserve whatever summer_break flag the user set from the website toggle
-    data["summer_break"] = summer_break
+    data["summer_break"] = False
 
     OUTPUT_FILE.write_text(json.dumps(data, indent=2))
     print(f"\nData written to {OUTPUT_FILE}")
     print(f"Last updated: {data['last_updated']}")
-    print(f"Summer break flag preserved: {summer_break}")
+    print(f"Summer break: {data['summer_break']}")
 
 
 if __name__ == "__main__":

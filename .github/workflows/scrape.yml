@@ -37,6 +37,9 @@ jobs:
           STUDENT_2_NAME: ${{ secrets.STUDENT_2_NAME }}
           STUDENT_2_SCHOOL_CODE: ${{ secrets.STUDENT_2_SCHOOL_CODE }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          # Flip twice a year in GitHub → Settings → Secrets and variables → Actions → Variables
+          # true = skip Aeries + Grok; false or unset = normal daily scrape
+          SUMMER_BREAK: ${{ vars.SUMMER_BREAK }}
         run: |
           if [ "${{ inputs.grok_only }}" = "true" ]; then
             python scraper.py --grok-only

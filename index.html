@@ -1042,40 +1042,6 @@
             margin-top: 8px;
         }
 
-        .summer-download-btn {
-            display: none;
-            width: 100%;
-            background: var(--green);
-            color: #0f1014;
-            border: none;
-            padding: 14px 16px;
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 700;
-            cursor: pointer;
-            margin-top: 16px;
-            min-height: var(--touch-min);
-        }
-
-        .summer-instructions {
-            display: none;
-            font-size: 13px;
-            color: var(--text-secondary);
-            line-height: 1.5;
-            margin-top: 12px;
-            background: rgba(255, 255, 255, 0.04);
-            padding: 12px;
-            border-radius: 10px;
-            border: 1px solid var(--border);
-        }
-
-        .summer-instructions code {
-            background: var(--bg);
-            padding: 1px 5px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-
         .kbd-hint {
             margin-top: 8px;
             font-size: 12px;
@@ -1286,23 +1252,6 @@
                     <span class="toggle-label">Car mode</span>
                 </label>
                 <p class="settings-hint">Larger touch targets and type — ideal for Tesla and landscape screens.</p>
-            </div>
-
-            <div class="settings-section">
-                <h3>School Year</h3>
-                <label class="toggle-row">
-                    <input type="checkbox" id="summerBreakToggle">
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-label">Summer Break Mode</span>
-                </label>
-                <p class="settings-hint">Hides AI briefings and pauses daily scraping + Grok API calls.</p>
-                <button id="downloadDataBtn" class="summer-download-btn">Download grades_data.json</button>
-                <div id="summerInstructions" class="summer-instructions">
-                    <strong>1.</strong> Flip the toggle above to ON or OFF.<br>
-                    <strong>2.</strong> Click the button to download the updated file.<br>
-                    <strong>3.</strong> On GitHub, drag the file onto <code>grades_data.json</code> and commit.<br>
-                    The next daily run will respect your setting.
-                </div>
             </div>
 
             <div class="settings-section">
@@ -2072,7 +2021,8 @@
             });
         }
 
-        function applySummerBreak(active) {
+        function applySummerBreakFromData(active) {
+            // Reflect repo/CI state only — controlled by GitHub variable SUMMER_BREAK
             if (active) {
                 document.body.classList.add('summer-break');
                 let banner = document.getElementById('summerBreakBanner');
@@ -2080,7 +2030,7 @@
                     banner = document.createElement('div');
                     banner.id = 'summerBreakBanner';
                     banner.className = 'summer-break-banner';
-                    banner.textContent = 'Summer Break Mode active — AI briefings hidden. Daily scraping + Grok API paused.';
+                    banner.textContent = 'Summer break — AI briefings hidden. Daily scrape and Grok are paused in GitHub.';
                     const picker = document.getElementById('studentPicker');
                     picker.parentNode.insertBefore(banner, picker.nextSibling);
                 }
@@ -2117,56 +2067,6 @@
             });
         }
 
-        function setupSummerBreakToggle(data) {
-            const toggle = document.getElementById('summerBreakToggle');
-            const downloadBtn = document.getElementById('downloadDataBtn');
-            const instructions = document.getElementById('summerInstructions');
-            if (!toggle) return;
-
-            currentData = data || { summer_break: false };
-
-            const flagFromData = !!(currentData.summer_break);
-            const saved = localStorage.getItem('summerBreakMode');
-            const initial = (saved !== null) ? (saved === 'true') : flagFromData;
-
-            toggle.checked = initial;
-            currentData.summer_break = initial;
-            applySummerBreak(initial);
-
-            if (saved !== null || initial) {
-                downloadBtn.style.display = 'block';
-                instructions.style.display = 'block';
-            }
-
-            toggle.addEventListener('change', () => {
-                const isActive = toggle.checked;
-                localStorage.setItem('summerBreakMode', isActive);
-                currentData.summer_break = isActive;
-                applySummerBreak(isActive);
-                downloadBtn.style.display = 'block';
-                instructions.style.display = 'block';
-            });
-
-            downloadBtn.addEventListener('click', () => {
-                const jsonStr = JSON.stringify(currentData, null, 2);
-                const blob = new Blob([jsonStr], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'grades_data.json';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                alert('Downloaded grades_data.json with summer_break = ' + (currentData.summer_break ? 'true' : 'false') + '\n\n' +
-                      '1. Go to https://github.com/davidcasas82/aeries-dashboard\n' +
-                      '2. Drag the downloaded file onto grades_data.json\n' +
-                      '3. Commit the change\n\n' +
-                      'The next daily run will see the flag and stop scraping + Grok calls.');
-            });
-        }
-
         function setupKeyboard() {
             document.addEventListener('keydown', (e) => {
                 const tag = (e.target && e.target.tagName) || '';
@@ -2194,6 +2094,7 @@
                 data.summer_break = false;
             }
             currentData = data;
+            applySummerBreakFromData(!!data.summer_break);
 
             const updated = new Date(data.last_updated);
             const opts = { timeZone: 'America/Los_Angeles' };
@@ -2226,7 +2127,6 @@
             updateTopBarTitle();
             setupSettings();
             setupCarModeToggle();
-            setupSummerBreakToggle(data);
             setupTonightSticky();
             setupKeyboard();
             window.dispatchEvent(new Event('scroll'));
