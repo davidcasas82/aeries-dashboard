@@ -31,6 +31,25 @@ for i in range(1, 10):
     })
 
 OUTPUT_FILE = Path(__file__).parent / "grades_data.json"
+HISTORY_FILE = Path(__file__).parent / "grade_history.json"
+HISTORY_MAX_DAYS = 120
+HISTORY_MISSING_NAMES_CAP = 8
+PCT_HISTORY_UI_POINTS = 30
+TREND_DELTA_THRESHOLD = 2.0  # percentage points over 7d for improve/slip labels
+
+
+def downsample_pct_history(points, max_points=PCT_HISTORY_UI_POINTS):
+    """Keep first/last and evenly sample middle so sparklines span the full term."""
+    if not points or len(points) <= max_points:
+        return list(points or [])
+    if max_points < 2:
+        return points[-1:]
+    n = len(points)
+    indices = {0, n - 1}
+    for i in range(1, max_points - 1):
+        idx = round(i * (n - 1) / (max_points - 1))
+        indices.add(idx)
+    return [points[i] for i in sorted(indices)]
 
 
 def env_truthy(name):
@@ -121,21 +140,110 @@ def fetch_class_summary(session):
 
 
 def fetch_gradebook_summary(session):
-    """Fetch the GradebookSummary page which contains grade trend data."""
+    """Fetch GradebookSummary page; return list of (label_hint, series) pairs.
+
+    Soft-fails to [] if the page structure changes — daily snapshots still work.
+    """
     resp = session.get(f"{BASE_URL}/student/GradebookSummary.aspx")
     if resp.status_code != 200:
         return []
 
-    trends = []
+    # Course names often appear near chart setup: createScatterChart('ID', 'Name', 'S')
+    chart_names = re.findall(
+        r"createScatterChart\(\s*'[^']+'\s*,\s*'([^']+)'\s*,",
+        resp.text,
+    )
+
+    series_list = []
     for match in re.finditer(
         r'var\s+\w+\s*=\s*(\[\s*\{\s*"overallDate"[\s\S]*?\]);', resp.text
     ):
         try:
             data = json.loads(match.group(1))
-            trends.append(data)
+            if isinstance(data, list) and data:
+                series_list.append(data)
         except json.JSONDecodeError:
             pass
-    return trends
+
+    labeled = []
+    for i, series in enumerate(series_list):
+        hint = chart_names[i] if i < len(chart_names) else ""
+        labeled.append((hint, series))
+    return labeled
+
+
+def normalize_aeries_series(raw_series):
+    """Turn Aeries overallDate points into [{date, pct}, ...]."""
+    points = []
+    for pt in raw_series or []:
+        if not isinstance(pt, dict):
+            continue
+        date_raw = pt.get("overallDate") or pt.get("date") or pt.get("Date")
+        pct_raw = (
+            pt.get("overallScore")
+            or pt.get("overallPercent")
+            or pt.get("score")
+            or pt.get("percent")
+            or pt.get("Percent")
+            or pt.get("y")
+        )
+        if date_raw is None or pct_raw is None:
+            continue
+        pct = safe_float(pct_raw)
+        if pct is None:
+            continue
+        # Normalize date to YYYY-MM-DD when possible
+        date_str = str(date_raw).strip()
+        for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%m/%d/%y"):
+            try:
+                date_str = datetime.strptime(date_str[:10], fmt).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                continue
+        points.append({"date": date_str, "pct": round(pct, 1)})
+    points.sort(key=lambda p: p["date"])
+    return points
+
+
+def match_aeries_series_to_classes(classes, labeled_series):
+    """Map course_name -> slim pct series from GradebookSummary when possible."""
+    by_class = {}
+    if not labeled_series:
+        return by_class
+
+    graded = [c for c in classes if c.get("percent")]
+    used = set()
+
+    for course in graded:
+        name = course.get("course_name", "")
+        name_norm = re.sub(r"[^a-z0-9]", "", name.lower())
+        best_i = None
+        best_len = 0
+        for i, (hint, series) in enumerate(labeled_series):
+            if i in used:
+                continue
+            hint_norm = re.sub(r"[^a-z0-9]", "", (hint or "").lower())
+            if not hint_norm or not name_norm:
+                continue
+            if name_norm in hint_norm or hint_norm in name_norm:
+                if len(hint_norm) > best_len:
+                    best_i = i
+                    best_len = len(hint_norm)
+        if best_i is not None:
+            used.add(best_i)
+            points = normalize_aeries_series(labeled_series[best_i][1])
+            if points:
+                by_class[name] = points
+
+    # Fallback: assign remaining series in order to unmatched graded classes
+    remaining = [i for i in range(len(labeled_series)) if i not in used]
+    unmatched = [c for c in graded if c.get("course_name") not in by_class]
+    for course, i in zip(unmatched, remaining):
+        points = normalize_aeries_series(labeled_series[i][1])
+        if points:
+            by_class[course.get("course_name", "")] = points
+
+    return by_class
 
 
 def fetch_all_assignments(session):
@@ -379,6 +487,376 @@ def parse_trend_html(trend_html):
     }
 
 
+# ── Grade history (multi-day memory across scrapes) ──────────────────────────
+
+
+def load_grade_history():
+    if not HISTORY_FILE.exists():
+        return {"students": {}}
+    try:
+        data = json.loads(HISTORY_FILE.read_text())
+        if not isinstance(data, dict):
+            return {"students": {}}
+        data.setdefault("students", {})
+        return data
+    except (json.JSONDecodeError, OSError):
+        return {"students": {}}
+
+
+def save_grade_history(history):
+    HISTORY_FILE.write_text(json.dumps(history, indent=2))
+
+
+def _parse_iso_date(date_str):
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def snapshot_missing_names(class_analytics_entry):
+    """Top missing assignment names for history (by points, then name)."""
+    missing = list(class_analytics_entry.get("missing_assignments") or [])
+    missing.sort(
+        key=lambda m: (
+            -(m.get("points_possible") or 0),
+            m.get("name") or "",
+        )
+    )
+    names = []
+    for m in missing[:HISTORY_MISSING_NAMES_CAP]:
+        name = (m.get("name") or "").strip()
+        if name:
+            names.append(name)
+    return names
+
+
+def build_student_snapshot(student_data, class_analytics_list, captured_at=None):
+    """Compact daily snapshot for one student."""
+    now = captured_at or datetime.now(timezone.utc)
+    date_str = now.astimezone().strftime("%Y-%m-%d") if now.tzinfo else now.strftime("%Y-%m-%d")
+    classes = {}
+    for c in class_analytics_list:
+        name = c.get("course_name") or ""
+        if not name:
+            continue
+        trend = c.get("trend") or {}
+        classes[name] = {
+            "period": c.get("period"),
+            "pct": c.get("current_grade_pct"),
+            "mark": c.get("current_grade_mark") or "",
+            "missing_count": len(c.get("missing_assignments") or []),
+            "missing_names": snapshot_missing_names(c),
+            "aeries_trend": trend.get("direction") if isinstance(trend, dict) else None,
+        }
+    prev_brief = None
+    ai = student_data.get("ai_summary") or {}
+    if ai.get("headline") or ai.get("focus_tonight"):
+        prev_brief = {
+            "headline": (ai.get("headline") or "").strip(),
+            "focus_tonight": (ai.get("focus_tonight") or "").strip(),
+        }
+    snap = {
+        "date": date_str,
+        "captured_at": now.isoformat() if hasattr(now, "isoformat") else str(now),
+        "classes": classes,
+    }
+    if prev_brief:
+        snap["previous_briefing"] = prev_brief
+    return snap
+
+
+def upsert_student_snapshot(history, student_sn, student_name, snapshot):
+    """One snapshot per student per calendar day; trim old days."""
+    students = history.setdefault("students", {})
+    entry = students.setdefault(str(student_sn), {"name": student_name, "snapshots": []})
+    entry["name"] = student_name or entry.get("name", "")
+    snaps = entry.get("snapshots") or []
+    date_str = snapshot.get("date")
+    snaps = [s for s in snaps if s.get("date") != date_str]
+    snaps.append(snapshot)
+    snaps.sort(key=lambda s: s.get("date") or "")
+    if len(snaps) > HISTORY_MAX_DAYS:
+        snaps = snaps[-HISTORY_MAX_DAYS:]
+    entry["snapshots"] = snaps
+    return history
+
+
+def _class_point_on_or_before(snapshots, course_name, target_date, min_age_days=0, as_of=None):
+    """Most recent snapshot on or before target_date for a class.
+
+    If min_age_days > 0, the snapshot must be at least that many days before as_of
+    (so a 1-day-old point is not treated as a 7-day comparison).
+    Returns (snapshot_date, class_dict) or (None, None).
+    """
+    as_of = as_of or datetime.now().date()
+    best = None
+    best_date = None
+    for snap in snapshots:
+        d = _parse_iso_date(snap.get("date"))
+        if not d or d > target_date:
+            continue
+        if min_age_days and (as_of - d).days < min_age_days:
+            continue
+        cls = (snap.get("classes") or {}).get(course_name)
+        if cls is None:
+            continue
+        best = cls
+        best_date = d
+    return best_date, best
+
+
+def _pct_delta(current_pct, past_cls):
+    if current_pct is None or not past_cls:
+        return None
+    past_pct = past_cls.get("pct")
+    if past_pct is None:
+        return None
+    return round(current_pct - past_pct, 1)
+
+
+def trend_label_from_delta(delta):
+    if delta is None:
+        return "insufficient_history"
+    if delta >= TREND_DELTA_THRESHOLD:
+        return "improving"
+    if delta <= -TREND_DELTA_THRESHOLD:
+        return "slipping"
+    return "stable"
+
+
+def build_history_context(student_sn, student_data, class_analytics_list, history):
+    """Multi-day deltas and chronic missing for Grok + UI."""
+    entry = (history.get("students") or {}).get(str(student_sn), {})
+    snapshots = list(entry.get("snapshots") or [])
+    today = datetime.now().date()
+
+    # Include today's in-memory analytics as the "current" point even before write
+    current_by_class = {
+        c["course_name"]: c for c in class_analytics_list if c.get("course_name")
+    }
+
+    if not snapshots and not current_by_class:
+        return {
+            "history_span_days": 0,
+            "snapshot_count": 0,
+            "classes": {},
+            "movers": [],
+            "previous_briefing": None,
+        }
+
+    first_date = _parse_iso_date(snapshots[0]["date"]) if snapshots else today
+    span = (today - first_date).days if first_date else 0
+
+    previous_briefing = None
+    for snap in reversed(snapshots):
+        if snap.get("previous_briefing"):
+            previous_briefing = snap["previous_briefing"]
+            break
+    # Prefer last stored ai_summary if regenerating same day without snapshot field
+    if not previous_briefing:
+        ai = student_data.get("ai_summary") or {}
+        if ai.get("headline") or ai.get("focus_tonight"):
+            previous_briefing = {
+                "headline": (ai.get("headline") or "").strip(),
+                "focus_tonight": (ai.get("focus_tonight") or "").strip(),
+            }
+
+    target_7 = today.fromordinal(today.toordinal() - 7)
+    target_14 = today.fromordinal(today.toordinal() - 14)
+
+    classes_ctx = {}
+    movers = []
+
+    for course_name, c in current_by_class.items():
+        pct = c.get("current_grade_pct")
+        missing_names = [
+            (m.get("name") or "").strip()
+            for m in (c.get("missing_assignments") or [])
+            if (m.get("name") or "").strip()
+        ]
+        # Require ~5+ / ~10+ day-old points so short history isn't labeled as 7d/14d
+        _, past_7 = _class_point_on_or_before(
+            snapshots, course_name, target_7, min_age_days=5, as_of=today
+        )
+        _, past_14 = _class_point_on_or_before(
+            snapshots, course_name, target_14, min_age_days=10, as_of=today
+        )
+        # Nearest older snapshot for chronic missing (any prior day)
+        _, past_any = _class_point_on_or_before(
+            snapshots, course_name, today.fromordinal(today.toordinal() - 1), as_of=today
+        )
+
+        delta_7 = _pct_delta(pct, past_7)
+        delta_14 = _pct_delta(pct, past_14)
+
+        ref_missing = past_7 or past_any or {}
+        past_missing = set(ref_missing.get("missing_names") or [])
+        now_missing = set(missing_names)
+        chronic = sorted(past_missing & now_missing)
+        resolved = sorted(past_missing - now_missing)
+
+        # Full series for span delta; downsampled series for UI sparklines
+        full_hist = []
+        for snap in snapshots:
+            cls = (snap.get("classes") or {}).get(course_name)
+            if cls is None or cls.get("pct") is None:
+                continue
+            full_hist.append({"date": snap.get("date"), "pct": cls.get("pct")})
+        if pct is not None:
+            today_str = today.strftime("%Y-%m-%d")
+            if not full_hist:
+                full_hist.append({"date": today_str, "pct": pct})
+            elif full_hist[-1].get("date") == today_str:
+                full_hist[-1] = {"date": today_str, "pct": pct}
+            elif full_hist[-1].get("pct") != pct:
+                full_hist.append({"date": today_str, "pct": pct})
+
+        pct_history = downsample_pct_history(full_hist, PCT_HISTORY_UI_POINTS)
+
+        delta_span = None
+        span_window = None
+        if len(full_hist) >= 2 and pct is not None:
+            oldest_pct = full_hist[0].get("pct")
+            oldest_date = _parse_iso_date(full_hist[0].get("date"))
+            if oldest_pct is not None and oldest_date:
+                age = (today - oldest_date).days
+                if age >= 14:
+                    delta_span = round(pct - oldest_pct, 1)
+                    span_window = f"{age}d"
+
+        label = trend_label_from_delta(
+            delta_7 if delta_7 is not None else (
+                delta_14 if delta_14 is not None else delta_span
+            )
+        )
+
+        classes_ctx[course_name] = {
+            "pct_now": pct,
+            "pct_7d_ago": (past_7 or {}).get("pct"),
+            "pct_14d_ago": (past_14 or {}).get("pct"),
+            "delta_7d": delta_7,
+            "delta_14d": delta_14,
+            "delta_span": delta_span,
+            "span_window": span_window,
+            "missing_count_now": len(missing_names),
+            "missing_count_7d_ago": (past_7 or {}).get("missing_count"),
+            "chronic_missing": chronic[:HISTORY_MISSING_NAMES_CAP],
+            "resolved_missing": resolved[:HISTORY_MISSING_NAMES_CAP],
+            "trend_label": label,
+            "pct_history": pct_history,
+        }
+
+        delta_for_mover = None
+        mover_window = None
+        for candidate, window in (
+            (delta_7, "7d"),
+            (delta_14, "14d"),
+            (delta_span, span_window or "term"),
+        ):
+            if candidate is not None and abs(candidate) >= TREND_DELTA_THRESHOLD:
+                delta_for_mover = candidate
+                mover_window = window
+                break
+        if delta_for_mover is not None:
+            movers.append({
+                "class_name": course_name,
+                "delta": delta_for_mover,
+                "window": mover_window,
+                "pct_now": pct,
+            })
+
+    movers.sort(key=lambda m: abs(m["delta"]), reverse=True)
+
+    return {
+        "history_span_days": span,
+        "snapshot_count": len(snapshots),
+        "classes": classes_ctx,
+        "movers": movers[:6],
+        "previous_briefing": previous_briefing,
+    }
+
+
+def attach_ui_trend_fields(student_data, history_context, aeries_series_by_class=None):
+    """Write slim trend fields onto student payload for the static dashboard."""
+    aeries_series_by_class = aeries_series_by_class or {}
+    classes_ctx = history_context.get("classes") or {}
+
+    trend_summary = []
+    for m in history_context.get("movers") or []:
+        trend_summary.append({
+            "class_name": m["class_name"],
+            "delta": m["delta"],
+            "window": m.get("window", "7d"),
+            "pct_now": m.get("pct_now"),
+            "direction": "up" if m["delta"] > 0 else "down",
+        })
+    # Fill remaining strip slots with next-largest measurable deltas
+    if len(trend_summary) < 4:
+        already = {t["class_name"] for t in trend_summary}
+        scored = []
+        for name, ctx in classes_ctx.items():
+            if name in already:
+                continue
+            d = ctx.get("delta_7d")
+            window = "7d"
+            if d is None or d == 0:
+                d14 = ctx.get("delta_14d")
+                if d14 is not None and d14 != 0:
+                    d, window = d14, "14d"
+                elif ctx.get("delta_span") is not None:
+                    d = ctx.get("delta_span")
+                    window = ctx.get("span_window") or "term"
+            if d is None or d == 0:
+                continue
+            scored.append((abs(d), name, d, window, ctx.get("pct_now")))
+        scored.sort(reverse=True)
+        for _, name, d, window, pct_now in scored:
+            if len(trend_summary) >= 4:
+                break
+            trend_summary.append({
+                "class_name": name,
+                "delta": d,
+                "window": window,
+                "pct_now": pct_now,
+                "direction": "up" if d > 0 else ("down" if d < 0 else "same"),
+            })
+
+    student_data["trend_summary"] = trend_summary[:4]
+    student_data["history_span_days"] = history_context.get("history_span_days", 0)
+
+    # Attach per-class pct_history onto matching class meta for UI
+    class_history = {}
+    for name, ctx in classes_ctx.items():
+        hist = list(ctx.get("pct_history") or [])
+        aeries = aeries_series_by_class.get(name) or []
+        # Prefer multi-day scrape history; fall back to denser Aeries series for sparklines
+        if len(hist) < 2 and len(aeries) >= 2:
+            hist = aeries[-PCT_HISTORY_UI_POINTS:]
+        class_history[name] = {
+            "pct_history": hist,
+            "delta_7d": ctx.get("delta_7d"),
+            "delta_14d": ctx.get("delta_14d"),
+            "delta_span": ctx.get("delta_span"),
+            "span_window": ctx.get("span_window"),
+            "trend_label": ctx.get("trend_label"),
+        }
+    # Classes only present in Aeries series
+    for name, series in aeries_series_by_class.items():
+        if name not in class_history and series:
+            class_history[name] = {
+                "pct_history": series[-PCT_HISTORY_UI_POINTS:],
+                "delta_7d": None,
+                "delta_14d": None,
+                "trend_label": "insufficient_history",
+            }
+
+    student_data["class_trends"] = class_history
+    return student_data
+
+
 def is_missing_assignment(assignment, today):
     due = parse_due_date(assignment.get("due_date"))
     if not due or due >= today:
@@ -565,6 +1043,22 @@ def analyze_class(class_meta, assignments, today):
         grade_pct, len(missing), trend, performance_pattern
     )
 
+    overdue_days = []
+    for a in missing:
+        due = parse_due_date(a.get("due_date"))
+        if due:
+            overdue_days.append((today - due).days)
+    oldest_missing_days = max(overdue_days) if overdue_days else None
+    median_missing_days = None
+    if overdue_days:
+        ordered = sorted(overdue_days)
+        mid = len(ordered) // 2
+        median_missing_days = (
+            ordered[mid]
+            if len(ordered) % 2
+            else round((ordered[mid - 1] + ordered[mid]) / 2)
+        )
+
     return {
         "period": class_meta.get("period"),
         "course_name": class_meta.get("course_name", ""),
@@ -576,6 +1070,8 @@ def analyze_class(class_meta, assignments, today):
             format_assignment_entry(a, today, "missing") for a in missing
         ],
         "recoverable_points": round(recoverable_points, 1),
+        "oldest_missing_days": oldest_missing_days,
+        "median_missing_days": median_missing_days,
         "category_breakdown": category_breakdown,
         "recent_scores": [
             format_assignment_entry(a, today, "recent") for a in recent[:8]
@@ -590,18 +1086,34 @@ def analyze_class(class_meta, assignments, today):
     }
 
 
-def build_class_analytics(student_data):
+def build_class_analytics(student_data, history_context=None):
     """Pre-compute per-class facts for Grok interpretation."""
     today = datetime.now()
     student_name = student_data.get("name", "Student")
     class_analytics = []
+    history_context = history_context or {}
+    hist_classes = history_context.get("classes") or {}
 
     for class_meta in student_data.get("classes", []):
         if not class_meta.get("percent"):
             continue
         period = class_meta.get("period")
         assignments = assignments_for_period(student_data, period)
-        class_analytics.append(analyze_class(class_meta, assignments, today))
+        analyzed = analyze_class(class_meta, assignments, today)
+        # Fold multi-day history onto each class for Grok
+        h = hist_classes.get(analyzed["course_name"]) or {}
+        if h:
+            analyzed["history"] = {
+                "delta_7d": h.get("delta_7d"),
+                "delta_14d": h.get("delta_14d"),
+                "pct_7d_ago": h.get("pct_7d_ago"),
+                "pct_14d_ago": h.get("pct_14d_ago"),
+                "trend_label": h.get("trend_label"),
+                "chronic_missing": h.get("chronic_missing") or [],
+                "resolved_missing": h.get("resolved_missing") or [],
+                "missing_count_7d_ago": h.get("missing_count_7d_ago"),
+            }
+        class_analytics.append(analyzed)
 
     total_recoverable = sum(c.get("recoverable_points", 0) for c in class_analytics)
     missing_class_count = sum(1 for c in class_analytics if c.get("missing_assignments"))
@@ -624,7 +1136,14 @@ def build_class_analytics(student_data):
 
     wins = []
     for c in class_analytics:
-        if (
+        h = c.get("history") or {}
+        if h.get("trend_label") == "improving" and h.get("delta_7d") is not None:
+            wins.append({
+                "class_name": c["course_name"],
+                "grade": f"{c.get('current_grade_mark') or ''} {c['current_grade_pct']}%".strip(),
+                "note": f"up {h['delta_7d']} pts vs ~1 week ago",
+            })
+        elif (
             c.get("current_grade_pct") is not None
             and c["current_grade_pct"] >= 85
             and not c.get("missing_assignments")
@@ -654,7 +1173,7 @@ def build_class_analytics(student_data):
         ),
     )
 
-    return {
+    result = {
         "student_name": student_name,
         "date": today.strftime("%A, %B %d, %Y"),
         "dominant_theme": dominant_theme,
@@ -662,63 +1181,84 @@ def build_class_analytics(student_data):
         "classes_needing_focus": classes_needing_focus,
         "wins_hints": wins[:3],
         "classes": class_analytics,
+        "data_scope": (
+            "Aeries parent portal only — current grades, posted missing work, "
+            "scored assignments, and short portal forecasts. Not a full picture of "
+            "work done offline or not yet graded."
+        ),
     }
+    if history_context:
+        result["history_meta"] = {
+            "history_span_days": history_context.get("history_span_days", 0),
+            "snapshot_count": history_context.get("snapshot_count", 0),
+            "movers": history_context.get("movers") or [],
+            "previous_briefing": history_context.get("previous_briefing"),
+        }
+    return result
 
 
-def build_student_context(student_data):
-    """Build Grok user message from precomputed analytics."""
-    analytics = build_class_analytics(student_data)
-    return (
-        "PRECOMPUTED_ANALYTICS (source of truth — do not redo arithmetic):\n"
-        f"{json.dumps(analytics, indent=2)}\n\n"
-        "Interpret these facts into a family briefing. Use assignment names, "
-        "scores, and trends from this JSON. Do not invent assignments or scores."
-    )  # kept for standalone testing
-
-
-def generate_ai_summary(student_data):
-    """Call Grok API to generate a family-facing daily briefing."""
+def generate_ai_summary(student_data, history_context=None):
+    """Call Grok API to generate a unified family daily briefing."""
     if not GROK_API_KEY:
         return None
 
     student_name = student_data.get("name", "the student")
-    analytics = build_class_analytics(student_data)
+    history_context = history_context or {}
+    analytics = build_class_analytics(student_data, history_context=history_context)
+
+    has_history = (history_context.get("snapshot_count") or 0) >= 1 or bool(
+        history_context.get("movers")
+    )
+
     context = (
         "PRECOMPUTED_ANALYTICS (source of truth — do not redo arithmetic):\n"
         f"{json.dumps(analytics, indent=2)}\n\n"
-        "Write a tight family briefing from these facts only. "
+        "Write one tight briefing from these facts only. "
         "Name real assignments and scores. Do not invent data. "
-        "Do not restate assignment lists the dashboard already shows — interpret them."
+        "Do not restate full assignment lists the dashboard already shows — interpret them."
     )
+    if has_history:
+        context += (
+            "\n\nHISTORY_CONTEXT is embedded under each class as \"history\" and "
+            "history_meta (multi-day scrape memory). Use it for week-scale movement, "
+            "chronic vs new missing items, and genuine improving/slipping wins. "
+            "If history is thin, do not invent multi-week stories."
+        )
 
     today = datetime.now()
     today_dow = today.strftime("%A")
-    system_prompt = f"""You are a tight, practical academic coach writing a daily family briefing for {student_name}. Parent and student read this on a phone in under a minute.
+    system_prompt = f"""You are writing a daily grade briefing for {student_name}'s family. One output only — parent and kids may both read it. Direct facts at a glance. Not a coaching script, not separate parent vs student advice.
 
 Today is {today_dow}, {today.strftime('%B %d, %Y')}.
 
-You receive PRECOMPUTED_ANALYTICS (grades, missing work, categories, trends, recoverable points). Your job is INTERPRETATION only — no math, no full assignment dumps.
+DATA SCOPE (hard limits)
+- Facts come only from the Aeries parent portal: posted grades, missing work, scored assignments, portal forecast, and multi-day scrape history when present.
+- The portal can lag reality (turned-in but not graded, offline work). Prefer "portal still shows … missing" over "never did …".
+- Do NOT invent causes (motivation, home, teacher fairness, effort).
+- Do NOT assume prior advice was followed unless history shows a grade or missing-work change.
+- Without multi-day history, only use within-term assignment trajectory / Aeries forecast — never invent "over the past month" narratives.
+
+You receive PRECOMPUTED_ANALYTICS. Your job is INTERPRETATION only — no math, no full assignment dumps.
 
 VOICE
-- Third person with "{student_name}" (never "you")
-- Plain family English. No jargon: never say completion_gap, performance_pattern, recoverable points, dominant_theme, issue_type, or "Pattern suggests"
-- Short sentences. Specific. Encouraging, not accusatory
-- Prefer naming the 1–2 highest-leverage missing items over listing everything
+- Third person with "{student_name}" (never "you", never "as a parent…")
+- One shared tone: plain English, specific, calm, not accusatory
+- No jargon: never say completion_gap, performance_pattern, recoverable points, dominant_theme, issue_type, or "Pattern suggests"
+- Short sentences. Prefer the 1–2 highest-leverage missing items over listing everything
+- No parent tips, conversation openers, or separate student pep talks
 
 Respond ONLY with valid JSON matching this exact schema:
 {{
-  "headline": "ONE sentence the family can skim — the cross-class story, not every grade",
-  "focus_tonight": "Single highest-leverage action for tonight: named assignment(s) + class. Empty string if nothing urgent",
-  "wins": ["0–2 short genuine positives with evidence — not category % recitation"],
+  "headline": "ONE sentence anyone can skim — the cross-class story, not every grade",
+  "focus_tonight": "Single highest-leverage next action: named assignment(s) + class. Empty string if nothing urgent",
+  "wins": ["0–2 short genuine positives with evidence — grade up vs last week, strong class, good recent score"],
   "classes": [
     {{
       "class_name": "must match course_name from analytics",
       "urgency": "critical | watch | ok | strong",
       "snap": "≤12 words for the closed card line — why this class matters right now",
-      "story": "1–2 plain sentences: what's going on. Habit vs skill only when clear from data. Do NOT dump the full missing list",
-      "do_tonight": "What {student_name} should do tonight — named assignment(s). Empty string if nothing needed",
-      "parent_tip": "One low-pressure parent move. Empty string if not useful",
-      "ask": "Optional natural conversation opener. Empty string unless it truly helps"
+      "story": "1–2 plain sentences: what's going on from portal data. Do NOT dump the full missing list",
+      "do_tonight": "Concrete next step — named assignment(s). Empty string if nothing needed"
     }}
   ]
 }}
@@ -732,15 +1272,17 @@ Urgency (match suggested_urgency unless you have a strong reason not to — driv
 Rules:
 - Include EVERY class from analytics.classes
 - Order classes: critical → watch → ok → strong
-- For ok/strong classes: short snap + brief story is enough; leave do_tonight, parent_tip, and ask empty
-- For critical/watch: fill do_tonight when there is a concrete action; name specific assignments from missing_assignments (not "the missing work")
+- For ok/strong: short snap + brief story; leave do_tonight empty
+- For critical/watch: fill do_tonight when there is a concrete portal action; name specific assignments from missing_assignments
+- Phrase actions as what the portal still needs (e.g. submit X), not moral judgments
+- If history.chronic_missing is set, you may note those items are still open in the portal
+- If history.delta_7d / trend_label show clear movement, one plain phrase is enough
 - Do NOT invent scores, assignments, or causes
-- Do NOT list every missing assignment in story — pick what matters most
-- Do NOT write forecast math lectures; at most one plain phrase if trend is clearly slipping or improving
-- wins must be real and specific (a strong class, a good recent score, an improving trend) — skip empty praise
-- Prefer empty strings over filler"""
-
-    user_prompt = context
+- Do NOT list every missing assignment in story
+- Do NOT write forecast math lectures
+- wins must be real and specific — skip empty praise
+- Prefer empty strings over filler
+- Never output parent_tip, ask, parent_support, or similar fields"""
 
     try:
         resp = requests.post(
@@ -753,7 +1295,7 @@ Rules:
                 "model": GROK_MODEL,
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
+                    {"role": "user", "content": context},
                 ],
                 "response_format": {"type": "json_object"},
                 "temperature": 0.4,
@@ -769,10 +1311,18 @@ Rules:
         result = resp.json()
         content = result["choices"][0]["message"]["content"]
         summary = json.loads(content)
+        # Strip any legacy parent/student coaching fields if the model still emits them
+        for cls in summary.get("classes") or []:
+            if isinstance(cls, dict):
+                cls.pop("parent_tip", None)
+                cls.pop("ask", None)
+                cls.pop("parent_support", None)
+                cls.pop("student_action", None)
         summary["generated_at"] = datetime.now(timezone.utc).isoformat()
         summary["analytics_snapshot"] = {
             "dominant_theme": analytics.get("dominant_theme"),
             "total_recoverable_pts": analytics.get("total_recoverable_pts"),
+            "history_span_days": (history_context or {}).get("history_span_days"),
         }
         return summary
 
@@ -782,6 +1332,26 @@ Rules:
     except (json.JSONDecodeError, KeyError, IndexError) as e:
         print(f"  WARNING: Failed to parse Grok response: {e}")
         return None
+
+
+def _prepare_student_for_briefing(student_data, history, aeries_series_by_class=None):
+    """Build analytics, history context, UI trend fields; return history_context."""
+    # First pass: class analytics without history (for snapshot + context base)
+    base_analytics = build_class_analytics(student_data, history_context=None)
+    class_list = base_analytics.get("classes") or []
+
+    history_context = build_history_context(
+        student_data.get("sn"),
+        student_data,
+        class_list,
+        history,
+    )
+    attach_ui_trend_fields(
+        student_data,
+        history_context,
+        aeries_series_by_class=aeries_series_by_class or {},
+    )
+    return history_context, class_list
 
 
 def regenerate_grok_summaries():
@@ -812,12 +1382,15 @@ def regenerate_grok_summaries():
         print("ERROR: No students found in grades_data.json")
         sys.exit(1)
 
+    history = load_grade_history()
     print(f"Regenerating AI briefings for {len(students)} student(s) from {OUTPUT_FILE.name}...")
 
     for student in students:
         name = student.get("name", "Student")
         print(f"  {name}...")
-        ai_summary = generate_ai_summary(student)
+        # Keep prior briefing for previous_briefing context before overwrite
+        history_context, _ = _prepare_student_for_briefing(student, history)
+        ai_summary = generate_ai_summary(student, history_context=history_context)
         if ai_summary:
             student["ai_summary"] = ai_summary
             print(f"    AI summary generated ({len(ai_summary.get('classes', []))} classes)")
@@ -841,6 +1414,13 @@ def scrape_all():
         except Exception:
             previous_data = {}
 
+    # Preserve prior AI briefings for history "previous_briefing" notes
+    previous_by_sn = {
+        str(s.get("sn")): s
+        for s in (previous_data.get("students") or [])
+        if s.get("sn") is not None
+    }
+
     summer_break = is_summer_break(previous_data)
 
     if summer_break:
@@ -860,6 +1440,7 @@ def scrape_all():
         return
 
     session = login()
+    history = load_grade_history()
     data = {
         "last_updated": datetime.now(timezone.utc).isoformat(),
         "district": "Tustin USD",
@@ -884,6 +1465,15 @@ def scrape_all():
         total_assignments = sum(len(ca["assignments"]) for ca in class_assignments)
         print(f"  {total_assignments} assignments across {len(class_assignments)} classes")
 
+        # Optional within-term grade curves from GradebookSummary
+        print("  Fetching gradebook trend series...")
+        labeled_series = fetch_gradebook_summary(session)
+        aeries_series = match_aeries_series_to_classes(classes, labeled_series)
+        if aeries_series:
+            print(f"  Aeries series for {len(aeries_series)} class(es)")
+        else:
+            print("  Aeries series unavailable (using daily snapshots only)")
+
         student_data = {
             "sn": student["sn"],
             "name": student["name"],
@@ -892,21 +1482,48 @@ def scrape_all():
             "assignments_by_class": class_assignments,
         }
 
+        # Carry prior briefing so history_context can reference last focus
+        prior = previous_by_sn.get(str(student["sn"])) or {}
+        if prior.get("ai_summary"):
+            student_data["ai_summary"] = prior["ai_summary"]
+
+        history_context, class_list = _prepare_student_for_briefing(
+            student_data, history, aeries_series_by_class=aeries_series
+        )
+
         if GROK_API_KEY:
             print("  Generating AI summary...")
-            ai_summary = generate_ai_summary(student_data)
+            ai_summary = generate_ai_summary(
+                student_data, history_context=history_context
+            )
             if ai_summary:
                 student_data["ai_summary"] = ai_summary
                 print("  AI summary generated")
             else:
                 print("  AI summary skipped")
+                # Drop stale prior briefing if regenerate failed and we only carried it for context
+                if prior.get("ai_summary") and student_data.get("ai_summary") is prior.get("ai_summary"):
+                    pass  # keep previous briefing on failure
+
+        # Append today's grade snapshot after briefing (stores previous_briefing from prior AI)
+        # Prefer storing the briefing we just replaced as previous — rebuild snapshot with prior AI
+        snap_source = dict(student_data)
+        if prior.get("ai_summary"):
+            snap_source["ai_summary"] = prior["ai_summary"]
+        snapshot = build_student_snapshot(snap_source, class_list)
+        upsert_student_snapshot(
+            history, student["sn"], student["name"], snapshot
+        )
+        print(f"  History snapshots: {len((history.get('students') or {}).get(str(student['sn']), {}).get('snapshots') or [])}")
 
         data["students"].append(student_data)
 
     data["summer_break"] = False
 
+    save_grade_history(history)
     OUTPUT_FILE.write_text(json.dumps(data, indent=2))
     print(f"\nData written to {OUTPUT_FILE}")
+    print(f"History written to {HISTORY_FILE}")
     print(f"Last updated: {data['last_updated']}")
     print(f"Summer break: {data['summer_break']}")
 

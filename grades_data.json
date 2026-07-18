@@ -2159,60 +2159,855 @@
             "urgency": "critical",
             "snap": "74% with 34 points recoverable from old projects.",
             "story": "Missing several Problem-solving and Projects items keeps the grade low.",
-            "do_tonight": "Complete 1 - PoW - PROCESS and 1 - PoW - PRODUCT.",
-            "parent_tip": "",
-            "ask": ""
+            "do_tonight": "Complete 1 - PoW - PROCESS and 1 - PoW - PRODUCT."
           },
           {
             "class_name": "Tech of Biology",
             "urgency": "critical",
             "snap": "77% with four Practice items overdue.",
             "story": "Recent scores show slight improvement but missing Practice work remains.",
-            "do_tonight": "Submit Protein Synthesis Gizmos and Week 4 & 5 Warm-Ups.",
-            "parent_tip": "",
-            "ask": ""
+            "do_tonight": "Submit Protein Synthesis Gizmos and Week 4 & 5 Warm-Ups."
           },
           {
             "class_name": "WrldHis by Dsgn",
             "urgency": "critical",
             "snap": "78% with one Classwork item missing.",
             "story": "Low Classwork Collaboration average holds the grade at C.",
-            "do_tonight": "Finish 22.3 US Foreign Policy.",
-            "parent_tip": "",
-            "ask": ""
+            "do_tonight": "Finish 22.3 US Foreign Policy."
           },
           {
             "class_name": "PE Course 1",
             "urgency": "watch",
             "snap": "90% overall but four Fitness and Projects items overdue.",
             "story": "Strong Fitness scores contrast with missing Projects.",
-            "do_tonight": "",
-            "parent_tip": "",
-            "ask": ""
+            "do_tonight": ""
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "watch",
             "snap": "82% with nine Assignments and Learning Targets overdue.",
             "story": "Recent scores stay flat while old work piles up.",
-            "do_tonight": "",
-            "parent_tip": "",
-            "ask": ""
+            "do_tonight": ""
           },
           {
             "class_name": "Eng 9 Entre",
             "urgency": "watch",
             "snap": "84% but trend points downward.",
             "story": "Assessments remain solid while overall direction slips.",
-            "do_tonight": "",
-            "parent_tip": "",
-            "ask": ""
+            "do_tonight": ""
           }
         ],
         "generated_at": "2026-07-09T12:16:21.665206+00:00",
         "analytics_snapshot": {
           "dominant_theme": "missing_work_backlog in 5 of 6 graded classes",
           "total_recoverable_pts": 100.0
+        }
+      },
+      "trend_summary": [
+        {
+          "class_name": "PE Course 1",
+          "delta": 2.0,
+          "window": "61d",
+          "pct_now": 90.5,
+          "direction": "up"
+        },
+        {
+          "class_name": "Tech of Biology",
+          "delta": 1.5,
+          "window": "61d",
+          "pct_now": 77.0,
+          "direction": "up"
+        },
+        {
+          "class_name": "Mkt Adv GrphDes",
+          "delta": -1.0,
+          "window": "61d",
+          "pct_now": 82.0,
+          "direction": "down"
+        },
+        {
+          "class_name": "WrldHis by Dsgn",
+          "delta": 0.9,
+          "window": "61d",
+          "pct_now": 78.5,
+          "direction": "up"
+        }
+      ],
+      "history_span_days": 61,
+      "class_trends": {
+        "Eng 9 Entre": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-05-20",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-05-23",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-05-25",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-05-27",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-05-29",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-02",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-05",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-08",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-18",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-21",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-24",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-06-30",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-07-04",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-07-07",
+              "pct": 83.8
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 83.8
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": 0.0,
+          "span_window": "61d",
+          "trend_label": "stable"
+        },
+        "Mkt Adv GrphDes": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 83.0
+            },
+            {
+              "date": "2026-05-20",
+              "pct": 83.0
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 83.5
+            },
+            {
+              "date": "2026-05-23",
+              "pct": 83.5
+            },
+            {
+              "date": "2026-05-25",
+              "pct": 83.5
+            },
+            {
+              "date": "2026-05-27",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-05-29",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-02",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-05",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-08",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-18",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-21",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-24",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-06-30",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-07-04",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-07-07",
+              "pct": 82.0
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 82.0
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": -1.0,
+          "span_window": "61d",
+          "trend_label": "stable"
+        },
+        "PE Course 1": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 88.5
+            },
+            {
+              "date": "2026-05-20",
+              "pct": 88.5
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 88.5
+            },
+            {
+              "date": "2026-05-23",
+              "pct": 88.5
+            },
+            {
+              "date": "2026-05-25",
+              "pct": 88.5
+            },
+            {
+              "date": "2026-05-27",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-05-29",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-02",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-05",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-08",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-18",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-21",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-24",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-06-30",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-07-04",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-07-07",
+              "pct": 90.5
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 90.5
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": 2.0,
+          "span_window": "61d",
+          "trend_label": "stable"
+        },
+        "WrldHis by Dsgn": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 77.6
+            },
+            {
+              "date": "2026-05-19",
+              "pct": 77.6
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 77.7
+            },
+            {
+              "date": "2026-05-22",
+              "pct": 77.7
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-01",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-04",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-06",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-09",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-17",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-20",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-22",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-25",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-06-29",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-07-03",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-07-05",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-07-08",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 78.5
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": 0.9,
+          "span_window": "61d",
+          "trend_label": "stable"
+        },
+        "Tech of Biology": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 75.5
+            },
+            {
+              "date": "2026-05-20",
+              "pct": 78.1
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 78.1
+            },
+            {
+              "date": "2026-05-23",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-05-25",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-05-27",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-05-29",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-02",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-05",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-08",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-18",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-21",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-24",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-06-30",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-07-04",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-07-07",
+              "pct": 77.0
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 77.0
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": 1.5,
+          "span_window": "61d",
+          "trend_label": "stable"
+        },
+        "Engineering Geo": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 74.0
+            },
+            {
+              "date": "2026-05-20",
+              "pct": 74.5
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 74.5
+            },
+            {
+              "date": "2026-05-23",
+              "pct": 74.5
+            },
+            {
+              "date": "2026-05-25",
+              "pct": 75.6
+            },
+            {
+              "date": "2026-05-27",
+              "pct": 75.8
+            },
+            {
+              "date": "2026-05-29",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-02",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-05",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-08",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-18",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-21",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-24",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-06-30",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-07-04",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-07-07",
+              "pct": 74.3
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 74.3
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": 0.3,
+          "span_window": "61d",
+          "trend_label": "stable"
         }
       }
     },
@@ -4109,60 +4904,848 @@
             "urgency": "critical",
             "snap": "C at 79.7% with one key missing assignment",
             "story": "One fluency assignment is overdue and the grade sits below 80%.",
-            "do_tonight": "Complete LT 10.5 - Two Way Tables",
-            "parent_tip": "Check in on the assignment tonight.",
-            "ask": "How can we finish that algebra task?"
+            "do_tonight": "Complete LT 10.5 - Two Way Tables"
           },
           {
             "class_name": "PE 8",
             "urgency": "watch",
             "snap": "B+ at 90% but five old fitness items missing",
             "story": "Several fitness and project tasks from January and February remain incomplete.",
-            "do_tonight": "Finish MFJ Feb Goals",
-            "parent_tip": "",
-            "ask": ""
+            "do_tonight": "Finish MFJ Feb Goals"
           },
           {
             "class_name": "Virt Enterprise",
             "urgency": "watch",
             "snap": "B at 89.4% with two presentations overdue",
             "story": "Two presentation tasks from March are still open.",
-            "do_tonight": "Submit Task 2 Presentation",
-            "parent_tip": "",
-            "ask": ""
+            "do_tonight": "Submit Task 2 Presentation"
           },
           {
             "class_name": "DT 8 Soc Sci",
             "urgency": "watch",
             "snap": "B at 87.6% with two classwork pieces missing",
             "story": "Two parts of the Dividing Nation assignment are overdue.",
-            "do_tonight": "Complete A Dividing Nation (part 1)",
-            "parent_tip": "",
-            "ask": ""
+            "do_tonight": "Complete A Dividing Nation (part 1)"
           },
           {
             "class_name": "Int Sci Designs",
             "urgency": "watch",
             "snap": "B at 84% with two short literacy tasks missing",
             "story": "Two brief science literacy items remain unfinished.",
-            "do_tonight": "Turn in LT 4.1 Types of Waves",
-            "parent_tip": "",
-            "ask": ""
+            "do_tonight": "Turn in LT 4.1 Types of Waves"
           },
           {
             "class_name": "DT 8 Lang Arts",
             "urgency": "strong",
             "snap": "A at 90.1% with nothing missing",
             "story": "Work is on track and the grade is stable.",
-            "do_tonight": "",
-            "parent_tip": "",
-            "ask": ""
+            "do_tonight": ""
           }
         ],
         "generated_at": "2026-07-09T12:16:36.823803+00:00",
         "analytics_snapshot": {
           "dominant_theme": "missing_work_backlog in 5 of 6 graded classes",
           "total_recoverable_pts": 62.0
+        }
+      },
+      "trend_summary": [
+        {
+          "class_name": "Bus Algebra 1",
+          "delta": 2.9,
+          "window": "61d",
+          "pct_now": 79.7,
+          "direction": "up"
+        },
+        {
+          "class_name": "PE 8",
+          "delta": 2.3,
+          "window": "61d",
+          "pct_now": 90.0,
+          "direction": "up"
+        },
+        {
+          "class_name": "Virt Enterprise",
+          "delta": 2.3,
+          "window": "61d",
+          "pct_now": 89.4,
+          "direction": "up"
+        }
+      ],
+      "history_span_days": 61,
+      "class_trends": {
+        "DT 8 Lang Arts": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-05-20",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-05-23",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-05-25",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-05-27",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-05-29",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-02",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-05",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-08",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-18",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-21",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-24",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-06-30",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-07-04",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-07-07",
+              "pct": 90.1
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 90.1
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": 0.0,
+          "span_window": "61d",
+          "trend_label": "stable"
+        },
+        "PE 8": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 87.7
+            },
+            {
+              "date": "2026-05-20",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-05-23",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-05-25",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-05-27",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-05-29",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-02",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-05",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-08",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-18",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-21",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-24",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-06-30",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-07-04",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-07-07",
+              "pct": 90.0
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 90.0
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": 2.3,
+          "span_window": "61d",
+          "trend_label": "stable"
+        },
+        "Int Sci Designs": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-05-20",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-05-23",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-05-25",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-05-27",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-05-29",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-02",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-05",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-08",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-18",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-21",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-24",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-06-30",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-07-04",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-07-07",
+              "pct": 84.0
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 84.0
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": 0.0,
+          "span_window": "61d",
+          "trend_label": "stable"
+        },
+        "DT 8 Soc Sci": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-05-20",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-05-23",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-05-25",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-05-27",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-05-29",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-02",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-05",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-08",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-18",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-21",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-24",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-06-30",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-07-04",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-07-07",
+              "pct": 87.6
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 87.6
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": 0.0,
+          "span_window": "61d",
+          "trend_label": "stable"
+        },
+        "Virt Enterprise": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 87.1
+            },
+            {
+              "date": "2026-05-20",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-05-23",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-05-25",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-05-27",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-05-29",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-02",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-05",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-08",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-18",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-21",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-24",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-06-30",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-07-04",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-07-07",
+              "pct": 89.4
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 89.4
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": 2.3,
+          "span_window": "61d",
+          "trend_label": "stable"
+        },
+        "Bus Algebra 1": {
+          "pct_history": [
+            {
+              "date": "2026-05-18",
+              "pct": 76.8
+            },
+            {
+              "date": "2026-05-20",
+              "pct": 77.9
+            },
+            {
+              "date": "2026-05-21",
+              "pct": 77.9
+            },
+            {
+              "date": "2026-05-23",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-05-25",
+              "pct": 78.5
+            },
+            {
+              "date": "2026-05-27",
+              "pct": 79.5
+            },
+            {
+              "date": "2026-05-29",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-05-31",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-02",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-03",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-05",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-07",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-08",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-10",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-12",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-13",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-16",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-18",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-19",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-21",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-23",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-24",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-26",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-28",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-06-30",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-07-02",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-07-04",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-07-06",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-07-07",
+              "pct": 79.7
+            },
+            {
+              "date": "2026-07-09",
+              "pct": 79.7
+            }
+          ],
+          "delta_7d": 0.0,
+          "delta_14d": 0.0,
+          "delta_span": 2.9,
+          "span_window": "61d",
+          "trend_label": "stable"
         }
       }
     }
