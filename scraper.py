@@ -2156,10 +2156,17 @@ if __name__ == "__main__":
         action="store_true",
         help="Login and dump Attendance page structure (no grades_data write)",
     )
+    parser.add_argument(
+        "--attendance-only",
+        action="store_true",
+        help="Refresh absences/tardies only (works during summer; no Grok)",
+    )
     args = parser.parse_args()
 
     if args.probe_attendance:
         probe_attendance()
+    elif args.attendance_only:
+        refresh_attendance_only()
     elif args.grok_only:
         regenerate_grok_summaries()
     else:
