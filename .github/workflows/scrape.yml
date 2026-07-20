@@ -13,6 +13,10 @@ on:
         description: 'Debug: dump Attendance page structure only'
         type: boolean
         default: false
+      attendance_only:
+        description: 'Refresh absences/tardies only (no grades/Grok)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -48,6 +52,8 @@ jobs:
         run: |
           if [ "${{ inputs.probe_attendance }}" = "true" ]; then
             python scraper.py --probe-attendance
+          elif [ "${{ inputs.attendance_only }}" = "true" ]; then
+            python scraper.py --attendance-only
           elif [ "${{ inputs.grok_only }}" = "true" ]; then
             python scraper.py --grok-only
           else
