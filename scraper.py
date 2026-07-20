@@ -177,54 +177,65 @@ def _parse_att_summary_area(html):
 
 
 def _parse_history_year_cards(html):
-    """Parse Attendance History Summary cards for the latest full school year.
+    """Parse Attendance History Summary for the latest full school year.
 
     Cards look like:
       2025-2026 Legacy Magnet Academy (...) Program: Home School: Grade: 9
       Enrolled: 180 Present: 178 Absent: 2 ...
-    Skip short/in-progress transfer programs (enrolled < 20) and Program: I rows.
     """
     soup = BeautifulSoup(html, "html.parser")
+    page_text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
+
+    # Global findall so nested DOM nodes don't confuse year selection
+    pattern = re.compile(
+        r"(20\d{2}\s*[-–]\s*20\d{2})\s+"
+        r"(.+?)\s+Program:\s*(\w*)\s*"
+        r".{0,40}?"
+        r"Enrolled:\s*(\d+)\s*Present:\s*(\d+)\s*Absen\w*:\s*(\d+)",
+        re.I,
+    )
     cards = []
-    # Each year card is in a DataDetails node with Enrolled/Present/Absent
-    for el in soup.find_all(True):
-        text = re.sub(r"\s+", " ", el.get_text(" ", strip=True))
-        if "Enrolled:" not in text or "Present:" not in text:
-            continue
-        if "Absent" not in text and "Absen" not in text:
-            continue
-        m = re.search(
-            r"(20\d{2}\s*[-–]\s*20\d{2}).{0,120}?"
-            r"Enrolled:\s*(\d+)\s*Present:\s*(\d+)\s*Absen\w*:\s*(\d+)",
-            text,
-            re.I,
-        )
-        if not m:
-            continue
+    for m in pattern.finditer(page_text):
         year = re.sub(r"\s+", "", m.group(1).replace("–", "-"))
-        enrolled = int(m.group(2))
-        present = int(m.group(3))
-        absent = int(m.group(4))
-        # Prefer "Home School" full-year rows
-        is_transfer = bool(re.search(r"Program:\s*I\b", text)) or enrolled < 20
-        school_m = re.search(
-            r"20\d{2}\s*[-–]\s*20\d{2}\s+(.+?)\s+Program:", text
-        )
-        school = (school_m.group(1).strip() if school_m else "")[:80]
+        school = m.group(2).strip()[:80]
+        program = (m.group(3) or "").strip().upper()
+        enrolled = int(m.group(4))
+        present = int(m.group(5))
+        absent = int(m.group(6))
+        is_transfer = program in ("I", "H") or enrolled < 20
         cards.append({
             "year": year,
             "days_enrolled": enrolled,
             "days_present": present,
             "absences": absent,
             "school": school,
+            "program": program,
             "is_transfer": is_transfer,
-            "text": text[:220],
         })
+
+    if not cards:
+        # looser fallback
+        for m in re.finditer(
+            r"(20\d{2}\s*[-–]\s*20\d{2}).{0,160}?"
+            r"Enrolled:\s*(\d+)\s*Present:\s*(\d+)\s*Absen\w*:\s*(\d+)",
+            page_text,
+            re.I,
+        ):
+            year = re.sub(r"\s+", "", m.group(1).replace("–", "-"))
+            enrolled = int(m.group(2))
+            cards.append({
+                "year": year,
+                "days_enrolled": enrolled,
+                "days_present": int(m.group(3)),
+                "absences": int(m.group(4)),
+                "school": "",
+                "program": "",
+                "is_transfer": enrolled < 20,
+            })
 
     if not cards:
         return None
 
-    # Dedupe by year+enrolled+absent (page has nested nodes)
     seen = set()
     unique = []
     for c in cards:
@@ -234,34 +245,19 @@ def _parse_history_year_cards(html):
         seen.add(key)
         unique.append(c)
 
-    full = [c for c in unique if not c["is_transfer"]]
-    pool = full or unique
-    # Sort years descending
+    full = [c for c in unique if not c["is_transfer"] and c["days_enrolled"] >= 100]
+    pool = full or [c for c in unique if not c["is_transfer"]] or unique
     pool.sort(key=lambda c: c["year"], reverse=True)
     best = pool[0]
 
-    # Tardies for that year from Details tab text: "T 2025-2026 TARDY ... Total: N"
     year_compact = best["year"]
-    page_text = soup.get_text(" ", strip=True)
     tardies = 0
     for m in re.finditer(
-        rf"\b([TV])\s+{re.escape(year_compact)}\s+(EXTARDY|TARDY)\b.{{0,40}}Total:\s*(\d+)",
+        rf"\b[TV]\s+{re.escape(year_compact)}\s+(?:EXTARDY|TARDY)\b.{{0,50}}Total:\s*(\d+)",
         page_text,
         re.I,
     ):
-        tardies += int(m.group(3))
-    # Also all-day tardy count if shown as "TARDY N Total"
-    if tardies == 0:
-        m = re.search(
-            rf"TARDY\s+(\d+)\s+Total:\s*(\d+)",
-            page_text[page_text.find(year_compact): page_text.find(year_compact) + 2000]
-            if year_compact in page_text
-            else "",
-            re.I,
-        )
-        # Prefer the first number after TARDY as all-day? From probe: "T 2025-2026 TARDY 0 Total: 3"
-        # The 0 might be all-day and Total is period count. Use period total.
-        pass
+        tardies += int(m.group(1))
 
     return {
         "absences": best["absences"],
