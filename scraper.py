@@ -227,6 +227,38 @@ def next_first_day(today=None, calendar=None):
     return min(candidates) if candidates else None
 
 
+def target_attendance_year_label(today=None, calendar=None):
+    """Aeries-style year label (e.g. 2025-2026) for the school year we should display.
+
+    - During a session: the active school year
+    - During summer: the year that most recently started (just ended), not an older one
+    """
+    today = today or datetime.now().date()
+    if isinstance(today, datetime):
+        today = today.date()
+    calendar = calendar or load_school_calendar(refresh=False)
+
+    active = school_session_window(today=today, calendar=calendar)
+    if active:
+        first = _parse_iso_date_str(active.get("first_day"))
+        last = _parse_iso_date_str(active.get("last_day"))
+        if first:
+            end_y = last.year if last else first.year + 1
+            return f"{first.year}-{end_y}"
+
+    started = []
+    for y in calendar.get("years") or []:
+        first = _parse_iso_date_str(y.get("first_day"))
+        last = _parse_iso_date_str(y.get("last_day"))
+        if first and first <= today:
+            end_y = last.year if last else first.year + 1
+            started.append((first, f"{first.year}-{end_y}"))
+    if not started:
+        return None
+    started.sort(key=lambda t: t[0], reverse=True)
+    return started[0][1]
+
+
 def is_calendar_summer_break(today=None, calendar=None):
     """True when today is outside every instructional school-year window."""
     return school_session_window(today=today, calendar=calendar) is None
@@ -360,17 +392,18 @@ def _parse_att_summary_area(html):
     }
 
 
-def _parse_history_year_cards(html):
-    """Parse Attendance History Summary for the latest full school year.
+def _parse_history_year_cards(html, prefer_year=None):
+    """Parse Attendance History Summary cards.
 
     Cards look like:
       2025-2026 Legacy Magnet Academy (...) Program: Home School: Grade: 9
       Enrolled: 180 Present: 178 Absent: 2 ...
+
+    prefer_year: Aeries label like '2025-2026' from TUSD calendar alignment.
     """
     soup = BeautifulSoup(html, "html.parser")
     page_text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
 
-    # Global findall so nested DOM nodes don't confuse year selection
     pattern = re.compile(
         r"(20\d{2}\s*[-–]\s*20\d{2})\s+"
         r"(.+?)\s+Program:\s*(\w*)\s*"
@@ -398,7 +431,6 @@ def _parse_history_year_cards(html):
         })
 
     if not cards:
-        # looser fallback
         for m in re.finditer(
             r"(20\d{2}\s*[-–]\s*20\d{2}).{0,160}?"
             r"Enrolled:\s*(\d+)\s*Present:\s*(\d+)\s*Absen\w*:\s*(\d+)",
@@ -431,13 +463,23 @@ def _parse_history_year_cards(html):
 
     full = [c for c in unique if not c["is_transfer"] and c["days_enrolled"] >= 100]
     pool = full or [c for c in unique if not c["is_transfer"]] or unique
-    pool.sort(key=lambda c: c["year"], reverse=True)
-    best = pool[0]
+
+    prefer_year = (prefer_year or "").replace("–", "-").replace(" ", "")
+    best = None
+    if prefer_year:
+        for c in pool:
+            if c["year"] == prefer_year:
+                best = c
+                break
+    if best is None:
+        pool.sort(key=lambda c: c["year"], reverse=True)
+        best = pool[0]
 
     year_compact = best["year"]
+    # Period tardy totals for that year only (T = tardy, V = excused tardy in TUSD)
     tardies = 0
     for m in re.finditer(
-        rf"\b[TV]\s+{re.escape(year_compact)}\s+(?:EXTARDY|TARDY)\b.{{0,50}}Total:\s*(\d+)",
+        rf"\b[TV]\s+{re.escape(year_compact)}\s+(?:EXTARDY|TARDY)\b.{{0,60}}?Total:\s*(\d+)",
         page_text,
         re.I,
     ):
@@ -445,7 +487,7 @@ def _parse_history_year_cards(html):
 
     return {
         "absences": best["absences"],
-        "tardies": tardies if tardies else None,
+        "tardies": tardies if tardies else 0,
         "excused": None,
         "unexcused": None,
         "days_enrolled": best["days_enrolled"],
@@ -453,41 +495,44 @@ def _parse_history_year_cards(html):
         "year": best["year"],
         "school": best.get("school"),
         "source": "AttendanceHistory.aspx",
+        "year_source": "calendar" if prefer_year and best["year"] == prefer_year else "latest_card",
     }
 
 
-def parse_attendance_html(html, source_hint=""):
+def parse_attendance_html(html, source_hint="", prefer_year=None):
     """Extract absence/tardy counts from Attendance or AttendanceHistory HTML."""
     if not html:
         return None
 
-    # 1) Live year summary strip (mid-year on Attendance.aspx)
+    prefer_year = prefer_year or target_attendance_year_label()
+
+    # Mid-year live strip only when it matches the calendar year we want
+    # (summer often zeros this out for the *new* year — ignore zeros)
     summary = _parse_att_summary_area(html)
     if summary and (summary.get("days_enrolled") or 0) > 0:
+        summary["year"] = summary.get("year") or prefer_year
         return summary
 
-    # 2) History year cards (reliable after year ends / always has prior years)
-    history = _parse_history_year_cards(html)
-    if history and history.get("days_enrolled"):
+    history = _parse_history_year_cards(html, prefer_year=prefer_year)
+    if history and history.get("days_enrolled") is not None:
         return history
-
-    # 3) Summary area even if zeros (school out for summer)
-    if summary:
-        return summary
 
     return None
 
 
-def fetch_attendance(session):
-    """Return attendance summary dict from History (preferred) or Attendance page."""
-    # History has full-year Enrolled/Present/Absent even in summer
+def fetch_attendance(session, prefer_year=None):
+    """Return attendance for the calendar-aligned school year."""
+    prefer_year = prefer_year or target_attendance_year_label()
+    if prefer_year:
+        print(f"  Attendance target year: {prefer_year}")
+
     hist = session.get(
         f"{BASE_URL}/student/AttendanceHistory.aspx",
         allow_redirects=True,
         timeout=90,
     )
     if hist.status_code == 200 and "LoginParent" not in hist.url and "NotFound" not in hist.url:
-        parsed = parse_attendance_html(hist.text, "history")
+        parsed = parse_attendance_html(hist.text, "history", prefer_year=prefer_year)
         if parsed and parsed.get("absences") is not None:
             return parsed
 
@@ -499,16 +544,80 @@ def fetch_attendance(session):
     if att.status_code != 200 or "LoginParent" in att.url:
         print("  Attendance pages unavailable")
         return None
-    parsed = parse_attendance_html(att.text, "attendance")
+    parsed = parse_attendance_html(att.text, "attendance", prefer_year=prefer_year)
     if not parsed:
         print("  Attendance page loaded but no counts parsed")
         return {
             "absences": None,
             "tardies": None,
             "parse_failed": True,
+            "year": prefer_year,
             "source": "Attendance.aspx",
         }
     return parsed
+
+
+def refresh_attendance_only():
+    """Login and update attendance on existing grades_data (works in summer)."""
+    require_scrape_config()
+    if not OUTPUT_FILE.exists():
+        print(f"ERROR: {OUTPUT_FILE} not found — run a full scrape first")
+        sys.exit(1)
+    try:
+        data = json.loads(OUTPUT_FILE.read_text())
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Could not parse {OUTPUT_FILE}: {e}")
+        sys.exit(1)
+
+    cal = load_school_calendar(refresh=True)
+    prefer_year = target_attendance_year_label(calendar=cal)
+    print(f"Refreshing attendance only (target year {prefer_year})...")
+
+    session = login()
+    students = data.get("students") or []
+    by_sn = {str(s.get("sn")): s for s in students}
+
+    for student in STUDENTS:
+        sn = str(student["sn"])
+        name = student.get("name", sn)
+        print(f"  {name}...")
+        switch_student(session, student["school_code"], student["sn"])
+        att = fetch_attendance(session, prefer_year=prefer_year)
+        if att:
+            print(
+                f"    year={att.get('year')} absences={att.get('absences')} "
+                f"tardies={att.get('tardies')} present={att.get('days_present')}/"
+                f"{att.get('days_enrolled')}"
+            )
+            if sn in by_sn:
+                by_sn[sn]["attendance"] = att
+            else:
+                students.append({
+                    "sn": student["sn"],
+                    "name": name,
+                    "school_code": student["school_code"],
+                    "classes": [],
+                    "assignments_by_class": [],
+                    "attendance": att,
+                })
+                by_sn[sn] = students[-1]
+        else:
+            print("    WARNING: no attendance parsed")
+
+    data["students"] = students
+    data["last_updated"] = datetime.now(timezone.utc).isoformat()
+    nxt = next_first_day(calendar=cal)
+    paused = is_calendar_summer_break(calendar=cal)
+    data["summer_break"] = paused
+    data["school_session"] = {
+        "active": not paused,
+        "reason": "TUSD school calendar" if paused else "in session",
+        "next_first_day": nxt.isoformat() if nxt else None,
+        "attendance_year": prefer_year,
+        "calendar_source": cal.get("source_url"),
+    }
+    OUTPUT_FILE.write_text(json.dumps(data, indent=2))
+    print(f"\nAttendance written to {OUTPUT_FILE}")
 
 
 def probe_attendance():
@@ -1887,13 +1996,23 @@ def scrape_all():
     summer_break = is_summer_break(previous_data)
 
     if summer_break:
-        cal = load_school_calendar(refresh=False)
+        cal = load_school_calendar(refresh=True)
         nxt = next_first_day(calendar=cal)
+        prefer_year = target_attendance_year_label(calendar=cal)
         reason = "SUMMER_BREAK env override" if env_truthy("SUMMER_BREAK") is True else "TUSD school calendar"
         print(f"School session paused ({reason}).")
         if nxt:
             print(f"Next first day of school: {nxt.isoformat()}")
-        print("Skipping Aeries scraping and Grok API calls for today.")
+        print(f"Skipping grades scrape and Grok; refreshing attendance for {prefer_year} only.")
+        # Preserve classes/AI; only update attendance from portal
+        if OUTPUT_FILE.exists() and previous_data.get("students"):
+            try:
+                refresh_attendance_only()
+                return
+            except SystemExit:
+                raise
+            except Exception as e:
+                print(f"  WARNING: attendance refresh failed ({e}); preserving prior data")
         data = previous_data.copy() if previous_data else {
             "last_updated": datetime.now(timezone.utc).isoformat(),
             "district": "Tustin USD",
@@ -1907,10 +2026,11 @@ def scrape_all():
             "active": False,
             "reason": reason,
             "next_first_day": nxt.isoformat() if nxt else None,
+            "attendance_year": prefer_year,
             "calendar_source": cal.get("source_url"),
         }
         OUTPUT_FILE.write_text(json.dumps(data, indent=2))
-        print(f"Data preserved (no new scrape). Written to {OUTPUT_FILE}")
+        print(f"Data preserved (no new grade scrape). Written to {OUTPUT_FILE}")
         return
 
     session = login()

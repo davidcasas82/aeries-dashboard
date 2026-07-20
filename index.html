@@ -1591,7 +1591,11 @@ python3 -m http.server 8765</pre>
                 chips.push(`<span class="masthead-stat ok"><span class="stat-num">${a.days_present}</span> / ${a.days_enrolled} present</span>`);
             }
             if (a.year) {
-                chips.push(`<span class="masthead-stat"><span class="stat-num" style="font-size:13px;font-weight:600">${a.year}</span></span>`);
+                // Normalize 2025-2026 → “2025–26 school year”
+                let yearLabel = String(a.year);
+                const ym = yearLabel.match(/^(20\d{2})-20(\d{2})$/);
+                if (ym) yearLabel = `${ym[1]}–${ym[2]} school year`;
+                chips.push(`<span class="masthead-stat"><span class="stat-num" style="font-size:13px;font-weight:600">${yearLabel}</span></span>`);
             }
             if (!chips.length) return '';
             return `<div class="masthead-stats">${chips.join('')}</div>`;
