@@ -306,6 +306,38 @@
             color: var(--green);
         }
 
+        .masthead-stats {
+            margin-top: 14px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .masthead-stat {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 6px;
+            padding: 8px 12px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            box-shadow: var(--shadow-sm);
+            font-size: 14px;
+            color: var(--text-2);
+        }
+
+        .masthead-stat .stat-num {
+            font-size: 18px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: var(--text);
+            letter-spacing: -0.3px;
+        }
+
+        .masthead-stat.warn .stat-num { color: var(--amber); }
+        .masthead-stat.alert .stat-num { color: var(--red); }
+        .masthead-stat.ok .stat-num { color: var(--teal); }
+
         .masthead-movers {
             margin-top: 14px;
             padding-top: 12px;
@@ -1503,15 +1535,39 @@ python3 -m http.server 8765</pre>
             </div>`;
         }
 
+        function renderAttendanceStats(student) {
+            const a = student.attendance;
+            if (!a || a.parse_failed) return '';
+            const chips = [];
+            if (a.absences != null) {
+                const cls = a.absences >= 5 ? 'alert' : (a.absences > 0 ? 'warn' : 'ok');
+                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.absences}</span> absences</span>`);
+            }
+            if (a.tardies != null) {
+                const cls = a.tardies >= 5 ? 'alert' : (a.tardies > 0 ? 'warn' : 'ok');
+                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.tardies}</span> tardies</span>`);
+            }
+            if (a.unexcused != null && a.unexcused > 0) {
+                chips.push(`<span class="masthead-stat alert"><span class="stat-num">${a.unexcused}</span> unexcused</span>`);
+            }
+            if (a.excused != null && a.absences == null) {
+                chips.push(`<span class="masthead-stat"><span class="stat-num">${a.excused}</span> excused</span>`);
+            }
+            if (!chips.length) return '';
+            return `<div class="masthead-stats">${chips.join('')}</div>`;
+        }
+
         function renderMasthead(student, idx) {
             const s = student.ai_summary;
             const focus = s ? (s.focus_tonight || '').trim() : '';
             studentFocusMap[idx] = focus;
+            const attendanceHtml = renderAttendanceStats(student);
 
             if (!s) {
                 return `<div class="masthead" id="hero-card-${idx}">
                     <div class="masthead-kicker"><h2>Briefing</h2></div>
                     <div class="masthead-headline muted">No briefing yet</div>
+                    ${attendanceHtml}
                     ${renderMovers(student)}
                 </div>`;
             }
@@ -1554,6 +1610,7 @@ python3 -m http.server 8765</pre>
                 }
             }
 
+            html += attendanceHtml;
             html += renderMovers(student);
             html += `</div>`;
             return html;

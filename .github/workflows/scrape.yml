@@ -9,6 +9,10 @@ on:
         description: 'Regenerate AI briefings only (skip Aeries scrape)'
         type: boolean
         default: false
+      probe_attendance:
+        description: 'Debug: dump Attendance page structure only'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -41,13 +45,16 @@ jobs:
           # true = skip Aeries + Grok; false or unset = normal daily scrape
           SUMMER_BREAK: ${{ vars.SUMMER_BREAK }}
         run: |
-          if [ "${{ inputs.grok_only }}" = "true" ]; then
+          if [ "${{ inputs.probe_attendance }}" = "true" ]; then
+            python scraper.py --probe-attendance
+          elif [ "${{ inputs.grok_only }}" = "true" ]; then
             python scraper.py --grok-only
           else
             python scraper.py
           fi
 
       - name: Commit updated data
+        if: ${{ inputs.probe_attendance != true }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
