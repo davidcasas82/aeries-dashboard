@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-07-20T04:30:02.482601+00:00",
+  "last_updated": "2026-07-20T04:38:35.908686+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -9,12 +9,23 @@
       "school_code": "95",
       "classes": [],
       "assignments_by_class": [],
+      "attendance": {
+        "absences": 3,
+        "tardies": 3,
+        "excused": null,
+        "unexcused": null,
+        "days_enrolled": 176,
+        "days_present": 173,
+        "year": "2024-2025",
+        "school": "Legacy Magnet Academy (95)",
+        "source": "AttendanceHistory.aspx"
+      },
       "ai_summary": {
-        "headline": "Portal data shows mixed or stable performance with no classes or missing work listed.",
+        "headline": "Portal shows stable performance across classes with no missing work or urgent items flagged.",
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-07-20T04:30:11.279231+00:00",
+        "generated_at": "2026-07-20T04:38:43.373951+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -31,12 +42,23 @@
       "school_code": "95",
       "classes": [],
       "assignments_by_class": [],
+      "attendance": {
+        "absences": 5,
+        "tardies": null,
+        "excused": null,
+        "unexcused": null,
+        "days_enrolled": 176,
+        "days_present": 171,
+        "year": "2024-2025",
+        "school": "Legacy Magnet Academy (95)",
+        "source": "AttendanceHistory.aspx"
+      },
       "ai_summary": {
-        "headline": "Portal shows no posted grades, missing work, or class data for Leah.",
+        "headline": "Portal shows no current classes or posted grades for Leah.",
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-07-20T04:30:20.701891+00:00",
+        "generated_at": "2026-07-20T04:38:53.226129+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
