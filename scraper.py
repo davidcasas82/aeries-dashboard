@@ -139,6 +139,202 @@ def fetch_class_summary(session):
     return None
 
 
+def fetch_attendance_page(session):
+    """Load parent portal Attendance page HTML (login required)."""
+    resp = session.get(f"{BASE_URL}/student/Attendance.aspx", allow_redirects=True, timeout=60)
+    if resp.status_code != 200 or "LoginParent" in resp.url:
+        return None, resp.url if resp is not None else ""
+    return resp.text, resp.url
+
+
+def _first_int(patterns, text):
+    for pat in patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            try:
+                return int(m.group(1))
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def parse_attendance_html(html):
+    """Extract absence/tardy counts from Aeries parent Attendance page.
+
+    Portal layouts vary by district; try several label patterns and fall back
+    to counting absence-like codes in the main table.
+    """
+    if not html:
+        return None
+
+    soup = BeautifulSoup(html, "html.parser")
+    # Prefer visible text over raw HTML noise
+    text = soup.get_text("\n", strip=True)
+
+    absences = _first_int(
+        [
+            r"total\s+absences?\s*[:\-]?\s*(\d+)",
+            r"absences?\s*[:\-]?\s*(\d+)",
+            r"(\d+)\s+absences?\b",
+            r"days?\s+absent\s*[:\-]?\s*(\d+)",
+            r"absent\s+days?\s*[:\-]?\s*(\d+)",
+            r"all[- ]day\s+absences?\s*[:\-]?\s*(\d+)",
+        ],
+        text,
+    )
+    tardies = _first_int(
+        [
+            r"total\s+tardies?\s*[:\-]?\s*(\d+)",
+            r"tardies?\s*[:\-]?\s*(\d+)",
+            r"(\d+)\s+tardies?\b",
+            r"days?\s+tardy\s*[:\-]?\s*(\d+)",
+        ],
+        text,
+    )
+    excused = _first_int(
+        [
+            r"excused\s+absences?\s*[:\-]?\s*(\d+)",
+            r"(\d+)\s+excused\b",
+        ],
+        text,
+    )
+    unexcused = _first_int(
+        [
+            r"unexcused\s+absences?\s*[:\-]?\s*(\d+)",
+            r"(\d+)\s+unexcused\b",
+        ],
+        text,
+    )
+    days_enrolled = _first_int(
+        [
+            r"days?\s+enrolled\s*[:\-]?\s*(\d+)",
+            r"enrolled\s+days?\s*[:\-]?\s*(\d+)",
+        ],
+        text,
+    )
+    days_present = _first_int(
+        [
+            r"days?\s+present\s*[:\-]?\s*(\d+)",
+            r"present\s+days?\s*[:\-]?\s*(\d+)",
+        ],
+        text,
+    )
+
+    # Table row count fallback: rows that look like absence codes
+    table_absence_rows = 0
+    table_tardy_rows = 0
+    code_counts = {}
+    for table in soup.find_all("table"):
+        rows = table.find_all("tr")
+        if len(rows) < 2:
+            continue
+        for row in rows[1:]:
+            cells = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
+            if not cells:
+                continue
+            row_text = " ".join(cells).lower()
+            # skip pure header/legend rows
+            if "description" in row_text and "code" in row_text:
+                continue
+            # Aeries often shows a code letter in an early column
+            code = ""
+            for c in cells[:4]:
+                if re.fullmatch(r"[A-Za-z]{1,3}", c or ""):
+                    code = c.upper()
+                    break
+            if code:
+                code_counts[code] = code_counts.get(code, 0) + 1
+            if re.search(r"\b(absent|absence|unexcused|excused|ill|sick|truant)\b", row_text):
+                table_absence_rows += 1
+            elif re.search(r"\btardy\b", row_text):
+                table_tardy_rows += 1
+            elif code in ("A", "U", "E", "I", "X", "S"):  # common absence-ish codes
+                table_absence_rows += 1
+            elif code == "T":
+                table_tardy_rows += 1
+
+    if absences is None and table_absence_rows:
+        absences = table_absence_rows
+    if tardies is None and table_tardy_rows:
+        tardies = table_tardy_rows
+
+    # If excused+unexcused known but not total
+    if absences is None and excused is not None and unexcused is not None:
+        absences = excused + unexcused
+
+    if all(
+        v is None
+        for v in (absences, tardies, excused, unexcused, days_enrolled, days_present)
+    ) and not code_counts:
+        return None
+
+    return {
+        "absences": absences,
+        "tardies": tardies,
+        "excused": excused,
+        "unexcused": unexcused,
+        "days_enrolled": days_enrolled,
+        "days_present": days_present,
+        "code_counts": code_counts or None,
+        "source": "Attendance.aspx",
+    }
+
+
+def fetch_attendance(session):
+    """Return attendance summary dict or None."""
+    html, url = fetch_attendance_page(session)
+    if not html:
+        print(f"  Attendance page unavailable ({url})")
+        return None
+    summary = parse_attendance_html(html)
+    if not summary:
+        # Soft-fail with a note so we can improve the parser
+        print("  Attendance page loaded but no counts parsed")
+        return {
+            "absences": None,
+            "tardies": None,
+            "parse_failed": True,
+            "source": "Attendance.aspx",
+        }
+    return summary
+
+
+def probe_attendance():
+    """Login and dump Attendance page structure for each student (debug)."""
+    require_scrape_config()
+    session = login()
+    for student in STUDENTS:
+        print(f"\n=== PROBE attendance: {student['name']} (SN {student['sn']}) ===")
+        switch_student(session, student["school_code"], student["sn"])
+        html, url = fetch_attendance_page(session)
+        print(f"URL: {url}")
+        if not html:
+            print("No HTML")
+            continue
+        print(f"HTML length: {len(html)}")
+        soup = BeautifulSoup(html, "html.parser")
+        text = soup.get_text("\n", strip=True)
+        print("--- text sample (first 2000 chars) ---")
+        print(text[:2000])
+        print("--- keyword hits ---")
+        for kw in (
+            "Absent", "Absence", "Tardy", "Tardies", "Excused", "Unexcused",
+            "Enrolled", "Present", "Attendance",
+        ):
+            print(f"  {kw}: {text.lower().count(kw.lower())}")
+        print("--- tables ---")
+        for i, table in enumerate(soup.find_all("table")[:8]):
+            rows = table.find_all("tr")
+            print(f"  table[{i}] rows={len(rows)}")
+            for ri, row in enumerate(rows[:4]):
+                cells = [c.get_text(" ", strip=True)[:50] for c in row.find_all(["th", "td"])]
+                print(f"    r{ri}: {cells}")
+        parsed = parse_attendance_html(html)
+        print("--- parsed ---")
+        print(json.dumps(parsed, indent=2))
+
+
+
 def fetch_gradebook_summary(session):
     """Fetch GradebookSummary page; return list of (label_hint, series) pairs.
 
@@ -1474,12 +1670,25 @@ def scrape_all():
         else:
             print("  Aeries series unavailable (using daily snapshots only)")
 
+        print("  Fetching attendance...")
+        attendance = fetch_attendance(session)
+        if attendance and not attendance.get("parse_failed"):
+            print(
+                f"  Attendance: absences={attendance.get('absences')} "
+                f"tardies={attendance.get('tardies')}"
+            )
+        elif attendance and attendance.get("parse_failed"):
+            print("  Attendance: page OK, counts not parsed yet")
+        else:
+            print("  Attendance: skipped")
+
         student_data = {
             "sn": student["sn"],
             "name": student["name"],
             "school_code": student["school_code"],
             "classes": classes,
             "assignments_by_class": class_assignments,
+            "attendance": attendance,
         }
 
         # Carry prior briefing so history_context can reference last focus
@@ -1535,9 +1744,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Regenerate AI briefings from existing grades_data.json (skip Aeries scrape)",
     )
+    parser.add_argument(
+        "--probe-attendance",
+        action="store_true",
+        help="Login and dump Attendance page structure (no grades_data write)",
+    )
     args = parser.parse_args()
 
-    if args.grok_only:
+    if args.probe_attendance:
+        probe_attendance()
+    elif args.grok_only:
         regenerate_grok_summaries()
     else:
         scrape_all()
