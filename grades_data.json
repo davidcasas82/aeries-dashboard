@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-07-20T04:45:06.102930+00:00",
+  "last_updated": "2026-07-20T04:48:06.712385+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -5772,5 +5772,11 @@
       }
     }
   ],
-  "summer_break": true
+  "summer_break": true,
+  "school_session": {
+    "active": false,
+    "reason": "TUSD school calendar",
+    "next_first_day": "2026-08-13",
+    "calendar_source": "https://www.tustin.k12.ca.us/about-us/calendars-school-year"
+  }
 }

@@ -2076,7 +2076,10 @@ python3 -m http.server 8765</pre>
                     banner = document.createElement('div');
                     banner.id = 'summerBreakBanner';
                     banner.className = 'summer-break-banner';
-                    banner.textContent = 'Summer break — daily Aeries scrape and Grok are paused. Showing last school-year grades and attendance.';
+                    const resume = (currentData && currentData.school_session && currentData.school_session.next_first_day)
+                        ? currentData.school_session.next_first_day
+                        : 'Aug 13, 2026';
+                    banner.textContent = `School is out — Aeries scrape and Grok are paused (TUSD calendar). Showing last school-year grades and attendance. Resumes ${resume}.`;
                     const picker = document.getElementById('studentPicker');
                     picker.parentNode.insertBefore(banner, picker.nextSibling);
                 }

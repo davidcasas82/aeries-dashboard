@@ -1,0 +1,23 @@
+{
+  "district": "Tustin Unified School District",
+  "source_url": "https://www.tustin.k12.ca.us/about-us/calendars-school-year",
+  "years": [
+    {
+      "id": "2025-26",
+      "first_day": "2025-08-13",
+      "last_day": "2026-05-29"
+    },
+    {
+      "id": "2026-27",
+      "first_day": "2026-08-13",
+      "last_day": "2027-05-28"
+    },
+    {
+      "id": "2027-28",
+      "first_day": "2027-08-12",
+      "last_day": "2028-05-26"
+    }
+  ],
+  "updated_at": "2026-07-20",
+  "notes": "First/last instructional days. Scraper auto-pauses Aeries + Grok outside these windows (summer). SUMMER_BREAK env can still force on/off."
+}

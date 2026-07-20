@@ -3,7 +3,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import requests
@@ -18,6 +18,9 @@ PASSWORD = os.getenv("AERIES_PASSWORD", "")
 GROK_API_KEY = os.getenv("GROK_API_KEY", "")
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 GROK_MODEL = "grok-3-mini"
+
+TUSD_CALENDAR_URL = "https://www.tustin.k12.ca.us/about-us/calendars-school-year"
+CALENDAR_FILE = Path(__file__).parent / "school_calendar.json"
 
 STUDENTS = []
 for i in range(1, 10):
@@ -36,6 +39,13 @@ HISTORY_MAX_DAYS = 120
 HISTORY_MISSING_NAMES_CAP = 8
 PCT_HISTORY_UI_POINTS = 30
 TREND_DELTA_THRESHOLD = 2.0  # percentage points over 7d for improve/slip labels
+
+# Fallback if school_calendar.json missing / unreadable
+_DEFAULT_SCHOOL_YEARS = [
+    {"id": "2025-26", "first_day": "2025-08-13", "last_day": "2026-05-29"},
+    {"id": "2026-27", "first_day": "2026-08-13", "last_day": "2027-05-28"},
+    {"id": "2027-28", "first_day": "2027-08-12", "last_day": "2028-05-26"},
+]
 
 
 def downsample_pct_history(points, max_points=PCT_HISTORY_UI_POINTS):
@@ -60,16 +70,190 @@ def env_truthy(name):
     return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _parse_iso_date_str(s):
+    if not s:
+        return None
+    try:
+        return datetime.strptime(str(s)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _month_day_to_date(token, year_hint):
+    """Parse 'Aug 13' / 'Aug 13, Wednesday' / 'May 29, 2026' with a year hint."""
+    token = re.sub(r"\s+", " ", (token or "").strip())
+    token = re.sub(r",?\s*(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b", "", token, flags=re.I)
+    token = token.strip(" ,")
+    for fmt in ("%b %d, %Y", "%B %d, %Y", "%b %d %Y", "%B %d %Y"):
+        try:
+            return datetime.strptime(token, fmt).date()
+        except ValueError:
+            pass
+    for fmt in ("%b %d", "%B %d"):
+        try:
+            d = datetime.strptime(token, fmt)
+            return date(year_hint, d.month, d.day)
+        except ValueError:
+            pass
+    return None
+
+
+def parse_tusd_school_years_html(html):
+    """Extract first/last instructional days from TUSD school-year calendar page."""
+    if not html:
+        return []
+    text = BeautifulSoup(html, "html.parser").get_text("\n", strip=True)
+    years = []
+    # Split on "YYYY-YY School Year Calendar"
+    chunks = re.split(r"(\d{4}-\d{2})\s*School Year Calendar", text)
+    # chunks: [pre, id1, body1, id2, body2, ...]
+    for i in range(1, len(chunks) - 1, 2):
+        year_id = chunks[i].strip()
+        body = chunks[i + 1]
+        # Year span e.g. 2025-26 → start year 2025, end year 2026
+        try:
+            start_y = int(year_id.split("-")[0])
+            end_y = start_y + 1
+        except ValueError:
+            continue
+
+        first = None
+        last = None
+        # Line before FIRST DAY OF SCHOOL
+        m_first = re.search(
+            r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:,\s*\d{4})?)"
+            r"[^\n]{0,30}\n\s*FIRST DAY OF SCHOOL",
+            body,
+            re.I,
+        )
+        if m_first:
+            first = _month_day_to_date(m_first.group(1), start_y)
+
+        m_last = re.search(
+            r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:,\s*\d{4})?)"
+            r"[^\n]{0,30}\n\s*LAST DAY OF SCHOOL",
+            body,
+            re.I,
+        )
+        if m_last:
+            last = _month_day_to_date(m_last.group(1), end_y)
+
+        if first and last:
+            years.append({
+                "id": year_id,
+                "first_day": first.isoformat(),
+                "last_day": last.isoformat(),
+            })
+    return years
+
+
+def fetch_tusd_school_years(timeout=20):
+    """Download TUSD public calendar; return year list or []."""
+    try:
+        resp = requests.get(
+            TUSD_CALENDAR_URL,
+            timeout=timeout,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (compatible; aeries-dashboard/1.0; "
+                    "+https://github.com/davidcasas82/aeries-dashboard)"
+                )
+            },
+        )
+        if resp.status_code != 200:
+            return []
+        return parse_tusd_school_years_html(resp.text)
+    except requests.RequestException:
+        return []
+
+
+def load_school_calendar(refresh=True):
+    """Load school years from school_calendar.json, optionally refresh from TUSD."""
+    data = {
+        "district": "Tustin Unified School District",
+        "source_url": TUSD_CALENDAR_URL,
+        "years": list(_DEFAULT_SCHOOL_YEARS),
+    }
+    if CALENDAR_FILE.exists():
+        try:
+            file_data = json.loads(CALENDAR_FILE.read_text())
+            if file_data.get("years"):
+                data.update(file_data)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    if refresh and env_truthy("SKIP_CALENDAR_REFRESH") is not True:
+        remote_years = fetch_tusd_school_years()
+        if remote_years:
+            # Merge by id (remote wins)
+            by_id = {y["id"]: y for y in data.get("years") or []}
+            for y in remote_years:
+                by_id[y["id"]] = y
+            data["years"] = sorted(by_id.values(), key=lambda y: y.get("first_day") or "")
+            data["updated_at"] = datetime.now(timezone.utc).date().isoformat()
+            data["source_url"] = TUSD_CALENDAR_URL
+            try:
+                CALENDAR_FILE.write_text(json.dumps(data, indent=2) + "\n")
+            except OSError:
+                pass
+    return data
+
+
+def school_session_window(today=None, calendar=None):
+    """Return the school-year dict containing today, or None if outside all windows (summer)."""
+    today = today or datetime.now().date()
+    if isinstance(today, datetime):
+        today = today.date()
+    calendar = calendar or load_school_calendar(refresh=False)
+    for y in calendar.get("years") or []:
+        first = _parse_iso_date_str(y.get("first_day"))
+        last = _parse_iso_date_str(y.get("last_day"))
+        if first and last and first <= today <= last:
+            return y
+    return None
+
+
+def next_first_day(today=None, calendar=None):
+    """Next first day of school on or after today (for UI messaging)."""
+    today = today or datetime.now().date()
+    if isinstance(today, datetime):
+        today = today.date()
+    calendar = calendar or load_school_calendar(refresh=False)
+    candidates = []
+    for y in calendar.get("years") or []:
+        first = _parse_iso_date_str(y.get("first_day"))
+        if first and first >= today:
+            candidates.append(first)
+    return min(candidates) if candidates else None
+
+
+def is_calendar_summer_break(today=None, calendar=None):
+    """True when today is outside every instructional school-year window."""
+    return school_session_window(today=today, calendar=calendar) is None
+
+
 def is_summer_break(previous_data=None):
     """
-    Summer break pauses Aeries scraping and Grok API calls.
+    Pause Aeries scraping and Grok API calls during summer (and forced break).
 
-    Source of truth in CI: GitHub Actions variable SUMMER_BREAK (true/false).
-    Local fallback: summer_break field in grades_data.json.
+    Priority:
+      1. SUMMER_BREAK env (GitHub variable / local) — explicit override
+      2. TUSD school calendar (school_calendar.json ± live refresh)
+      3. summer_break field on grades_data.json
     """
     env = env_truthy("SUMMER_BREAK")
     if env is not None:
         return env
+
+    try:
+        calendar = load_school_calendar(refresh=True)
+        # Calendar is authoritative when available
+        if calendar.get("years"):
+            paused = is_calendar_summer_break(calendar=calendar)
+            return paused
+    except Exception as e:
+        print(f"  WARNING: school calendar check failed ({e}); falling back")
+
     if previous_data is None:
         previous_data = {}
         if OUTPUT_FILE.exists():
@@ -1703,7 +1887,12 @@ def scrape_all():
     summer_break = is_summer_break(previous_data)
 
     if summer_break:
-        print("Summer break mode is active (SUMMER_BREAK env or grades_data.json).")
+        cal = load_school_calendar(refresh=False)
+        nxt = next_first_day(calendar=cal)
+        reason = "SUMMER_BREAK env override" if env_truthy("SUMMER_BREAK") is True else "TUSD school calendar"
+        print(f"School session paused ({reason}).")
+        if nxt:
+            print(f"Next first day of school: {nxt.isoformat()}")
         print("Skipping Aeries scraping and Grok API calls for today.")
         data = previous_data.copy() if previous_data else {
             "last_updated": datetime.now(timezone.utc).isoformat(),
@@ -1714,18 +1903,33 @@ def scrape_all():
         }
         data["last_updated"] = datetime.now(timezone.utc).isoformat()
         data["summer_break"] = True
+        data["school_session"] = {
+            "active": False,
+            "reason": reason,
+            "next_first_day": nxt.isoformat() if nxt else None,
+            "calendar_source": cal.get("source_url"),
+        }
         OUTPUT_FILE.write_text(json.dumps(data, indent=2))
         print(f"Data preserved (no new scrape). Written to {OUTPUT_FILE}")
         return
 
     session = login()
     history = load_grade_history()
+    cal = load_school_calendar(refresh=False)
+    session_year = school_session_window(calendar=cal)
     data = {
         "last_updated": datetime.now(timezone.utc).isoformat(),
         "district": "Tustin USD",
         "portal_url": BASE_URL,
         "students": [],
         "summer_break": False,
+        "school_session": {
+            "active": True,
+            "year_id": (session_year or {}).get("id"),
+            "first_day": (session_year or {}).get("first_day"),
+            "last_day": (session_year or {}).get("last_day"),
+            "calendar_source": cal.get("source_url"),
+        },
     }
 
     for student in STUDENTS:
