@@ -139,156 +139,188 @@ def fetch_class_summary(session):
     return None
 
 
-def fetch_attendance_page(session):
-    """Load parent portal Attendance page HTML (login required)."""
-    resp = session.get(f"{BASE_URL}/student/Attendance.aspx", allow_redirects=True, timeout=60)
-    if resp.status_code != 200 or "LoginParent" in resp.url:
-        return None, resp.url if resp is not None else ""
-    return resp.text, resp.url
-
-
-def _first_int(patterns, text):
-    for pat in patterns:
-        m = re.search(pat, text, re.IGNORECASE)
-        if m:
-            try:
-                return int(m.group(1))
-            except (TypeError, ValueError):
-                continue
-    return None
-
-
-def parse_attendance_html(html):
-    """Extract absence/tardy counts from Aeries parent Attendance page.
-
-    Portal layouts vary by district; try several label patterns and fall back
-    to counting absence-like codes in the main table.
-    """
-    if not html:
-        return None
-
+def _parse_att_summary_area(html):
+    """Parse #AttendanceSummaryArea on Attendance.aspx (current-year totals)."""
     soup = BeautifulSoup(html, "html.parser")
-    # Prefer visible text over raw HTML noise
-    text = soup.get_text("\n", strip=True)
-
-    absences = _first_int(
-        [
-            r"total\s+absences?\s*[:\-]?\s*(\d+)",
-            r"absences?\s*[:\-]?\s*(\d+)",
-            r"(\d+)\s+absences?\b",
-            r"days?\s+absent\s*[:\-]?\s*(\d+)",
-            r"absent\s+days?\s*[:\-]?\s*(\d+)",
-            r"all[- ]day\s+absences?\s*[:\-]?\s*(\d+)",
-        ],
-        text,
+    area = soup.find(id="AttendanceSummaryArea") or soup.find(
+        class_=re.compile(r"AttendanceSummary", re.I)
     )
-    tardies = _first_int(
-        [
-            r"total\s+tardies?\s*[:\-]?\s*(\d+)",
-            r"tardies?\s*[:\-]?\s*(\d+)",
-            r"(\d+)\s+tardies?\b",
-            r"days?\s+tardy\s*[:\-]?\s*(\d+)",
-        ],
-        text,
-    )
-    excused = _first_int(
-        [
-            r"excused\s+absences?\s*[:\-]?\s*(\d+)",
-            r"(\d+)\s+excused\b",
-        ],
-        text,
-    )
-    unexcused = _first_int(
-        [
-            r"unexcused\s+absences?\s*[:\-]?\s*(\d+)",
-            r"(\d+)\s+unexcused\b",
-        ],
-        text,
-    )
-    days_enrolled = _first_int(
-        [
-            r"days?\s+enrolled\s*[:\-]?\s*(\d+)",
-            r"enrolled\s+days?\s*[:\-]?\s*(\d+)",
-        ],
-        text,
-    )
-    days_present = _first_int(
-        [
-            r"days?\s+present\s*[:\-]?\s*(\d+)",
-            r"present\s+days?\s*[:\-]?\s*(\d+)",
-        ],
-        text,
-    )
-
-    # Table row count fallback: rows that look like absence codes
-    table_absence_rows = 0
-    table_tardy_rows = 0
-    code_counts = {}
-    for table in soup.find_all("table"):
-        rows = table.find_all("tr")
-        if len(rows) < 2:
-            continue
-        for row in rows[1:]:
-            cells = [c.get_text(" ", strip=True) for c in row.find_all(["td", "th"])]
-            if not cells:
-                continue
-            row_text = " ".join(cells).lower()
-            # skip pure header/legend rows
-            if "description" in row_text and "code" in row_text:
-                continue
-            # Aeries often shows a code letter in an early column
-            code = ""
-            for c in cells[:4]:
-                if re.fullmatch(r"[A-Za-z]{1,3}", c or ""):
-                    code = c.upper()
-                    break
-            if code:
-                code_counts[code] = code_counts.get(code, 0) + 1
-            if re.search(r"\b(absent|absence|unexcused|excused|ill|sick|truant)\b", row_text):
-                table_absence_rows += 1
-            elif re.search(r"\btardy\b", row_text):
-                table_tardy_rows += 1
-            elif code in ("A", "U", "E", "I", "X", "S"):  # common absence-ish codes
-                table_absence_rows += 1
-            elif code == "T":
-                table_tardy_rows += 1
-
-    if absences is None and table_absence_rows:
-        absences = table_absence_rows
-    if tardies is None and table_tardy_rows:
-        tardies = table_tardy_rows
-
-    # If excused+unexcused known but not total
-    if absences is None and excused is not None and unexcused is not None:
-        absences = excused + unexcused
-
-    if all(
-        v is None
-        for v in (absences, tardies, excused, unexcused, days_enrolled, days_present)
-    ) and not code_counts:
+    if not area:
         return None
+    text = re.sub(r"\s+", " ", area.get_text(" ", strip=True))
+    # Year Days Enrolled: 0 Days Present: 0 Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 ...
+    def grab(label):
+        m = re.search(rf"{label}\s*:\s*(\d+)", text, re.I)
+        return int(m.group(1)) if m else None
 
+    enrolled = grab(r"Days\s+Enrolled")
+    present = grab(r"Days\s+Present")
+    excused = grab(r"Days\s+Excused")
+    unexcused = grab(r"Days\s+Unexcused")
+    tardies = grab(r"Periods\s+Tardy")
+    if all(v is None for v in (enrolled, present, excused, unexcused, tardies)):
+        return None
+    absences = None
+    if excused is not None or unexcused is not None:
+        absences = (excused or 0) + (unexcused or 0)
     return {
         "absences": absences,
         "tardies": tardies,
         "excused": excused,
         "unexcused": unexcused,
-        "days_enrolled": days_enrolled,
-        "days_present": days_present,
-        "code_counts": code_counts or None,
-        "source": "Attendance.aspx",
+        "days_enrolled": enrolled,
+        "days_present": present,
+        "year": None,
+        "source": "Attendance.aspx#AttendanceSummaryArea",
+        "raw": text[:200],
     }
 
 
-def fetch_attendance(session):
-    """Return attendance summary dict or None."""
-    html, url = fetch_attendance_page(session)
-    if not html:
-        print(f"  Attendance page unavailable ({url})")
+def _parse_history_year_cards(html):
+    """Parse Attendance History Summary cards for the latest full school year.
+
+    Cards look like:
+      2025-2026 Legacy Magnet Academy (...) Program: Home School: Grade: 9
+      Enrolled: 180 Present: 178 Absent: 2 ...
+    Skip short/in-progress transfer programs (enrolled < 20) and Program: I rows.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    cards = []
+    # Each year card is in a DataDetails node with Enrolled/Present/Absent
+    for el in soup.find_all(True):
+        text = re.sub(r"\s+", " ", el.get_text(" ", strip=True))
+        if "Enrolled:" not in text or "Present:" not in text:
+            continue
+        if "Absent" not in text and "Absen" not in text:
+            continue
+        m = re.search(
+            r"(20\d{2}\s*[-–]\s*20\d{2}).{0,120}?"
+            r"Enrolled:\s*(\d+)\s*Present:\s*(\d+)\s*Absen\w*:\s*(\d+)",
+            text,
+            re.I,
+        )
+        if not m:
+            continue
+        year = re.sub(r"\s+", "", m.group(1).replace("–", "-"))
+        enrolled = int(m.group(2))
+        present = int(m.group(3))
+        absent = int(m.group(4))
+        # Prefer "Home School" full-year rows
+        is_transfer = bool(re.search(r"Program:\s*I\b", text)) or enrolled < 20
+        school_m = re.search(
+            r"20\d{2}\s*[-–]\s*20\d{2}\s+(.+?)\s+Program:", text
+        )
+        school = (school_m.group(1).strip() if school_m else "")[:80]
+        cards.append({
+            "year": year,
+            "days_enrolled": enrolled,
+            "days_present": present,
+            "absences": absent,
+            "school": school,
+            "is_transfer": is_transfer,
+            "text": text[:220],
+        })
+
+    if not cards:
         return None
-    summary = parse_attendance_html(html)
-    if not summary:
-        # Soft-fail with a note so we can improve the parser
+
+    # Dedupe by year+enrolled+absent (page has nested nodes)
+    seen = set()
+    unique = []
+    for c in cards:
+        key = (c["year"], c["days_enrolled"], c["absences"], c["days_present"])
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(c)
+
+    full = [c for c in unique if not c["is_transfer"]]
+    pool = full or unique
+    # Sort years descending
+    pool.sort(key=lambda c: c["year"], reverse=True)
+    best = pool[0]
+
+    # Tardies for that year from Details tab text: "T 2025-2026 TARDY ... Total: N"
+    year_compact = best["year"]
+    page_text = soup.get_text(" ", strip=True)
+    tardies = 0
+    for m in re.finditer(
+        rf"\b([TV])\s+{re.escape(year_compact)}\s+(EXTARDY|TARDY)\b.{{0,40}}Total:\s*(\d+)",
+        page_text,
+        re.I,
+    ):
+        tardies += int(m.group(3))
+    # Also all-day tardy count if shown as "TARDY N Total"
+    if tardies == 0:
+        m = re.search(
+            rf"TARDY\s+(\d+)\s+Total:\s*(\d+)",
+            page_text[page_text.find(year_compact): page_text.find(year_compact) + 2000]
+            if year_compact in page_text
+            else "",
+            re.I,
+        )
+        # Prefer the first number after TARDY as all-day? From probe: "T 2025-2026 TARDY 0 Total: 3"
+        # The 0 might be all-day and Total is period count. Use period total.
+        pass
+
+    return {
+        "absences": best["absences"],
+        "tardies": tardies if tardies else None,
+        "excused": None,
+        "unexcused": None,
+        "days_enrolled": best["days_enrolled"],
+        "days_present": best["days_present"],
+        "year": best["year"],
+        "school": best.get("school"),
+        "source": "AttendanceHistory.aspx",
+    }
+
+
+def parse_attendance_html(html, source_hint=""):
+    """Extract absence/tardy counts from Attendance or AttendanceHistory HTML."""
+    if not html:
+        return None
+
+    # 1) Live year summary strip (mid-year on Attendance.aspx)
+    summary = _parse_att_summary_area(html)
+    if summary and (summary.get("days_enrolled") or 0) > 0:
+        return summary
+
+    # 2) History year cards (reliable after year ends / always has prior years)
+    history = _parse_history_year_cards(html)
+    if history and history.get("days_enrolled"):
+        return history
+
+    # 3) Summary area even if zeros (school out for summer)
+    if summary:
+        return summary
+
+    return None
+
+
+def fetch_attendance(session):
+    """Return attendance summary dict from History (preferred) or Attendance page."""
+    # History has full-year Enrolled/Present/Absent even in summer
+    hist = session.get(
+        f"{BASE_URL}/student/AttendanceHistory.aspx",
+        allow_redirects=True,
+        timeout=90,
+    )
+    if hist.status_code == 200 and "LoginParent" not in hist.url and "NotFound" not in hist.url:
+        parsed = parse_attendance_html(hist.text, "history")
+        if parsed and parsed.get("absences") is not None:
+            return parsed
+
+    att = session.get(
+        f"{BASE_URL}/student/Attendance.aspx",
+        allow_redirects=True,
+        timeout=60,
+    )
+    if att.status_code != 200 or "LoginParent" in att.url:
+        print("  Attendance pages unavailable")
+        return None
+    parsed = parse_attendance_html(att.text, "attendance")
+    if not parsed:
         print("  Attendance page loaded but no counts parsed")
         return {
             "absences": None,
@@ -296,7 +328,7 @@ def fetch_attendance(session):
             "parse_failed": True,
             "source": "Attendance.aspx",
         }
-    return summary
+    return parsed
 
 
 def probe_attendance():

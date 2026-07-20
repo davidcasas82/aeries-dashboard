@@ -1550,8 +1550,11 @@ python3 -m http.server 8765</pre>
             if (a.unexcused != null && a.unexcused > 0) {
                 chips.push(`<span class="masthead-stat alert"><span class="stat-num">${a.unexcused}</span> unexcused</span>`);
             }
-            if (a.excused != null && a.absences == null) {
-                chips.push(`<span class="masthead-stat"><span class="stat-num">${a.excused}</span> excused</span>`);
+            if (a.days_present != null && a.days_enrolled != null && a.days_enrolled > 0) {
+                chips.push(`<span class="masthead-stat ok"><span class="stat-num">${a.days_present}</span> / ${a.days_enrolled} present</span>`);
+            }
+            if (a.year) {
+                chips.push(`<span class="masthead-stat"><span class="stat-num" style="font-size:13px;font-weight:600">${a.year}</span></span>`);
             }
             if (!chips.length) return '';
             return `<div class="masthead-stats">${chips.join('')}</div>`;
