@@ -300,38 +300,60 @@ def fetch_attendance(session):
 
 
 def probe_attendance():
-    """Login and dump Attendance page structure for each student (debug)."""
+    """Login and dump Attendance-related page structure for each student (debug)."""
     require_scrape_config()
     session = login()
+    paths = [
+        "/student/Attendance.aspx",
+        "/student/AttendanceHistory.aspx",
+        "/student/StudentAttendanceHistory.aspx",
+        "/student/AttendanceSummary.aspx",
+    ]
     for student in STUDENTS:
         print(f"\n=== PROBE attendance: {student['name']} (SN {student['sn']}) ===")
         switch_student(session, student["school_code"], student["sn"])
-        html, url = fetch_attendance_page(session)
-        print(f"URL: {url}")
-        if not html:
-            print("No HTML")
-            continue
-        print(f"HTML length: {len(html)}")
-        soup = BeautifulSoup(html, "html.parser")
-        text = soup.get_text("\n", strip=True)
-        print("--- text sample (first 2000 chars) ---")
-        print(text[:2000])
-        print("--- keyword hits ---")
-        for kw in (
-            "Absent", "Absence", "Tardy", "Tardies", "Excused", "Unexcused",
-            "Enrolled", "Present", "Attendance",
-        ):
-            print(f"  {kw}: {text.lower().count(kw.lower())}")
-        print("--- tables ---")
-        for i, table in enumerate(soup.find_all("table")[:8]):
-            rows = table.find_all("tr")
-            print(f"  table[{i}] rows={len(rows)}")
-            for ri, row in enumerate(rows[:4]):
-                cells = [c.get_text(" ", strip=True)[:50] for c in row.find_all(["th", "td"])]
-                print(f"    r{ri}: {cells}")
-        parsed = parse_attendance_html(html)
-        print("--- parsed ---")
-        print(json.dumps(parsed, indent=2))
+        for path in paths:
+            resp = session.get(f"{BASE_URL}{path}", allow_redirects=True, timeout=60)
+            print(f"\n-- {path} status={resp.status_code} final={resp.url} len={len(resp.text)}")
+            if "LoginParent" in resp.url or "NotFound" in resp.url or "Error" in resp.url:
+                print("  skip (login/error)")
+                continue
+            html = resp.text
+            soup = BeautifulSoup(html, "html.parser")
+            text = soup.get_text("\n", strip=True)
+            # Prefer content after main "Attendance" heading if present
+            idx = text.lower().rfind("would you like to take a tour")
+            body = text[idx + 40 :] if idx >= 0 else text
+            # Also try to find summary blocks
+            print("--- body sample ---")
+            print(body[:2500])
+            # Links containing attendance
+            for a in soup.find_all("a", href=True):
+                label = a.get_text(" ", strip=True)
+                href = a["href"]
+                if re.search(r"attend", href + " " + label, re.I) and label:
+                    print(f"  link: {label[:60]!r} -> {href[:90]}")
+            # Title attributes / legends often hold totals
+            for el in soup.find_all(attrs={"title": True})[:30]:
+                t = el.get("title") or ""
+                if re.search(r"absent|tardy|excused|total", t, re.I):
+                    print(f"  title: {t[:120]!r}")
+            # Any element with id/class containing attend
+            for el in soup.find_all(True):
+                cid = " ".join(filter(None, [el.get("id"), " ".join(el.get("class") or [])]))
+                if re.search(r"attend|absent|tardy", cid, re.I):
+                    snippet = el.get_text(" ", strip=True)[:100]
+                    if snippet:
+                        print(f"  node {cid[:60]!r}: {snippet!r}")
+            parsed = parse_attendance_html(html)
+            print("--- parsed ---")
+            print(json.dumps(parsed, indent=2))
+            # Save a redacted length marker for calendar codes
+            codes = re.findall(r'\bclass="[^"]*absent[^"]*"', html, re.I)
+            print(f"  class*=absent attrs: {len(codes)}")
+            codes2 = re.findall(r"title=\"[^\"]{0,80}\"", html)
+            interesting = [c for c in codes2 if re.search(r"absent|tardy|code", c, re.I)]
+            print(f"  interesting titles: {interesting[:15]}")
 
 
 
