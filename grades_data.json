@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-07-20T04:48:06.712385+00:00",
+  "last_updated": "2026-07-20T04:52:44.523096+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -3019,7 +3019,8 @@
         "days_present": 178,
         "year": "2025-2026",
         "school": "Legacy Magnet Academy (95)",
-        "source": "AttendanceHistory.aspx"
+        "source": "AttendanceHistory.aspx",
+        "year_source": "calendar"
       }
     },
     {
@@ -5768,7 +5769,8 @@
         "days_present": 171,
         "year": "2025-2026",
         "school": "Legacy Magnet Academy (95)",
-        "source": "AttendanceHistory.aspx"
+        "source": "AttendanceHistory.aspx",
+        "year_source": "calendar"
       }
     }
   ],
@@ -5777,6 +5779,7 @@
     "active": false,
     "reason": "TUSD school calendar",
     "next_first_day": "2026-08-13",
+    "attendance_year": "2025-2026",
     "calendar_source": "https://www.tustin.k12.ca.us/about-us/calendars-school-year"
   }
 }
