@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-07-20T04:38:35.908686+00:00",
+  "last_updated": "2026-07-20T04:40:20.105741+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -10,22 +10,22 @@
       "classes": [],
       "assignments_by_class": [],
       "attendance": {
-        "absences": 3,
-        "tardies": 3,
+        "absences": 2,
+        "tardies": 4,
         "excused": null,
         "unexcused": null,
-        "days_enrolled": 176,
-        "days_present": 173,
-        "year": "2024-2025",
+        "days_enrolled": 180,
+        "days_present": 178,
+        "year": "2025-2026",
         "school": "Legacy Magnet Academy (95)",
         "source": "AttendanceHistory.aspx"
       },
       "ai_summary": {
-        "headline": "Portal shows stable performance across classes with no missing work or urgent items flagged.",
+        "headline": "Portal data shows mixed or stable performance with no classes or missing work listed.",
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-07-20T04:38:43.373951+00:00",
+        "generated_at": "2026-07-20T04:40:27.490842+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -43,22 +43,22 @@
       "classes": [],
       "assignments_by_class": [],
       "attendance": {
-        "absences": 5,
-        "tardies": null,
+        "absences": 9,
+        "tardies": 2,
         "excused": null,
         "unexcused": null,
-        "days_enrolled": 176,
+        "days_enrolled": 180,
         "days_present": 171,
-        "year": "2024-2025",
+        "year": "2025-2026",
         "school": "Legacy Magnet Academy (95)",
         "source": "AttendanceHistory.aspx"
       },
       "ai_summary": {
-        "headline": "Portal shows no current classes or posted grades for Leah.",
+        "headline": "Portal shows no posted grades, missing work, or class data for Leah.",
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-07-20T04:38:53.226129+00:00",
+        "generated_at": "2026-07-20T04:40:35.839309+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,

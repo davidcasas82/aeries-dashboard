@@ -3781,10 +3781,10 @@
         },
         {
           "date": "2026-07-20",
-          "captured_at": "2026-07-20T04:38:43.374682+00:00",
+          "captured_at": "2026-07-20T04:40:27.491582+00:00",
           "classes": {},
           "previous_briefing": {
-            "headline": "Portal data shows mixed or stable performance with no classes or missing work listed.",
+            "headline": "Portal shows stable performance across classes with no missing work or urgent items flagged.",
             "focus_tonight": ""
           }
         }
@@ -7237,10 +7237,10 @@
         },
         {
           "date": "2026-07-20",
-          "captured_at": "2026-07-20T04:38:53.226987+00:00",
+          "captured_at": "2026-07-20T04:40:35.840207+00:00",
           "classes": {},
           "previous_briefing": {
-            "headline": "Portal shows no posted grades, missing work, or class data for Leah.",
+            "headline": "Portal shows no current classes or posted grades for Leah.",
             "focus_tonight": ""
           }
         }
