@@ -940,9 +940,46 @@
             box-shadow: var(--shadow-sm);
         }
 
-        body.summer-break .masthead,
+        /* Keep masthead + attendance visible; only hide tonight sticky in summer */
         body.summer-break .tonight-sticky {
             display: none !important;
+        }
+
+        .empty-term-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px 24px;
+            box-shadow: var(--shadow-card);
+            text-align: left;
+        }
+
+        .empty-term-card h3 {
+            font-size: 20px;
+            font-weight: 650;
+            letter-spacing: -0.3px;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        .empty-term-card p {
+            font-size: 16px;
+            color: var(--text-2);
+            line-height: 1.5;
+            max-width: 40em;
+        }
+
+        .empty-term-card .resume {
+            margin-top: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            background: var(--teal-wash);
+            color: var(--teal);
+            border-radius: 999px;
+            font-size: 15px;
+            font-weight: 600;
         }
 
         /* ── Settings ── */
@@ -1560,11 +1597,36 @@ python3 -m http.server 8765</pre>
             return `<div class="masthead-stats">${chips.join('')}</div>`;
         }
 
+        function hasGradedClasses(student) {
+            return (student.classes || []).some(c => c.percent !== undefined && c.percent !== null && String(c.percent).trim() !== '');
+        }
+
+        function isSummerMode() {
+            return !!(currentData && currentData.summer_break) || document.body.classList.contains('summer-break');
+        }
+
         function renderMasthead(student, idx) {
             const s = student.ai_summary;
-            const focus = s ? (s.focus_tonight || '').trim() : '';
+            const emptyTerm = !hasGradedClasses(student);
+            const summer = isSummerMode() || emptyTerm;
+            const focus = (!summer && s) ? (s.focus_tonight || '').trim() : '';
             studentFocusMap[idx] = focus;
             const attendanceHtml = renderAttendanceStats(student);
+
+            // Summer / no classes: clear message, not a vague AI status line
+            if (summer || emptyTerm) {
+                const dateStr = (s && s.generated_at)
+                    ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                    : '';
+                let html = `<div class="masthead" id="hero-card-${idx}">`;
+                html += `<div class="masthead-kicker"><h2>Briefing</h2>`;
+                if (dateStr) html += `<span class="masthead-date">${dateStr}</span>`;
+                html += `</div>`;
+                html += `<div class="masthead-headline">School year is out — no current classes or missing work in the portal.</div>`;
+                html += attendanceHtml;
+                html += `</div>`;
+                return html;
+            }
 
             if (!s) {
                 return `<div class="masthead" id="hero-card-${idx}">
@@ -1578,7 +1640,11 @@ python3 -m http.server 8765</pre>
             const dateStr = s.generated_at
                 ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
                 : '';
-            const headline = (s.headline || s.status || '').trim();
+            let headline = (s.headline || s.status || '').trim();
+            // Guard against old bad empty-term headlines
+            if (/no classes or missing work listed|mixed or stable performance/i.test(headline) && emptyTerm) {
+                headline = 'School year is out — no current classes or missing work in the portal.';
+            }
 
             let html = `<div class="masthead" id="hero-card-${idx}">`;
             html += `<div class="masthead-kicker"><h2>Briefing</h2>`;
@@ -1617,6 +1683,15 @@ python3 -m http.server 8765</pre>
             html += renderMovers(student);
             html += `</div>`;
             return html;
+        }
+
+        function renderEmptyTermCard() {
+            return `
+                <div class="empty-term-card">
+                    <h3>School year ended</h3>
+                    <p>Tustin USD’s last day was May 29, 2026. The parent portal isn’t listing current classes or missing work while school is out.</p>
+                    <div class="resume">Grades resume after first day — Aug 13, 2026</div>
+                </div>`;
         }
 
         function renderAssignmentList(assignments, kind) {
@@ -1897,6 +1972,17 @@ python3 -m http.server 8765</pre>
 
         function renderStudent(student, idx) {
             const profiles = enrichProfiles(student, buildClassProfiles(student));
+            const emptyTerm = !hasGradedClasses(student) || profiles.length === 0;
+            // Summer / no graded classes: clear empty state instead of blank feed
+            if (emptyTerm || isSummerMode()) {
+                // If we still have historical class profiles (restored spring data), show them
+                const feed = profiles.length
+                    ? renderClassFeed(profiles, idx, student)
+                    : renderEmptyTermCard();
+                return `
+                    ${renderMasthead(student, idx)}
+                    ${feed}`;
+            }
             return `
                 ${renderMasthead(student, idx)}
                 ${renderClassFeed(profiles, idx, student)}`;
@@ -1990,7 +2076,7 @@ python3 -m http.server 8765</pre>
                     banner = document.createElement('div');
                     banner.id = 'summerBreakBanner';
                     banner.className = 'summer-break-banner';
-                    banner.textContent = 'Summer break — AI briefings hidden. Daily scrape and Grok are paused in GitHub.';
+                    banner.textContent = 'Summer break — daily Aeries scrape and Grok are paused. Showing last school-year grades and attendance.';
                     const picker = document.getElementById('studentPicker');
                     picker.parentNode.insertBefore(banner, picker.nextSibling);
                 }

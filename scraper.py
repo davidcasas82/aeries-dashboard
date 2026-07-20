@@ -1443,8 +1443,40 @@ def build_class_analytics(student_data, history_context=None):
     return result
 
 
+def count_graded_classes(student_data):
+    return sum(
+        1
+        for c in student_data.get("classes") or []
+        if c.get("percent") not in (None, "")
+    )
+
+
+def empty_term_summary(student_data):
+    """Static briefing when the portal has no graded classes (e.g. summer)."""
+    student_name = student_data.get("name", "the student")
+    return {
+        "headline": (
+            f"School year is out — the portal has no current classes or missing work "
+            f"for {student_name}."
+        ),
+        "focus_tonight": "",
+        "wins": [],
+        "classes": [],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "analytics_snapshot": {
+            "dominant_theme": "empty_term",
+            "total_recoverable_pts": 0,
+            "empty_term": True,
+        },
+    }
+
+
 def generate_ai_summary(student_data, history_context=None):
     """Call Grok API to generate a unified family daily briefing."""
+    # No graded classes (common in summer) — never invent "mixed/stable performance"
+    if count_graded_classes(student_data) == 0:
+        return empty_term_summary(student_data)
+
     if not GROK_API_KEY:
         return None
 
@@ -1517,6 +1549,7 @@ Urgency (match suggested_urgency unless you have a strong reason not to — driv
 
 Rules:
 - Include EVERY class from analytics.classes
+- If analytics.classes is empty: headline must say the portal has no current classes / school is out — do NOT say "mixed or stable performance" or invent status
 - Order classes: critical → watch → ok → strong
 - For ok/strong: short snap + brief story; leave do_tonight empty
 - For critical/watch: fill do_tonight when there is a concrete portal action; name specific assignments from missing_assignments
