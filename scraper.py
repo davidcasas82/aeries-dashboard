@@ -949,6 +949,54 @@ def safe_float(val):
         return None
 
 
+def _class_row_richness(cls):
+    """Score how much grade signal a class row carries (for Aeries duplicate merge)."""
+    score = 0
+    pct = str(cls.get("percent") or "").strip()
+    mark = str(cls.get("mark") or "").strip()
+    if pct:
+        score += 2
+        try:
+            if float(pct) > 0:
+                score += 2
+        except (TypeError, ValueError):
+            pass
+    if mark:
+        score += 3
+    if cls.get("missing_count"):
+        score += 1
+    if str(cls.get("missing_assignments") or "").strip():
+        score += 1
+    if str(cls.get("trend") or "").strip():
+        score += 1
+    return score
+
+
+def dedupe_class_summary_rows(classes):
+    """Merge duplicate ClassSummary rows (same period + course), keep richest grade data.
+
+    Aeries sometimes returns two widgets for one section at year start — one empty
+    schedule row and one with a phantom 0% gradebook.
+    """
+    if not classes:
+        return []
+    best = {}
+    order = []
+    for cls in classes:
+        key = (
+            cls.get("period"),
+            re.sub(r"\s+", " ", (cls.get("course_name") or "").strip().lower()),
+        )
+        if key not in best:
+            best[key] = cls
+            order.append(key)
+            continue
+        prev = best[key]
+        if _class_row_richness(cls) > _class_row_richness(prev):
+            best[key] = cls
+    return [best[k] for k in order]
+
+
 def parse_class_summary(raw_data):
     if not raw_data:
         return []
@@ -968,7 +1016,33 @@ def parse_class_summary(raw_data):
             "room": course.get("RoomNumber", ""),
             "school_name": course.get("SchoolName", ""),
         })
-    return classes
+    return dedupe_class_summary_rows(classes)
+
+
+def class_has_real_grade(class_meta, assignments=None):
+    """True when the portal has a meaningful posted grade (not schedule-only / phantom 0%)."""
+    mark = str(class_meta.get("mark") or "").strip()
+    if mark:
+        return True
+    pct_raw = class_meta.get("percent")
+    if pct_raw in (None, ""):
+        return False
+    try:
+        pct = float(pct_raw)
+    except (TypeError, ValueError):
+        return False
+    if pct > 0:
+        return True
+    # 0% only counts if there is evidence of graded or missing work
+    if class_meta.get("missing_count"):
+        return True
+    if assignments:
+        return any(
+            a.get("points_earned") is not None
+            or a.get("percentage") is not None
+            for a in assignments
+        )
+    return False
 
 
 def extract_period_from_label(label):
@@ -1634,10 +1708,11 @@ def build_class_analytics(student_data, history_context=None):
     hist_classes = history_context.get("classes") or {}
 
     for class_meta in student_data.get("classes", []):
-        if not class_meta.get("percent"):
-            continue
         period = class_meta.get("period")
         assignments = assignments_for_period(student_data, period)
+        # Skip schedule-only / phantom 0% rows so Grok doesn't treat empty gradebooks as Fs
+        if not class_has_real_grade(class_meta, assignments):
+            continue
         analyzed = analyze_class(class_meta, assignments, today)
         # Fold multi-day history onto each class for Grok
         h = hist_classes.get(analyzed["course_name"]) or {}
@@ -1740,33 +1815,53 @@ def count_graded_classes(student_data):
     return sum(
         1
         for c in student_data.get("classes") or []
-        if c.get("percent") not in (None, "")
+        if class_has_real_grade(c, assignments_for_period(student_data, c.get("period")))
+    )
+
+
+def count_scheduled_classes(student_data):
+    return sum(
+        1
+        for c in student_data.get("classes") or []
+        if (c.get("course_name") or "").strip()
     )
 
 
 def empty_term_summary(student_data):
-    """Static briefing when the portal has no graded classes (e.g. summer)."""
+    """Static briefing when the portal has no meaningful grades (summer or pre-grade week)."""
     student_name = student_data.get("name", "the student")
-    return {
-        "headline": (
+    scheduled = count_scheduled_classes(student_data)
+    if scheduled > 0:
+        headline = (
+            f"Schedules are up for {student_name} ({scheduled} classes) — "
+            f"no grades or missing work posted yet."
+        )
+        theme = "schedule_only"
+    else:
+        headline = (
             f"School year is out — the portal has no current classes or missing work "
             f"for {student_name}."
-        ),
+        )
+        theme = "empty_term"
+    return {
+        "headline": headline,
         "focus_tonight": "",
         "wins": [],
         "classes": [],
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "analytics_snapshot": {
-            "dominant_theme": "empty_term",
+            "dominant_theme": theme,
             "total_recoverable_pts": 0,
-            "empty_term": True,
+            "empty_term": scheduled == 0,
+            "schedule_only": scheduled > 0,
+            "scheduled_classes": scheduled,
         },
     }
 
 
 def generate_ai_summary(student_data, history_context=None):
     """Call Grok API to generate a unified family daily briefing."""
-    # No graded classes (common in summer) — never invent "mixed/stable performance"
+    # No real grades yet (summer or brand-new schedule) — don't invent urgency
     if count_graded_classes(student_data) == 0:
         return empty_term_summary(student_data)
 
