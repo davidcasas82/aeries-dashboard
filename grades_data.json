@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-12T02:38:40.583529+00:00",
+  "last_updated": "2026-08-12T02:42:48.298313+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -128,16 +128,17 @@
       ],
       "assignments_by_class": [],
       "attendance": {
-        "absences": 2,
-        "tardies": 4,
-        "excused": null,
-        "unexcused": null,
-        "days_enrolled": 180,
-        "days_present": 178,
-        "year": "2025-2026",
-        "school": "Legacy Magnet Academy (95)",
-        "source": "AttendanceHistory.aspx",
-        "year_source": "calendar"
+        "absences": 0,
+        "tardies": 0,
+        "excused": 0,
+        "unexcused": 0,
+        "days_enrolled": 0,
+        "days_present": 0,
+        "year": "2026-2027",
+        "school": null,
+        "source": "default_empty",
+        "year_source": "year_not_in_history",
+        "not_started": true
       },
       "ai_summary": {
         "headline": "Schedules are up for Daniel (9 classes) \u2014 no grades or missing work posted yet.",
@@ -282,16 +283,17 @@
       ],
       "assignments_by_class": [],
       "attendance": {
-        "absences": 9,
-        "tardies": 2,
-        "excused": null,
-        "unexcused": null,
-        "days_enrolled": 180,
-        "days_present": 171,
-        "year": "2025-2026",
-        "school": "Legacy Magnet Academy (95)",
-        "source": "AttendanceHistory.aspx",
-        "year_source": "calendar"
+        "absences": 0,
+        "tardies": 0,
+        "excused": 0,
+        "unexcused": 0,
+        "days_enrolled": 0,
+        "days_present": 0,
+        "year": "2026-2027",
+        "school": null,
+        "source": "default_empty",
+        "year_source": "year_not_in_history",
+        "not_started": true
       },
       "ai_summary": {
         "headline": "Schedules are up for Leah (9 classes) \u2014 no grades or missing work posted yet.",
