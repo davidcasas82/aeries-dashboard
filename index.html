@@ -1455,8 +1455,9 @@ python3 -m http.server 8765</pre>
                     }
                 }
 
-                const hasGrade = !!(c.percent || c.mark);
-                if (!hasGrade && !assignments.length) continue;
+                // Include schedule-only rows (new term before grades post).
+                // Still skip completely empty junk rows without a course name.
+                if (!(c.course_name || '').trim() && !assignments.length) continue;
 
                 const missing = filterMissingAssignments(assignments);
                 const aeriesMissing = parseMissingCount(c);
@@ -1500,10 +1501,26 @@ python3 -m http.server 8765</pre>
             return { critical: 4, watch: 3, ok: 2, strong: 1 }[urgency] || 2;
         }
 
+        function hasRealGrade(c, assignmentCount) {
+            const mark = (c.mark || '').trim();
+            if (mark) return true;
+            const raw = c.percent;
+            if (raw === undefined || raw === null || String(raw).trim() === '') return false;
+            const pct = parseFloat(raw);
+            if (isNaN(pct)) return false;
+            if (pct > 0) return true;
+            // Phantom 0% at year start: only count if missing work or scored assignments exist
+            if (parseMissingCount(c) > 0) return true;
+            return (assignmentCount || 0) > 0;
+        }
+
         function inferUrgency(profile, aiClass) {
             if (aiClass?.urgency) return aiClass.urgency.toLowerCase();
-            const pct = parseFloat(profile.classMeta.percent);
             const mc = profile.missingCount;
+            if (!hasRealGrade(profile.classMeta, profile.assignments?.length || 0)) {
+                return mc > 0 ? 'watch' : 'ok';
+            }
+            const pct = parseFloat(profile.classMeta.percent);
             const belowB = !isNaN(pct) && pct < 80;
             const belowC = !isNaN(pct) && pct < 70;
             if (belowC || (belowB && mc > 0)) return 'critical';
@@ -1514,6 +1531,9 @@ python3 -m http.server 8765</pre>
 
         function inferUrgencyReason(profile, urgency) {
             const mc = profile.missingCount;
+            if (!hasRealGrade(profile.classMeta, profile.assignments?.length || 0)) {
+                return mc > 0 ? `${mc} missing` : 'No grade yet';
+            }
             const mark = profile.classMeta.mark || '';
             const pct = profile.classMeta.percent ? Math.round(parseFloat(profile.classMeta.percent)) + '%' : '';
             if (urgency === 'watch') {
@@ -1546,11 +1566,18 @@ python3 -m http.server 8765</pre>
         }
 
         function formatGradeDisplay(c) {
-            const mark = c.mark || '';
-            const pct = c.percent ? Math.round(parseFloat(c.percent)) : null;
-            if (mark && pct) return { letter: mark, pct: pct + '%' };
+            const mark = (c.mark || '').trim();
+            const raw = c.percent;
+            const hasPct = raw !== undefined && raw !== null && String(raw).trim() !== '';
+            const pctNum = hasPct ? parseFloat(raw) : NaN;
+            const pct = !isNaN(pctNum) ? Math.round(pctNum) : null;
+            // Treat phantom 0% with no letter mark as "no grade yet"
+            if (!mark && (pct === null || pct === 0) && !hasRealGrade(c, 0)) {
+                return { letter: '—', pct: '' };
+            }
+            if (mark && pct !== null) return { letter: mark, pct: pct + '%' };
             if (mark) return { letter: mark, pct: '' };
-            if (pct) return { letter: pct + '%', pct: '' };
+            if (pct !== null) return { letter: pct + '%', pct: '' };
             return { letter: '—', pct: '' };
         }
 
@@ -1602,23 +1629,32 @@ python3 -m http.server 8765</pre>
         }
 
         function hasGradedClasses(student) {
-            return (student.classes || []).some(c => c.percent !== undefined && c.percent !== null && String(c.percent).trim() !== '');
+            return (student.classes || []).some(c => hasRealGrade(c, 0));
+        }
+
+        function hasScheduledClasses(student) {
+            return (student.classes || []).some(c => (c.course_name || '').trim());
         }
 
         function isSummerMode() {
             return !!(currentData && currentData.summer_break) || document.body.classList.contains('summer-break');
         }
 
+        function isScheduleOnly(student) {
+            return hasScheduledClasses(student) && !hasGradedClasses(student);
+        }
+
         function renderMasthead(student, idx) {
             const s = student.ai_summary;
-            const emptyTerm = !hasGradedClasses(student);
-            const summer = isSummerMode() || emptyTerm;
-            const focus = (!summer && s) ? (s.focus_tonight || '').trim() : '';
+            const scheduleOnly = isScheduleOnly(student);
+            const emptyTerm = !hasScheduledClasses(student);
+            const summer = isSummerMode() && emptyTerm;
+            const focus = (!summer && !scheduleOnly && s) ? (s.focus_tonight || '').trim() : '';
             studentFocusMap[idx] = focus;
             const attendanceHtml = renderAttendanceStats(student);
 
-            // Summer / no classes: clear message, not a vague AI status line
-            if (summer || emptyTerm) {
+            // True summer with no schedule: clear empty-state message
+            if (summer || (emptyTerm && isSummerMode())) {
                 const dateStr = (s && s.generated_at)
                     ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
                     : '';
@@ -1627,6 +1663,26 @@ python3 -m http.server 8765</pre>
                 if (dateStr) html += `<span class="masthead-date">${dateStr}</span>`;
                 html += `</div>`;
                 html += `<div class="masthead-headline">School year is out — no current classes or missing work in the portal.</div>`;
+                html += attendanceHtml;
+                html += `</div>`;
+                return html;
+            }
+
+            // Schedules posted, no real grades yet
+            if (scheduleOnly) {
+                const dateStr = (s && s.generated_at)
+                    ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                    : '';
+                const n = (student.classes || []).filter(c => (c.course_name || '').trim()).length;
+                let headline = (s && s.headline) ? String(s.headline).trim() : '';
+                if (!headline || /school year is out|no current classes or missing work/i.test(headline)) {
+                    headline = `Schedules are up (${n} classes) — no grades posted yet.`;
+                }
+                let html = `<div class="masthead" id="hero-card-${idx}">`;
+                html += `<div class="masthead-kicker"><h2>Briefing</h2>`;
+                if (dateStr) html += `<span class="masthead-date">${dateStr}</span>`;
+                html += `</div>`;
+                html += `<div class="masthead-headline">${headline}</div>`;
                 html += attendanceHtml;
                 html += `</div>`;
                 return html;
@@ -1645,7 +1701,7 @@ python3 -m http.server 8765</pre>
                 ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
                 : '';
             let headline = (s.headline || s.status || '').trim();
-            // Guard against old bad empty-term headlines
+            // Guard against old bad empty-term headlines once grades exist
             if (/no classes or missing work listed|mixed or stable performance/i.test(headline) && emptyTerm) {
                 headline = 'School year is out — no current classes or missing work in the portal.';
             }
@@ -1696,6 +1752,38 @@ python3 -m http.server 8765</pre>
                     <p>Tustin USD’s last day was May 29, 2026. The parent portal isn’t listing current classes or missing work while school is out.</p>
                     <div class="resume">Grades resume after first day — Aug 13, 2026</div>
                 </div>`;
+        }
+
+        function dedupeStudentClasses(classes) {
+            // Client-side safety net matching scraper: same period + course → keep richest row
+            if (!Array.isArray(classes) || classes.length < 2) return classes || [];
+            const best = new Map();
+            const order = [];
+            const richness = (c) => {
+                let s = 0;
+                const pct = String(c.percent ?? '').trim();
+                const mark = String(c.mark ?? '').trim();
+                if (pct) {
+                    s += 2;
+                    const n = parseFloat(pct);
+                    if (!isNaN(n) && n > 0) s += 2;
+                }
+                if (mark) s += 3;
+                if (c.missing_count) s += 1;
+                if (String(c.missing_assignments || '').trim()) s += 1;
+                if (String(c.trend || '').trim()) s += 1;
+                return s;
+            };
+            for (const c of classes) {
+                const key = `${c.period}::${String(c.course_name || '').trim().toLowerCase().replace(/\s+/g, ' ')}`;
+                if (!best.has(key)) {
+                    best.set(key, c);
+                    order.push(key);
+                } else if (richness(c) > richness(best.get(key))) {
+                    best.set(key, c);
+                }
+            }
+            return order.map(k => best.get(k));
         }
 
         function renderAssignmentList(assignments, kind) {
@@ -1975,21 +2063,23 @@ python3 -m http.server 8765</pre>
         }
 
         function renderStudent(student, idx) {
+            // Dedupe phantom duplicate ClassSummary rows before building the feed
+            student = { ...student, classes: dedupeStudentClasses(student.classes || []) };
             const profiles = enrichProfiles(student, buildClassProfiles(student));
-            const emptyTerm = !hasGradedClasses(student) || profiles.length === 0;
-            // Summer / no graded classes: clear empty state instead of blank feed
-            if (emptyTerm || isSummerMode()) {
-                // If we still have historical class profiles (restored spring data), show them
-                const feed = profiles.length
-                    ? renderClassFeed(profiles, idx, student)
-                    : renderEmptyTermCard();
+            const noSchedule = !hasScheduledClasses(student) || profiles.length === 0;
+            // True summer with nothing scheduled: empty-state card
+            if (noSchedule && isSummerMode()) {
                 return `
                     ${renderMasthead(student, idx)}
-                    ${feed}`;
+                    ${renderEmptyTermCard()}`;
             }
+            // Schedule and/or grades: always show the class feed when we have rows
+            const feed = profiles.length
+                ? renderClassFeed(profiles, idx, student)
+                : (isSummerMode() ? renderEmptyTermCard() : '');
             return `
                 ${renderMasthead(student, idx)}
-                ${renderClassFeed(profiles, idx, student)}`;
+                ${feed}`;
         }
 
         function updateTopBarTitle() {

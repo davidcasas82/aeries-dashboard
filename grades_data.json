@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-12T02:33:25.563997+00:00",
+  "last_updated": "2026-08-12T02:38:40.583529+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -140,15 +140,17 @@
         "year_source": "calendar"
       },
       "ai_summary": {
-        "headline": "School year is out \u2014 the portal has no current classes or missing work for Daniel.",
+        "headline": "Schedules are up for Daniel (9 classes) \u2014 no grades or missing work posted yet.",
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-08-12T02:33:27.463160+00:00",
+        "generated_at": "2026-08-12T02:38:40.583343+00:00",
         "analytics_snapshot": {
-          "dominant_theme": "empty_term",
+          "dominant_theme": "schedule_only",
           "total_recoverable_pts": 0,
-          "empty_term": true
+          "empty_term": false,
+          "schedule_only": true,
+          "scheduled_classes": 9
         }
       },
       "trend_summary": [],
@@ -182,19 +184,6 @@
           "mark_and_score": " (0.0%)",
           "missing_count": 0,
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
-          "trend": "",
-          "room": "2-222",
-          "school_name": "Legacy Magnet Academy"
-        },
-        {
-          "period": 1,
-          "course_name": "Mkt Adv GrphDes",
-          "teacher": "Chung, L",
-          "percent": "",
-          "mark": "",
-          "mark_and_score": "",
-          "missing_count": 0,
-          "missing_assignments": "",
           "trend": "",
           "room": "2-222",
           "school_name": "Legacy Magnet Academy"
@@ -305,42 +294,22 @@
         "year_source": "calendar"
       },
       "ai_summary": {
-        "headline": "Portal shows Leah's Mkt Adv GrphDes at 0% with no posted assignments or recent scores.",
+        "headline": "Schedules are up for Leah (9 classes) \u2014 no grades or missing work posted yet.",
         "focus_tonight": "",
         "wins": [],
-        "classes": [
-          {
-            "class_name": "Mkt Adv GrphDes",
-            "urgency": "critical",
-            "snap": "0% grade, no assignments posted",
-            "story": "The portal lists a 0% grade for Mkt Adv GrphDes. No missing work, recent scores, or upcoming items appear.",
-            "do_tonight": ""
-          }
-        ],
-        "generated_at": "2026-08-12T02:33:39.659238+00:00",
+        "classes": [],
+        "generated_at": "2026-08-12T02:38:40.583521+00:00",
         "analytics_snapshot": {
-          "dominant_theme": "mixed or stable performance",
+          "dominant_theme": "schedule_only",
           "total_recoverable_pts": 0,
-          "history_span_days": 86
+          "empty_term": false,
+          "schedule_only": true,
+          "scheduled_classes": 9
         }
       },
       "trend_summary": [],
       "history_span_days": 86,
-      "class_trends": {
-        "Mkt Adv GrphDes": {
-          "pct_history": [
-            {
-              "date": "2026-08-12",
-              "pct": 0.0
-            }
-          ],
-          "delta_7d": null,
-          "delta_14d": null,
-          "delta_span": null,
-          "span_window": null,
-          "trend_label": "insufficient_history"
-        }
-      }
+      "class_trends": {}
     }
   ],
   "summer_break": false,
