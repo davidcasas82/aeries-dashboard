@@ -3787,6 +3787,15 @@
             "headline": "Portal shows stable performance across classes with no missing work or urgent items flagged.",
             "focus_tonight": ""
           }
+        },
+        {
+          "date": "2026-08-12",
+          "captured_at": "2026-08-12T02:33:27.463174+00:00",
+          "classes": {},
+          "previous_briefing": {
+            "headline": "Daniel has missing work backlog in five classes, with critical grades in Engineering Geo, Tech of Biology, and WrldHis by Dsgn.",
+            "focus_tonight": "Complete 1 - PoW - PROCESS and 1 - PoW - PRODUCT in Engineering Geo."
+          }
         }
       ]
     },
@@ -7242,6 +7251,24 @@
           "previous_briefing": {
             "headline": "Portal shows no current classes or posted grades for Leah.",
             "focus_tonight": ""
+          }
+        },
+        {
+          "date": "2026-08-12",
+          "captured_at": "2026-08-12T02:33:39.660035+00:00",
+          "classes": {
+            "Mkt Adv GrphDes": {
+              "period": 1,
+              "pct": 0.0,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            }
+          },
+          "previous_briefing": {
+            "headline": "Missing work in five classes is holding Leah back while she keeps an A in Language Arts.",
+            "focus_tonight": "Complete LT 10.5 - Two Way Tables in Bus Algebra 1"
           }
         }
       ]
