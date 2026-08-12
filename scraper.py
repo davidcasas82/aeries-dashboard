@@ -227,11 +227,30 @@ def next_first_day(today=None, calendar=None):
     return min(candidates) if candidates else None
 
 
+def _school_year_aeries_label(year_dict):
+    """Turn calendar year dict into Aeries label like 2026-2027."""
+    if not year_dict:
+        return None
+    first = _parse_iso_date_str(year_dict.get("first_day"))
+    last = _parse_iso_date_str(year_dict.get("last_day"))
+    if not first:
+        return None
+    end_y = last.year if last else first.year + 1
+    return f"{first.year}-{end_y}"
+
+
+# Days before first instructional day when we start showing *new* year attendance
+# (schedules post early; last year's totals would otherwise stick around).
+ATTENDANCE_UPCOMING_LEAD_DAYS = 30
+
+
 def target_attendance_year_label(today=None, calendar=None):
     """Aeries-style year label (e.g. 2025-2026) for the school year we should display.
 
     - During a session: the active school year
-    - During summer: the year that most recently started (just ended), not an older one
+    - Near / after the next first day (within ATTENDANCE_UPCOMING_LEAD_DAYS): upcoming year
+      so early schedules don't still show last year's absences/tardies
+    - Mid-summer otherwise: the year that most recently completed
     """
     today = today or datetime.now().date()
     if isinstance(today, datetime):
@@ -240,23 +259,54 @@ def target_attendance_year_label(today=None, calendar=None):
 
     active = school_session_window(today=today, calendar=calendar)
     if active:
-        first = _parse_iso_date_str(active.get("first_day"))
-        last = _parse_iso_date_str(active.get("last_day"))
-        if first:
-            end_y = last.year if last else first.year + 1
-            return f"{first.year}-{end_y}"
+        return _school_year_aeries_label(active)
 
-    started = []
+    upcoming = None
+    completed = []
     for y in calendar.get("years") or []:
         first = _parse_iso_date_str(y.get("first_day"))
         last = _parse_iso_date_str(y.get("last_day"))
-        if first and first <= today:
-            end_y = last.year if last else first.year + 1
-            started.append((first, f"{first.year}-{end_y}"))
-    if not started:
-        return None
-    started.sort(key=lambda t: t[0], reverse=True)
-    return started[0][1]
+        if not first:
+            continue
+        label = _school_year_aeries_label(y)
+        if first > today:
+            if upcoming is None or first < _parse_iso_date_str(upcoming.get("first_day")):
+                upcoming = y
+        elif last and last < today:
+            completed.append((last, label))
+        elif first <= today:
+            # first day passed but outside last_day window shouldn't happen often
+            completed.append((first, label))
+
+    if upcoming:
+        first = _parse_iso_date_str(upcoming.get("first_day"))
+        if first and 0 <= (first - today).days <= ATTENDANCE_UPCOMING_LEAD_DAYS:
+            return _school_year_aeries_label(upcoming)
+
+    if completed:
+        completed.sort(key=lambda t: t[0], reverse=True)
+        return completed[0][1]
+
+    if upcoming:
+        return _school_year_aeries_label(upcoming)
+    return None
+
+
+def empty_attendance_for_year(year_label, reason="not_started"):
+    """Zeros for a school year that has no Attendance History card yet."""
+    return {
+        "absences": 0,
+        "tardies": 0,
+        "excused": 0,
+        "unexcused": 0,
+        "days_enrolled": 0,
+        "days_present": 0,
+        "year": year_label,
+        "school": None,
+        "source": "default_empty",
+        "year_source": reason,
+        "not_started": True,
+    }
 
 
 def is_calendar_summer_break(today=None, calendar=None):
@@ -471,6 +521,10 @@ def _parse_history_year_cards(html, prefer_year=None):
             if c["year"] == prefer_year:
                 best = c
                 break
+        # Do not fall back to another year when a specific year was requested —
+        # that is what kept last year's absences/tardies after schedules posted.
+        if best is None:
+            return None
     if best is None:
         pool.sort(key=lambda c: c["year"], reverse=True)
         best = pool[0]
@@ -505,13 +559,24 @@ def parse_attendance_html(html, source_hint="", prefer_year=None):
         return None
 
     prefer_year = prefer_year or target_attendance_year_label()
+    prefer_norm = (prefer_year or "").replace("–", "-").replace(" ", "")
 
-    # Mid-year live strip only when it matches the calendar year we want
-    # (summer often zeros this out for the *new* year — ignore zeros)
+    # Live summary strip — only trust when it matches the year we want (or no prefer)
     summary = _parse_att_summary_area(html)
     if summary and (summary.get("days_enrolled") or 0) > 0:
-        summary["year"] = summary.get("year") or prefer_year
-        return summary
+        sy = (summary.get("year") or "").replace("–", "-").replace(" ", "")
+        if sy and prefer_norm and sy != prefer_norm:
+            pass  # wrong year (common mid-summer); fall through to history
+        elif sy:
+            summary["year"] = sy
+            return summary
+        elif prefer_norm and school_session_window() is not None:
+            # Unlabelled strip during active session only
+            summary["year"] = prefer_year
+            return summary
+        elif not prefer_norm:
+            summary["year"] = summary.get("year") or prefer_year
+            return summary
 
     history = _parse_history_year_cards(html, prefer_year=prefer_year)
     if history and history.get("days_enrolled") is not None:
@@ -543,9 +608,15 @@ def fetch_attendance(session, prefer_year=None):
     )
     if att.status_code != 200 or "LoginParent" in att.url:
         print("  Attendance pages unavailable")
+        if prefer_year:
+            print(f"  No attendance data for {prefer_year} — using empty baseline")
+            return empty_attendance_for_year(prefer_year, reason="portal_unavailable")
         return None
     parsed = parse_attendance_html(att.text, "attendance", prefer_year=prefer_year)
     if not parsed:
+        if prefer_year:
+            print(f"  No attendance card for {prefer_year} yet — using empty baseline")
+            return empty_attendance_for_year(prefer_year, reason="year_not_in_history")
         print("  Attendance page loaded but no counts parsed")
         return {
             "absences": None,

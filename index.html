@@ -1603,6 +1603,7 @@ python3 -m http.server 8765</pre>
             const a = student.attendance;
             if (!a || a.parse_failed) return '';
             const chips = [];
+            const notStarted = !!(a.not_started || ((a.days_enrolled == null || a.days_enrolled === 0) && a.absences === 0 && a.tardies === 0));
             if (a.absences != null) {
                 const cls = a.absences >= 5 ? 'alert' : (a.absences > 0 ? 'warn' : 'ok');
                 chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.absences}</span> absences</span>`);
@@ -1616,6 +1617,8 @@ python3 -m http.server 8765</pre>
             }
             if (a.days_present != null && a.days_enrolled != null && a.days_enrolled > 0) {
                 chips.push(`<span class="masthead-stat ok"><span class="stat-num">${a.days_present}</span> / ${a.days_enrolled} present</span>`);
+            } else if (notStarted) {
+                chips.push(`<span class="masthead-stat ok"><span class="stat-num" style="font-size:13px;font-weight:600">year not started</span></span>`);
             }
             if (a.year) {
                 // Normalize 2025-2026 → “2025–26 school year”
