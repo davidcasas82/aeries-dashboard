@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-13T10:13:23.306855+00:00",
+  "last_updated": "2026-08-14T10:09:31.828204+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -132,18 +132,18 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 1,
-        "days_present": 1,
+        "days_enrolled": 2,
+        "days_present": 2,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 1 Days Present: 1 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 2 Days Present: 2 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
         "headline": "Schedules are up for Daniel (9 classes) \u2014 no grades or missing work posted yet.",
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-08-13T10:13:26.541849+00:00",
+        "generated_at": "2026-08-14T10:09:36.274181+00:00",
         "analytics_snapshot": {
           "dominant_theme": "schedule_only",
           "total_recoverable_pts": 0,
@@ -153,7 +153,7 @@
         }
       },
       "trend_summary": [],
-      "history_span_days": 87,
+      "history_span_days": 88,
       "class_trends": {}
     },
     {
@@ -285,18 +285,18 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 1,
-        "days_present": 1,
+        "days_enrolled": 2,
+        "days_present": 2,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 1 Days Present: 1 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 2 Days Present: 2 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
         "headline": "Schedules are up for Leah (9 classes) \u2014 no grades or missing work posted yet.",
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-08-13T10:13:29.230978+00:00",
+        "generated_at": "2026-08-14T10:09:39.076312+00:00",
         "analytics_snapshot": {
           "dominant_theme": "schedule_only",
           "total_recoverable_pts": 0,
@@ -306,7 +306,7 @@
         }
       },
       "trend_summary": [],
-      "history_span_days": 87,
+      "history_span_days": 88,
       "class_trends": {}
     }
   ],
