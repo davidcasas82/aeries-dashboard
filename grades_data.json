@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-15T09:30:40.013683+00:00",
+  "last_updated": "2026-08-16T09:32:45.931361+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -143,7 +143,7 @@
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-08-15T09:30:43.043258+00:00",
+        "generated_at": "2026-08-16T09:32:49.153892+00:00",
         "analytics_snapshot": {
           "dominant_theme": "schedule_only",
           "total_recoverable_pts": 0,
@@ -153,7 +153,7 @@
         }
       },
       "trend_summary": [],
-      "history_span_days": 89,
+      "history_span_days": 90,
       "class_trends": {}
     },
     {
@@ -296,7 +296,7 @@
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-08-15T09:30:45.626908+00:00",
+        "generated_at": "2026-08-16T09:32:51.855020+00:00",
         "analytics_snapshot": {
           "dominant_theme": "schedule_only",
           "total_recoverable_pts": 0,
@@ -306,7 +306,7 @@
         }
       },
       "trend_summary": [],
-      "history_span_days": 89,
+      "history_span_days": 90,
       "class_trends": {}
     }
   ],
