@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-17T09:49:00.989952+00:00",
+  "last_updated": "2026-08-18T09:38:42.513589+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -51,11 +51,11 @@
           "period": 3,
           "course_name": "Rapid Prototype",
           "teacher": "Ireland, M",
-          "percent": "",
+          "percent": "0.0",
           "mark": "",
-          "mark_and_score": "",
+          "mark_and_score": " (0.0%)",
           "missing_count": 0,
-          "missing_assignments": "",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "3-140",
           "school_name": "Legacy Magnet Academy"
@@ -132,18 +132,18 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 3,
-        "days_present": 3,
+        "days_enrolled": 4,
+        "days_present": 4,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 3 Days Present: 3 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 4 Days Present: 4 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
         "headline": "Schedules are up for Daniel (9 classes) \u2014 no grades or missing work posted yet.",
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-08-17T09:49:04.282766+00:00",
+        "generated_at": "2026-08-18T09:38:45.229586+00:00",
         "analytics_snapshot": {
           "dominant_theme": "schedule_only",
           "total_recoverable_pts": 0,
@@ -153,7 +153,7 @@
         }
       },
       "trend_summary": [],
-      "history_span_days": 91,
+      "history_span_days": 92,
       "class_trends": {}
     },
     {
@@ -285,18 +285,18 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 3,
-        "days_present": 3,
+        "days_enrolled": 4,
+        "days_present": 4,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 3 Days Present: 3 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 4 Days Present: 4 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
         "headline": "Schedules are up for Leah (9 classes) \u2014 no grades or missing work posted yet.",
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-08-17T09:49:07.119425+00:00",
+        "generated_at": "2026-08-18T09:38:47.490062+00:00",
         "analytics_snapshot": {
           "dominant_theme": "schedule_only",
           "total_recoverable_pts": 0,
@@ -306,7 +306,7 @@
         }
       },
       "trend_summary": [],
-      "history_span_days": 91,
+      "history_span_days": 92,
       "class_trends": {}
     }
   ],
