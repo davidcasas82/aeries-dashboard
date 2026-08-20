@@ -3935,7 +3935,7 @@
         },
         {
           "date": "2026-08-20",
-          "captured_at": "2026-08-20T03:14:05.660809+00:00",
+          "captured_at": "2026-08-20T09:40:05.758747+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -3967,10 +3967,8 @@
               "period": 3,
               "pct": null,
               "mark": "",
-              "missing_count": 1,
-              "missing_names": [
-                "Article: Design Principle Jigsaw"
-              ],
+              "missing_count": 0,
+              "missing_names": [],
               "aeries_trend": null
             },
             "US Hist Media": {
@@ -4015,8 +4013,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Daniel has one missing assignment posted in each of Bus of Gaming and Rapid Prototype.",
-            "focus_tonight": "Submit Anatomy of a Great Game in Bus of Gaming and Article: Design Principle Jigsaw in Rapid Prototype"
+            "headline": "Daniel has Anatomy of a Great Game due today in Bus of Gaming; most classes have no work posted yet.",
+            "focus_tonight": "Anatomy of a Great Game (Bus of Gaming)"
           }
         }
       ]
@@ -7631,7 +7629,7 @@
         },
         {
           "date": "2026-08-20",
-          "captured_at": "2026-08-20T03:14:18.724305+00:00",
+          "captured_at": "2026-08-20T09:40:09.011511+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -7711,8 +7709,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Leah has missing work in Tech of Biology and Bus of Gaming while Mkt Adv GrphDes holds an A.",
-            "focus_tonight": "Submit Syllabus Agreement Form for Tech of Biology"
+            "headline": "Due today in Bus of Gaming and Tech of Biology; A in Mkt Adv GrphDes, most classes have no work posted yet.",
+            "focus_tonight": "Anatomy of a Great Game (Bus of Gaming); Syllabus Agreement Form (Tech of Biology)"
           }
         }
       ]

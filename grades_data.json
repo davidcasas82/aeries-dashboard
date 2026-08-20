@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-20T03:33:07.165218+00:00",
+  "last_updated": "2026-08-20T09:40:02.167461+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -177,11 +177,11 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 5,
-        "days_present": 5,
+        "days_enrolled": 6,
+        "days_present": 6,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 6 Days Present: 6 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
         "headline": "Daniel has Anatomy of a Great Game due today in Bus of Gaming; most classes have no work posted yet.",
@@ -211,7 +211,7 @@
         }
       },
       "trend_summary": [],
-      "history_span_days": 93,
+      "history_span_days": 94,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
@@ -460,11 +460,11 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 5,
-        "days_present": 5,
+        "days_enrolled": 6,
+        "days_present": 6,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 6 Days Present: 6 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
         "headline": "Due today in Bus of Gaming and Tech of Biology; A in Mkt Adv GrphDes, most classes have no work posted yet.",
@@ -503,7 +503,7 @@
         }
       },
       "trend_summary": [],
-      "history_span_days": 93,
+      "history_span_days": 94,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
