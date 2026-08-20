@@ -856,10 +856,222 @@ def match_aeries_series_to_classes(classes, labeled_series):
     return by_class
 
 
+_GRADEBOOK_TERM_PATTERN = re.compile(
+    r"(1st\s+Semester|2nd\s+Semester|First\s+Semester|Second\s+Semester|"
+    r"Semester\s+[12]|Trimester\s+[123]|"
+    r"1st\s+Quarter|2nd\s+Quarter|3rd\s+Quarter|4th\s+Quarter|"
+    r"First\s+Quarter|Second\s+Quarter|Third\s+Quarter|Fourth\s+Quarter|"
+    r"Fall|Spring|Summer|Winter|Year|Q[1-4]|S[12])\b",
+    re.I,
+)
+
+_GRADEBOOK_TERM_ALIASES = {
+    "first semester": "1st semester",
+    "second semester": "2nd semester",
+    "semester 1": "1st semester",
+    "semester 2": "2nd semester",
+    "s1": "1st semester",
+    "s2": "2nd semester",
+    "first quarter": "q1",
+    "1st quarter": "q1",
+    "second quarter": "q2",
+    "2nd quarter": "q2",
+    "third quarter": "q3",
+    "3rd quarter": "q3",
+    "fourth quarter": "q4",
+    "4th quarter": "q4",
+    "trimester 1": "t1",
+    "trimester 2": "t2",
+    "trimester 3": "t3",
+}
+
+
+def normalize_gradebook_term(term):
+    t = re.sub(r"\s+", " ", (term or "").strip().lower())
+    return _GRADEBOOK_TERM_ALIASES.get(t, t)
+
+
+def preferred_gradebook_terms(today=None):
+    """Ordered term keys for the current TUSD 6-12 season (Fall first half, Spring second)."""
+    today = today or date.today()
+    month, day = today.month, today.day
+    if month >= 7:
+        terms = ["fall", "1st semester", "year"]
+        if month < 10 or (month == 10 and day <= 12):
+            terms.extend(["q1", "t1"])
+        else:
+            terms.append("q2")
+        return terms
+    if month == 1 and day <= 4:
+        return ["fall", "1st semester", "q2", "year"]
+    terms = ["spring", "2nd semester", "year"]
+    if month <= 3 and not (month == 3 and day > 15):
+        terms.extend(["q3", "t2"])
+    else:
+        terms.extend(["q4", "t3"])
+    return terms
+
+
+def parse_gradebook_option_label(label):
+    """Parse '2- PE 8- Spring  1/6/2026...' / '5- Alg- Fall' dropdown labels."""
+    raw = (label or "").strip()
+    text = re.sub(r"[<>]+", " ", raw)
+    text = re.sub(r"\s+", " ", text).strip()
+    period = extract_period_from_label(text) or extract_period_from_label(raw)
+
+    dates = []
+    for m in re.finditer(r"(\d{1,2}/\d{1,2}/\d{2,4})", text):
+        token = m.group(1)
+        parsed_date = None
+        for fmt in ("%m/%d/%Y", "%m/%d/%y"):
+            try:
+                parsed_date = datetime.strptime(token, fmt).date()
+                break
+            except ValueError:
+                continue
+        if parsed_date:
+            dates.append(parsed_date)
+
+    term_m = _GRADEBOOK_TERM_PATTERN.search(text)
+    term = term_m.group(1) if term_m else None
+    name = text
+    if term:
+        name_m = re.match(
+            rf"\d+\s*-\s*(.+?)\s*-\s*{re.escape(term)}\b",
+            text,
+            re.I,
+        )
+        if name_m:
+            name = name_m.group(1).strip()
+        else:
+            name = _GRADEBOOK_TERM_PATTERN.split(text, maxsplit=1)[0]
+            name = re.sub(r"^\d+\s*-\s*", "", name).strip(" -")
+
+    return {
+        "label": raw,
+        "name": name or raw,
+        "period": period,
+        "term": term,
+        "term_key": normalize_gradebook_term(term) if term else None,
+        "start_date": dates[0] if dates else None,
+        "end_date": dates[1] if len(dates) > 1 else None,
+    }
+
+
+def extract_class_name(label):
+    """Extract clean class name from a GradebookDetails dropdown label."""
+    parsed = parse_gradebook_option_label(label)
+    return parsed.get("name") or label
+
+
+def option_in_school_session(parsed, session_year):
+    """True/False if the option's start date is in session; None if unknown."""
+    start = parsed.get("start_date") if parsed else None
+    if not start or not session_year:
+        return None
+    first = _parse_iso_date_str(session_year.get("first_day"))
+    last = _parse_iso_date_str(session_year.get("last_day"))
+    if not first or not last:
+        return None
+    return first <= start <= last
+
+
+def select_current_gradebook_options(option_tags, today=None, calendar=None):
+    """Pick current-term GradebookDetails options (Fall in Aug–Dec, Spring in Jan–Jun).
+
+    Last year's Spring entries stay in the Aeries dropdown after year start; do not
+    scrape them into the new term. Year-long courses are included alongside the
+    current season term.
+    """
+    today = today or date.today()
+    calendar = calendar or load_school_calendar(refresh=False)
+    session = school_session_window(today=today, calendar=calendar)
+    preferred = preferred_gradebook_terms(today=today)
+
+    parsed_opts = []
+    selected_value = None
+    for opt in option_tags:
+        value = opt.get("value")
+        label = opt.get_text(" ", strip=True)
+        if value is None or not str(label).strip():
+            continue
+        parsed = parse_gradebook_option_label(label)
+        parsed["value"] = value
+        parsed["selected"] = opt.has_attr("selected")
+        if parsed["selected"]:
+            selected_value = value
+        parsed_opts.append(parsed)
+
+    empty_meta = {
+        "reason": "no_options",
+        "terms": [],
+        "selected_value": selected_value,
+        "preload_ok": False,
+        "option_count": len(parsed_opts),
+        "chosen_count": 0,
+    }
+    if not parsed_opts:
+        return [], empty_meta
+
+    in_session = []
+    undated = []
+    for parsed in parsed_opts:
+        flag = option_in_school_session(parsed, session)
+        if flag is False:
+            continue
+        if flag is True:
+            in_session.append(parsed)
+        else:
+            undated.append(parsed)
+
+    pool = in_session or undated
+    if not pool:
+        terms = []
+        seen = set()
+        for parsed in parsed_opts:
+            key = parsed.get("term_key")
+            if key and key not in seen:
+                seen.add(key)
+                terms.append(key)
+        empty_meta.update({"reason": "no_current_term", "terms": terms})
+        return [], empty_meta
+
+    terms_found = []
+    seen_terms = set()
+    for parsed in pool:
+        key = parsed.get("term_key")
+        if key and key not in seen_terms:
+            seen_terms.add(key)
+            terms_found.append(key)
+
+    chosen_term = next((term for term in preferred if term in seen_terms), None)
+    if chosen_term:
+        keep = {chosen_term, "year"} if chosen_term != "year" else {"year"}
+        ordered = [parsed for parsed in pool if parsed.get("term_key") in keep]
+        reason = f"term:{chosen_term}+year" if "year" in seen_terms and chosen_term != "year" else f"term:{chosen_term}"
+    else:
+        ordered = [parsed for parsed in pool if parsed.get("selected")] or list(pool)
+        reason = "selected" if len(ordered) == 1 and ordered[0].get("selected") else "all_current"
+
+    pairs = [(parsed["value"], parsed["label"]) for parsed in ordered]
+    preload_ok = bool(
+        selected_value and pairs and pairs[0][0] == selected_value
+    )
+    return pairs, {
+        "reason": reason,
+        "terms": terms_found,
+        "selected_value": selected_value,
+        "preload_ok": preload_ok,
+        "option_count": len(parsed_opts),
+        "chosen_count": len(pairs),
+    }
+
+
 def fetch_all_assignments(session):
-    """Fetch assignments for all classes by navigating GradebookDetails via postback."""
+    """Fetch assignments for current-term classes via GradebookDetails postback."""
     resp = session.get(f"{BASE_URL}/student/GradebookDetails.aspx")
     if resp.status_code != 200:
+        print(f"  GradebookDetails status {resp.status_code}")
         return []
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -871,31 +1083,31 @@ def fetch_all_assignments(session):
         if name:
             all_inputs[name] = inp.get("value", "")
 
-    # Get class dropdown
     class_select = soup.find("select", {"id": re.compile("dlGN")})
     if not class_select:
+        print("  GradebookDetails: no class dropdown (dlGN)")
         return []
 
-    options = class_select.find_all("option")
-    spring_classes = [
-        (opt["value"], opt.text.strip())
-        for opt in options
-        if "Spring" in opt.text
-    ]
+    chosen, meta = select_current_gradebook_options(class_select.find_all("option"))
+    print(
+        f"  Gradebook dropdown: {meta.get('option_count', 0)} option(s), "
+        f"terms={meta.get('terms')}, using {meta.get('reason')} "
+        f"({meta.get('chosen_count', 0)} class(es))"
+    )
+    if not chosen:
+        return []
 
     all_class_assignments = []
-
-    # First class is already loaded
     first_assignments = parse_assignment_rows(soup)
-    if spring_classes:
-        class_name = extract_class_name(spring_classes[0][1])
+    start_index = 0
+    if meta.get("preload_ok"):
         all_class_assignments.append({
-            "class_name": class_name,
+            "class_name": extract_class_name(chosen[0][1]),
             "assignments": first_assignments,
         })
+        start_index = 1
 
-    # Load remaining classes via async postback
-    for class_value, class_label in spring_classes[1:]:
+    for class_value, class_label in chosen[start_index:]:
         class_name = extract_class_name(class_label)
 
         form_data = dict(all_inputs)
@@ -924,7 +1136,6 @@ def fetch_all_assignments(session):
                 "assignments": assignments,
             })
 
-            # Update viewstate for next postback
             vs_match = re.search(r"__VIEWSTATE\|([^|]+)\|", resp2.text)
             if vs_match:
                 all_inputs["__VIEWSTATE"] = vs_match.group(1)
@@ -933,12 +1144,6 @@ def fetch_all_assignments(session):
                 all_inputs["__VIEWSTATEGENERATOR"] = vsg_match.group(1)
 
     return all_class_assignments
-
-
-def extract_class_name(label):
-    """Extract clean class name from dropdown label like '2- PE 8- Spring  1/6/2026...'"""
-    match = re.match(r"\d+-\s*(.+?)-\s*Spring", label)
-    return match.group(1).strip() if match else label
 
 
 def parse_assignment_rows(soup):
@@ -1222,8 +1427,23 @@ def build_student_snapshot(student_data, class_analytics_list, captured_at=None)
     now = captured_at or datetime.now(timezone.utc)
     date_str = now.astimezone().strftime("%Y-%m-%d") if now.tzinfo else now.strftime("%Y-%m-%d")
     classes = {}
-    for c in class_analytics_list:
-        name = c.get("course_name") or ""
+    # Include schedule-only rows so new-term days still have a baseline before grades post
+    for class_meta in student_data.get("classes") or []:
+        name = (class_meta.get("course_name") or "").strip()
+        if not name:
+            continue
+        assignments = assignments_for_period(student_data, class_meta.get("period"))
+        real = class_has_real_grade(class_meta, assignments)
+        classes[name] = {
+            "period": class_meta.get("period"),
+            "pct": safe_float(class_meta.get("percent")) if real else None,
+            "mark": (class_meta.get("mark") or "").strip() if real else "",
+            "missing_count": class_meta.get("missing_count") or 0,
+            "missing_names": [],
+            "aeries_trend": None,
+        }
+    for c in class_analytics_list or []:
+        name = (c.get("course_name") or "").strip()
         if not name:
             continue
         trend = c.get("trend") or {}
@@ -2310,6 +2530,45 @@ def scrape_all():
     print(f"Summer break: {data['summer_break']}")
 
 
+def probe_gradebook():
+    """Login and dump GradebookDetails dropdown terms for each student (debug)."""
+    require_scrape_config()
+    session = login()
+    for student in STUDENTS:
+        print(f"\n=== PROBE gradebook: {student['name']} (SN {student['sn']}) ===")
+        switch_student(session, student["school_code"], student["sn"])
+        resp = session.get(
+            f"{BASE_URL}/student/GradebookDetails.aspx",
+            allow_redirects=True,
+            timeout=60,
+        )
+        print(f"status={resp.status_code} final={resp.url} len={len(resp.text)}")
+        if "LoginParent" in resp.url:
+            print("  skip (login)")
+            continue
+        soup = BeautifulSoup(resp.text, "html.parser")
+        class_select = soup.find("select", {"id": re.compile("dlGN")})
+        if not class_select:
+            print("  no dlGN select")
+            ids = [el.get("id") for el in soup.find_all(True, id=True)][:40]
+            print(f"  sample ids: {ids}")
+            continue
+        options = class_select.find_all("option")
+        print(f"  {len(options)} option(s)")
+        for opt in options:
+            label = opt.get_text(" ", strip=True)
+            parsed = parse_gradebook_option_label(label)
+            sel = " SELECTED" if opt.has_attr("selected") else ""
+            print(
+                f"    {opt.get('value')!r}{sel}: {label!r} "
+                f"term={parsed.get('term_key')!r} start={parsed.get('start_date')} "
+                f"name={parsed.get('name')!r}"
+            )
+        chosen, meta = select_current_gradebook_options(options)
+        print("  select meta", json.dumps(meta, default=str))
+        print("  chosen", [(value, extract_class_name(label)) for value, label in chosen])
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Aeries grade scraper + Grok briefings")
     parser.add_argument(
@@ -2323,6 +2582,11 @@ if __name__ == "__main__":
         help="Login and dump Attendance page structure (no grades_data write)",
     )
     parser.add_argument(
+        "--probe-gradebook",
+        action="store_true",
+        help="Login and dump GradebookDetails dropdown terms (no grades_data write)",
+    )
+    parser.add_argument(
         "--attendance-only",
         action="store_true",
         help="Refresh absences/tardies only (works during summer; no Grok)",
@@ -2331,6 +2595,8 @@ if __name__ == "__main__":
 
     if args.probe_attendance:
         probe_attendance()
+    elif args.probe_gradebook:
+        probe_gradebook()
     elif args.attendance_only:
         refresh_attendance_only()
     elif args.grok_only:
