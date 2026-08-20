@@ -3935,7 +3935,7 @@
         },
         {
           "date": "2026-08-20",
-          "captured_at": "2026-08-20T09:40:05.758747+00:00",
+          "captured_at": "2026-08-20T23:18:39.669166+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -7629,7 +7629,7 @@
         },
         {
           "date": "2026-08-20",
-          "captured_at": "2026-08-20T09:40:09.011511+00:00",
+          "captured_at": "2026-08-20T23:18:52.839269+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -7683,12 +7683,10 @@
             },
             "Tech of Biology": {
               "period": 6,
-              "pct": null,
+              "pct": 0.0,
               "mark": "",
-              "missing_count": 1,
-              "missing_names": [
-                "Syllabus Agreement Form"
-              ],
+              "missing_count": 0,
+              "missing_names": [],
               "aeries_trend": null
             },
             "Point Break": {
