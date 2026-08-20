@@ -1410,7 +1410,7 @@ python3 -m http.server 8765</pre>
             return assignments
                 .filter(a => {
                     const due = parseDate(a.due_date);
-                    return due && due >= TODAY && !a.grading_complete;
+                    return due && due >= TODAY && a.points_earned == null;
                 })
                 .sort((a, b) => parseDate(a.due_date) - parseDate(b.due_date));
         }
@@ -1643,12 +1643,20 @@ python3 -m http.server 8765</pre>
             return (student.classes || []).some(c => (c.course_name || '').trim());
         }
 
+        function hasPostedWork(student) {
+            if (hasGradedClasses(student)) return true;
+            if ((student.assignments_by_class || []).some(ca => (ca.assignments || []).length)) return true;
+            const ai = student.ai_summary;
+            if (ai && ((ai.focus_tonight || '').trim() || (ai.classes || []).length)) return true;
+            return false;
+        }
+
         function isSummerMode() {
             return !!(currentData && currentData.summer_break) || document.body.classList.contains('summer-break');
         }
 
         function isScheduleOnly(student) {
-            return hasScheduledClasses(student) && !hasGradedClasses(student);
+            return hasScheduledClasses(student) && !hasPostedWork(student);
         }
 
         function renderMasthead(student, idx) {
