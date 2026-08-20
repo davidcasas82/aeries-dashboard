@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-20T03:31:27.304975+00:00",
+  "last_updated": "2026-08-20T03:33:07.165218+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -184,26 +184,26 @@
         "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel has one assignment due today in Bus of Gaming; most classes have no work posted yet.",
+        "headline": "Daniel has Anatomy of a Great Game due today in Bus of Gaming; most classes have no work posted yet.",
         "focus_tonight": "Anatomy of a Great Game (Bus of Gaming)",
         "wins": [],
         "classes": [
           {
             "class_name": "Bus of Gaming",
-            "urgency": "ok",
+            "urgency": "watch",
             "snap": "Anatomy of a Great Game \u00b7 due Wed",
-            "story": "No grade posted yet in the portal.",
+            "story": "Due today.",
             "do_tonight": "Anatomy of a Great Game"
           },
           {
             "class_name": "Rapid Prototype",
             "urgency": "ok",
             "snap": "Article: Design Principle Jigsaw \u00b7 due Thu",
-            "story": "No grade posted yet in the portal.",
+            "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-20T03:31:36.491001+00:00",
+        "generated_at": "2026-08-20T03:33:18.088115+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -467,35 +467,35 @@
         "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Two assignments due today in Bus of Gaming and Tech of Biology; most classes have no work posted yet. Leah holds an A in Mkt Adv GrphDes.",
+        "headline": "Due today in Bus of Gaming and Tech of Biology; A in Mkt Adv GrphDes, most classes have no work posted yet.",
         "focus_tonight": "Anatomy of a Great Game (Bus of Gaming); Syllabus Agreement Form (Tech of Biology)",
         "wins": [
-          "A 95% in Mkt Adv GrphDes"
+          "A 95% in Mkt Adv GrphDes with no missing work"
         ],
         "classes": [
           {
             "class_name": "Bus of Gaming",
-            "urgency": "ok",
+            "urgency": "watch",
             "snap": "Anatomy of a Great Game \u00b7 due Wed",
-            "story": "Portal shows no missing work.",
-            "do_tonight": ""
+            "story": "",
+            "do_tonight": "Anatomy of a Great Game"
           },
           {
             "class_name": "Tech of Biology",
-            "urgency": "ok",
+            "urgency": "watch",
             "snap": "Syllabus Agreement Form \u00b7 due Wed",
-            "story": "Portal shows no missing work.",
-            "do_tonight": ""
+            "story": "",
+            "do_tonight": "Syllabus Agreement Form"
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "A 95% with no missing work",
-            "story": "Portal shows no missing work.",
+            "snap": "A 95%, no missing work",
+            "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-20T03:31:48.739269+00:00",
+        "generated_at": "2026-08-20T03:33:28.450366+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -518,6 +518,10 @@
             {
               "date": "2026-08-12",
               "pct": 0.0
+            },
+            {
+              "date": "2026-08-19",
+              "pct": 95.0
             },
             {
               "date": "2026-08-20",
