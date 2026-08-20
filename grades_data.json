@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-20T03:13:50.587502+00:00",
+  "last_updated": "2026-08-20T03:31:27.304975+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -184,34 +184,34 @@
         "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel has one missing assignment in each of Bus of Gaming and Rapid Prototype.",
-        "focus_tonight": "Submit Anatomy of a Great Game in Bus of Gaming and Article: Design Principle Jigsaw in Rapid Prototype.",
+        "headline": "Daniel has one assignment due today in Bus of Gaming; most classes have no work posted yet.",
+        "focus_tonight": "Anatomy of a Great Game (Bus of Gaming)",
         "wins": [],
         "classes": [
           {
             "class_name": "Bus of Gaming",
-            "urgency": "watch",
-            "snap": "One 5-point summative overdue by one day.",
-            "story": "Portal lists Anatomy of a Great Game as missing.",
-            "do_tonight": "Submit Anatomy of a Great Game"
+            "urgency": "ok",
+            "snap": "Anatomy of a Great Game \u00b7 due Wed",
+            "story": "No grade posted yet in the portal.",
+            "do_tonight": "Anatomy of a Great Game"
           },
           {
             "class_name": "Rapid Prototype",
-            "urgency": "watch",
-            "snap": "One 3-point classwork item due today.",
-            "story": "Portal lists Article: Design Principle Jigsaw as missing.",
-            "do_tonight": "Submit Article: Design Principle Jigsaw"
+            "urgency": "ok",
+            "snap": "Article: Design Principle Jigsaw \u00b7 due Thu",
+            "story": "No grade posted yet in the portal.",
+            "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-20T03:14:05.660046+00:00",
+        "generated_at": "2026-08-20T03:31:36.491001+00:00",
         "analytics_snapshot": {
-          "dominant_theme": "missing_work_backlog in 2 of 2 graded classes",
-          "total_recoverable_pts": 8.0,
-          "history_span_days": 94
+          "dominant_theme": "mixed or stable performance",
+          "total_recoverable_pts": 0,
+          "history_span_days": 93
         }
       },
       "trend_summary": [],
-      "history_span_days": 94,
+      "history_span_days": 93,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
@@ -467,44 +467,43 @@
         "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "One missing assignment each in Bus of Gaming and Tech of Biology while Mkt Adv GrphDes holds an A.",
-        "focus_tonight": "Submit Anatomy of a Great Game in Bus of Gaming and Syllabus Agreement Form in Tech of Biology.",
+        "headline": "Two assignments due today in Bus of Gaming and Tech of Biology; most classes have no work posted yet. Leah holds an A in Mkt Adv GrphDes.",
+        "focus_tonight": "Anatomy of a Great Game (Bus of Gaming); Syllabus Agreement Form (Tech of Biology)",
         "wins": [
-          "A 95% in Mkt Adv GrphDes with no missing work",
-          "100% on About Me Slides assignment"
+          "A 95% in Mkt Adv GrphDes"
         ],
         "classes": [
           {
             "class_name": "Bus of Gaming",
-            "urgency": "watch",
-            "snap": "Missing 5-point summative due yesterday.",
-            "story": "Portal still shows Anatomy of a Great Game ungraded and overdue by one day.",
-            "do_tonight": "Submit Anatomy of a Great Game."
+            "urgency": "ok",
+            "snap": "Anatomy of a Great Game \u00b7 due Wed",
+            "story": "Portal shows no missing work.",
+            "do_tonight": ""
           },
           {
             "class_name": "Tech of Biology",
-            "urgency": "watch",
-            "snap": "Missing 3-point syllabus form due yesterday.",
-            "story": "Portal still shows Syllabus Agreement Form ungraded and overdue by one day.",
-            "do_tonight": "Submit Syllabus Agreement Form."
+            "urgency": "ok",
+            "snap": "Syllabus Agreement Form \u00b7 due Wed",
+            "story": "Portal shows no missing work.",
+            "do_tonight": ""
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "A at 95% with no missing work.",
-            "story": "Recent scores include 100% on About Me Slides and 85% on the presentation.",
+            "snap": "A 95% with no missing work",
+            "story": "Portal shows no missing work.",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-20T03:14:18.723556+00:00",
+        "generated_at": "2026-08-20T03:31:48.739269+00:00",
         "analytics_snapshot": {
-          "dominant_theme": "missing_work_backlog in 2 of 3 graded classes",
-          "total_recoverable_pts": 8.0,
-          "history_span_days": 94
+          "dominant_theme": "mixed or stable performance",
+          "total_recoverable_pts": 0,
+          "history_span_days": 93
         }
       },
       "trend_summary": [],
-      "history_span_days": 94,
+      "history_span_days": 93,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
@@ -532,12 +531,7 @@
           "trend_label": "insufficient_history"
         },
         "Tech of Biology": {
-          "pct_history": [
-            {
-              "date": "2026-08-20",
-              "pct": 0.0
-            }
-          ],
+          "pct_history": [],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,

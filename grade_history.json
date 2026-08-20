@@ -3853,11 +3853,84 @@
         },
         {
           "date": "2026-08-19",
-          "captured_at": "2026-08-19T09:39:12.625398+00:00",
-          "classes": {},
+          "captured_at": "2026-08-20T03:31:36.491758+00:00",
+          "classes": {
+            "Bus of Gaming": {
+              "period": 0,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "PE Course 2": {
+              "period": 1,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Span 1 (IVC)": {
+              "period": 2,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Rapid Prototype": {
+              "period": 3,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "US Hist Media": {
+              "period": 4,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Alg ll Bus Mang": {
+              "period": 5,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Physics & Eng": {
+              "period": 6,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Point Break": {
+              "period": 7,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Int Eng&Marktg": {
+              "period": 8,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            }
+          },
           "previous_briefing": {
-            "headline": "Schedules are up for Daniel (9 classes) \u2014 no grades or missing work posted yet.",
-            "focus_tonight": ""
+            "headline": "Daniel has one missing assignment in each of Bus of Gaming and Rapid Prototype.",
+            "focus_tonight": "Submit Anatomy of a Great Game in Bus of Gaming and Article: Design Principle Jigsaw in Rapid Prototype."
           }
         },
         {
@@ -7476,11 +7549,84 @@
         },
         {
           "date": "2026-08-19",
-          "captured_at": "2026-08-19T09:39:16.425092+00:00",
-          "classes": {},
+          "captured_at": "2026-08-20T03:31:48.740117+00:00",
+          "classes": {
+            "Bus of Gaming": {
+              "period": 0,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Mkt Adv GrphDes": {
+              "period": 1,
+              "pct": 95.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Engineering Geo": {
+              "period": 2,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "COMM 1 (IVC)": {
+              "period": 3,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "PE Course 1": {
+              "period": 4,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Eng 9 Entre": {
+              "period": 5,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Tech of Biology": {
+              "period": 6,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Point Break": {
+              "period": 7,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "WrldHis by Dsgn": {
+              "period": 8,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            }
+          },
           "previous_briefing": {
-            "headline": "Schedules are up for Leah (9 classes) \u2014 no grades or missing work posted yet.",
-            "focus_tonight": ""
+            "headline": "One missing assignment each in Bus of Gaming and Tech of Biology while Mkt Adv GrphDes holds an A.",
+            "focus_tonight": "Submit Anatomy of a Great Game in Bus of Gaming and Syllabus Agreement Form in Tech of Biology."
           }
         },
         {
