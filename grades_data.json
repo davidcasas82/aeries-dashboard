@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-19T09:39:08.144098+00:00",
+  "last_updated": "2026-08-20T03:08:26.931866+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -12,11 +12,11 @@
           "period": 0,
           "course_name": "Bus of Gaming",
           "teacher": "Licciardo, D",
-          "percent": "",
+          "percent": "0.0",
           "mark": "",
-          "mark_and_score": "",
+          "mark_and_score": " (0.0%)",
           "missing_count": 0,
-          "missing_assignments": "",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-123",
           "school_name": "Legacy Magnet Academy"
@@ -126,7 +126,46 @@
           "school_name": "Legacy Magnet Academy"
         }
       ],
-      "assignments_by_class": [],
+      "assignments_by_class": [
+        {
+          "class_name": "Bus of Gaming",
+          "assignments": [
+            {
+              "number": "1",
+              "description": "Anatomy of a Great Game",
+              "category": "Summatives",
+              "points_earned": null,
+              "points_possible": 5.0,
+              "percentage": 0.0,
+              "date_assigned": "08/13/2026",
+              "date_completed": "",
+              "due_date": "08/19/2026",
+              "grading_complete": false
+            }
+          ]
+        },
+        {
+          "class_name": "Rapid Prototype",
+          "assignments": [
+            {
+              "number": "1",
+              "description": "Article: Design Principle Jigsaw",
+              "category": "Classwork",
+              "points_earned": null,
+              "points_possible": 3.0,
+              "percentage": 0.0,
+              "date_assigned": "08/17/2026",
+              "date_completed": "",
+              "due_date": "08/20/2026",
+              "grading_complete": false
+            }
+          ]
+        },
+        {
+          "class_name": "Alg ll Bus Mang",
+          "assignments": []
+        }
+      ],
       "attendance": {
         "absences": 0,
         "tardies": 0,
@@ -143,7 +182,7 @@
         "focus_tonight": "",
         "wins": [],
         "classes": [],
-        "generated_at": "2026-08-19T09:39:12.625383+00:00",
+        "generated_at": "2026-08-20T03:08:30.821204+00:00",
         "analytics_snapshot": {
           "dominant_theme": "schedule_only",
           "total_recoverable_pts": 0,
@@ -153,7 +192,7 @@
         }
       },
       "trend_summary": [],
-      "history_span_days": 93,
+      "history_span_days": 94,
       "class_trends": {}
     },
     {
@@ -165,11 +204,11 @@
           "period": 0,
           "course_name": "Bus of Gaming",
           "teacher": "Licciardo, D",
-          "percent": "",
+          "percent": "0.0",
           "mark": "",
-          "mark_and_score": "",
+          "mark_and_score": " (0.0%)",
           "missing_count": 0,
-          "missing_assignments": "",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-123",
           "school_name": "Legacy Magnet Academy"
@@ -178,9 +217,9 @@
           "period": 1,
           "course_name": "Mkt Adv GrphDes",
           "teacher": "Chung, L",
-          "percent": "0.0",
-          "mark": "",
-          "mark_and_score": " (0.0%)",
+          "percent": "95.0",
+          "mark": "A",
+          "mark_and_score": "A (95.0%)",
           "missing_count": 0,
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
@@ -247,7 +286,7 @@
           "mark": "",
           "mark_and_score": " (0.0%)",
           "missing_count": 0,
-          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
+          "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=7516226&amp;Missing=1&amp;Term=F&amp;CDS=30736430000000&amp;SC=95\"><span>1</span></a>",
           "trend": "",
           "room": "2-115",
           "school_name": "Legacy Magnet Academy"
@@ -279,7 +318,99 @@
           "school_name": "Legacy Magnet Academy"
         }
       ],
-      "assignments_by_class": [],
+      "assignments_by_class": [
+        {
+          "class_name": "Bus of Gaming",
+          "assignments": [
+            {
+              "number": "1",
+              "description": "Anatomy of a Great Game",
+              "category": "Summatives",
+              "points_earned": null,
+              "points_possible": 5.0,
+              "percentage": 0.0,
+              "date_assigned": "08/13/2026",
+              "date_completed": "",
+              "due_date": "08/19/2026",
+              "grading_complete": false
+            }
+          ]
+        },
+        {
+          "class_name": "Mkt Adv GrphDes",
+          "assignments": [
+            {
+              "number": "1",
+              "description": "About Me Slides",
+              "category": "Assignments",
+              "points_earned": 10.0,
+              "points_possible": 10.0,
+              "percentage": 100.0,
+              "date_assigned": "08/17/2026",
+              "date_completed": "08/20/2026",
+              "due_date": "08/20/2026",
+              "grading_complete": false
+            },
+            {
+              "number": "2",
+              "description": "About Me Slides Presentation",
+              "category": "Presentations",
+              "points_earned": 8.5,
+              "points_possible": 10.0,
+              "percentage": 85.0,
+              "date_assigned": "08/17/2026",
+              "date_completed": "08/20/2026",
+              "due_date": "08/20/2026",
+              "grading_complete": false
+            }
+          ]
+        },
+        {
+          "class_name": "Eng 9 Entre Fall",
+          "assignments": []
+        },
+        {
+          "class_name": "Tech of Biology",
+          "assignments": [
+            {
+              "number": "1",
+              "description": "Week 1 & 2 Warm-Ups",
+              "category": "Practice Assignments",
+              "points_earned": null,
+              "points_possible": 3.0,
+              "percentage": null,
+              "date_assigned": "08/13/2026",
+              "date_completed": "",
+              "due_date": "08/21/2026",
+              "grading_complete": false
+            },
+            {
+              "number": "2",
+              "description": "Lab Safety Quiz",
+              "category": "Assessments",
+              "points_earned": null,
+              "points_possible": 5.0,
+              "percentage": null,
+              "date_assigned": "08/17/2026",
+              "date_completed": "",
+              "due_date": "08/21/2026",
+              "grading_complete": false
+            },
+            {
+              "number": "3",
+              "description": "Syllabus Agreement Form",
+              "category": "Practice Assignments",
+              "points_earned": null,
+              "points_possible": 3.0,
+              "percentage": 0.0,
+              "date_assigned": "08/17/2026",
+              "date_completed": "",
+              "due_date": "08/19/2026",
+              "grading_complete": true
+            }
+          ]
+        }
+      ],
       "attendance": {
         "absences": 0,
         "tardies": 0,
@@ -292,22 +423,56 @@
         "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Schedules are up for Leah (9 classes) \u2014 no grades or missing work posted yet.",
+        "headline": "Leah's Mkt Adv GrphDes grade reached A at 95% after a sharp week-long gain.",
         "focus_tonight": "",
-        "wins": [],
-        "classes": [],
-        "generated_at": "2026-08-19T09:39:16.425077+00:00",
+        "wins": [
+          "Mkt Adv GrphDes grade at 95% A, up 95 points from one week ago"
+        ],
+        "classes": [
+          {
+            "class_name": "Mkt Adv GrphDes",
+            "urgency": "strong",
+            "snap": "A at 95% after sharp week-long rise",
+            "story": "Portal shows current grade at 95% with no missing assignments. History indicates improving trend over the past week.",
+            "do_tonight": ""
+          }
+        ],
+        "generated_at": "2026-08-20T03:08:42.510216+00:00",
         "analytics_snapshot": {
-          "dominant_theme": "schedule_only",
+          "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
-          "empty_term": false,
-          "schedule_only": true,
-          "scheduled_classes": 9
+          "history_span_days": 94
         }
       },
-      "trend_summary": [],
-      "history_span_days": 93,
-      "class_trends": {}
+      "trend_summary": [
+        {
+          "class_name": "Mkt Adv GrphDes",
+          "delta": 95.0,
+          "window": "7d",
+          "pct_now": 95.0,
+          "direction": "up"
+        }
+      ],
+      "history_span_days": 94,
+      "class_trends": {
+        "Mkt Adv GrphDes": {
+          "pct_history": [
+            {
+              "date": "2026-08-12",
+              "pct": 0.0
+            },
+            {
+              "date": "2026-08-20",
+              "pct": 95.0
+            }
+          ],
+          "delta_7d": 95.0,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "improving"
+        }
+      }
     }
   ],
   "summer_break": false,
