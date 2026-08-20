@@ -5,6 +5,7 @@ import re
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
@@ -18,6 +19,21 @@ PASSWORD = os.getenv("AERIES_PASSWORD", "")
 GROK_API_KEY = os.getenv("GROK_API_KEY", "")
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 GROK_MODEL = "grok-3-mini"
+PACIFIC = ZoneInfo("America/Los_Angeles")
+
+
+def pacific_now():
+    return datetime.now(PACIFIC)
+
+
+def pacific_today():
+    """School-day calendar date in Pacific time (not UTC)."""
+    return pacific_now().date()
+
+
+def pacific_today_dt():
+    """Naive midnight Pacific today, for due-date math against naive Aeries dates."""
+    return datetime.combine(pacific_today(), datetime.min.time())
 
 TUSD_CALENDAR_URL = "https://www.tustin.k12.ca.us/about-us/calendars-school-year"
 CALENDAR_FILE = Path(__file__).parent / "school_calendar.json"
@@ -201,7 +217,7 @@ def load_school_calendar(refresh=True):
 
 def school_session_window(today=None, calendar=None):
     """Return the school-year dict containing today, or None if outside all windows (summer)."""
-    today = today or datetime.now().date()
+    today = today or pacific_today()
     if isinstance(today, datetime):
         today = today.date()
     calendar = calendar or load_school_calendar(refresh=False)
@@ -215,7 +231,7 @@ def school_session_window(today=None, calendar=None):
 
 def next_first_day(today=None, calendar=None):
     """Next first day of school on or after today (for UI messaging)."""
-    today = today or datetime.now().date()
+    today = today or pacific_today()
     if isinstance(today, datetime):
         today = today.date()
     calendar = calendar or load_school_calendar(refresh=False)
@@ -252,7 +268,7 @@ def target_attendance_year_label(today=None, calendar=None):
       so early schedules don't still show last year's absences/tardies
     - Mid-summer otherwise: the year that most recently completed
     """
-    today = today or datetime.now().date()
+    today = today or pacific_today()
     if isinstance(today, datetime):
         today = today.date()
     calendar = calendar or load_school_calendar(refresh=False)
@@ -1429,7 +1445,7 @@ def snapshot_missing_names(class_analytics_entry):
 def build_student_snapshot(student_data, class_analytics_list, captured_at=None):
     """Compact daily snapshot for one student."""
     now = captured_at or datetime.now(timezone.utc)
-    date_str = now.astimezone().strftime("%Y-%m-%d") if now.tzinfo else now.strftime("%Y-%m-%d")
+    date_str = pacific_today().isoformat()
     classes = {}
     # Include schedule-only rows so new-term days still have a baseline before grades post
     for class_meta in student_data.get("classes") or []:
@@ -1499,7 +1515,7 @@ def _class_point_on_or_before(snapshots, course_name, target_date, min_age_days=
     (so a 1-day-old point is not treated as a 7-day comparison).
     Returns (snapshot_date, class_dict) or (None, None).
     """
-    as_of = as_of or datetime.now().date()
+    as_of = as_of or pacific_today()
     best = None
     best_date = None
     for snap in snapshots:
@@ -1542,7 +1558,7 @@ def build_history_context(student_sn, student_data, class_analytics_list, histor
     """Multi-day deltas and chronic missing for Grok + UI."""
     entry = (history.get("students") or {}).get(str(student_sn), {})
     snapshots = list(entry.get("snapshots") or [])
-    today = datetime.now().date()
+    today = pacific_today()
 
     # Include today's in-memory analytics as the "current" point even before write
     current_by_class = {
@@ -1969,7 +1985,7 @@ def analyze_class(class_meta, assignments, today):
         days_diff = (due - today).days
         if a.get("points_earned") is not None and -14 <= days_diff < 0:
             recent.append(a)
-        elif 0 <= days_diff <= 14 and not a.get("grading_complete"):
+        elif 0 <= days_diff <= 14 and a.get("points_earned") is None:
             upcoming.append(a)
 
     recent.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min, reverse=True)
@@ -2030,7 +2046,7 @@ def analyze_class(class_meta, assignments, today):
 
 def build_class_analytics(student_data, history_context=None):
     """Pre-compute per-class facts for Grok interpretation."""
-    today = datetime.now()
+    today = pacific_today_dt()
     student_name = student_data.get("name", "Student")
     class_analytics = []
     history_context = history_context or {}
@@ -2116,9 +2132,20 @@ def build_class_analytics(student_data, history_context=None):
         ),
     )
 
+    scheduled = sum(
+        1
+        for c in student_data.get("classes") or []
+        if (c.get("course_name") or "").strip()
+    )
     result = {
         "student_name": student_name,
         "date": today.strftime("%A, %B %d, %Y"),
+        "timezone": "America/Los_Angeles",
+        "as_of": pacific_today().isoformat(),
+        "coverage": {
+            "scheduled_classes": scheduled,
+            "classes_with_portal_work": len(class_analytics),
+        },
         "dominant_theme": dominant_theme,
         "total_recoverable_pts": round(total_recoverable, 1),
         "classes_needing_focus": classes_needing_focus,
@@ -2224,63 +2251,61 @@ def generate_ai_summary(student_data, history_context=None):
             "If history is thin, do not invent multi-week stories."
         )
 
-    today = datetime.now()
-    today_dow = today.strftime("%A")
-    system_prompt = f"""You are writing a daily grade briefing for {student_name}'s family. One output only — parent and kids may both read it. Direct facts at a glance. Not a coaching script, not separate parent vs student advice.
+    now_pt = pacific_now()
+    today_label = now_pt.strftime("%A, %B %d, %Y")
+    system_prompt = f"""You write the daily briefing a parent reads in 10 seconds on a phone or car screen. One output. {student_name}'s family may all see it. Facts at a glance — not a coaching script.
 
-Today is {today_dow}, {today.strftime('%B %d, %Y')}.
+Today is {today_label} (Pacific). Due dates in PRECOMPUTED_ANALYTICS already use Pacific time. Trust days_overdue / days_until_due. Never call something overdue or "yesterday" unless days_overdue >= 1. Due today is not missing.
 
-DATA SCOPE (hard limits)
-- Facts come only from the Aeries parent portal: posted grades, missing work, scored assignments, portal forecast, and multi-day scrape history when present.
-- The portal can lag reality (turned-in but not graded, offline work). Prefer "portal still shows … missing" over "never did …".
-- Do NOT invent causes (motivation, home, teacher fairness, effort).
-- Do NOT assume prior advice was followed unless history shows a grade or missing-work change.
-- Without multi-day history, only use within-term assignment trajectory / Aeries forecast — never invent "over the past month" narratives.
+DATA SCOPE
+- Facts only from PRECOMPUTED_ANALYTICS (Aeries parent portal). Do not redo math.
+- Portal can lag (turned in but not graded, Canvas/paper work). Prefer "portal still shows …" over "never did …".
+- Do not invent causes, effort, or teacher fairness.
+- Do not invent week-scale stories unless history.delta_7d / trend_label is present.
 
-You receive PRECOMPUTED_ANALYTICS. Your job is INTERPRETATION only — no math, no full assignment dumps.
+PARENT SKIM (this is the job)
+- Headline: one sentence — what needs attention, plus one real win if there is one. Not a roster of every class.
+- If coverage.classes_with_portal_work is much smaller than coverage.scheduled_classes, add a short clause that most classes have no work posted yet (normal early in the term). Do not treat silence as all-clear, and do not panic about empty gradebooks.
+- focus_tonight: at most TWO items, named assignment + class, due today or overdue first. Format like "Anatomy of a Great Game (Bus of Gaming); Design Principle Jigsaw (Rapid Prototype)". Empty string if nothing is due/missing.
+- wins: 0–2 specifics with evidence (grade + assignment). Skip empty praise.
 
 VOICE
 - Third person with "{student_name}" (never "you", never "as a parent…")
-- One shared tone: plain English, specific, calm, not accusatory
-- No jargon: never say completion_gap, performance_pattern, recoverable points, dominant_theme, issue_type, or "Pattern suggests"
-- Short sentences. Prefer the 1–2 highest-leverage missing items over listing everything
-- No parent tips, conversation openers, or separate student pep talks
+- Plain English, calm, specific. Short sentences.
+- No jargon: never say completion_gap, performance_pattern, recoverable points, dominant_theme, issue_type, Summatives, or "Pattern suggests"
+- Name the assignment, not the Aeries category
+- No pep talks, conversation openers, or parent tips
 
 Respond ONLY with valid JSON matching this exact schema:
 {{
-  "headline": "ONE sentence anyone can skim — the cross-class story, not every grade",
-  "focus_tonight": "Single highest-leverage next action: named assignment(s) + class. Empty string if nothing urgent",
-  "wins": ["0–2 short genuine positives with evidence — grade up vs last week, strong class, good recent score"],
+  "headline": "ONE sentence a parent can skim",
+  "focus_tonight": "Named assignment(s) + class; empty if nothing due/missing today",
+  "wins": ["0–2 short genuine positives with evidence"],
   "classes": [
     {{
       "class_name": "must match course_name from analytics",
       "urgency": "critical | watch | ok | strong",
-      "snap": "≤12 words for the closed card line — why this class matters right now",
-      "story": "1–2 plain sentences: what's going on from portal data. Do NOT dump the full missing list",
-      "do_tonight": "Concrete next step — named assignment(s). Empty string if nothing needed"
+      "snap": "≤12 words; name the assignment and due day (e.g. Anatomy of a Great Game · due Tue)",
+      "story": "One sentence of context the closed card does not already say. Do not repeat the missing list.",
+      "do_tonight": "Named assignment if action is needed; else empty"
     }}
   ]
 }}
 
 Urgency (match suggested_urgency unless you have a strong reason not to — drives dashboard colors):
-- critical: grade below 70%, OR below 80% WITH missing work, OR failing trend with multiple high-point missing items
-- watch: B+ (80%+) but missing work or a clear slipping trend — backlog, not panic
-- ok: solid, nothing urgent
-- strong: A / 90%+, no missing, clearly on track
+- critical: grade below 70%, OR below 80% WITH missing work
+- watch: missing/due work, or a B with a slipping trend — backlog, not an F
+- ok: solid, or no grade yet without missing work
+- strong: A / 90%+, no missing
 
 Rules:
-- Include EVERY class from analytics.classes
-- If analytics.classes is empty: headline must say the portal has no current classes / school is out — do NOT say "mixed or stable performance" or invent status
+- Include EVERY class from analytics.classes (not the full 9-period schedule)
+- If analytics.classes is empty: headline says no posted work yet — do not invent status
 - Order classes: critical → watch → ok → strong
-- For ok/strong: short snap + brief story; leave do_tonight empty
-- For critical/watch: fill do_tonight when there is a concrete portal action; name specific assignments from missing_assignments
-- Phrase actions as what the portal still needs (e.g. submit X), not moral judgments
-- If history.chronic_missing is set, you may note those items are still open in the portal
-- If history.delta_7d / trend_label show clear movement, one plain phrase is enough
-- Do NOT invent scores, assignments, or causes
-- Do NOT list every missing assignment in story
-- Do NOT write forecast math lectures
-- wins must be real and specific — skip empty praise
+- ok/strong: short snap; leave do_tonight empty
+- critical/watch: do_tonight names the assignment from missing_assignments or upcoming due today
+- Use due_weekday / days_until_due for "due Tue"; use days_overdue only when >= 1
+- wins must be real — skip them if there are none
 - Prefer empty strings over filler
 - Never output parent_tip, ask, parent_support, or similar fields"""
 
