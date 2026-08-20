@@ -1179,7 +1179,7 @@
             }
         }
 
-        /* ── Desktop / car landscape: two class columns, bigger type ── */
+        /* ── Desktop / car landscape: bigger type, one period-order list ── */
         @media (min-width: 1100px) {
             :root {
                 --fs-body: 22px;
@@ -1196,13 +1196,9 @@
             }
 
             .class-feed {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 12px;
-            }
-
-            .class-row.expanded {
-                grid-column: 1 / -1;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
             }
 
             .row-trend .micro-spark {
@@ -1643,10 +1639,7 @@ python3 -m http.server 8765</pre>
                     snap,
                     urgencyRank: urgencyToRank(urgency),
                 };
-            }).sort((a, b) => {
-                if (b.urgencyRank !== a.urgencyRank) return b.urgencyRank - a.urgencyRank;
-                return a.period - b.period;
-            });
+            }).sort((a, b) => a.period - b.period);
         }
 
         function formatGradeDisplay(c) {
