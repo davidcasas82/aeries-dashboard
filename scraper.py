@@ -2222,6 +2222,50 @@ def empty_term_summary(student_data):
     }
 
 
+def academic_fingerprint(student_data):
+    """Stable snapshot of grades + assignments (ignores attendance, briefings, timestamps)."""
+    classes = sorted(
+        [
+            {
+                "period": c.get("period"),
+                "course": (c.get("course_name") or "").strip(),
+                "percent": str(c.get("percent") or "").strip(),
+                "mark": str(c.get("mark") or "").strip(),
+                "missing_count": int(c.get("missing_count") or 0),
+            }
+            for c in (student_data or {}).get("classes") or []
+        ],
+        key=lambda row: (row["period"] is None, row["period"], row["course"]),
+    )
+    assignments = []
+    for group in (student_data or {}).get("assignments_by_class") or []:
+        for assignment in group.get("assignments") or []:
+            assignments.append({
+                "period": group.get("period"),
+                "class": group.get("class_name") or "",
+                "number": assignment.get("number") or "",
+                "name": assignment.get("description") or "",
+                "due": assignment.get("due_date") or "",
+                "earned": assignment.get("points_earned"),
+                "pct": assignment.get("percentage"),
+                "complete": bool(assignment.get("grading_complete")),
+            })
+    assignments.sort(
+        key=lambda row: (
+            row["period"] is None,
+            row["period"],
+            row["class"],
+            row["number"],
+            row["name"],
+        )
+    )
+    return json.dumps(
+        {"classes": classes, "assignments": assignments},
+        sort_keys=True,
+        default=str,
+    )
+
+
 def generate_ai_summary(student_data, history_context=None):
     """Call Grok API to generate a unified family daily briefing."""
     # No real grades and no posted work yet — don't invent urgency
@@ -2569,18 +2613,20 @@ def scrape_all():
         )
 
         if GROK_API_KEY:
-            print("  Generating AI summary...")
-            ai_summary = generate_ai_summary(
-                student_data, history_context=history_context
-            )
-            if ai_summary:
-                student_data["ai_summary"] = ai_summary
-                print("  AI summary generated")
+            portal_changed = academic_fingerprint(student_data) != academic_fingerprint(prior)
+            if not portal_changed and prior.get("ai_summary"):
+                student_data["ai_summary"] = prior["ai_summary"]
+                print("  AI summary kept (grades/missing unchanged)")
             else:
-                print("  AI summary skipped")
-                # Drop stale prior briefing if regenerate failed and we only carried it for context
-                if prior.get("ai_summary") and student_data.get("ai_summary") is prior.get("ai_summary"):
-                    pass  # keep previous briefing on failure
+                print(f"  Generating AI summary ({GROK_MODEL})...")
+                ai_summary = generate_ai_summary(
+                    student_data, history_context=history_context
+                )
+                if ai_summary:
+                    student_data["ai_summary"] = ai_summary
+                    print("  AI summary generated")
+                else:
+                    print("  AI summary skipped")
 
         # Append today's grade snapshot after briefing (stores previous_briefing from prior AI)
         # Prefer storing the briefing we just replaced as previous — rebuild snapshot with prior AI
