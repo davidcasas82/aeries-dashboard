@@ -2,7 +2,10 @@ name: Daily Grade Scrape
 
 on:
   schedule:
-    - cron: '0 9 * * *'  # 2am PT (UTC-7)
+    # Pacific times shift one hour in winter (PST). GitHub cron is UTC.
+    - cron: '0 9 * * *'    # ~2am PT — overnight catch-up
+    - cron: '0 23 * * *'   # ~4pm PT — after school
+    - cron: '0 3 * * *'    # ~8pm PT — evening, before parents usually look
   workflow_dispatch:
     inputs:
       grok_only:
@@ -21,6 +24,10 @@ on:
         description: 'Refresh absences/tardies only (no grades/Grok)'
         type: boolean
         default: false
+
+concurrency:
+  group: grades-scrape
+  cancel-in-progress: false
 
 permissions:
   contents: write
