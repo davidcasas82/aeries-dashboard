@@ -1320,14 +1320,8 @@ def class_has_real_grade(class_meta, assignments=None):
     if class_meta.get("missing_count"):
         return True
     if assignments:
-        return any(
-            a.get("points_earned") is not None
-            or (
-                a.get("grading_complete")
-                and a.get("percentage") is not None
-            )
-            for a in assignments
-        )
+        # Ungraded rows often show 0% / complete with no points earned — not a real F
+        return any(a.get("points_earned") is not None for a in assignments)
     return False
 
 

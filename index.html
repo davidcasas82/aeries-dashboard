@@ -1502,10 +1502,7 @@ python3 -m http.server 8765</pre>
         }
 
         function hasScoredAssignments(assignments) {
-            return (assignments || []).some(a =>
-                a.points_earned != null
-                || (a.grading_complete && a.percentage != null)
-            );
+            return (assignments || []).some(a => a.points_earned != null);
         }
 
         function hasRealGrade(c, assignments) {
