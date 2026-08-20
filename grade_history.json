@@ -3862,7 +3862,7 @@
         },
         {
           "date": "2026-08-20",
-          "captured_at": "2026-08-20T03:12:29.499084+00:00",
+          "captured_at": "2026-08-20T03:14:05.660809+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -3942,8 +3942,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Schedules are up for Daniel (9 classes) \u2014 no grades or missing work posted yet.",
-            "focus_tonight": ""
+            "headline": "Daniel has one missing assignment posted in each of Bus of Gaming and Rapid Prototype.",
+            "focus_tonight": "Submit Anatomy of a Great Game in Bus of Gaming and Article: Design Principle Jigsaw in Rapid Prototype"
           }
         }
       ]
@@ -7485,7 +7485,7 @@
         },
         {
           "date": "2026-08-20",
-          "captured_at": "2026-08-20T03:12:43.675077+00:00",
+          "captured_at": "2026-08-20T03:14:18.724305+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -7539,7 +7539,7 @@
             },
             "Tech of Biology": {
               "period": 6,
-              "pct": 0.0,
+              "pct": null,
               "mark": "",
               "missing_count": 1,
               "missing_names": [
@@ -7565,8 +7565,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Leah's Mkt Adv GrphDes grade reached A at 95% after a sharp week-long gain.",
-            "focus_tonight": ""
+            "headline": "Leah has missing work in Tech of Biology and Bus of Gaming while Mkt Adv GrphDes holds an A.",
+            "focus_tonight": "Submit Syllabus Agreement Form for Tech of Biology"
           }
         }
       ]

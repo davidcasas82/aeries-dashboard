@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-20T03:12:13.472383+00:00",
+  "last_updated": "2026-08-20T03:13:50.587502+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -184,26 +184,26 @@
         "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel has one missing assignment posted in each of Bus of Gaming and Rapid Prototype.",
-        "focus_tonight": "Submit Anatomy of a Great Game in Bus of Gaming and Article: Design Principle Jigsaw in Rapid Prototype",
+        "headline": "Daniel has one missing assignment in each of Bus of Gaming and Rapid Prototype.",
+        "focus_tonight": "Submit Anatomy of a Great Game in Bus of Gaming and Article: Design Principle Jigsaw in Rapid Prototype.",
         "wins": [],
         "classes": [
           {
             "class_name": "Bus of Gaming",
             "urgency": "watch",
-            "snap": "5-point assignment overdue by one day",
-            "story": "Portal lists Anatomy of a Great Game as missing from Summatives.",
+            "snap": "One 5-point summative overdue by one day.",
+            "story": "Portal lists Anatomy of a Great Game as missing.",
             "do_tonight": "Submit Anatomy of a Great Game"
           },
           {
             "class_name": "Rapid Prototype",
             "urgency": "watch",
-            "snap": "3-point assignment due today",
-            "story": "Portal lists Article: Design Principle Jigsaw as missing from Classwork.",
+            "snap": "One 3-point classwork item due today.",
+            "story": "Portal lists Article: Design Principle Jigsaw as missing.",
             "do_tonight": "Submit Article: Design Principle Jigsaw"
           }
         ],
-        "generated_at": "2026-08-20T03:12:29.498310+00:00",
+        "generated_at": "2026-08-20T03:14:05.660046+00:00",
         "analytics_snapshot": {
           "dominant_theme": "missing_work_backlog in 2 of 2 graded classes",
           "total_recoverable_pts": 8.0,
@@ -467,35 +467,36 @@
         "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Leah has missing work in Tech of Biology and Bus of Gaming while Mkt Adv GrphDes holds an A.",
-        "focus_tonight": "Submit Syllabus Agreement Form for Tech of Biology",
+        "headline": "One missing assignment each in Bus of Gaming and Tech of Biology while Mkt Adv GrphDes holds an A.",
+        "focus_tonight": "Submit Anatomy of a Great Game in Bus of Gaming and Syllabus Agreement Form in Tech of Biology.",
         "wins": [
-          "Mkt Adv GrphDes at 95% with no missing work"
+          "A 95% in Mkt Adv GrphDes with no missing work",
+          "100% on About Me Slides assignment"
         ],
         "classes": [
           {
-            "class_name": "Tech of Biology",
-            "urgency": "critical",
-            "snap": "0% with Syllabus Agreement Form missing",
-            "story": "Portal lists one overdue assignment worth 3 points. Two items are due tomorrow.",
-            "do_tonight": "Submit Syllabus Agreement Form"
-          },
-          {
             "class_name": "Bus of Gaming",
             "urgency": "watch",
-            "snap": "One summative assignment overdue",
-            "story": "Anatomy of a Great Game still shows as missing.",
-            "do_tonight": "Submit Anatomy of a Great Game"
+            "snap": "Missing 5-point summative due yesterday.",
+            "story": "Portal still shows Anatomy of a Great Game ungraded and overdue by one day.",
+            "do_tonight": "Submit Anatomy of a Great Game."
+          },
+          {
+            "class_name": "Tech of Biology",
+            "urgency": "watch",
+            "snap": "Missing 3-point syllabus form due yesterday.",
+            "story": "Portal still shows Syllabus Agreement Form ungraded and overdue by one day.",
+            "do_tonight": "Submit Syllabus Agreement Form."
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "A at 95% with recent full scores",
-            "story": "About Me Slides scored 100% and presentation 85%.",
+            "snap": "A at 95% with no missing work.",
+            "story": "Recent scores include 100% on About Me Slides and 85% on the presentation.",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-20T03:12:43.674291+00:00",
+        "generated_at": "2026-08-20T03:14:18.723556+00:00",
         "analytics_snapshot": {
           "dominant_theme": "missing_work_backlog in 2 of 3 graded classes",
           "total_recoverable_pts": 8.0,
