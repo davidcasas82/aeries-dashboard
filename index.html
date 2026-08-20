@@ -1501,7 +1501,14 @@ python3 -m http.server 8765</pre>
             return { critical: 4, watch: 3, ok: 2, strong: 1 }[urgency] || 2;
         }
 
-        function hasRealGrade(c, assignmentCount) {
+        function hasScoredAssignments(assignments) {
+            return (assignments || []).some(a =>
+                a.points_earned != null
+                || (a.grading_complete && a.percentage != null)
+            );
+        }
+
+        function hasRealGrade(c, assignments) {
             const mark = (c.mark || '').trim();
             if (mark) return true;
             const raw = c.percent;
@@ -1511,13 +1518,13 @@ python3 -m http.server 8765</pre>
             if (pct > 0) return true;
             // Phantom 0% at year start: only count if missing work or scored assignments exist
             if (parseMissingCount(c) > 0) return true;
-            return (assignmentCount || 0) > 0;
+            return hasScoredAssignments(assignments);
         }
 
         function inferUrgency(profile, aiClass) {
             if (aiClass?.urgency) return aiClass.urgency.toLowerCase();
             const mc = profile.missingCount;
-            if (!hasRealGrade(profile.classMeta, profile.assignments?.length || 0)) {
+            if (!hasRealGrade(profile.classMeta, profile.assignments)) {
                 return mc > 0 ? 'watch' : 'ok';
             }
             const pct = parseFloat(profile.classMeta.percent);
@@ -1531,7 +1538,7 @@ python3 -m http.server 8765</pre>
 
         function inferUrgencyReason(profile, urgency) {
             const mc = profile.missingCount;
-            if (!hasRealGrade(profile.classMeta, profile.assignments?.length || 0)) {
+            if (!hasRealGrade(profile.classMeta, profile.assignments)) {
                 return mc > 0 ? `${mc} missing` : 'No grade yet';
             }
             const mark = profile.classMeta.mark || '';
@@ -1572,7 +1579,7 @@ python3 -m http.server 8765</pre>
             const pctNum = hasPct ? parseFloat(raw) : NaN;
             const pct = !isNaN(pctNum) ? Math.round(pctNum) : null;
             // Treat phantom 0% with no letter mark as "no grade yet"
-            if (!mark && (pct === null || pct === 0) && !hasRealGrade(c, 0)) {
+            if (!mark && (pct === null || pct === 0) && !hasRealGrade(c)) {
                 return { letter: '—', pct: '' };
             }
             if (mark && pct !== null) return { letter: mark, pct: pct + '%' };
@@ -1632,7 +1639,7 @@ python3 -m http.server 8765</pre>
         }
 
         function hasGradedClasses(student) {
-            return (student.classes || []).some(c => hasRealGrade(c, 0));
+            return (student.classes || []).some(c => hasRealGrade(c));
         }
 
         function hasScheduledClasses(student) {

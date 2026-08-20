@@ -964,6 +964,16 @@ def extract_class_name(label):
     return parsed.get("name") or label
 
 
+def _assignment_group_entry(class_label, assignments):
+    parsed = parse_gradebook_option_label(class_label)
+    return {
+        "class_name": parsed.get("name") or extract_class_name(class_label),
+        "period": parsed.get("period"),
+        "term": parsed.get("term_key"),
+        "assignments": assignments,
+    }
+
+
 def option_in_school_session(parsed, session_year):
     """True/False if the option's start date is in session; None if unknown."""
     start = parsed.get("start_date") if parsed else None
@@ -1101,14 +1111,12 @@ def fetch_all_assignments(session):
     first_assignments = parse_assignment_rows(soup)
     start_index = 0
     if meta.get("preload_ok"):
-        all_class_assignments.append({
-            "class_name": extract_class_name(chosen[0][1]),
-            "assignments": first_assignments,
-        })
+        all_class_assignments.append(
+            _assignment_group_entry(chosen[0][1], first_assignments)
+        )
         start_index = 1
 
     for class_value, class_label in chosen[start_index:]:
-        class_name = extract_class_name(class_label)
 
         form_data = dict(all_inputs)
         form_data["__EVENTTARGET"] = "ctl00$MainContent$subGBS$dlGN"
@@ -1131,10 +1139,9 @@ def fetch_all_assignments(session):
         if resp2.status_code == 200 and len(resp2.text) > 500:
             frag_soup = BeautifulSoup(resp2.text, "html.parser")
             assignments = parse_assignment_rows(frag_soup)
-            all_class_assignments.append({
-                "class_name": class_name,
-                "assignments": assignments,
-            })
+            all_class_assignments.append(
+                _assignment_group_entry(class_label, assignments)
+            )
 
             vs_match = re.search(r"__VIEWSTATE\|([^|]+)\|", resp2.text)
             if vs_match:
@@ -1315,7 +1322,10 @@ def class_has_real_grade(class_meta, assignments=None):
     if assignments:
         return any(
             a.get("points_earned") is not None
-            or a.get("percentage") is not None
+            or (
+                a.get("grading_complete")
+                and a.get("percentage") is not None
+            )
             for a in assignments
         )
     return False
@@ -1432,7 +1442,7 @@ def build_student_snapshot(student_data, class_analytics_list, captured_at=None)
         name = (class_meta.get("course_name") or "").strip()
         if not name:
             continue
-        assignments = assignments_for_period(student_data, class_meta.get("period"))
+        assignments = assignments_for_class(student_data, class_meta)
         real = class_has_real_grade(class_meta, assignments)
         classes[name] = {
             "period": class_meta.get("period"),
@@ -1517,6 +1527,9 @@ def _pct_delta(current_pct, past_cls):
         return None
     past_pct = past_cls.get("pct")
     if past_pct is None:
+        return None
+    # Ignore phantom 0% baselines from empty gradebooks at term start
+    if past_pct == 0 and not (past_cls.get("mark") or "").strip():
         return None
     return round(current_pct - past_pct, 1)
 
@@ -1768,14 +1781,39 @@ def is_missing_assignment(assignment, today):
     return assignment.get("points_earned") is None
 
 
-def assignments_for_period(student_data, period):
-    grouped = {}
-    for ca in student_data.get("assignments_by_class", []):
-        p = extract_period_from_label(ca.get("class_name", ""))
-        if p is None:
+def _norm_course_name(name):
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+
+def assignments_for_class(student_data, class_meta):
+    """Match GradebookDetails groups to a ClassSummary row by period and/or name."""
+    period = class_meta.get("period") if class_meta else None
+    course_n = _norm_course_name((class_meta or {}).get("course_name"))
+    matched = []
+    seen = set()
+    for ca in student_data.get("assignments_by_class") or []:
+        label = ca.get("class_name") or ""
+        group_period = ca.get("period")
+        if group_period is None:
+            group_period = extract_period_from_label(label)
+        name_n = _norm_course_name(label)
+        hit = False
+        if period is not None and group_period is not None and int(group_period) == int(period):
+            hit = True
+        elif course_n and name_n and (course_n in name_n or name_n in course_n):
+            hit = True
+        if not hit:
             continue
-        grouped.setdefault(p, []).extend(ca.get("assignments", []))
-    return grouped.get(period, [])
+        key = (group_period, name_n or label)
+        if key in seen:
+            continue
+        seen.add(key)
+        matched.extend(ca.get("assignments") or [])
+    return matched
+
+
+def assignments_for_period(student_data, period):
+    return assignments_for_class(student_data, {"period": period, "course_name": ""})
 
 
 def build_category_breakdown(assignments):
@@ -1869,6 +1907,8 @@ def detect_performance_pattern(grade_pct, missing_count, category_breakdown, sco
 
 def infer_urgency_from_analytics(grade_pct, missing_count, trend, performance_pattern):
     if grade_pct is None:
+        if missing_count > 0:
+            return "watch", "missing_backlog"
         return "ok", "on_track"
 
     if grade_pct >= 90 and missing_count == 0 and performance_pattern == "on_track":
@@ -1909,8 +1949,12 @@ def format_assignment_entry(assignment, today, kind):
 
 
 def analyze_class(class_meta, assignments, today):
-    grade_pct = safe_float(class_meta.get("percent"))
     mark = class_meta.get("mark") or ""
+    if class_has_real_grade(class_meta, assignments):
+        grade_pct = safe_float(class_meta.get("percent"))
+    else:
+        grade_pct = None
+        mark = ""
 
     missing = [
         a for a in assignments
@@ -2000,9 +2044,9 @@ def build_class_analytics(student_data, history_context=None):
 
     for class_meta in student_data.get("classes", []):
         period = class_meta.get("period")
-        assignments = assignments_for_period(student_data, period)
-        # Skip schedule-only / phantom 0% rows so Grok doesn't treat empty gradebooks as Fs
-        if not class_has_real_grade(class_meta, assignments):
+        assignments = assignments_for_class(student_data, class_meta)
+        # Skip empty schedule rows; keep ungraded classes that already have posted work
+        if not class_has_real_grade(class_meta, assignments) and not assignments:
             continue
         analyzed = analyze_class(class_meta, assignments, today)
         # Fold multi-day history onto each class for Grok
@@ -2106,7 +2150,7 @@ def count_graded_classes(student_data):
     return sum(
         1
         for c in student_data.get("classes") or []
-        if class_has_real_grade(c, assignments_for_period(student_data, c.get("period")))
+        if class_has_real_grade(c, assignments_for_class(student_data, c))
     )
 
 
@@ -2152,8 +2196,12 @@ def empty_term_summary(student_data):
 
 def generate_ai_summary(student_data, history_context=None):
     """Call Grok API to generate a unified family daily briefing."""
-    # No real grades yet (summer or brand-new schedule) — don't invent urgency
-    if count_graded_classes(student_data) == 0:
+    # No real grades and no posted work yet — don't invent urgency
+    has_assignments = any(
+        ca.get("assignments")
+        for ca in student_data.get("assignments_by_class") or []
+    )
+    if count_graded_classes(student_data) == 0 and not has_assignments:
         return empty_term_summary(student_data)
 
     if not GROK_API_KEY:
