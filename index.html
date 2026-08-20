@@ -1748,12 +1748,28 @@ python3 -m http.server 8765</pre>
             return html;
         }
 
+        function formatSessionDay(iso) {
+            if (!iso) return '';
+            const d = new Date(`${iso}T12:00:00`);
+            if (Number.isNaN(d.getTime())) return '';
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
         function renderEmptyTermCard() {
+            const sess = (currentData && currentData.school_session) || {};
+            const last = formatSessionDay(sess.last_day);
+            const resume = formatSessionDay(sess.next_first_day) || formatSessionDay(sess.first_day);
+            const lastLine = last
+                ? `Tustin USD’s last day was ${last}. `
+                : '';
+            const resumeLine = resume
+                ? `Grades resume after first day — ${resume}`
+                : 'Grades resume on the first instructional day.';
             return `
                 <div class="empty-term-card">
                     <h3>School year ended</h3>
-                    <p>Tustin USD’s last day was May 29, 2026. The parent portal isn’t listing current classes or missing work while school is out.</p>
-                    <div class="resume">Grades resume after first day — Aug 13, 2026</div>
+                    <p>${lastLine}The parent portal isn’t listing current classes or missing work while school is out.</p>
+                    <div class="resume">${resumeLine}</div>
                 </div>`;
         }
 
@@ -2173,9 +2189,9 @@ python3 -m http.server 8765</pre>
                     banner = document.createElement('div');
                     banner.id = 'summerBreakBanner';
                     banner.className = 'summer-break-banner';
-                    const resume = (currentData && currentData.school_session && currentData.school_session.next_first_day)
-                        ? currentData.school_session.next_first_day
-                        : 'Aug 13, 2026';
+                    const resume = formatSessionDay(currentData && currentData.school_session && currentData.school_session.next_first_day)
+                        || formatSessionDay(currentData && currentData.school_session && currentData.school_session.first_day)
+                        || 'on the first instructional day';
                     banner.textContent = `School is out — Aeries scrape and Grok are paused (TUSD calendar). Showing last school-year grades and attendance. Resumes ${resume}.`;
                     const picker = document.getElementById('studentPicker');
                     picker.parentNode.insertBefore(banner, picker.nextSibling);
