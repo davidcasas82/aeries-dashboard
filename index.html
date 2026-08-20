@@ -323,29 +323,37 @@
 
         .masthead-stat {
             display: inline-flex;
-            align-items: baseline;
-            gap: 6px;
-            padding: 8px 14px;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            min-height: 44px;
+            padding: 0 16px;
             background: var(--surface-2);
             border: 1px solid var(--border);
             border-radius: 999px;
             box-shadow: var(--shadow-sm);
             font-size: var(--fs-small);
+            line-height: 1;
             color: var(--text-2);
         }
 
         .masthead-stat .stat-num {
-            font-size: calc(var(--fs-body) + 2px);
+            font-size: 1.2em;
             font-weight: 700;
             font-variant-numeric: tabular-nums;
             color: var(--text);
-            letter-spacing: -0.3px;
+            letter-spacing: -0.02em;
+            line-height: 1;
         }
 
-        .masthead-stat .stat-num-text {
-            font-size: var(--fs-small);
+        .masthead-stat .stat-lbl {
+            line-height: 1;
+            font-weight: 500;
+        }
+
+        .masthead-stat-text {
             font-weight: 600;
-            letter-spacing: 0;
+            color: var(--text);
         }
 
         .masthead-stat.warn .stat-num { color: var(--amber); }
@@ -1679,26 +1687,26 @@ python3 -m http.server 8765</pre>
             const notStarted = !!(a.not_started || ((a.days_enrolled == null || a.days_enrolled === 0) && a.absences === 0 && a.tardies === 0));
             if (a.absences != null) {
                 const cls = a.absences >= 5 ? 'alert' : (a.absences > 0 ? 'warn' : 'ok');
-                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.absences}</span> absences</span>`);
+                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.absences}</span><span class="stat-lbl">absences</span></span>`);
             }
             if (a.tardies != null) {
                 const cls = a.tardies >= 5 ? 'alert' : (a.tardies > 0 ? 'warn' : 'ok');
-                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.tardies}</span> tardies</span>`);
+                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.tardies}</span><span class="stat-lbl">tardies</span></span>`);
             }
             if (a.unexcused != null && a.unexcused > 0) {
-                chips.push(`<span class="masthead-stat alert"><span class="stat-num">${a.unexcused}</span> unexcused</span>`);
+                chips.push(`<span class="masthead-stat alert"><span class="stat-num">${a.unexcused}</span><span class="stat-lbl">unexcused</span></span>`);
             }
             if (a.days_present != null && a.days_enrolled != null && a.days_enrolled > 0) {
-                chips.push(`<span class="masthead-stat ok"><span class="stat-num">${a.days_present}</span> / ${a.days_enrolled} present</span>`);
+                chips.push(`<span class="masthead-stat ok"><span class="stat-num">${a.days_present}/${a.days_enrolled}</span><span class="stat-lbl">present</span></span>`);
             } else if (notStarted) {
-                chips.push(`<span class="masthead-stat ok"><span class="stat-num stat-num-text">year not started</span></span>`);
+                chips.push(`<span class="masthead-stat ok masthead-stat-text">year not started</span>`);
             }
             if (a.year) {
                 // Normalize 2025-2026 → “2025–26 school year”
                 let yearLabel = String(a.year);
                 const ym = yearLabel.match(/^(20\d{2})-20(\d{2})$/);
                 if (ym) yearLabel = `${ym[1]}–${ym[2]} school year`;
-                chips.push(`<span class="masthead-stat"><span class="stat-num stat-num-text">${yearLabel}</span></span>`);
+                chips.push(`<span class="masthead-stat masthead-stat-text">${yearLabel}</span>`);
             }
             if (!chips.length) return '';
             return `<div class="masthead-stats">${chips.join('')}</div>`;
