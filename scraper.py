@@ -2000,6 +2000,13 @@ def analyze_class(class_meta, assignments, today):
     urgency, issue_type = infer_urgency_from_analytics(
         grade_pct, len(missing), trend, performance_pattern
     )
+    due_today = [
+        a for a in upcoming
+        if parse_due_date(a.get("due_date"))
+        and (parse_due_date(a.get("due_date")).date() - today.date()).days == 0
+    ]
+    if due_today and urgency in ("ok", "strong"):
+        urgency, issue_type = "watch", "due_today"
 
     overdue_days = []
     for a in missing:
@@ -2303,8 +2310,9 @@ Rules:
 - If analytics.classes is empty: headline says no posted work yet — do not invent status
 - Order classes: critical → watch → ok → strong
 - ok/strong: short snap; leave do_tonight empty
-- critical/watch: do_tonight names the assignment from missing_assignments or upcoming due today
+- critical/watch: do_tonight names the assignment from missing_assignments or upcoming with days_until_due 0
 - Use due_weekday / days_until_due for "due Tue"; use days_overdue only when >= 1
+- Do not write "portal shows no missing work" as the story. If the only news is a due-today item, leave story short or empty.
 - wins must be real — skip them if there are none
 - Prefer empty strings over filler
 - Never output parent_tip, ask, parent_support, or similar fields"""
