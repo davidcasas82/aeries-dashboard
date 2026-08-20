@@ -3862,14 +3862,16 @@
         },
         {
           "date": "2026-08-20",
-          "captured_at": "2026-08-20T03:08:30.821247+00:00",
+          "captured_at": "2026-08-20T03:12:29.499084+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
               "pct": null,
               "mark": "",
-              "missing_count": 0,
-              "missing_names": [],
+              "missing_count": 1,
+              "missing_names": [
+                "Anatomy of a Great Game"
+              ],
               "aeries_trend": null
             },
             "PE Course 2": {
@@ -3892,8 +3894,10 @@
               "period": 3,
               "pct": null,
               "mark": "",
-              "missing_count": 0,
-              "missing_names": [],
+              "missing_count": 1,
+              "missing_names": [
+                "Article: Design Principle Jigsaw"
+              ],
               "aeries_trend": null
             },
             "US Hist Media": {
@@ -7481,14 +7485,16 @@
         },
         {
           "date": "2026-08-20",
-          "captured_at": "2026-08-20T03:08:42.510979+00:00",
+          "captured_at": "2026-08-20T03:12:43.675077+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
               "pct": null,
               "mark": "",
-              "missing_count": 0,
-              "missing_names": [],
+              "missing_count": 1,
+              "missing_names": [
+                "Anatomy of a Great Game"
+              ],
               "aeries_trend": null
             },
             "Mkt Adv GrphDes": {
@@ -7533,10 +7539,12 @@
             },
             "Tech of Biology": {
               "period": 6,
-              "pct": null,
+              "pct": 0.0,
               "mark": "",
-              "missing_count": 0,
-              "missing_names": [],
+              "missing_count": 1,
+              "missing_names": [
+                "Syllabus Agreement Form"
+              ],
               "aeries_trend": null
             },
             "Point Break": {
@@ -7557,7 +7565,7 @@
             }
           },
           "previous_briefing": {
-            "headline": "Schedules are up for Leah (9 classes) \u2014 no grades or missing work posted yet.",
+            "headline": "Leah's Mkt Adv GrphDes grade reached A at 95% after a sharp week-long gain.",
             "focus_tonight": ""
           }
         }

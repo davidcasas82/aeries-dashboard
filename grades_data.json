@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-20T03:08:26.931866+00:00",
+  "last_updated": "2026-08-20T03:12:13.472383+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -129,6 +129,8 @@
       "assignments_by_class": [
         {
           "class_name": "Bus of Gaming",
+          "period": 0,
+          "term": "fall",
           "assignments": [
             {
               "number": "1",
@@ -146,6 +148,8 @@
         },
         {
           "class_name": "Rapid Prototype",
+          "period": 3,
+          "term": "fall",
           "assignments": [
             {
               "number": "1",
@@ -163,6 +167,8 @@
         },
         {
           "class_name": "Alg ll Bus Mang",
+          "period": 5,
+          "term": "fall",
           "assignments": []
         }
       ],
@@ -178,22 +184,52 @@
         "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Schedules are up for Daniel (9 classes) \u2014 no grades or missing work posted yet.",
-        "focus_tonight": "",
+        "headline": "Daniel has one missing assignment posted in each of Bus of Gaming and Rapid Prototype.",
+        "focus_tonight": "Submit Anatomy of a Great Game in Bus of Gaming and Article: Design Principle Jigsaw in Rapid Prototype",
         "wins": [],
-        "classes": [],
-        "generated_at": "2026-08-20T03:08:30.821204+00:00",
+        "classes": [
+          {
+            "class_name": "Bus of Gaming",
+            "urgency": "watch",
+            "snap": "5-point assignment overdue by one day",
+            "story": "Portal lists Anatomy of a Great Game as missing from Summatives.",
+            "do_tonight": "Submit Anatomy of a Great Game"
+          },
+          {
+            "class_name": "Rapid Prototype",
+            "urgency": "watch",
+            "snap": "3-point assignment due today",
+            "story": "Portal lists Article: Design Principle Jigsaw as missing from Classwork.",
+            "do_tonight": "Submit Article: Design Principle Jigsaw"
+          }
+        ],
+        "generated_at": "2026-08-20T03:12:29.498310+00:00",
         "analytics_snapshot": {
-          "dominant_theme": "schedule_only",
-          "total_recoverable_pts": 0,
-          "empty_term": false,
-          "schedule_only": true,
-          "scheduled_classes": 9
+          "dominant_theme": "missing_work_backlog in 2 of 2 graded classes",
+          "total_recoverable_pts": 8.0,
+          "history_span_days": 94
         }
       },
       "trend_summary": [],
       "history_span_days": 94,
-      "class_trends": {}
+      "class_trends": {
+        "Bus of Gaming": {
+          "pct_history": [],
+          "delta_7d": null,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "insufficient_history"
+        },
+        "Rapid Prototype": {
+          "pct_history": [],
+          "delta_7d": null,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "insufficient_history"
+        }
+      }
     },
     {
       "sn": "1223",
@@ -321,6 +357,8 @@
       "assignments_by_class": [
         {
           "class_name": "Bus of Gaming",
+          "period": 0,
+          "term": "fall",
           "assignments": [
             {
               "number": "1",
@@ -338,6 +376,8 @@
         },
         {
           "class_name": "Mkt Adv GrphDes",
+          "period": 1,
+          "term": "fall",
           "assignments": [
             {
               "number": "1",
@@ -367,10 +407,14 @@
         },
         {
           "class_name": "Eng 9 Entre Fall",
+          "period": 5,
+          "term": "fall",
           "assignments": []
         },
         {
           "class_name": "Tech of Biology",
+          "period": 6,
+          "term": "fall",
           "assignments": [
             {
               "number": "1",
@@ -423,38 +467,52 @@
         "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Leah's Mkt Adv GrphDes grade reached A at 95% after a sharp week-long gain.",
-        "focus_tonight": "",
+        "headline": "Leah has missing work in Tech of Biology and Bus of Gaming while Mkt Adv GrphDes holds an A.",
+        "focus_tonight": "Submit Syllabus Agreement Form for Tech of Biology",
         "wins": [
-          "Mkt Adv GrphDes grade at 95% A, up 95 points from one week ago"
+          "Mkt Adv GrphDes at 95% with no missing work"
         ],
         "classes": [
           {
+            "class_name": "Tech of Biology",
+            "urgency": "critical",
+            "snap": "0% with Syllabus Agreement Form missing",
+            "story": "Portal lists one overdue assignment worth 3 points. Two items are due tomorrow.",
+            "do_tonight": "Submit Syllabus Agreement Form"
+          },
+          {
+            "class_name": "Bus of Gaming",
+            "urgency": "watch",
+            "snap": "One summative assignment overdue",
+            "story": "Anatomy of a Great Game still shows as missing.",
+            "do_tonight": "Submit Anatomy of a Great Game"
+          },
+          {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "A at 95% after sharp week-long rise",
-            "story": "Portal shows current grade at 95% with no missing assignments. History indicates improving trend over the past week.",
+            "snap": "A at 95% with recent full scores",
+            "story": "About Me Slides scored 100% and presentation 85%.",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-20T03:08:42.510216+00:00",
+        "generated_at": "2026-08-20T03:12:43.674291+00:00",
         "analytics_snapshot": {
-          "dominant_theme": "mixed or stable performance",
-          "total_recoverable_pts": 0,
+          "dominant_theme": "missing_work_backlog in 2 of 3 graded classes",
+          "total_recoverable_pts": 8.0,
           "history_span_days": 94
         }
       },
-      "trend_summary": [
-        {
-          "class_name": "Mkt Adv GrphDes",
-          "delta": 95.0,
-          "window": "7d",
-          "pct_now": 95.0,
-          "direction": "up"
-        }
-      ],
+      "trend_summary": [],
       "history_span_days": 94,
       "class_trends": {
+        "Bus of Gaming": {
+          "pct_history": [],
+          "delta_7d": null,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "insufficient_history"
+        },
         "Mkt Adv GrphDes": {
           "pct_history": [
             {
@@ -466,11 +524,24 @@
               "pct": 95.0
             }
           ],
-          "delta_7d": 95.0,
+          "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
           "span_window": null,
-          "trend_label": "improving"
+          "trend_label": "insufficient_history"
+        },
+        "Tech of Biology": {
+          "pct_history": [
+            {
+              "date": "2026-08-20",
+              "pct": 0.0
+            }
+          ],
+          "delta_7d": null,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "insufficient_history"
         }
       }
     }
