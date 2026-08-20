@@ -1491,14 +1491,10 @@ python3 -m http.server 8765</pre>
                 .sort((a, b) => parseDate(a.due_date) - parseDate(b.due_date));
         }
 
-        function filterRecentAssignments(assignments, limit) {
+        function filterScoredAssignments(assignments) {
             return assignments
-                .filter(a => {
-                    const due = parseDate(a.due_date);
-                    return due && due < TODAY && a.points_earned !== null;
-                })
-                .sort((a, b) => parseDate(b.due_date) - parseDate(a.due_date))
-                .slice(0, limit || 8);
+                .filter(a => a.points_earned != null)
+                .sort((a, b) => (parseDate(b.due_date) || 0) - (parseDate(a.due_date) || 0));
         }
 
         function buildClassProfiles(student) {
@@ -1539,7 +1535,7 @@ python3 -m http.server 8765</pre>
                 const aeriesMissing = parseMissingCount(c);
                 const missingCount = assignments.length ? missing.length : aeriesMissing;
                 const upcoming = filterUpcomingAssignments(assignments);
-                const recent = filterRecentAssignments(assignments, 8);
+                const recent = filterScoredAssignments(assignments);
 
                 profiles.push({
                     classMeta: c,
@@ -2033,7 +2029,7 @@ python3 -m http.server 8765</pre>
             }
             if (profile.recent.length) {
                 listBlocks.push(`<div class="panel-block full">
-                    <div class="panel-block-label">Recent scores <span class="count">${profile.recent.length}</span></div>
+                    <div class="panel-block-label">Scores <span class="count">${profile.recent.length}</span></div>
                     ${renderAssignmentList(profile.recent, 'recent')}
                 </div>`);
             }
