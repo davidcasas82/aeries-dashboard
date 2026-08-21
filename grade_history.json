@@ -4017,7 +4017,7 @@
         },
         {
           "date": "2026-08-21",
-          "captured_at": "2026-08-21T09:42:23.803767+00:00",
+          "captured_at": "2026-08-21T23:16:14.664620+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -4093,7 +4093,7 @@
             }
           },
           "previous_briefing": {
-            "headline": "Daniel has a 0% in Rapid Prototype; most classes have no work posted yet.",
+            "headline": "Rapid Prototype shows a 0% grade while Bus of Gaming has an overdue assignment; most classes have no work posted yet.",
             "focus_tonight": ""
           }
         }
@@ -7791,7 +7791,7 @@
         },
         {
           "date": "2026-08-21",
-          "captured_at": "2026-08-21T09:42:33.638663+00:00",
+          "captured_at": "2026-08-21T23:16:25.687764+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -7843,8 +7843,8 @@
             },
             "Tech of Biology": {
               "period": 6,
-              "pct": 0.0,
-              "mark": "",
+              "pct": 100.0,
+              "mark": "A",
               "missing_count": 0,
               "missing_names": [],
               "aeries_trend": null
@@ -7868,7 +7868,7 @@
           },
           "previous_briefing": {
             "headline": "Tech of Biology at 0% needs attention; A in Mkt Adv GrphDes, most classes have no work posted yet.",
-            "focus_tonight": "0.1 Simplify Expressions (Engineering Geo); 0.2 Solve multi-step equations (Engineering Geo)"
+            "focus_tonight": "Week 1 & 2 Warm-Ups (Tech of Biology); Lab Safety Quiz (Tech of Biology)"
           }
         }
       ]

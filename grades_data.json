@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-21T09:42:14.031132+00:00",
+  "last_updated": "2026-08-21T23:16:03.165204+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -90,11 +90,11 @@
           "period": 6,
           "course_name": "Physics & Eng",
           "teacher": "Chung, C",
-          "percent": "",
+          "percent": "0.0",
           "mark": "",
-          "mark_and_score": "",
+          "mark_and_score": " (0.0%)",
           "missing_count": 0,
-          "missing_assignments": "",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-217",
           "school_name": "Legacy Magnet Academy"
@@ -176,6 +176,12 @@
           "period": 5,
           "term": "fall",
           "assignments": []
+        },
+        {
+          "class_name": "Physics & Eng",
+          "period": 6,
+          "term": "fall",
+          "assignments": []
         }
       ],
       "attendance": {
@@ -190,7 +196,7 @@
         "raw": "Year Days Enrolled: 7 Days Present: 7 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Rapid Prototype shows a 0% grade while Bus of Gaming has an overdue assignment; most classes have no work posted yet.",
+        "headline": "Daniel has a 0% in Rapid Prototype; most classes have no work posted yet.",
         "focus_tonight": "",
         "wins": [],
         "classes": [
@@ -198,7 +204,7 @@
             "class_name": "Rapid Prototype",
             "urgency": "critical",
             "snap": "Article: Design Principle Jigsaw \u00b7 33%",
-            "story": "Only one scored assignment posted so far.",
+            "story": "One scored classwork item at 33%.",
             "do_tonight": ""
           },
           {
@@ -209,7 +215,7 @@
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-21T09:42:23.802246+00:00",
+        "generated_at": "2026-08-21T23:16:14.663071+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -231,6 +237,10 @@
           "pct_history": [
             {
               "date": "2026-08-20",
+              "pct": 0.0
+            },
+            {
+              "date": "2026-08-21",
               "pct": 0.0
             }
           ],
@@ -303,11 +313,11 @@
           "period": 4,
           "course_name": "PE Course 1",
           "teacher": "Gray-Burrell, T",
-          "percent": "",
+          "percent": "0.0",
           "mark": "",
-          "mark_and_score": "",
+          "mark_and_score": " (0.0%)",
           "missing_count": 0,
-          "missing_assignments": "",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "Gym",
           "school_name": "Legacy Magnet Academy"
@@ -329,11 +339,11 @@
           "period": 6,
           "course_name": "Tech of Biology",
           "teacher": "Johnson, D",
-          "percent": "0.0",
-          "mark": "",
-          "mark_and_score": " (0.0%)",
+          "percent": "100.0",
+          "mark": "A",
+          "mark_and_score": "A (100.0%)",
           "missing_count": 0,
-          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
+          "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=7516226&amp;Missing=1&amp;Term=F&amp;CDS=30736430000000&amp;SC=95\"><span>1</span></a>",
           "trend": "",
           "room": "2-115",
           "school_name": "Legacy Magnet Academy"
@@ -400,7 +410,7 @@
               "date_assigned": "08/17/2026",
               "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "2",
@@ -508,6 +518,12 @@
           ]
         },
         {
+          "class_name": "PE Course 1",
+          "period": 4,
+          "term": "fall",
+          "assignments": []
+        },
+        {
           "class_name": "Eng 9 Entre Fall",
           "period": 5,
           "term": "fall",
@@ -524,23 +540,23 @@
               "category": "Practice Assignments",
               "points_earned": null,
               "points_possible": 3.0,
-              "percentage": null,
+              "percentage": 0.0,
               "date_assigned": "08/13/2026",
               "date_completed": "",
               "due_date": "08/21/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "2",
               "description": "Lab Safety Quiz",
               "category": "Assessments",
-              "points_earned": null,
+              "points_earned": 5.0,
               "points_possible": 5.0,
-              "percentage": null,
+              "percentage": 100.0,
               "date_assigned": "08/17/2026",
-              "date_completed": "",
+              "date_completed": "08/21/2026",
               "due_date": "08/21/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "3",
@@ -575,17 +591,18 @@
         "raw": "Year Days Enrolled: 7 Days Present: 7 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Tech of Biology at 0% needs attention; A in Mkt Adv GrphDes, most classes have no work posted yet.",
-        "focus_tonight": "Week 1 & 2 Warm-Ups (Tech of Biology); Lab Safety Quiz (Tech of Biology)",
+        "headline": "Week 1 & 2 Warm-Ups due today in Tech of Biology; A in Mkt Adv GrphDes and most classes have no work posted yet.",
+        "focus_tonight": "Week 1 & 2 Warm-Ups (Tech of Biology)",
         "wins": [
-          "Mkt Adv GrphDes: A 95.0%, no missing work"
+          "A 95.0% in Mkt Adv GrphDes (About Me Slides 100%)",
+          "A 100.0% in Tech of Biology"
         ],
         "classes": [
           {
             "class_name": "Tech of Biology",
-            "urgency": "critical",
-            "snap": "0% grade; Week 1 & 2 Warm-Ups due Fri",
-            "story": "One scored assignment at 100%.",
+            "urgency": "watch",
+            "snap": "Week 1 & 2 Warm-Ups \u00b7 due Fri",
+            "story": "",
             "do_tonight": "Week 1 & 2 Warm-Ups"
           },
           {
@@ -605,12 +622,12 @@
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "A 95.0%, two recent scores at 100% and 85%",
+            "snap": "About Me Slides 100%, Presentation 85%",
             "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-21T09:42:33.636726+00:00",
+        "generated_at": "2026-08-21T23:16:25.685655+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -641,6 +658,10 @@
             {
               "date": "2026-08-20",
               "pct": 95.0
+            },
+            {
+              "date": "2026-08-21",
+              "pct": 95.0
             }
           ],
           "delta_7d": null,
@@ -662,6 +683,10 @@
             {
               "date": "2026-08-20",
               "pct": 0.0
+            },
+            {
+              "date": "2026-08-21",
+              "pct": 100.0
             }
           ],
           "delta_7d": null,
