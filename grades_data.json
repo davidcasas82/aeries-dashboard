@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-20T03:33:07.165218+00:00",
+  "last_updated": "2026-08-20T23:18:32.082342+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -64,11 +64,11 @@
           "period": 4,
           "course_name": "US Hist Media",
           "teacher": "Healey, M",
-          "percent": "",
+          "percent": "0.0",
           "mark": "",
-          "mark_and_score": "",
+          "mark_and_score": " (0.0%)",
           "missing_count": 0,
-          "missing_assignments": "",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-126",
           "school_name": "Legacy Magnet Academy"
@@ -166,6 +166,12 @@
           ]
         },
         {
+          "class_name": "US History",
+          "period": 4,
+          "term": "fall",
+          "assignments": []
+        },
+        {
           "class_name": "Alg ll Bus Mang",
           "period": 5,
           "term": "fall",
@@ -177,41 +183,41 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 5,
-        "days_present": 5,
+        "days_enrolled": 6,
+        "days_present": 6,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 6 Days Present: 6 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel has Anatomy of a Great Game due today in Bus of Gaming; most classes have no work posted yet.",
-        "focus_tonight": "Anatomy of a Great Game (Bus of Gaming)",
+        "headline": "Daniel has one overdue assignment in Bus of Gaming and one due today in Rapid Prototype; most classes have no work posted yet.",
+        "focus_tonight": "Anatomy of a Great Game (Bus of Gaming); Article: Design Principle Jigsaw (Rapid Prototype)",
         "wins": [],
         "classes": [
           {
             "class_name": "Bus of Gaming",
             "urgency": "watch",
-            "snap": "Anatomy of a Great Game \u00b7 due Wed",
-            "story": "Due today.",
+            "snap": "Anatomy of a Great Game \u00b7 overdue Wed",
+            "story": "Portal shows one missing assignment worth 5 points.",
             "do_tonight": "Anatomy of a Great Game"
           },
           {
             "class_name": "Rapid Prototype",
-            "urgency": "ok",
+            "urgency": "watch",
             "snap": "Article: Design Principle Jigsaw \u00b7 due Thu",
             "story": "",
-            "do_tonight": ""
+            "do_tonight": "Article: Design Principle Jigsaw"
           }
         ],
-        "generated_at": "2026-08-20T03:33:18.088115+00:00",
+        "generated_at": "2026-08-20T23:18:39.668326+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
-          "total_recoverable_pts": 0,
-          "history_span_days": 93
+          "total_recoverable_pts": 5.0,
+          "history_span_days": 94
         }
       },
       "trend_summary": [],
-      "history_span_days": 93,
+      "history_span_days": 94,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
@@ -266,11 +272,11 @@
           "period": 2,
           "course_name": "Engineering Geo",
           "teacher": "Stadel, A",
-          "percent": "",
+          "percent": "0.0",
           "mark": "",
-          "mark_and_score": "",
+          "mark_and_score": " (0.0%)",
           "missing_count": 0,
-          "missing_assignments": "",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-211",
           "school_name": "Legacy Magnet Academy"
@@ -322,7 +328,7 @@
           "mark": "",
           "mark_and_score": " (0.0%)",
           "missing_count": 0,
-          "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=7516226&amp;Missing=1&amp;Term=F&amp;CDS=30736430000000&amp;SC=95\"><span>1</span></a>",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-115",
           "school_name": "Legacy Magnet Academy"
@@ -344,11 +350,11 @@
           "period": 8,
           "course_name": "WrldHis by Dsgn",
           "teacher": "Healey, M",
-          "percent": "",
+          "percent": "0.0",
           "mark": "",
-          "mark_and_score": "",
+          "mark_and_score": " (0.0%)",
           "missing_count": 0,
-          "missing_assignments": "",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-126",
           "school_name": "Legacy Magnet Academy"
@@ -383,8 +389,8 @@
               "number": "1",
               "description": "About Me Slides",
               "category": "Assignments",
-              "points_earned": 10.0,
-              "points_possible": 10.0,
+              "points_earned": 5.0,
+              "points_possible": 5.0,
               "percentage": 100.0,
               "date_assigned": "08/17/2026",
               "date_completed": "08/20/2026",
@@ -400,6 +406,97 @@
               "percentage": 85.0,
               "date_assigned": "08/17/2026",
               "date_completed": "08/20/2026",
+              "due_date": "08/20/2026",
+              "grading_complete": false
+            }
+          ]
+        },
+        {
+          "class_name": "Engineering Geo",
+          "period": 2,
+          "term": "fall",
+          "assignments": [
+            {
+              "number": "1",
+              "description": "0.1 Simplify Expressions",
+              "category": "Algebra Boot Camp",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "date_assigned": "08/19/2026",
+              "date_completed": "",
+              "due_date": "08/20/2026",
+              "grading_complete": false
+            },
+            {
+              "number": "2",
+              "description": "0.2 Solve multi-step equations",
+              "category": "Algebra Boot Camp",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "date_assigned": "08/19/2026",
+              "date_completed": "",
+              "due_date": "08/20/2026",
+              "grading_complete": false
+            },
+            {
+              "number": "3",
+              "description": "0.3 Solve proportions",
+              "category": "Algebra Boot Camp",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "date_assigned": "08/19/2026",
+              "date_completed": "",
+              "due_date": "08/20/2026",
+              "grading_complete": false
+            },
+            {
+              "number": "4",
+              "description": "0.4 Coordinate plane",
+              "category": "Algebra Boot Camp",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "date_assigned": "08/19/2026",
+              "date_completed": "",
+              "due_date": "08/20/2026",
+              "grading_complete": false
+            },
+            {
+              "number": "5",
+              "description": "0.5 Slope of line",
+              "category": "Algebra Boot Camp",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "date_assigned": "08/19/2026",
+              "date_completed": "",
+              "due_date": "08/20/2026",
+              "grading_complete": false
+            },
+            {
+              "number": "6",
+              "description": "0.6 Area & Perimeter of rectangles & triangles",
+              "category": "Algebra Boot Camp",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "date_assigned": "08/19/2026",
+              "date_completed": "",
+              "due_date": "08/20/2026",
+              "grading_complete": false
+            },
+            {
+              "number": "7",
+              "description": "0.7 Perfect square & Square roots",
+              "category": "Algebra Boot Camp",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "date_assigned": "08/19/2026",
+              "date_completed": "",
               "due_date": "08/20/2026",
               "grading_complete": false
             }
@@ -444,15 +541,21 @@
               "number": "3",
               "description": "Syllabus Agreement Form",
               "category": "Practice Assignments",
-              "points_earned": null,
+              "points_earned": 3.0,
               "points_possible": 3.0,
-              "percentage": 0.0,
+              "percentage": 100.0,
               "date_assigned": "08/17/2026",
-              "date_completed": "",
+              "date_completed": "08/19/2026",
               "due_date": "08/19/2026",
               "grading_complete": true
             }
           ]
+        },
+        {
+          "class_name": "World History",
+          "period": 8,
+          "term": "fall",
+          "assignments": []
         }
       ],
       "attendance": {
@@ -460,50 +563,57 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 5,
-        "days_present": 5,
+        "days_enrolled": 6,
+        "days_present": 6,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 5 Days Present: 5 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 6 Days Present: 6 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Due today in Bus of Gaming and Tech of Biology; A in Mkt Adv GrphDes, most classes have no work posted yet.",
-        "focus_tonight": "Anatomy of a Great Game (Bus of Gaming); Syllabus Agreement Form (Tech of Biology)",
+        "headline": "Tech of Biology at 0% needs attention; A in Mkt Adv GrphDes, most classes have no work posted yet.",
+        "focus_tonight": "Anatomy of a Great Game (Bus of Gaming)",
         "wins": [
           "A 95% in Mkt Adv GrphDes with no missing work"
         ],
         "classes": [
           {
+            "class_name": "Tech of Biology",
+            "urgency": "critical",
+            "snap": "Low grade at 0%",
+            "story": "100% on Syllabus Agreement Form.",
+            "do_tonight": ""
+          },
+          {
             "class_name": "Bus of Gaming",
             "urgency": "watch",
             "snap": "Anatomy of a Great Game \u00b7 due Wed",
-            "story": "",
+            "story": "One 5-point assignment overdue.",
             "do_tonight": "Anatomy of a Great Game"
           },
           {
-            "class_name": "Tech of Biology",
+            "class_name": "Engineering Geo",
             "urgency": "watch",
-            "snap": "Syllabus Agreement Form \u00b7 due Wed",
+            "snap": "Seven Algebra Boot Camp items due Thu",
             "story": "",
-            "do_tonight": "Syllabus Agreement Form"
+            "do_tonight": "0.1 Simplify Expressions"
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "A 95%, no missing work",
+            "snap": "A 95%",
             "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-20T03:33:28.450366+00:00",
+        "generated_at": "2026-08-20T23:18:52.838427+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
-          "total_recoverable_pts": 0,
-          "history_span_days": 93
+          "total_recoverable_pts": 5.0,
+          "history_span_days": 94
         }
       },
       "trend_summary": [],
-      "history_span_days": 93,
+      "history_span_days": 94,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
@@ -534,8 +644,21 @@
           "span_window": null,
           "trend_label": "insufficient_history"
         },
-        "Tech of Biology": {
+        "Engineering Geo": {
           "pct_history": [],
+          "delta_7d": null,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "insufficient_history"
+        },
+        "Tech of Biology": {
+          "pct_history": [
+            {
+              "date": "2026-08-20",
+              "pct": 0.0
+            }
+          ],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
