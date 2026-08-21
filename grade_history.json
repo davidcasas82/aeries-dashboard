@@ -3935,16 +3935,14 @@
         },
         {
           "date": "2026-08-20",
-          "captured_at": "2026-08-20T23:18:39.669166+00:00",
+          "captured_at": "2026-08-21T03:49:32.274773+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
               "pct": null,
               "mark": "",
-              "missing_count": 1,
-              "missing_names": [
-                "Anatomy of a Great Game"
-              ],
+              "missing_count": 0,
+              "missing_names": [],
               "aeries_trend": null
             },
             "PE Course 2": {
@@ -3965,7 +3963,7 @@
             },
             "Rapid Prototype": {
               "period": 3,
-              "pct": null,
+              "pct": 0.0,
               "mark": "",
               "missing_count": 0,
               "missing_names": [],
@@ -4013,8 +4011,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Daniel has Anatomy of a Great Game due today in Bus of Gaming; most classes have no work posted yet.",
-            "focus_tonight": "Anatomy of a Great Game (Bus of Gaming)"
+            "headline": "Daniel has one overdue assignment in Bus of Gaming and one due today in Rapid Prototype; most classes have no work posted yet.",
+            "focus_tonight": "Anatomy of a Great Game (Bus of Gaming); Article: Design Principle Jigsaw (Rapid Prototype)"
           }
         }
       ]
@@ -7629,16 +7627,14 @@
         },
         {
           "date": "2026-08-20",
-          "captured_at": "2026-08-20T23:18:52.839269+00:00",
+          "captured_at": "2026-08-21T03:49:35.601298+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
               "pct": null,
               "mark": "",
-              "missing_count": 1,
-              "missing_names": [
-                "Anatomy of a Great Game"
-              ],
+              "missing_count": 0,
+              "missing_names": [],
               "aeries_trend": null
             },
             "Mkt Adv GrphDes": {
@@ -7707,8 +7703,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Due today in Bus of Gaming and Tech of Biology; A in Mkt Adv GrphDes, most classes have no work posted yet.",
-            "focus_tonight": "Anatomy of a Great Game (Bus of Gaming); Syllabus Agreement Form (Tech of Biology)"
+            "headline": "Tech of Biology at 0% needs attention; A in Mkt Adv GrphDes, most classes have no work posted yet.",
+            "focus_tonight": "0.1 Simplify Expressions (Engineering Geo); 0.2 Solve multi-step equations (Engineering Geo)"
           }
         }
       ]

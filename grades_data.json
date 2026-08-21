@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-20T23:18:32.082342+00:00",
+  "last_updated": "2026-08-21T03:49:17.377579+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -155,13 +155,13 @@
               "number": "1",
               "description": "Article: Design Principle Jigsaw",
               "category": "Classwork",
-              "points_earned": null,
+              "points_earned": 1.0,
               "points_possible": 3.0,
-              "percentage": 0.0,
+              "percentage": 33.33,
               "date_assigned": "08/17/2026",
-              "date_completed": "",
+              "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
-              "grading_complete": false
+              "grading_complete": true
             }
           ]
         },
@@ -190,29 +190,29 @@
         "raw": "Year Days Enrolled: 6 Days Present: 6 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel has one overdue assignment in Bus of Gaming and one due today in Rapid Prototype; most classes have no work posted yet.",
-        "focus_tonight": "Anatomy of a Great Game (Bus of Gaming); Article: Design Principle Jigsaw (Rapid Prototype)",
+        "headline": "Daniel has a 0% in Rapid Prototype; most classes have no work posted yet.",
+        "focus_tonight": "",
         "wins": [],
         "classes": [
           {
-            "class_name": "Bus of Gaming",
-            "urgency": "watch",
-            "snap": "Anatomy of a Great Game \u00b7 overdue Wed",
-            "story": "Portal shows one missing assignment worth 5 points.",
-            "do_tonight": "Anatomy of a Great Game"
+            "class_name": "Rapid Prototype",
+            "urgency": "critical",
+            "snap": "Classwork avg 33.3%",
+            "story": "Current grade is 0%.",
+            "do_tonight": ""
           },
           {
-            "class_name": "Rapid Prototype",
-            "urgency": "watch",
-            "snap": "Article: Design Principle Jigsaw \u00b7 due Thu",
-            "story": "",
-            "do_tonight": "Article: Design Principle Jigsaw"
+            "class_name": "Bus of Gaming",
+            "urgency": "ok",
+            "snap": "Anatomy of a Great Game \u00b7 due Wed",
+            "story": "Pending grade is 1 day overdue.",
+            "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-20T23:18:39.668326+00:00",
+        "generated_at": "2026-08-21T03:49:32.273313+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
-          "total_recoverable_pts": 5.0,
+          "total_recoverable_pts": 0,
           "history_span_days": 94
         }
       },
@@ -228,7 +228,12 @@
           "trend_label": "insufficient_history"
         },
         "Rapid Prototype": {
-          "pct_history": [],
+          "pct_history": [
+            {
+              "date": "2026-08-20",
+              "pct": 0.0
+            }
+          ],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
@@ -571,7 +576,7 @@
       },
       "ai_summary": {
         "headline": "Tech of Biology at 0% needs attention; A in Mkt Adv GrphDes, most classes have no work posted yet.",
-        "focus_tonight": "Anatomy of a Great Game (Bus of Gaming)",
+        "focus_tonight": "0.1 Simplify Expressions (Engineering Geo); 0.2 Solve multi-step equations (Engineering Geo)",
         "wins": [
           "A 95% in Mkt Adv GrphDes with no missing work"
         ],
@@ -588,7 +593,7 @@
             "urgency": "watch",
             "snap": "Anatomy of a Great Game \u00b7 due Wed",
             "story": "One 5-point assignment overdue.",
-            "do_tonight": "Anatomy of a Great Game"
+            "do_tonight": ""
           },
           {
             "class_name": "Engineering Geo",
