@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-21T03:49:17.377579+00:00",
+  "last_updated": "2026-08-21T09:42:14.031132+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -183,41 +183,41 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 6,
-        "days_present": 6,
+        "days_enrolled": 7,
+        "days_present": 7,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 6 Days Present: 6 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 7 Days Present: 7 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel has a 0% in Rapid Prototype; most classes have no work posted yet.",
+        "headline": "Rapid Prototype shows a 0% grade while Bus of Gaming has an overdue assignment; most classes have no work posted yet.",
         "focus_tonight": "",
         "wins": [],
         "classes": [
           {
             "class_name": "Rapid Prototype",
             "urgency": "critical",
-            "snap": "Classwork avg 33.3%",
-            "story": "Current grade is 0%.",
+            "snap": "Article: Design Principle Jigsaw \u00b7 33%",
+            "story": "Only one scored assignment posted so far.",
             "do_tonight": ""
           },
           {
             "class_name": "Bus of Gaming",
             "urgency": "ok",
             "snap": "Anatomy of a Great Game \u00b7 due Wed",
-            "story": "Pending grade is 1 day overdue.",
+            "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-21T03:49:32.273313+00:00",
+        "generated_at": "2026-08-21T09:42:23.802246+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
-          "history_span_days": 94
+          "history_span_days": 95
         }
       },
       "trend_summary": [],
-      "history_span_days": 94,
+      "history_span_days": 95,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
@@ -568,57 +568,57 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 6,
-        "days_present": 6,
+        "days_enrolled": 7,
+        "days_present": 7,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 6 Days Present: 6 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 7 Days Present: 7 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
         "headline": "Tech of Biology at 0% needs attention; A in Mkt Adv GrphDes, most classes have no work posted yet.",
-        "focus_tonight": "0.1 Simplify Expressions (Engineering Geo); 0.2 Solve multi-step equations (Engineering Geo)",
+        "focus_tonight": "Week 1 & 2 Warm-Ups (Tech of Biology); Lab Safety Quiz (Tech of Biology)",
         "wins": [
-          "A 95% in Mkt Adv GrphDes with no missing work"
+          "Mkt Adv GrphDes: A 95.0%, no missing work"
         ],
         "classes": [
           {
             "class_name": "Tech of Biology",
             "urgency": "critical",
-            "snap": "Low grade at 0%",
-            "story": "100% on Syllabus Agreement Form.",
-            "do_tonight": ""
+            "snap": "0% grade; Week 1 & 2 Warm-Ups due Fri",
+            "story": "One scored assignment at 100%.",
+            "do_tonight": "Week 1 & 2 Warm-Ups"
           },
           {
             "class_name": "Bus of Gaming",
-            "urgency": "watch",
+            "urgency": "ok",
             "snap": "Anatomy of a Great Game \u00b7 due Wed",
-            "story": "One 5-point assignment overdue.",
+            "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "Engineering Geo",
-            "urgency": "watch",
-            "snap": "Seven Algebra Boot Camp items due Thu",
+            "urgency": "ok",
+            "snap": "Seven Algebra Boot Camp items \u00b7 due Thu",
             "story": "",
-            "do_tonight": "0.1 Simplify Expressions"
+            "do_tonight": ""
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "A 95%",
+            "snap": "A 95.0%, two recent scores at 100% and 85%",
             "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-20T23:18:52.838427+00:00",
+        "generated_at": "2026-08-21T09:42:33.636726+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
-          "total_recoverable_pts": 5.0,
-          "history_span_days": 94
+          "total_recoverable_pts": 0,
+          "history_span_days": 95
         }
       },
       "trend_summary": [],
-      "history_span_days": 94,
+      "history_span_days": 95,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
