@@ -1784,11 +1784,61 @@ def attach_ui_trend_fields(student_data, history_context, aeries_series_by_class
     return student_data
 
 
-def is_missing_assignment(assignment, today):
+def aeries_missing_count(class_meta):
+    """Portal missing badge — not the same as 'ungraded and past due'."""
+    try:
+        n = int((class_meta or {}).get("missing_count") or 0)
+    except (TypeError, ValueError):
+        n = 0
+    html = str((class_meta or {}).get("missing_assignments") or "")
+    if re.search(r'class="MissingAssignment"', html):
+        m = re.search(r">(\d+)<", html)
+        if m:
+            n = max(n, int(m.group(1)))
+    return n
+
+
+def is_past_due_ungraded(assignment, today):
     due = parse_due_date(assignment.get("due_date"))
     if not due or due >= today:
         return False
     return assignment.get("points_earned") is None
+
+
+def select_missing_assignments(assignments, class_meta, today):
+    """Past-due ungraded work is missing only if Aeries says so (or graded as zero).
+
+    Teachers often leave submitted work ungraded for a day. That is pending_grade,
+    not tonight's homework and not a missing flag.
+    """
+    past_due = [a for a in assignments if is_past_due_ungraded(a, today)]
+    graded_zero = [a for a in past_due if a.get("grading_complete")]
+    aeries_n = aeries_missing_count(class_meta)
+    if aeries_n <= 0:
+        return graded_zero
+
+    picked = list(graded_zero)
+    already = {id(a) for a in picked}
+    rest = [a for a in past_due if id(a) not in already]
+    rest.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
+    for a in rest:
+        if len(picked) >= aeries_n:
+            break
+        picked.append(a)
+    picked.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
+    return picked
+
+
+def is_missing_assignment(assignment, today, class_meta=None):
+    """Compatibility wrapper; prefer select_missing_assignments for class context."""
+    if class_meta is not None:
+        return assignment in select_missing_assignments([assignment], class_meta, today)
+    due = parse_due_date(assignment.get("due_date"))
+    if not due or due >= today:
+        return False
+    if assignment.get("points_earned") is not None:
+        return False
+    return bool(assignment.get("grading_complete"))
 
 
 def _norm_course_name(name):
@@ -1966,11 +2016,13 @@ def analyze_class(class_meta, assignments, today):
         grade_pct = None
         mark = ""
 
-    missing = [
+    missing = select_missing_assignments(assignments, class_meta, today)
+    missing_ids = {id(a) for a in missing}
+    pending_grade = [
         a for a in assignments
-        if is_missing_assignment(a, today)
+        if is_past_due_ungraded(a, today) and id(a) not in missing_ids
     ]
-    missing.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
+    pending_grade.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
 
     recoverable_points = sum(
         a.get("points_possible") or 0 for a in missing
@@ -2033,6 +2085,9 @@ def analyze_class(class_meta, assignments, today):
         "trend": trend,
         "missing_assignments": [
             format_assignment_entry(a, today, "missing") for a in missing
+        ],
+        "pending_grade": [
+            format_assignment_entry(a, today, "missing") for a in pending_grade[:8]
         ],
         "recoverable_points": round(recoverable_points, 1),
         "oldest_missing_days": oldest_missing_days,
@@ -2121,6 +2176,8 @@ def build_class_analytics(student_data, history_context=None):
                 "note": "no missing work, stable or improving",
             })
 
+    tonight_plan = build_tonight_plan(class_analytics)
+
     urgency_rank = {"critical": 0, "watch": 1, "ok": 2, "strong": 3}
     classes_needing_focus = sorted(
         [
@@ -2155,6 +2212,7 @@ def build_class_analytics(student_data, history_context=None):
         },
         "dominant_theme": dominant_theme,
         "total_recoverable_pts": round(total_recoverable, 1),
+        "tonight_plan": tonight_plan,
         "classes_needing_focus": classes_needing_focus,
         "wins_hints": wins[:3],
         "classes": class_analytics,
@@ -2172,6 +2230,85 @@ def build_class_analytics(student_data, history_context=None):
             "previous_briefing": history_context.get("previous_briefing"),
         }
     return result
+
+
+def build_tonight_plan(class_analytics, limit=2):
+    """Due today first; Aeries-confirmed missing next. Never pending_grade."""
+    items = []
+    seen = set()
+
+    def add(course, assignment, reason):
+        name = (assignment.get("name") or "").strip()
+        if not name or not course:
+            return
+        key = (_norm_course_name(course), name.lower())
+        if key in seen:
+            return
+        seen.add(key)
+        items.append({
+            "name": name,
+            "class_name": course,
+            "reason": reason,
+        })
+
+    for c in class_analytics or []:
+        course = (c.get("course_name") or "").strip()
+        for a in c.get("upcoming") or []:
+            if a.get("days_until_due") == 0:
+                add(course, a, "due_today")
+
+    if len(items) < limit:
+        for c in class_analytics or []:
+            course = (c.get("course_name") or "").strip()
+            for a in c.get("missing_assignments") or []:
+                add(course, a, "missing")
+                if len(items) >= limit:
+                    break
+            if len(items) >= limit:
+                break
+
+    items = items[:limit]
+    label = "; ".join(f"{i['name']} ({i['class_name']})" for i in items)
+    return {"items": items, "label": label}
+
+
+def apply_tonight_plan(summary, analytics):
+    """Tonight is computed, not left to the model — yesterday's ungraded work cannot win."""
+    if not isinstance(summary, dict):
+        return summary
+    plan = (analytics or {}).get("tonight_plan") or {}
+    items = plan.get("items") or []
+    summary["focus_tonight"] = (plan.get("label") or "").strip()
+    by_class = {}
+    for item in items:
+        by_class.setdefault(item.get("class_name") or "", []).append(item.get("name") or "")
+    for cls in summary.get("classes") or []:
+        if not isinstance(cls, dict):
+            continue
+        key = (cls.get("class_name") or "").strip()
+        names = by_class.get(key)
+        if not names:
+            kn = _norm_course_name(key)
+            for ck, cn in by_class.items():
+                cn_key = _norm_course_name(ck)
+                if kn and cn_key and (kn in cn_key or cn_key in kn):
+                    names = cn
+                    break
+        cls["do_tonight"] = (names[0] if names else "") or ""
+    return summary
+
+
+def briefing_generated_on_pacific_date(ai, day):
+    raw = (ai or {}).get("generated_at") or ""
+    if not raw:
+        return False
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(PACIFIC).date() == day
 
 
 def count_graded_classes(student_data):
@@ -2317,7 +2454,7 @@ DATA SCOPE
 PARENT SKIM (this is the job)
 - Headline: one sentence — what needs attention, plus one real win if there is one. Not a roster of every class.
 - If coverage.classes_with_portal_work is much smaller than coverage.scheduled_classes, add a short clause that most classes have no work posted yet (normal early in the term). Do not treat silence as all-clear, and do not panic about empty gradebooks.
-- focus_tonight: at most TWO items, named assignment + class, due today or overdue first. Format like "Anatomy of a Great Game (Bus of Gaming); Design Principle Jigsaw (Rapid Prototype)". Empty string if nothing is due/missing.
+- focus_tonight: copy tonight_plan.label exactly (empty if tonight_plan.items is empty). Due today always beats overdue. pending_grade is submitted/awaiting a teacher score — not tonight, not missing.
 - wins: 0–2 specifics with evidence (grade + assignment). Skip empty praise.
 
 VOICE
@@ -2354,7 +2491,8 @@ Rules:
 - If analytics.classes is empty: headline says no posted work yet — do not invent status
 - Order classes: critical → watch → ok → strong
 - ok/strong: short snap; leave do_tonight empty
-- critical/watch: do_tonight names the assignment from missing_assignments or upcoming with days_until_due 0
+- critical/watch: do_tonight is that class's tonight_plan item; empty if the class is not in tonight_plan
+- pending_grade: do not tell the family to redo it tonight; portal often lags after turn-in
 - Use due_weekday / days_until_due for "due Tue"; use days_overdue only when >= 1
 - Do not write "portal shows no missing work" as the story. If the only news is a due-today item, leave story short or empty.
 - wins must be real — skip them if there are none
@@ -2401,7 +2539,7 @@ Rules:
             "total_recoverable_pts": analytics.get("total_recoverable_pts"),
             "history_span_days": (history_context or {}).get("history_span_days"),
         }
-        return summary
+        return apply_tonight_plan(summary, analytics)
 
     except requests.exceptions.Timeout:
         print("  WARNING: Grok API timed out")
@@ -2614,7 +2752,10 @@ def scrape_all():
 
         if GROK_API_KEY:
             portal_changed = academic_fingerprint(student_data) != academic_fingerprint(prior)
-            if not portal_changed and prior.get("ai_summary"):
+            briefing_today = briefing_generated_on_pacific_date(
+                prior.get("ai_summary"), pacific_today()
+            )
+            if not portal_changed and briefing_today and prior.get("ai_summary"):
                 student_data["ai_summary"] = prior["ai_summary"]
                 print("  AI summary kept (grades/missing unchanged)")
             else:
@@ -2627,6 +2768,14 @@ def scrape_all():
                     print("  AI summary generated")
                 else:
                     print("  AI summary skipped")
+
+        if student_data.get("ai_summary"):
+            analytics = build_class_analytics(
+                student_data, history_context=history_context
+            )
+            student_data["ai_summary"] = apply_tonight_plan(
+                student_data["ai_summary"], analytics
+            )
 
         # Append today's grade snapshot after briefing (stores previous_briefing from prior AI)
         # Prefer storing the briefing we just replaced as previous — rebuild snapshot with prior AI

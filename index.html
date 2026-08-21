@@ -1392,10 +1392,20 @@ python3 -m http.server 8765</pre>
             return m ? parseInt(m[1], 10) : 0;
         }
 
-        function isMissingAssignment(a) {
+        function isPastDueUngraded(a) {
             const due = parseDate(a.due_date);
             if (!due || due >= TODAY) return false;
             return a.points_earned === null;
+        }
+
+        function isDueTodayUngraded(a) {
+            const due = parseDate(a.due_date);
+            if (!due || a.points_earned != null) return false;
+            return due.getTime() === TODAY.getTime();
+        }
+
+        function isMissingAssignment(a) {
+            return isPastDueUngraded(a) && a.grading_complete === true;
         }
 
         function normalizeAiClass(ai) {
@@ -1480,10 +1490,23 @@ python3 -m http.server 8765</pre>
             return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         }
 
-        function filterMissingAssignments(assignments) {
-            return assignments
-                .filter(isMissingAssignment)
-                .sort((a, b) => {
+        function filterMissingAssignments(assignments, aeriesCount) {
+            const pastDue = (assignments || []).filter(isPastDueUngraded);
+            const gradedZero = pastDue.filter(a => a.grading_complete === true);
+            const rest = pastDue
+                .filter(a => a.grading_complete !== true)
+                .sort((a, b) => (parseDate(a.due_date) || 0) - (parseDate(b.due_date) || 0));
+            let picked;
+            if (!aeriesCount || aeriesCount <= 0) {
+                picked = gradedZero;
+            } else {
+                picked = gradedZero.slice();
+                for (const a of rest) {
+                    if (picked.length >= aeriesCount) break;
+                    picked.push(a);
+                }
+            }
+            return picked.sort((a, b) => {
                     const ptsDiff = (b.points_possible || 0) - (a.points_possible || 0);
                     if (ptsDiff !== 0) return ptsDiff;
                     return (parseDate(a.due_date) || 0) - (parseDate(b.due_date) || 0);
@@ -1539,8 +1562,8 @@ python3 -m http.server 8765</pre>
                 // Still skip completely empty junk rows without a course name.
                 if (!(c.course_name || '').trim() && !assignments.length) continue;
 
-                const missing = filterMissingAssignments(assignments);
                 const aeriesMissing = parseMissingCount(c);
+                const missing = filterMissingAssignments(assignments, aeriesMissing);
                 const missingCount = assignments.length ? missing.length : aeriesMissing;
                 const upcoming = filterUpcomingAssignments(assignments);
                 const recent = filterScoredAssignments(assignments);
@@ -1598,18 +1621,73 @@ python3 -m http.server 8765</pre>
             return hasScoredAssignments(assignments);
         }
 
+        function pickTonightItems(profiles) {
+            const dueToday = [];
+            const missing = [];
+            for (const p of profiles || []) {
+                const className = (p.classMeta && p.classMeta.course_name) || '';
+                for (const a of p.upcoming || []) {
+                    if (isDueTodayUngraded(a) && a.description) {
+                        dueToday.push({ name: a.description, className });
+                    }
+                }
+                for (const a of p.missing || []) {
+                    if (a.description) missing.push({ name: a.description, className });
+                }
+            }
+            const seen = new Set();
+            const items = [];
+            for (const item of dueToday.concat(missing)) {
+                const key = `${normalizeName(item.className)}|${(item.name || '').toLowerCase()}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                items.push(item);
+                if (items.length >= 2) break;
+            }
+            return items;
+        }
+
+        function formatTonightLabel(items) {
+            return (items || []).map(i => `${i.name} (${i.className})`).join('; ');
+        }
+
+        function liveDoTonight(profile) {
+            const dueToday = (profile.upcoming || []).find(isDueTodayUngraded);
+            if (dueToday && dueToday.description) return dueToday.description;
+            const miss = (profile.missing || [])[0];
+            return (miss && miss.description) || '';
+        }
+
+        function snapNamesStaleWork(snap, profile) {
+            if (!snap) return false;
+            for (const a of profile.assignments || []) {
+                if (!a.description || snap.indexOf(a.description) === -1) continue;
+                if (isPastDueUngraded(a) && !(profile.missing || []).some(m => m.description === a.description)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         function inferUrgency(profile, aiClass) {
-            if (aiClass?.urgency) return aiClass.urgency.toLowerCase();
             const mc = profile.missingCount;
+            const dueToday = (profile.upcoming || []).some(isDueTodayUngraded);
             if (!hasRealGrade(profile.classMeta, profile.assignments)) {
-                return mc > 0 ? 'watch' : 'ok';
+                if (mc > 0 || dueToday) return 'watch';
+                return 'ok';
             }
             const pct = parseFloat(profile.classMeta.percent);
             const belowB = !isNaN(pct) && pct < 80;
             const belowC = !isNaN(pct) && pct < 70;
             if (belowC || (belowB && mc > 0)) return 'critical';
             if (mc > 0 && !isNaN(pct) && pct >= 80) return 'watch';
+            if (dueToday) return 'watch';
             if (!isNaN(pct) && pct >= 90 && mc === 0) return 'strong';
+            const aiUrgency = (aiClass?.urgency || '').toLowerCase();
+            if ((aiUrgency === 'watch' || aiUrgency === 'critical') && mc === 0 && !dueToday) {
+                return (!isNaN(pct) && pct >= 90) ? 'strong' : 'ok';
+            }
+            if (aiUrgency) return aiUrgency;
             return 'ok';
         }
 
@@ -1635,12 +1713,16 @@ python3 -m http.server 8765</pre>
                 const rawAi = findAiClass(student, p.classMeta.course_name);
                 const aiClass = normalizeAiClass(rawAi);
                 const urgency = inferUrgency(p, aiClass);
-                const snap = (aiClass?.snap || inferUrgencyReason(p, urgency) || '').trim();
+                let snap = (aiClass?.snap || inferUrgencyReason(p, urgency) || '').trim();
+                if (snapNamesStaleWork(snap, p)) {
+                    snap = inferUrgencyReason(p, urgency) || '';
+                }
                 return {
                     ...p,
                     aiClass,
                     urgency,
                     snap,
+                    liveDoTonight: liveDoTonight(p),
                     urgencyRank: urgencyToRank(urgency),
                 };
             }).sort((a, b) => a.period - b.period);
@@ -1736,12 +1818,13 @@ python3 -m http.server 8765</pre>
             return hasScheduledClasses(student) && !hasPostedWork(student);
         }
 
-        function renderMasthead(student, idx) {
+        function renderMasthead(student, idx, profiles) {
             const s = student.ai_summary;
             const scheduleOnly = isScheduleOnly(student);
             const emptyTerm = !hasScheduledClasses(student);
             const summer = isSummerMode() && emptyTerm;
-            const focus = (!summer && !scheduleOnly && s) ? (s.focus_tonight || '').trim() : '';
+            const tonightItems = (!summer && !scheduleOnly) ? pickTonightItems(profiles || []) : [];
+            const focus = formatTonightLabel(tonightItems);
             studentFocusMap[idx] = focus;
             const attendanceHtml = renderAttendanceStats(student);
 
@@ -1796,6 +1879,24 @@ python3 -m http.server 8765</pre>
             // Guard against old bad empty-term headlines once grades exist
             if (/no classes or missing work listed|mixed or stable performance/i.test(headline) && emptyTerm) {
                 headline = 'School year is out — no current classes or missing work in the portal.';
+            }
+            const headlineNamesStaleTonight = (profiles || []).some(p =>
+                (p.assignments || []).some(a =>
+                    a.description && headline.indexOf(a.description) !== -1
+                    && isPastDueUngraded(a)
+                    && !tonightItems.some(i => i.name === a.description)
+                )
+            );
+            if (headlineNamesStaleTonight) {
+                if (tonightItems.length === 1) {
+                    headline = `${tonightItems[0].name} is due today in ${tonightItems[0].className}.`;
+                } else if (tonightItems.length > 1) {
+                    headline = `Due today: ${focus}.`;
+                } else if (s.wins && s.wins[0]) {
+                    headline = s.wins[0];
+                } else {
+                    headline = '';
+                }
             }
 
             let html = `<div class="masthead" id="hero-card-${idx}">`;
@@ -1945,7 +2046,7 @@ python3 -m http.server 8765</pre>
             const c = profile.classMeta;
             const ai = normalizeAiClass(profile.aiClass);
             const story = (ai?.story || '').trim();
-            const doTonight = (ai?.do_tonight || '').trim();
+            const doTonight = (profile.liveDoTonight || '').trim();
             const snap = (profile.snap || '').trim();
             const storyText = story || snap;
             const g = formatGradeDisplay(c);
@@ -2178,7 +2279,7 @@ python3 -m http.server 8765</pre>
             // True summer with nothing scheduled: empty-state card
             if (noSchedule && isSummerMode()) {
                 return `
-                    ${renderMasthead(student, idx)}
+                    ${renderMasthead(student, idx, profiles)}
                     ${renderEmptyTermCard()}`;
             }
             // Schedule and/or grades: always show the class feed when we have rows
@@ -2186,7 +2287,7 @@ python3 -m http.server 8765</pre>
                 ? renderClassFeed(profiles, idx, student)
                 : (isSummerMode() ? renderEmptyTermCard() : '');
             return `
-                ${renderMasthead(student, idx)}
+                ${renderMasthead(student, idx, profiles)}
                 ${feed}`;
         }
 
