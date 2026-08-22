@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-22T03:39:56.715407+00:00",
+  "last_updated": "2026-08-22T23:12:41.128754+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -25,11 +25,11 @@
           "period": 1,
           "course_name": "PE Course 2",
           "teacher": "Kelly, S",
-          "percent": "",
+          "percent": "0.0",
           "mark": "",
-          "mark_and_score": "",
+          "mark_and_score": " (0.0%)",
           "missing_count": 0,
-          "missing_assignments": "",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "Gym",
           "school_name": "Legacy Magnet Academy"
@@ -147,6 +147,12 @@
           ]
         },
         {
+          "class_name": "PE Course 2",
+          "period": 1,
+          "term": "fall",
+          "assignments": []
+        },
+        {
           "class_name": "Rapid Prototype",
           "period": 3,
           "term": "fall",
@@ -204,26 +210,26 @@
             "class_name": "Rapid Prototype",
             "urgency": "critical",
             "snap": "Article: Design Principle Jigsaw \u00b7 33%",
-            "story": "One scored classwork item at 33%.",
+            "story": "Only classwork score posted so far.",
             "do_tonight": ""
           },
           {
             "class_name": "Bus of Gaming",
             "urgency": "ok",
             "snap": "Anatomy of a Great Game \u00b7 due Wed",
-            "story": "",
+            "story": "Portal shows pending grade.",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-21T23:16:14.663071+00:00",
+        "generated_at": "2026-08-22T23:12:50.994351+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
-          "history_span_days": 95
+          "history_span_days": 96
         }
       },
       "trend_summary": [],
-      "history_span_days": 95,
+      "history_span_days": 96,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
@@ -591,18 +597,17 @@
         "raw": "Year Days Enrolled: 7 Days Present: 7 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Week 1 & 2 Warm-Ups due today in Tech of Biology; A in Mkt Adv GrphDes and most classes have no work posted yet.",
+        "headline": "Week 1 & 2 Warm-Ups overdue in Tech of Biology; A in Mkt Adv GrphDes and most classes have no work posted yet.",
         "focus_tonight": "Week 1 & 2 Warm-Ups (Tech of Biology)",
         "wins": [
-          "A 95.0% in Mkt Adv GrphDes (About Me Slides 100%)",
-          "A 100.0% in Tech of Biology"
+          "A 95% in Mkt Adv GrphDes"
         ],
         "classes": [
           {
             "class_name": "Tech of Biology",
             "urgency": "watch",
             "snap": "Week 1 & 2 Warm-Ups \u00b7 due Fri",
-            "story": "",
+            "story": "Lab Safety Quiz scored 100%.",
             "do_tonight": "Week 1 & 2 Warm-Ups"
           },
           {
@@ -615,7 +620,7 @@
           {
             "class_name": "Engineering Geo",
             "urgency": "ok",
-            "snap": "Seven Algebra Boot Camp items \u00b7 due Thu",
+            "snap": "Seven Algebra Boot Camp tasks \u00b7 due Thu",
             "story": "",
             "do_tonight": ""
           },
@@ -627,15 +632,15 @@
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-21T23:16:25.685655+00:00",
+        "generated_at": "2026-08-22T23:13:00.677529+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
-          "total_recoverable_pts": 0,
-          "history_span_days": 95
+          "total_recoverable_pts": 3.0,
+          "history_span_days": 96
         }
       },
       "trend_summary": [],
-      "history_span_days": 95,
+      "history_span_days": 96,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
