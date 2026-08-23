@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-23T03:49:10.674243+00:00",
+  "last_updated": "2026-08-23T09:33:14.145883+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -209,27 +209,27 @@
           {
             "class_name": "Rapid Prototype",
             "urgency": "critical",
-            "snap": "Article: Design Principle Jigsaw \u00b7 33%",
-            "story": "Only classwork score posted so far.",
+            "snap": "Article: Design Principle Jigsaw \u00b7 due Thu",
+            "story": "One scored assignment at 33%.",
             "do_tonight": ""
           },
           {
             "class_name": "Bus of Gaming",
             "urgency": "ok",
             "snap": "Anatomy of a Great Game \u00b7 due Wed",
-            "story": "Portal shows pending grade.",
+            "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-22T23:12:50.994351+00:00",
+        "generated_at": "2026-08-23T09:33:23.693658+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
-          "history_span_days": 96
+          "history_span_days": 97
         }
       },
       "trend_summary": [],
-      "history_span_days": 96,
+      "history_span_days": 97,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
@@ -601,10 +601,10 @@
         "raw": "Year Days Enrolled: 7 Days Present: 7 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Week 1 & 2 Warm-Ups overdue in Tech of Biology; A in Mkt Adv GrphDes and most classes have no work posted yet.",
+        "headline": "Week 1 & 2 Warm-Ups overdue in Tech of Biology needs attention; A in Mkt Adv GrphDes and most classes have no work posted yet.",
         "focus_tonight": "Week 1 & 2 Warm-Ups (Tech of Biology)",
         "wins": [
-          "A 95% in Mkt Adv GrphDes"
+          "A 95% in Mkt Adv GrphDes with no missing work"
         ],
         "classes": [
           {
@@ -624,7 +624,7 @@
           {
             "class_name": "Engineering Geo",
             "urgency": "ok",
-            "snap": "Seven Algebra Boot Camp tasks \u00b7 due Thu",
+            "snap": "Seven Algebra Boot Camp items \u00b7 due Thu",
             "story": "",
             "do_tonight": ""
           },
@@ -636,15 +636,15 @@
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-22T23:13:00.677529+00:00",
+        "generated_at": "2026-08-23T09:33:34.792346+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 3.0,
-          "history_span_days": 96
+          "history_span_days": 97
         }
       },
       "trend_summary": [],
-      "history_span_days": 96,
+      "history_span_days": 97,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [],
