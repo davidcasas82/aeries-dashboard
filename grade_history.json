@@ -4263,12 +4263,12 @@
         },
         {
           "date": "2026-08-24",
-          "captured_at": "2026-08-24T09:54:17.625043+00:00",
+          "captured_at": "2026-08-24T23:15:52.774020+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
-              "pct": null,
-              "mark": "",
+              "pct": 100.0,
+              "mark": "A",
               "missing_count": 0,
               "missing_names": [],
               "aeries_trend": null
@@ -8287,12 +8287,12 @@
         },
         {
           "date": "2026-08-24",
-          "captured_at": "2026-08-24T09:54:30.508204+00:00",
+          "captured_at": "2026-08-24T23:16:02.775175+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
-              "pct": null,
-              "mark": "",
+              "pct": 100.0,
+              "mark": "A",
               "missing_count": 0,
               "missing_names": [],
               "aeries_trend": null
@@ -8341,10 +8341,8 @@
               "period": 6,
               "pct": 100.0,
               "mark": "A",
-              "missing_count": 1,
-              "missing_names": [
-                "Week 1 & 2 Warm-Ups"
-              ],
+              "missing_count": 0,
+              "missing_names": [],
               "aeries_trend": null
             },
             "Point Break": {
@@ -8365,7 +8363,7 @@
             }
           },
           "previous_briefing": {
-            "headline": "Week 1 & 2 Warm-Ups overdue in Tech of Biology needs attention; A in Mkt Adv GrphDes and most classes have no work posted yet.",
+            "headline": "Week 1 & 2 Warm-Ups overdue in Tech of Biology needs attention; A in Mkt Adv GrphDes.",
             "focus_tonight": "Week 1 & 2 Warm-Ups (Tech of Biology)"
           }
         }

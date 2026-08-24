@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-24T09:54:04.621298+00:00",
+  "last_updated": "2026-08-24T23:15:43.671158+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -12,9 +12,9 @@
           "period": 0,
           "course_name": "Bus of Gaming",
           "teacher": "Licciardo, D",
-          "percent": "0.0",
-          "mark": "",
-          "mark_and_score": " (0.0%)",
+          "percent": "100.0",
+          "mark": "A",
+          "mark_and_score": "A (100.0%)",
           "missing_count": 0,
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
@@ -136,11 +136,11 @@
               "number": "1",
               "description": "Anatomy of a Great Game",
               "category": "Summatives",
-              "points_earned": null,
+              "points_earned": 5.0,
               "points_possible": 5.0,
-              "percentage": 0.0,
+              "percentage": 100.0,
               "date_assigned": "08/13/2026",
-              "date_completed": "",
+              "date_completed": "08/19/2026",
               "due_date": "08/19/2026",
               "grading_complete": false
             }
@@ -168,6 +168,18 @@
               "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
               "grading_complete": true
+            },
+            {
+              "number": "2",
+              "description": "LT 1.1 - Poster of Myself in Adobe Illustrator",
+              "category": "Assessments",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "date_assigned": "08/24/2026",
+              "date_completed": "",
+              "due_date": "08/28/2026",
+              "grading_complete": false
             }
           ]
         },
@@ -202,26 +214,28 @@
         "raw": "Year Days Enrolled: 8 Days Present: 8 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel has a 0% in Rapid Prototype; most classes have no work posted yet.",
+        "headline": "Daniel has a 0% in Rapid Prototype; most classes have no work posted yet, and he earned an A in Bus of Gaming.",
         "focus_tonight": "",
-        "wins": [],
+        "wins": [
+          "100% on Anatomy of a Great Game in Bus of Gaming"
+        ],
         "classes": [
           {
             "class_name": "Rapid Prototype",
             "urgency": "critical",
             "snap": "Article: Design Principle Jigsaw \u00b7 33%",
-            "story": "Classwork average sits at 33% with one scored item.",
+            "story": "Upcoming poster due Friday.",
             "do_tonight": ""
           },
           {
             "class_name": "Bus of Gaming",
-            "urgency": "ok",
-            "snap": "Anatomy of a Great Game \u00b7 due Wed",
-            "story": "Pending grade on the summative assignment.",
+            "urgency": "strong",
+            "snap": "Anatomy of a Great Game \u00b7 100%",
+            "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-24T09:54:17.623885+00:00",
+        "generated_at": "2026-08-24T23:15:52.772599+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -232,7 +246,12 @@
       "history_span_days": 98,
       "class_trends": {
         "Bus of Gaming": {
-          "pct_history": [],
+          "pct_history": [
+            {
+              "date": "2026-08-24",
+              "pct": 100.0
+            }
+          ],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
@@ -256,6 +275,10 @@
             {
               "date": "2026-08-23",
               "pct": 0.0
+            },
+            {
+              "date": "2026-08-24",
+              "pct": 0.0
             }
           ],
           "delta_7d": null,
@@ -275,9 +298,9 @@
           "period": 0,
           "course_name": "Bus of Gaming",
           "teacher": "Licciardo, D",
-          "percent": "0.0",
-          "mark": "",
-          "mark_and_score": " (0.0%)",
+          "percent": "100.0",
+          "mark": "A",
+          "mark_and_score": "A (100.0%)",
           "missing_count": 0,
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
@@ -357,7 +380,7 @@
           "mark": "A",
           "mark_and_score": "A (100.0%)",
           "missing_count": 0,
-          "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=7516226&amp;Missing=1&amp;Term=F&amp;CDS=30736430000000&amp;SC=95\"><span>1</span></a>",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-115",
           "school_name": "Legacy Magnet Academy"
@@ -399,11 +422,11 @@
               "number": "1",
               "description": "Anatomy of a Great Game",
               "category": "Summatives",
-              "points_earned": null,
+              "points_earned": 5.0,
               "points_possible": 5.0,
-              "percentage": 0.0,
+              "percentage": 100.0,
               "date_assigned": "08/13/2026",
-              "date_completed": "",
+              "date_completed": "08/19/2026",
               "due_date": "08/19/2026",
               "grading_complete": false
             }
@@ -436,7 +459,7 @@
               "date_assigned": "08/17/2026",
               "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
-              "grading_complete": false
+              "grading_complete": true
             }
           ]
         },
@@ -552,11 +575,11 @@
               "number": "1",
               "description": "Week 1 & 2 Warm-Ups",
               "category": "Practice Assignments",
-              "points_earned": null,
+              "points_earned": 2.0,
               "points_possible": 3.0,
-              "percentage": 0.0,
+              "percentage": 66.67,
               "date_assigned": "08/13/2026",
-              "date_completed": "",
+              "date_completed": "08/21/2026",
               "due_date": "08/21/2026",
               "grading_complete": true
             },
@@ -583,6 +606,18 @@
               "date_completed": "08/19/2026",
               "due_date": "08/19/2026",
               "grading_complete": true
+            },
+            {
+              "number": "4",
+              "description": "DNA Structure Exit Ticket",
+              "category": "Practice Assignments",
+              "points_earned": null,
+              "points_possible": 3.0,
+              "percentage": null,
+              "date_assigned": "08/24/2026",
+              "date_completed": "",
+              "due_date": "08/25/2026",
+              "grading_complete": false
             }
           ]
         },
@@ -605,45 +640,46 @@
         "raw": "Year Days Enrolled: 8 Days Present: 8 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Week 1 & 2 Warm-Ups overdue in Tech of Biology needs attention; A in Mkt Adv GrphDes.",
-        "focus_tonight": "Week 1 & 2 Warm-Ups (Tech of Biology)",
+        "headline": "Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and Tech of Biology; most classes have no work posted yet.",
+        "focus_tonight": "",
         "wins": [
-          "A 95% in Mkt Adv GrphDes with no missing work."
+          "A 100% in Bus of Gaming on Anatomy of a Great Game",
+          "A 100% in Tech of Biology on Lab Safety Quiz"
         ],
         "classes": [
           {
-            "class_name": "Tech of Biology",
-            "urgency": "watch",
-            "snap": "Week 1 & 2 Warm-Ups \u00b7 overdue Fri",
-            "story": "Lab Safety Quiz scored 100%.",
-            "do_tonight": "Week 1 & 2 Warm-Ups"
-          },
-          {
-            "class_name": "Bus of Gaming",
+            "class_name": "Engineering Geo",
             "urgency": "ok",
-            "snap": "Anatomy of a Great Game \u00b7 due Wed",
-            "story": "Portal shows pending grade.",
+            "snap": "No current grade; 7 pending assignments",
+            "story": "Portal shows pending scores from last week.",
             "do_tonight": ""
           },
           {
-            "class_name": "Engineering Geo",
-            "urgency": "ok",
-            "snap": "Seven Algebra Boot Camp items pending \u00b7 due Thu",
-            "story": "Portal shows pending grades.",
+            "class_name": "Bus of Gaming",
+            "urgency": "strong",
+            "snap": "Anatomy of a Great Game \u00b7 due Wed",
+            "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "About Me Slides 100%, Presentation 85%.",
+            "snap": "About Me Slides \u00b7 due Thu",
+            "story": "",
+            "do_tonight": ""
+          },
+          {
+            "class_name": "Tech of Biology",
+            "urgency": "strong",
+            "snap": "DNA Structure Exit Ticket \u00b7 due Tue",
             "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-24T09:54:30.506641+00:00",
+        "generated_at": "2026-08-24T23:16:02.773213+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
-          "total_recoverable_pts": 3.0,
+          "total_recoverable_pts": 0,
           "history_span_days": 98
         }
       },
@@ -651,7 +687,12 @@
       "history_span_days": 98,
       "class_trends": {
         "Bus of Gaming": {
-          "pct_history": [],
+          "pct_history": [
+            {
+              "date": "2026-08-24",
+              "pct": 100.0
+            }
+          ],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
@@ -682,6 +723,10 @@
             },
             {
               "date": "2026-08-23",
+              "pct": 95.0
+            },
+            {
+              "date": "2026-08-24",
               "pct": 95.0
             }
           ],
@@ -715,6 +760,10 @@
             },
             {
               "date": "2026-08-23",
+              "pct": 100.0
+            },
+            {
+              "date": "2026-08-24",
               "pct": 100.0
             }
           ],
