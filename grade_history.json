@@ -4345,7 +4345,7 @@
         },
         {
           "date": "2026-08-25",
-          "captured_at": "2026-08-25T09:41:10.829263+00:00",
+          "captured_at": "2026-08-25T23:18:32.788098+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -8451,7 +8451,7 @@
         },
         {
           "date": "2026-08-25",
-          "captured_at": "2026-08-25T09:41:21.369167+00:00",
+          "captured_at": "2026-08-25T23:18:45.547420+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -8471,7 +8471,7 @@
             },
             "Engineering Geo": {
               "period": 2,
-              "pct": null,
+              "pct": 0.0,
               "mark": "",
               "missing_count": 0,
               "missing_names": [],
@@ -8487,8 +8487,8 @@
             },
             "PE Course 1": {
               "period": 4,
-              "pct": null,
-              "mark": "",
+              "pct": 100.0,
+              "mark": "A",
               "missing_count": 0,
               "missing_names": [],
               "aeries_trend": null
@@ -8527,8 +8527,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and Tech of Biology; most classes have no work posted yet.",
-            "focus_tonight": ""
+            "headline": "DNA Structure Exit Ticket due today in Tech of Biology; most classes have no work posted yet. Leah holds A's in Bus of Gaming and Mkt Adv GrphDes.",
+            "focus_tonight": "DNA Structure Exit Ticket (Tech of Biology)"
           }
         }
       ]

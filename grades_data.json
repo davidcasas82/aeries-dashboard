@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-25T09:41:00.178799+00:00",
+  "last_updated": "2026-08-25T23:18:21.253776+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -187,7 +187,20 @@
           "class_name": "US History",
           "period": 4,
           "term": "fall",
-          "assignments": []
+          "assignments": [
+            {
+              "number": "1",
+              "description": "LT 1.1 - CER # 1",
+              "category": "Assessment",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "date_assigned": "08/25/2026",
+              "date_completed": "",
+              "due_date": "09/09/2026",
+              "grading_complete": false
+            }
+          ]
         },
         {
           "class_name": "Alg ll Bus Mang",
@@ -214,17 +227,24 @@
         "raw": "Year Days Enrolled: 9 Days Present: 9 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel has a 0% in Rapid Prototype; most classes have no work posted yet, and he earned an A in Bus of Gaming.",
+        "headline": "Daniel has a 0% in Rapid Prototype; he earned an A in Bus of Gaming. Most classes have no work posted yet.",
         "focus_tonight": "",
         "wins": [
-          "A 100.0% in Bus of Gaming (Anatomy of a Great Game)"
+          "A 100.0% in Bus of Gaming with no missing work"
         ],
         "classes": [
           {
             "class_name": "Rapid Prototype",
             "urgency": "critical",
             "snap": "Article: Design Principle Jigsaw \u00b7 33%",
-            "story": "Upcoming poster due Friday.",
+            "story": "Current grade at 0% after one Classwork score.",
+            "do_tonight": ""
+          },
+          {
+            "class_name": "US Hist Media",
+            "urgency": "ok",
+            "snap": "No assignments posted yet.",
+            "story": "",
             "do_tonight": ""
           },
           {
@@ -235,7 +255,7 @@
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-25T09:41:10.827810+00:00",
+        "generated_at": "2026-08-25T23:18:32.786581+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -249,6 +269,10 @@
           "pct_history": [
             {
               "date": "2026-08-24",
+              "pct": 100.0
+            },
+            {
+              "date": "2026-08-25",
               "pct": 100.0
             }
           ],
@@ -279,8 +303,20 @@
             {
               "date": "2026-08-24",
               "pct": 0.0
+            },
+            {
+              "date": "2026-08-25",
+              "pct": 0.0
             }
           ],
+          "delta_7d": null,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "insufficient_history"
+        },
+        "US Hist Media": {
+          "pct_history": [],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
@@ -350,9 +386,9 @@
           "period": 4,
           "course_name": "PE Course 1",
           "teacher": "Gray-Burrell, T",
-          "percent": "0.0",
-          "mark": "",
-          "mark_and_score": " (0.0%)",
+          "percent": "100.0",
+          "mark": "A",
+          "mark_and_score": "A (100.0%)",
           "missing_count": 0,
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
@@ -460,6 +496,18 @@
               "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
               "grading_complete": true
+            },
+            {
+              "number": "3",
+              "description": "8/24 & 8/25 - Daily Assignment (Shark Tank)",
+              "category": "Daily Assignments",
+              "points_earned": 1.0,
+              "points_possible": 1.0,
+              "percentage": 100.0,
+              "date_assigned": "08/25/2026",
+              "date_completed": "08/26/2026",
+              "due_date": "08/26/2026",
+              "grading_complete": true
             }
           ]
         },
@@ -472,85 +520,85 @@
               "number": "1",
               "description": "0.1 Simplify Expressions",
               "category": "Algebra Boot Camp",
-              "points_earned": null,
+              "points_earned": 8.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 80.0,
               "date_assigned": "08/19/2026",
-              "date_completed": "",
+              "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "2",
               "description": "0.2 Solve multi-step equations",
               "category": "Algebra Boot Camp",
-              "points_earned": null,
+              "points_earned": 7.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 70.0,
               "date_assigned": "08/19/2026",
-              "date_completed": "",
+              "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "3",
               "description": "0.3 Solve proportions",
               "category": "Algebra Boot Camp",
-              "points_earned": null,
+              "points_earned": 5.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 50.0,
               "date_assigned": "08/19/2026",
-              "date_completed": "",
+              "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "4",
               "description": "0.4 Coordinate plane",
               "category": "Algebra Boot Camp",
-              "points_earned": null,
+              "points_earned": 7.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 70.0,
               "date_assigned": "08/19/2026",
-              "date_completed": "",
+              "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "5",
               "description": "0.5 Slope of line",
               "category": "Algebra Boot Camp",
-              "points_earned": null,
+              "points_earned": 7.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 70.0,
               "date_assigned": "08/19/2026",
-              "date_completed": "",
+              "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "6",
               "description": "0.6 Area & Perimeter of rectangles & triangles",
               "category": "Algebra Boot Camp",
-              "points_earned": null,
+              "points_earned": 7.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 70.0,
               "date_assigned": "08/19/2026",
-              "date_completed": "",
+              "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
-              "grading_complete": false
+              "grading_complete": true
             },
             {
               "number": "7",
               "description": "0.7 Perfect square & Square roots",
               "category": "Algebra Boot Camp",
-              "points_earned": null,
+              "points_earned": 10.0,
               "points_possible": 10.0,
-              "percentage": 0.0,
+              "percentage": 100.0,
               "date_assigned": "08/19/2026",
-              "date_completed": "",
+              "date_completed": "08/20/2026",
               "due_date": "08/20/2026",
-              "grading_complete": false
+              "grading_complete": true
             }
           ]
         },
@@ -558,7 +606,20 @@
           "class_name": "PE Course 1",
           "period": 4,
           "term": "fall",
-          "assignments": []
+          "assignments": [
+            {
+              "number": "1",
+              "description": "August",
+              "category": "Affective",
+              "points_earned": 8.0,
+              "points_possible": 8.0,
+              "percentage": 100.0,
+              "date_assigned": "08/13/2026",
+              "date_completed": "08/26/2026",
+              "due_date": "08/26/2026",
+              "grading_complete": false
+            }
+          ]
         },
         {
           "class_name": "Eng 9 Entre Fall",
@@ -611,13 +672,13 @@
               "number": "4",
               "description": "DNA Structure Exit Ticket",
               "category": "Practice Assignments",
-              "points_earned": null,
+              "points_earned": 3.0,
               "points_possible": 3.0,
-              "percentage": null,
+              "percentage": 100.0,
               "date_assigned": "08/24/2026",
-              "date_completed": "",
+              "date_completed": "08/25/2026",
               "due_date": "08/25/2026",
-              "grading_complete": false
+              "grading_complete": true
             }
           ]
         },
@@ -640,25 +701,18 @@
         "raw": "Year Days Enrolled: 9 Days Present: 9 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "DNA Structure Exit Ticket due today in Tech of Biology; most classes have no work posted yet. Leah holds A's in Bus of Gaming and Mkt Adv GrphDes.",
-        "focus_tonight": "DNA Structure Exit Ticket (Tech of Biology)",
+        "headline": "Engineering Geo at 0% needs attention; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE; most classes have no work posted yet.",
+        "focus_tonight": "",
         "wins": [
-          "A 100% in Bus of Gaming on Anatomy of a Great Game",
-          "A 95% in Mkt Adv GrphDes"
+          "Bus of Gaming: A 100% on Anatomy of a Great Game",
+          "Mkt Adv GrphDes: A 95% with no missing work"
         ],
         "classes": [
           {
-            "class_name": "Tech of Biology",
-            "urgency": "watch",
-            "snap": "DNA Structure Exit Ticket \u00b7 due Tue",
-            "story": "Current grade 100% with recent scores at 100% and 66.67%.",
-            "do_tonight": "DNA Structure Exit Ticket"
-          },
-          {
             "class_name": "Engineering Geo",
-            "urgency": "ok",
-            "snap": "Seven pending Algebra Boot Camp items",
-            "story": "",
+            "urgency": "critical",
+            "snap": "Algebra Boot Camp assignments \u00b7 due Thu",
+            "story": "Current grade shows 0% with Algebra Boot Camp average at 72.9%.",
             "do_tonight": ""
           },
           {
@@ -671,12 +725,26 @@
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "About Me Slides at 100%, presentation at 85%",
+            "snap": "About Me Slides \u00b7 due Thu",
+            "story": "",
+            "do_tonight": ""
+          },
+          {
+            "class_name": "PE Course 1",
+            "urgency": "strong",
+            "snap": "Affective category at 100%",
+            "story": "",
+            "do_tonight": ""
+          },
+          {
+            "class_name": "Tech of Biology",
+            "urgency": "ok",
+            "snap": "Lab Safety Quiz \u00b7 due Fri",
             "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-25T09:41:21.367189+00:00",
+        "generated_at": "2026-08-25T23:18:45.545208+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -690,6 +758,10 @@
           "pct_history": [
             {
               "date": "2026-08-24",
+              "pct": 100.0
+            },
+            {
+              "date": "2026-08-25",
               "pct": 100.0
             }
           ],
@@ -728,6 +800,10 @@
             {
               "date": "2026-08-24",
               "pct": 95.0
+            },
+            {
+              "date": "2026-08-25",
+              "pct": 95.0
             }
           ],
           "delta_7d": null,
@@ -737,7 +813,25 @@
           "trend_label": "insufficient_history"
         },
         "Engineering Geo": {
-          "pct_history": [],
+          "pct_history": [
+            {
+              "date": "2026-08-25",
+              "pct": 0.0
+            }
+          ],
+          "delta_7d": null,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "insufficient_history"
+        },
+        "PE Course 1": {
+          "pct_history": [
+            {
+              "date": "2026-08-25",
+              "pct": 100.0
+            }
+          ],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
@@ -764,6 +858,10 @@
             },
             {
               "date": "2026-08-24",
+              "pct": 100.0
+            },
+            {
+              "date": "2026-08-25",
               "pct": 100.0
             }
           ],
