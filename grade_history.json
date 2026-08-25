@@ -4263,7 +4263,7 @@
         },
         {
           "date": "2026-08-24",
-          "captured_at": "2026-08-24T23:15:52.774020+00:00",
+          "captured_at": "2026-08-25T03:46:41.036720+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -4339,7 +4339,7 @@
             }
           },
           "previous_briefing": {
-            "headline": "Daniel has a 0% in Rapid Prototype; most classes have no work posted yet.",
+            "headline": "Daniel has a 0% in Rapid Prototype; most classes have no work posted yet, and he earned an A in Bus of Gaming.",
             "focus_tonight": ""
           }
         }
@@ -8287,7 +8287,7 @@
         },
         {
           "date": "2026-08-24",
-          "captured_at": "2026-08-24T23:16:02.775175+00:00",
+          "captured_at": "2026-08-25T03:46:44.361417+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -8363,8 +8363,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Week 1 & 2 Warm-Ups overdue in Tech of Biology needs attention; A in Mkt Adv GrphDes.",
-            "focus_tonight": "Week 1 & 2 Warm-Ups (Tech of Biology)"
+            "headline": "Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and Tech of Biology; most classes have no work posted yet.",
+            "focus_tonight": ""
           }
         }
       ]
