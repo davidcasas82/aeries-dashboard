@@ -980,14 +980,17 @@ def extract_class_name(label):
     return parsed.get("name") or label
 
 
-def _assignment_group_entry(class_label, assignments):
+def _assignment_group_entry(class_label, assignments, totals=None):
     parsed = parse_gradebook_option_label(class_label)
-    return {
+    entry = {
         "class_name": parsed.get("name") or extract_class_name(class_label),
         "period": parsed.get("period"),
         "term": parsed.get("term_key"),
         "assignments": assignments,
     }
+    if totals:
+        entry["totals"] = totals
+    return entry
 
 
 def option_in_school_session(parsed, session_year):
@@ -1125,10 +1128,11 @@ def fetch_all_assignments(session):
 
     all_class_assignments = []
     first_assignments = parse_assignment_rows(soup)
+    first_totals = parse_gradebook_totals(soup)
     start_index = 0
     if meta.get("preload_ok"):
         all_class_assignments.append(
-            _assignment_group_entry(chosen[0][1], first_assignments)
+            _assignment_group_entry(chosen[0][1], first_assignments, first_totals)
         )
         start_index = 1
 
@@ -1155,8 +1159,9 @@ def fetch_all_assignments(session):
         if resp2.status_code == 200 and len(resp2.text) > 500:
             frag_soup = BeautifulSoup(resp2.text, "html.parser")
             assignments = parse_assignment_rows(frag_soup)
+            totals = parse_gradebook_totals(frag_soup)
             all_class_assignments.append(
-                _assignment_group_entry(class_label, assignments)
+                _assignment_group_entry(class_label, assignments, totals)
             )
 
             vs_match = re.search(r"__VIEWSTATE\|([^|]+)\|", resp2.text)
@@ -1166,6 +1171,8 @@ def fetch_all_assignments(session):
             if vsg_match:
                 all_inputs["__VIEWSTATEGENERATOR"] = vsg_match.group(1)
 
+    for entry in all_class_assignments:
+        finalize_gradebook_group(entry)
     return all_class_assignments
 
 
@@ -1176,7 +1183,7 @@ def parse_assignment_rows(soup):
     [0]  # (with "Date Assigned: MM/DD/YYYY" embedded)
     [1]  Description
     [2]  Category
-    [3]  Score fraction display (e.g. "5 / 5")
+    [3]  Score fraction display (e.g. "5 / 5") or status code (NA / TX)
     [4]  Score earned
     [5]  "/" separator
     [6]  Score possible
@@ -1190,6 +1197,8 @@ def parse_assignment_rows(soup):
     [14] Due Date (MM/DD/YYYY)
     [15] Grading Complete ("Yes" or "")
     [16] Documents
+
+    Keep the raw Score cell text. Never coerce NA/TX to blank via safe_float.
     """
     rows = soup.find_all("tr", class_="assignment-info")
     assignments = []
@@ -1206,39 +1215,86 @@ def parse_assignment_rows(soup):
         date_assigned_match = re.search(r"Date Assigned:\s*([\d/]+)", cell0_text)
         date_assigned = date_assigned_match.group(1) if date_assigned_match else ""
 
-        # Score
-        points_earned = safe_float(cells[4].get_text(strip=True))
-        points_possible = safe_float(cells[6].get_text(strip=True))
+        # Score — raw text first so NA/TX stay visible
+        score_display = cells[3].get_text(separator=" ", strip=True) if len(cells) > 3 else ""
+        earned_raw = cells[4].get_text(strip=True) if len(cells) > 4 else ""
+        possible_raw = cells[6].get_text(strip=True) if len(cells) > 6 else ""
+        score_raw = score_display or earned_raw or possible_raw
+        points_earned = safe_float(earned_raw)
+        points_possible = safe_float(possible_raw)
+
+        # # Correct
+        correct_display = cells[7].get_text(separator=" ", strip=True) if len(cells) > 7 else ""
+        correct_earned_raw = cells[8].get_text(strip=True) if len(cells) > 8 else ""
+        correct_possible_raw = cells[10].get_text(strip=True) if len(cells) > 10 else ""
+        correct_raw = correct_display or ""
+        correct_earned = safe_float(correct_earned_raw)
+        correct_possible = safe_float(correct_possible_raw)
 
         # Percentage
         pct_text = cells[11].get_text(strip=True) if len(cells) > 11 else ""
         pct_match = re.search(r"([\d.]+)%", pct_text)
         percentage = float(pct_match.group(1)) if pct_match else None
 
-        # Dates
+        comment = cells[12].get_text(separator=" ", strip=True) if len(cells) > 12 else ""
         date_completed = cells[13].get_text(strip=True) if len(cells) > 13 else ""
         due_date = cells[14].get_text(strip=True) if len(cells) > 14 else ""
-
-        # Grading complete
         grading_complete = (
             cells[15].get_text(strip=True) == "Yes" if len(cells) > 15 else False
+        )
+        documents = cells[16].get_text(separator=" ", strip=True) if len(cells) > 16 else ""
+
+        extra_credit = (
+            points_possible == 0
+            and points_earned is not None
         )
 
         assignment = {
             "number": assign_num,
             "description": cells[1].get_text(strip=True),
             "category": cells[2].get_text(strip=True),
+            "score_raw": score_raw,
             "points_earned": points_earned,
             "points_possible": points_possible,
             "percentage": percentage,
+            "correct_raw": correct_raw,
+            "correct_earned": correct_earned,
+            "correct_possible": correct_possible,
+            "comment": comment,
+            "documents": documents,
             "date_assigned": date_assigned,
             "date_completed": date_completed,
             "due_date": due_date,
             "grading_complete": grading_complete,
+            "extra_credit": extra_credit,
         }
         assignments.append(assignment)
 
     return assignments
+
+
+SCORE_STATUS_CODES = ("NA", "TX", "EX", "NT")
+_SCORE_STATUS_RE = re.compile(
+    r"\b(" + "|".join(SCORE_STATUS_CODES) + r")\b",
+    re.IGNORECASE,
+)
+_TOTAL_ROW_RE = re.compile(r"^(total|overall|grand total)\b", re.IGNORECASE)
+_MIN_MAX_NOTE_RE = re.compile(
+    r"min(?:imum)?(?:\s+assignment)?(?:\s+(?:value|score|pct|percent(?:age)?))?"
+    r"(?:\s+(?:of|is|:))?\s*(\d+(?:\.\d+)?)\s*%"
+    r".{0,120}"
+    r"max(?:imum)?(?:\s+assignment)?(?:\s+(?:value|score|pct|percent(?:age)?))?"
+    r"(?:\s+(?:of|is|:))?\s*(\d+(?:\.\d+)?)\s*%",
+    re.IGNORECASE | re.DOTALL,
+)
+_MAX_MIN_NOTE_RE = re.compile(
+    r"max(?:imum)?(?:\s+assignment)?(?:\s+(?:value|score|pct|percent(?:age)?))?"
+    r"(?:\s+(?:of|is|:))?\s*(\d+(?:\.\d+)?)\s*%"
+    r".{0,120}"
+    r"min(?:imum)?(?:\s+assignment)?(?:\s+(?:value|score|pct|percent(?:age)?))?"
+    r"(?:\s+(?:of|is|:))?\s*(\d+(?:\.\d+)?)\s*%",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def safe_float(val):
@@ -1246,6 +1302,690 @@ def safe_float(val):
         return float(val)
     except (ValueError, TypeError):
         return None
+
+
+def score_status_code(*texts):
+    """Return NA/TX/EX/NT if present in any Score-cell text; do not invent blanks."""
+    for text in texts:
+        if not text:
+            continue
+        match = _SCORE_STATUS_RE.search(str(text))
+        if match:
+            return match.group(1).upper()
+    return None
+
+
+def assignment_has_score_mark(assignment):
+    """True when Aeries recorded a numeric score or a visible status code (NA/TX)."""
+    if not assignment:
+        return False
+    if assignment.get("points_earned") is not None:
+        return True
+    return bool(score_status_code(assignment.get("score_raw")))
+
+
+def _cell_text(cell):
+    return cell.get_text(separator=" ", strip=True) if cell is not None else ""
+
+
+def _norm_header(text):
+    return re.sub(r"\s+", " ", (text or "").strip()).lower()
+
+
+def _parse_pct_value(text):
+    if text is None:
+        return None
+    match = re.search(r"(-?[\d.]+)\s*%", str(text))
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return None
+    return safe_float(str(text).strip().rstrip("%"))
+
+
+def _weight_in_header(text):
+    match = re.search(r"\((\s*-?[\d.]+)\s*%\s*\)", text or "")
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
+
+
+def _header_cells(table):
+    if table is None:
+        return []
+    thead = table.find("thead")
+    if thead:
+        row = thead.find("tr")
+        if row:
+            cells = row.find_all(["th", "td"])
+            if cells:
+                return [_cell_text(c) for c in cells]
+    first = table.find("tr")
+    if not first:
+        return []
+    cells = first.find_all("th")
+    if not cells:
+        # Some Aeries footers use a header row of td cells
+        maybe = first.find_all("td")
+        if maybe and any(
+            re.search(r"category|perc of grade|summative|formative", _norm_header(_cell_text(c)))
+            for c in maybe
+        ):
+            cells = maybe
+    return [_cell_text(c) for c in cells]
+
+
+def _classify_totals_headers(headers):
+    """Return layout name and column index map, or (None, {})."""
+    norms = [_norm_header(h) for h in headers]
+    joined = " | ".join(norms)
+    if re.search(r"description|due date|grading complete|date assigned", joined):
+        return None, {}
+    if not any("category" in h for h in norms):
+        return None, {}
+
+    idx = {}
+    for i, h in enumerate(norms):
+        if "category" in h and "idx_category" not in idx:
+            idx["category"] = i
+        elif "perc of grade" in h or "percent of grade" in h or h in ("weight", "weight %"):
+            idx["weight"] = i
+        elif "summative" in h and "pts" in h:
+            idx["summative_pts"] = i
+        elif "summative" in h and "max" in h:
+            idx["summative_max"] = i
+        elif "summative" in h and ("perc" in h or "percent" in h or "%" in h):
+            idx["summative_perc"] = i
+        elif "formative" in h and "pts" in h:
+            idx["formative_pts"] = i
+        elif "formative" in h and "max" in h:
+            idx["formative_max"] = i
+        elif "formative" in h and ("perc" in h or "percent" in h or "%" in h):
+            idx["formative_perc"] = i
+        elif "overall" in h and ("perc" in h or "percent" in h or "%" in h):
+            idx["overall_perc"] = i
+        elif h in ("points", "pts") or (h.endswith("pts") and "summative" not in h and "formative" not in h):
+            idx["points"] = i
+        elif h == "max" or h == "max pts" or h == "points possible":
+            idx["max"] = i
+        elif h in ("perc", "percent", "%", "percentage") or (
+            ("perc" in h or "percent" in h) and "grade" not in h and "overall" not in h
+            and "summative" not in h and "formative" not in h
+        ):
+            idx["perc"] = i
+        elif h == "mark" or h == "letter":
+            idx["mark"] = i
+
+    if "summative_perc" in idx and "formative_perc" in idx:
+        return "summative_formative", idx
+    if "weight" in idx:
+        return "perc_of_grade", idx
+    return None, {}
+
+
+def parse_min_max_assignment_scale(soup):
+    """Store min/max assignment scale only when a footer note says it is in effect."""
+    if soup is None:
+        return None, None
+    text = soup.get_text(" ", strip=True) if hasattr(soup, "get_text") else str(soup)
+    if not re.search(r"in effect|assignment (?:value|score|scale)|scale min", text, re.I):
+        # Require wording that the scale is actually on, not a random 50%/100% elsewhere
+        if not re.search(r"min(?:imum)?(?:\s+assignment).{0,40}\d+\s*%", text, re.I):
+            return None, None
+    match = _MIN_MAX_NOTE_RE.search(text)
+    if match:
+        return safe_float(match.group(1)), safe_float(match.group(2))
+    match = _MAX_MIN_NOTE_RE.search(text)
+    if match:
+        return safe_float(match.group(2)), safe_float(match.group(1))
+    return None, None
+
+
+def parse_gradebook_totals(soup):
+    """Parse the GradebookDetails Totals footer. Soft-fail (None) if absent."""
+    if soup is None:
+        return None
+    try:
+        tables = list(soup.find_all("table"))
+        # Prefer a table whose id/class mentions totals, but accept header match anywhere
+        ranked = []
+        for table in tables:
+            ident = " ".join(
+                filter(
+                    None,
+                    [
+                        table.get("id") or "",
+                        " ".join(table.get("class") or []),
+                    ],
+                )
+            )
+            headers = _header_cells(table)
+            layout, idx = _classify_totals_headers(headers)
+            if not layout:
+                continue
+            score = 2 if re.search(r"total", ident, re.I) else 1
+            ranked.append((score, table, headers, layout, idx))
+        if not ranked:
+            return None
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        _, table, headers, layout, idx = ranked[0]
+        min_pct, max_pct = parse_min_max_assignment_scale(soup)
+
+        body_rows = []
+        thead = table.find("thead")
+        for row in table.find_all("tr"):
+            if thead and row.parent is thead:
+                continue
+            cells = row.find_all(["td", "th"])
+            if not cells:
+                continue
+            texts = [_cell_text(c) for c in cells]
+            # Skip a repeated header row
+            if texts and _norm_header(texts[0]) == "category" and any(
+                "perc" in _norm_header(t) or "pts" in _norm_header(t) for t in texts[1:]
+            ):
+                continue
+            body_rows.append(texts)
+
+        def col(texts, key):
+            i = idx.get(key)
+            if i is None or i >= len(texts):
+                return ""
+            return texts[i]
+
+        categories = []
+        overall_perc = None
+        overall_mark = ""
+        summative_weight = _weight_in_header(headers[idx["summative_perc"]]) if "summative_perc" in idx else None
+        formative_weight = _weight_in_header(headers[idx["formative_perc"]]) if "formative_perc" in idx else None
+
+        for texts in body_rows:
+            name = col(texts, "category") or (texts[0] if texts else "")
+            if not name:
+                continue
+            is_total = bool(_TOTAL_ROW_RE.match(name))
+
+            if layout == "perc_of_grade":
+                weight = _parse_pct_value(col(texts, "weight"))
+                points = safe_float(col(texts, "points"))
+                maximum = safe_float(col(texts, "max"))
+                perc = _parse_pct_value(col(texts, "perc"))
+                mark = col(texts, "mark")
+                empty = (points in (0, None) and maximum in (0, None))
+                if is_total:
+                    overall_perc = perc if perc is not None else overall_perc
+                    overall_mark = mark or overall_mark
+                    continue
+                categories.append({
+                    "name": name,
+                    "weight_pct": weight,
+                    "points": points,
+                    "max": maximum,
+                    "perc": perc,
+                    "mark": mark,
+                    "empty": empty,
+                })
+            else:
+                s_pts = safe_float(col(texts, "summative_pts"))
+                s_max = safe_float(col(texts, "summative_max"))
+                s_perc = _parse_pct_value(col(texts, "summative_perc"))
+                f_pts = safe_float(col(texts, "formative_pts"))
+                f_max = safe_float(col(texts, "formative_max"))
+                f_perc = _parse_pct_value(col(texts, "formative_perc"))
+                o_perc = _parse_pct_value(col(texts, "overall_perc"))
+                mark = col(texts, "mark")
+                if is_total:
+                    overall_perc = o_perc if o_perc is not None else overall_perc
+                    overall_mark = mark or overall_mark
+                    if s_perc is not None:
+                        # Total row type perc is the bucket score, not the weight
+                        pass
+                    # Represent the two weighted buckets from the Total row when present
+                    continue
+                # A category row lives on one side or both
+                s_empty = s_pts in (0, None) and s_max in (0, None)
+                f_empty = f_pts in (0, None) and f_max in (0, None)
+                if not s_empty or s_perc is not None:
+                    categories.append({
+                        "name": name,
+                        "kind": "summative",
+                        "weight_pct": summative_weight,
+                        "points": s_pts,
+                        "max": s_max,
+                        "perc": s_perc,
+                        "mark": mark,
+                        "empty": s_empty,
+                    })
+                if not f_empty or f_perc is not None:
+                    categories.append({
+                        "name": name,
+                        "kind": "formative",
+                        "weight_pct": formative_weight,
+                        "points": f_pts,
+                        "max": f_max,
+                        "perc": f_perc,
+                        "mark": mark,
+                        "empty": f_empty,
+                    })
+                if s_empty and f_empty and s_perc is None and f_perc is None:
+                    # Still record the named category so weights can attach later
+                    kind = None
+                    lname = name.lower()
+                    if "summative" in lname:
+                        kind = "summative"
+                    elif "formative" in lname:
+                        kind = "formative"
+                    categories.append({
+                        "name": name,
+                        "kind": kind,
+                        "weight_pct": (
+                            summative_weight if kind == "summative"
+                            else formative_weight if kind == "formative"
+                            else None
+                        ),
+                        "points": 0.0,
+                        "max": 0.0,
+                        "perc": None,
+                        "mark": mark,
+                        "empty": True,
+                    })
+
+        if layout == "summative_formative":
+            # If no per-category rows landed, synthesize buckets from weights alone
+            if not categories:
+                if summative_weight is not None:
+                    categories.append({
+                        "name": "Summative",
+                        "kind": "summative",
+                        "weight_pct": summative_weight,
+                        "points": None,
+                        "max": None,
+                        "perc": None,
+                        "mark": "",
+                        "empty": True,
+                    })
+                if formative_weight is not None:
+                    categories.append({
+                        "name": "Formative",
+                        "kind": "formative",
+                        "weight_pct": formative_weight,
+                        "points": None,
+                        "max": None,
+                        "perc": None,
+                        "mark": "",
+                        "empty": True,
+                    })
+
+        totals = {
+            "layout": layout,
+            "categories": categories,
+            "overall_perc": overall_perc,
+            "overall_mark": overall_mark,
+            "min_assignment_pct": min_pct,
+            "max_assignment_pct": max_pct,
+            "min_max_in_effect": min_pct is not None or max_pct is not None,
+            "parse_ok": True,
+        }
+        if layout == "summative_formative":
+            totals["summative_weight_pct"] = summative_weight
+            totals["formative_weight_pct"] = formative_weight
+        return totals
+    except Exception:
+        return None
+
+
+def category_weight_map(totals):
+    """Map normalized category name → weight_pct from the Totals footer."""
+    weights = {}
+    if not totals:
+        return weights
+    for cat in totals.get("categories") or []:
+        name = (cat.get("name") or "").strip()
+        if not name:
+            continue
+        weight = cat.get("weight_pct")
+        if weight is None:
+            continue
+        weights[_norm_course_name(name)] = weight
+        weights[name.lower()] = weight
+    # Layout A: also map the type words
+    if totals.get("layout") == "summative_formative":
+        if totals.get("summative_weight_pct") is not None:
+            weights["summative"] = totals["summative_weight_pct"]
+            weights["summatives"] = totals["summative_weight_pct"]
+        if totals.get("formative_weight_pct") is not None:
+            weights["formative"] = totals["formative_weight_pct"]
+            weights["formatives"] = totals["formative_weight_pct"]
+    return weights
+
+
+def lookup_category_weight(category, weights):
+    if not category or not weights:
+        return None
+    key = _norm_course_name(category)
+    if key in weights:
+        return weights[key]
+    low = category.strip().lower()
+    if low in weights:
+        return weights[low]
+    # Prefix / contains match for "Summatives" vs "Summative"
+    for stored, weight in weights.items():
+        if not stored:
+            continue
+        if stored in key or key in stored:
+            return weight
+    return None
+
+
+def annotate_assignment_status(assignment, weights=None):
+    """Set status / status_label from Score raw text + footer weights."""
+    weights = weights or {}
+    raw = (assignment.get("score_raw") or "").strip()
+    code = score_status_code(raw)
+    cat = (assignment.get("category") or "").strip()
+    weight = lookup_category_weight(cat, weights)
+    extra = bool(
+        assignment.get("extra_credit")
+        or (
+            assignment.get("points_possible") == 0
+            and assignment.get("points_earned") is not None
+        )
+    )
+    assignment["extra_credit"] = extra
+
+    if code:
+        assignment["status"] = code.lower()
+        assignment["status_label"] = code
+        assignment["counts_toward_grade"] = False
+        return assignment
+
+    if assignment.get("points_earned") is None and not assignment.get("grading_complete"):
+        assignment["status"] = "pending"
+        assignment["status_label"] = "pending"
+        assignment["counts_toward_grade"] = False
+        return assignment
+
+    if weight == 0:
+        assignment["status"] = "zero_weight"
+        assignment["status_label"] = "0% category (doesn't count)"
+        assignment["counts_toward_grade"] = False
+        return assignment
+
+    if extra:
+        assignment["status"] = "extra_credit"
+        assignment["status_label"] = f"extra credit in {cat}" if cat else "extra credit"
+        assignment["counts_toward_grade"] = True
+        return assignment
+
+    if cat:
+        assignment["status"] = "counts"
+        assignment["status_label"] = f"counts in {cat}"
+    else:
+        assignment["status"] = "counts"
+        assignment["status_label"] = "counts"
+    assignment["counts_toward_grade"] = True
+    return assignment
+
+
+def _clamp_pct(pct, min_pct, max_pct):
+    if pct is None:
+        return None
+    if min_pct is not None:
+        pct = max(pct, min_pct)
+    if max_pct is not None:
+        pct = min(pct, max_pct)
+    return pct
+
+
+def _category_perc_from_assignments(assignments, category_name, min_pct, max_pct):
+    """Points-weighted category % from assignments; extra credit (max=0) adds to numerator."""
+    earned = 0.0
+    possible = 0.0
+    extra = 0.0
+    have = False
+    want = _norm_course_name(category_name)
+    for a in assignments or []:
+        name = _norm_course_name(a.get("category"))
+        if want and name and not (want in name or name in want):
+            continue
+        if score_status_code(a.get("score_raw")):
+            continue
+        pts = a.get("points_earned")
+        mx = a.get("points_possible")
+        if pts is None:
+            continue
+        have = True
+        if mx == 0:
+            extra += float(pts)
+            continue
+        if not mx:
+            continue
+        pct = a.get("percentage")
+        if pct is None:
+            pct = (float(pts) / float(mx)) * 100.0
+        pct = _clamp_pct(pct, min_pct, max_pct)
+        if pct is None:
+            continue
+        earned += (pct / 100.0) * float(mx)
+        possible += float(mx)
+    if not have or possible <= 0:
+        return None
+    return ((earned + extra) / possible) * 100.0
+
+
+def rebuild_counted_percent(totals, assignments=None):
+    """Rebuild class % from counted footer categories only. Empty 0/0 buckets drop out.
+
+    Example: 70% Assessments 0/0 + 20% of 100 + 10% of 85 → 95%.
+    Does not overwrite the official Aeries posted percent.
+    """
+    if not totals or not totals.get("categories"):
+        return None
+    min_pct = totals.get("min_assignment_pct")
+    max_pct = totals.get("max_assignment_pct")
+    layout = totals.get("layout")
+
+    if layout == "summative_formative":
+        buckets = {"summative": None, "formative": None}
+        weights = {
+            "summative": totals.get("summative_weight_pct"),
+            "formative": totals.get("formative_weight_pct"),
+        }
+        for cat in totals["categories"]:
+            kind = cat.get("kind")
+            if kind not in buckets:
+                continue
+            if weights.get(kind) in (None, 0):
+                continue
+            if cat.get("empty") or (cat.get("points") in (0, None) and cat.get("max") in (0, None)):
+                continue
+            perc = cat.get("perc")
+            if perc is None:
+                perc = _category_perc_from_assignments(
+                    assignments, cat.get("name"), min_pct, max_pct
+                )
+            if perc is None:
+                continue
+            # If several categories share a kind, points-weight them
+            prev = buckets[kind]
+            if prev is None:
+                buckets[kind] = {
+                    "perc": perc,
+                    "points": cat.get("points") or 0,
+                    "max": cat.get("max") or 0,
+                }
+            else:
+                mx = (prev["max"] or 0) + (cat.get("max") or 0)
+                pts = (prev["points"] or 0) + (cat.get("points") or 0)
+                if mx > 0:
+                    buckets[kind] = {"perc": (pts / mx) * 100.0, "points": pts, "max": mx}
+                else:
+                    buckets[kind] = {"perc": perc, "points": pts, "max": mx}
+        counted = []
+        for kind, data in buckets.items():
+            weight = weights.get(kind)
+            if weight in (None, 0) or not data:
+                continue
+            counted.append((weight, data["perc"]))
+    else:
+        counted = []
+        for cat in totals["categories"]:
+            name = cat.get("name") or ""
+            if _TOTAL_ROW_RE.match(name):
+                continue
+            weight = cat.get("weight_pct")
+            if weight is None or weight <= 0:
+                continue
+            pts = cat.get("points")
+            mx = cat.get("max")
+            perc = cat.get("perc")
+            extra = mx == 0 and pts is not None and pts > 0
+            if extra:
+                # Extra-credit category (max 0) is a bonus, not a weighted slot
+                continue
+            if cat.get("empty") or (pts in (0, None) and mx in (0, None)):
+                continue
+            if perc is None:
+                perc = _category_perc_from_assignments(assignments, name, min_pct, max_pct)
+            if perc is None and pts is not None and mx:
+                perc = (pts / mx) * 100.0
+            if perc is None:
+                continue
+            counted.append((weight, perc))
+
+    if not counted:
+        return None
+    total_w = sum(w for w, _ in counted)
+    if total_w <= 0:
+        return None
+    return round(sum(w * p for w, p in counted) / total_w, 2)
+
+
+def build_counted_insight(totals, assignments=None, posted_pct=None, posted_mark=None):
+    """Family-facing counted-only mix from the footer. Never replaces posted %."""
+    if not totals or not totals.get("parse_ok"):
+        return None
+    rebuild = rebuild_counted_percent(totals, assignments)
+    cats = []
+    extra_credit = False
+    for cat in totals.get("categories") or []:
+        name = cat.get("name") or ""
+        if _TOTAL_ROW_RE.match(name):
+            continue
+        weight = cat.get("weight_pct")
+        pts = cat.get("points")
+        mx = cat.get("max")
+        empty = bool(cat.get("empty") or (pts in (0, None) and mx in (0, None)))
+        extra = mx == 0 and pts is not None and pts > 0
+        if extra:
+            extra_credit = True
+        counts = bool(
+            weight not in (None, 0)
+            and not empty
+            and not extra
+        )
+        reason = None
+        if extra:
+            reason = "extra_credit"
+        elif weight == 0:
+            reason = "zero_weight"
+        elif empty:
+            reason = "empty_0_0"
+        cats.append({
+            "name": name,
+            "kind": cat.get("kind"),
+            "weight_pct": weight,
+            "perc": cat.get("perc"),
+            "points": pts,
+            "max": mx,
+            "empty": empty,
+            "counts": counts,
+            "reason": reason,
+        })
+        if any(a.get("extra_credit") for a in (assignments or [])):
+            extra_credit = True
+
+    matches = None
+    if posted_pct is not None and rebuild is not None:
+        try:
+            matches = abs(float(posted_pct) - float(rebuild)) < 0.51
+        except (TypeError, ValueError):
+            matches = None
+
+    return {
+        "layout": totals.get("layout"),
+        "categories": cats,
+        "rebuild_pct": rebuild,
+        "posted_pct": posted_pct,
+        "posted_mark": posted_mark or "",
+        "matches_posted": matches,
+        "min_assignment_pct": totals.get("min_assignment_pct"),
+        "max_assignment_pct": totals.get("max_assignment_pct"),
+        "extra_credit": extra_credit,
+    }
+
+
+def finalize_gradebook_group(entry):
+    """Annotate assignment statuses and counted insight on one GradebookDetails group."""
+    if not entry:
+        return entry
+    totals = entry.get("totals")
+    weights = category_weight_map(totals)
+    for assignment in entry.get("assignments") or []:
+        annotate_assignment_status(assignment, weights)
+    insight = build_counted_insight(totals, entry.get("assignments"))
+    if insight:
+        entry["counted_insight"] = insight
+    return entry
+
+
+def assignment_group_for_class(class_assignments, class_meta):
+    """Return the GradebookDetails group matching a ClassSummary row."""
+    if not class_assignments or not class_meta:
+        return None
+    period = class_meta.get("period")
+    course_n = _norm_course_name(class_meta.get("course_name"))
+    fallback = None
+    for group in class_assignments:
+        label = group.get("class_name") or ""
+        group_period = group.get("period")
+        if group_period is None:
+            group_period = extract_period_from_label(label)
+        name_n = _norm_course_name(label)
+        if period is not None and group_period is not None and int(group_period) == int(period):
+            return group
+        if course_n and name_n and (course_n in name_n or name_n in course_n):
+            fallback = group
+    return fallback
+
+
+def attach_gradebook_insights(classes, class_assignments):
+    """Copy footer + counted insight onto class rows. Never overwrite percent/mark."""
+    for group in class_assignments or []:
+        finalize_gradebook_group(group)
+    for class_meta in classes or []:
+        group = assignment_group_for_class(class_assignments, class_meta)
+        if not group:
+            continue
+        if group.get("totals"):
+            class_meta["gradebook_totals"] = group["totals"]
+        # posted_pct is always the ClassSummary number — never a homemade rebuild
+        insight = build_counted_insight(
+            group.get("totals"),
+            group.get("assignments"),
+            posted_pct=safe_float(class_meta.get("percent")),
+            posted_mark=class_meta.get("mark") or "",
+        )
+        if insight:
+            group["counted_insight"] = insight
+            class_meta["counted_insight"] = insight
+        # Official class number is ClassSummary Percent / CurrentMark only
+        class_meta.pop("rebuild_pct", None)
+    return classes
 
 
 def _class_row_richness(cls):
@@ -1802,6 +2542,8 @@ def is_past_due_ungraded(assignment, today):
     due = parse_due_date(assignment.get("due_date"))
     if not due or due >= today:
         return False
+    if assignment_has_score_mark(assignment):
+        return False
     return assignment.get("points_earned") is None
 
 
@@ -1876,20 +2618,51 @@ def assignments_for_period(student_data, period):
     return assignments_for_class(student_data, {"period": period, "course_name": ""})
 
 
-def build_category_breakdown(assignments):
-    """Average score by assignment category for graded work."""
+def build_category_breakdown(assignments, totals=None):
+    """Per-category assignment facts for Grok. NOT a class grade.
+
+    Equal-average of assignment % is stored as assignment_avg_pct only.
+    Footer weights and the counted rebuild live on counted_insight.
+    """
     buckets = {}
-    for a in assignments:
+    for a in assignments or []:
         if a.get("points_earned") is None or a.get("percentage") is None:
+            continue
+        if score_status_code(a.get("score_raw")):
             continue
         cat = (a.get("category") or "Other").strip() or "Other"
         buckets.setdefault(cat, []).append(a["percentage"])
 
+    weights = category_weight_map(totals)
+    footer_by_name = {}
+    for cat in (totals or {}).get("categories") or []:
+        footer_by_name[_norm_course_name(cat.get("name"))] = cat
+
     breakdown = {}
     for cat, pcts in buckets.items():
+        footer = footer_by_name.get(_norm_course_name(cat)) or {}
+        weight = lookup_category_weight(cat, weights)
         breakdown[cat] = {
-            "avg_pct": round(sum(pcts) / len(pcts), 1),
+            "assignment_avg_pct": round(sum(pcts) / len(pcts), 1),
             "count": len(pcts),
+            "weight_pct": weight,
+            "footer_perc": footer.get("perc"),
+            "counts": weight not in (0,) and not footer.get("empty"),
+            "not_a_class_grade": True,
+        }
+    # Include footer-only categories (empty 0/0, 0% weight) so Grok can see the mix
+    for cat in (totals or {}).get("categories") or []:
+        name = (cat.get("name") or "").strip()
+        if not name or name in breakdown or _TOTAL_ROW_RE.match(name):
+            continue
+        breakdown[name] = {
+            "assignment_avg_pct": None,
+            "count": 0,
+            "weight_pct": cat.get("weight_pct"),
+            "footer_perc": cat.get("perc"),
+            "counts": bool(cat.get("weight_pct") not in (None, 0) and not cat.get("empty")),
+            "empty": bool(cat.get("empty")),
+            "not_a_class_grade": True,
         }
     return breakdown
 
@@ -1935,11 +2708,16 @@ def detect_performance_pattern(grade_pct, missing_count, category_breakdown, sco
 
     assessment_avgs = []
     other_avgs = []
-    for cat, info in category_breakdown.items():
+    for cat, info in (category_breakdown or {}).items():
+        avg = info.get("assignment_avg_pct")
+        if avg is None:
+            avg = info.get("avg_pct")
+        if avg is None:
+            continue
         if is_assessment_category(cat):
-            assessment_avgs.append(info["avg_pct"])
+            assessment_avgs.append(avg)
         else:
-            other_avgs.append(info["avg_pct"])
+            other_avgs.append(avg)
 
     test_weakness = False
     if assessment_avgs and other_avgs:
@@ -2005,6 +2783,11 @@ def format_assignment_entry(assignment, today, kind):
     if kind == "recent":
         entry["points_earned"] = assignment.get("points_earned")
         entry["percentage"] = assignment.get("percentage")
+        if assignment.get("score_raw"):
+            entry["score_raw"] = assignment.get("score_raw")
+    if assignment.get("status"):
+        entry["status"] = assignment.get("status")
+        entry["status_label"] = assignment.get("status_label")
     return entry
 
 
@@ -2043,7 +2826,9 @@ def analyze_class(class_meta, assignments, today):
     recent.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min, reverse=True)
     upcoming.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
 
-    category_breakdown = build_category_breakdown(assignments)
+    totals = class_meta.get("gradebook_totals")
+    counted_insight = class_meta.get("counted_insight")
+    category_breakdown = build_category_breakdown(assignments, totals)
     score_trajectory = compute_score_trajectory(assignments)
     trend = parse_trend_html(class_meta.get("trend", ""))
     performance_pattern = detect_performance_pattern(
@@ -2082,6 +2867,7 @@ def analyze_class(class_meta, assignments, today):
         "teacher": class_meta.get("teacher", ""),
         "current_grade_pct": grade_pct,
         "current_grade_mark": mark,
+        "current_grade_source": "aeries_class_summary",
         "trend": trend,
         "missing_assignments": [
             format_assignment_entry(a, today, "missing") for a in missing
@@ -2093,6 +2879,7 @@ def analyze_class(class_meta, assignments, today):
         "oldest_missing_days": oldest_missing_days,
         "median_missing_days": median_missing_days,
         "category_breakdown": category_breakdown,
+        "counted_insight": counted_insight,
         "recent_scores": [
             format_assignment_entry(a, today, "recent") for a in recent[:8]
         ],
@@ -2385,6 +3172,7 @@ def academic_fingerprint(student_data):
                 "due": assignment.get("due_date") or "",
                 "earned": assignment.get("points_earned"),
                 "pct": assignment.get("percentage"),
+                "score_raw": assignment.get("score_raw") or "",
                 "complete": bool(assignment.get("grading_complete")),
             })
     assignments.sort(
@@ -2447,6 +3235,9 @@ Today is {today_label} (Pacific). Due dates in PRECOMPUTED_ANALYTICS already use
 
 DATA SCOPE
 - Facts only from PRECOMPUTED_ANALYTICS (Aeries parent portal). Do not redo math.
+- current_grade_pct / current_grade_mark is the official Aeries ClassSummary Percent / CurrentMark. Never replace it with assignment averages, category averages, or counted_insight.rebuild_pct.
+- category_breakdown.*.assignment_avg_pct is the unweighted mean of scored assignment percentages in that bucket — not the class grade and not Aeries' weighted category %. Do not write a class as "at 72%" because seven assignments average 72.
+- If counted_insight is present, you may name which categories count, are 0% weight, or are empty (0/0). If rebuild_pct differs from current_grade_pct, still use the posted grade.
 - Portal can lag (turned in but not graded, Canvas/paper work). Prefer "portal still shows …" over "never did …".
 - Do not invent causes, effort, or teacher fairness.
 - Do not invent week-scale stories unless history.delta_7d / trend_label is present.
@@ -2551,6 +3342,10 @@ Rules:
 
 def _prepare_student_for_briefing(student_data, history, aeries_series_by_class=None):
     """Build analytics, history context, UI trend fields; return history_context."""
+    attach_gradebook_insights(
+        student_data.get("classes") or [],
+        student_data.get("assignments_by_class") or [],
+    )
     # First pass: class analytics without history (for snapshot + context base)
     base_analytics = build_class_analytics(student_data, history_context=None)
     class_list = base_analytics.get("classes") or []
@@ -2708,8 +3503,11 @@ def scrape_all():
         # Assignments per class
         print("  Fetching assignments...")
         class_assignments = fetch_all_assignments(session)
+        attach_gradebook_insights(classes, class_assignments)
         total_assignments = sum(len(ca["assignments"]) for ca in class_assignments)
+        totals_n = sum(1 for ca in class_assignments if ca.get("totals"))
         print(f"  {total_assignments} assignments across {len(class_assignments)} classes")
+        print(f"  GradebookDetails totals parsed for {totals_n}/{len(class_assignments)} class(es)")
 
         # Optional within-term grade curves from GradebookSummary
         print("  Fetching gradebook trend series...")
