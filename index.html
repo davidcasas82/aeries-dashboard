@@ -1633,7 +1633,9 @@ python3 -m http.server 8765</pre>
                     pct: a.percentage != null ? a.percentage.toFixed(0) + '%' : '',
                 };
             }
-            if (raw) return { text: raw, cls: 'score-none', pct: '' };
+            if (raw && !/^\d+(\.\d+)?$/.test(raw)) {
+                return { text: raw, cls: 'score-none', pct: '' };
+            }
             return { text: '—', cls: 'score-none', pct: '' };
         }
 

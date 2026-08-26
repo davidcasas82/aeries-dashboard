@@ -1219,7 +1219,13 @@ def parse_assignment_rows(soup):
         score_display = cells[3].get_text(separator=" ", strip=True) if len(cells) > 3 else ""
         earned_raw = cells[4].get_text(strip=True) if len(cells) > 4 else ""
         possible_raw = cells[6].get_text(strip=True) if len(cells) > 6 else ""
-        score_raw = score_display or earned_raw or possible_raw
+        # Score cell only. Do not fall back to Max alone (pending rows would look scored).
+        if score_display:
+            score_raw = score_display
+        elif earned_raw:
+            score_raw = f"{earned_raw} / {possible_raw}".strip(" /") if possible_raw else earned_raw
+        else:
+            score_raw = ""
         points_earned = safe_float(earned_raw)
         points_possible = safe_float(possible_raw)
 

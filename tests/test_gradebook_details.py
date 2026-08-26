@@ -24,6 +24,11 @@ class ParseAssignmentRowsTests(unittest.TestCase):
         soup = load_soup("gradebook_perc_of_grade.html")
         rows = scraper.parse_assignment_rows(soup)
         self.assertEqual(len(rows), 4)
+        pending = rows[3]
+        self.assertEqual(pending["description"], "Unit 1 Assessment")
+        self.assertEqual(pending["score_raw"], "")
+        self.assertIsNone(pending["points_earned"])
+        self.assertEqual(pending["points_possible"], 20.0)
         slides = rows[0]
         self.assertEqual(slides["score_raw"], "5 / 5")
         self.assertEqual(slides["points_earned"], 5.0)
