@@ -912,6 +912,58 @@
         .score-mid { color: var(--amber); }
         .score-low { color: var(--red); }
         .score-none { color: var(--text-3); font-weight: 400; }
+        .score-code { color: var(--text); font-weight: 650; letter-spacing: 0.02em; }
+
+        .assn-status {
+            font-size: var(--fs-label);
+            margin-top: 2px;
+            color: var(--text-3);
+        }
+        .assn-status.counts { color: var(--teal); }
+        .assn-status.pending { color: var(--amber); }
+        .assn-status.zero_weight { color: var(--text-3); }
+        .assn-status.na,
+        .assn-status.tx,
+        .assn-status.ex,
+        .assn-status.nt { color: var(--text-2); }
+        .assn-status.extra_credit { color: var(--teal-mid); }
+
+        .counted-insight {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .counted-note {
+            font-size: var(--fs-small);
+            color: var(--text-2);
+            line-height: 1.4;
+        }
+        .cat-mix-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: var(--fs-small);
+            line-height: 1.35;
+            padding: 4px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .cat-mix-row:last-child { border-bottom: none; }
+        .cat-mix-row .cat-name { color: var(--text); font-weight: 550; }
+        .cat-mix-row .cat-meta { color: var(--text-3); text-align: right; }
+        .cat-mix-row.dropped .cat-name,
+        .cat-mix-row.dropped .cat-meta { color: var(--text-3); }
+        .cat-mix-row.counts .cat-meta { color: var(--teal); font-weight: 550; }
+        .rebuild-debug {
+            margin-top: 8px;
+            font-size: var(--fs-label);
+            color: var(--text-3);
+        }
+        .rebuild-debug summary {
+            cursor: pointer;
+            color: var(--text-3);
+            font-weight: 550;
+        }
+        .rebuild-debug p { margin-top: 4px; line-height: 1.4; }
 
         .panel-block .assignment-row:first-of-type { padding-top: 0; }
         .panel-block .list-panel { margin-top: 0; }
@@ -1392,15 +1444,28 @@ python3 -m http.server 8765</pre>
             return m ? parseInt(m[1], 10) : 0;
         }
 
+        function scoreStatusCode(a) {
+            const raw = String((a && a.score_raw) || '').trim();
+            const m = raw.match(/\b(NA|TX|EX|NT)\b/i);
+            return m ? m[1].toUpperCase() : '';
+        }
+
+        function assignmentHasScoreMark(a) {
+            if (!a) return false;
+            if (a.points_earned != null) return true;
+            return !!scoreStatusCode(a);
+        }
+
         function isPastDueUngraded(a) {
             const due = parseDate(a.due_date);
             if (!due || due >= TODAY) return false;
+            if (assignmentHasScoreMark(a)) return false;
             return a.points_earned === null;
         }
 
         function isDueTodayUngraded(a) {
             const due = parseDate(a.due_date);
-            if (!due || a.points_earned != null) return false;
+            if (!due || assignmentHasScoreMark(a)) return false;
             return due.getTime() === TODAY.getTime();
         }
 
@@ -1517,15 +1582,61 @@ python3 -m http.server 8765</pre>
             return assignments
                 .filter(a => {
                     const due = parseDate(a.due_date);
-                    return due && due >= TODAY && a.points_earned == null;
+                    return due && due >= TODAY && !assignmentHasScoreMark(a);
                 })
                 .sort((a, b) => parseDate(a.due_date) - parseDate(b.due_date));
         }
 
         function filterScoredAssignments(assignments) {
             return assignments
-                .filter(a => a.points_earned != null)
+                .filter(a => assignmentHasScoreMark(a))
                 .sort((a, b) => (parseDate(b.due_date) || 0) - (parseDate(a.due_date) || 0));
+        }
+
+        function inferAssignmentStatus(a, insight) {
+            if (a.status && a.status_label) {
+                return { status: a.status, label: a.status_label };
+            }
+            const code = scoreStatusCode(a);
+            if (code) return { status: code.toLowerCase(), label: code };
+            if (a.points_earned == null && !a.grading_complete) {
+                return { status: 'pending', label: 'pending' };
+            }
+            const cat = (a.category || '').trim();
+            const mix = (insight && insight.categories) || [];
+            const hit = mix.find(c => {
+                const an = normalizeName(c.name);
+                const bn = normalizeName(cat);
+                return an && bn && (an === bn || an.includes(bn) || bn.includes(an));
+            });
+            if (hit && hit.weight_pct === 0) {
+                return { status: 'zero_weight', label: '0% category (doesn\'t count)' };
+            }
+            if (a.extra_credit || (a.points_possible === 0 && a.points_earned != null)) {
+                return { status: 'extra_credit', label: cat ? `extra credit in ${cat}` : 'extra credit' };
+            }
+            if (cat) return { status: 'counts', label: `counts in ${cat}` };
+            return { status: 'counts', label: 'counts' };
+        }
+
+        function assignmentScoreDisplay(a) {
+            const raw = String(a.score_raw || '').trim();
+            const code = scoreStatusCode(a);
+            if (code) {
+                return { text: raw || code, cls: 'score-code', pct: '' };
+            }
+            if (a.points_earned != null) {
+                const max = a.points_possible == null ? '' : a.points_possible;
+                return {
+                    text: `${a.points_earned}/${max}`,
+                    cls: getScoreClass(a.percentage),
+                    pct: a.percentage != null ? a.percentage.toFixed(0) + '%' : '',
+                };
+            }
+            if (raw && !/^\d+(\.\d+)?$/.test(raw)) {
+                return { text: raw, cls: 'score-none', pct: '' };
+            }
+            return { text: '—', cls: 'score-none', pct: '' };
         }
 
         function buildClassProfiles(student) {
@@ -1567,6 +1678,21 @@ python3 -m http.server 8765</pre>
                 const missingCount = assignments.length ? missing.length : aeriesMissing;
                 const upcoming = filterUpcomingAssignments(assignments);
                 const recent = filterScoredAssignments(assignments);
+
+                // Prefer ClassSummary copies; fall back to the GradebookDetails group
+                if (!c.counted_insight || !c.gradebook_totals) {
+                    const group = (student.assignments_by_class || []).find(ca => {
+                        const samePeriod = ca.period != null && ca.period === c.period;
+                        const cn = normalizeName(c.course_name);
+                        const gn = normalizeName(ca.class_name);
+                        const nameHit = cn && gn && (cn.includes(gn) || gn.includes(cn));
+                        return samePeriod || nameHit;
+                    });
+                    if (group) {
+                        if (!c.gradebook_totals && group.totals) c.gradebook_totals = group.totals;
+                        if (!c.counted_insight && group.counted_insight) c.counted_insight = group.counted_insight;
+                    }
+                }
 
                 profiles.push({
                     classMeta: c,
@@ -1995,7 +2121,7 @@ python3 -m http.server 8765</pre>
             return order.map(k => best.get(k));
         }
 
-        function renderAssignmentList(assignments, kind) {
+        function renderAssignmentList(assignments, kind, insight) {
             if (!assignments.length) return '';
             let html = `<div class="list-panel">`;
             let currentWeek = '';
@@ -2015,31 +2141,90 @@ python3 -m http.server 8765</pre>
                     ? formatShortDate(due)
                     : `${formatDayOfWeek(due)} ${formatShortDate(due)}`;
 
+                const st = inferAssignmentStatus(a, insight);
+                const score = assignmentScoreDisplay(a);
                 let scoreHtml = '';
                 if (kind === 'missing') {
                     scoreHtml = a.points_possible
                         ? `<span class="pts-badge">${a.points_possible} pts</span>`
                         : '';
-                } else if (kind === 'upcoming') {
-                    scoreHtml = a.points_earned !== null
-                        ? `<div class="score ${getScoreClass(a.percentage)}">${a.points_earned}/${a.points_possible}</div>`
-                        : `<span class="badge badge-upcoming">Due</span>`;
+                } else if (kind === 'upcoming' && !assignmentHasScoreMark(a)) {
+                    scoreHtml = `<span class="badge badge-upcoming">Due</span>`;
                 } else {
-                    scoreHtml = `<div class="score ${getScoreClass(a.percentage)}">${a.points_earned}/${a.points_possible}</div>
-                        <div class="max">${a.percentage != null ? a.percentage.toFixed(0) + '%' : ''}</div>`;
+                    scoreHtml = `<div class="score ${score.cls}">${score.text}</div>
+                        ${score.pct ? `<div class="max">${score.pct}</div>` : ''}`;
                 }
 
+                const comment = (a.comment || '').trim();
                 html += `
                     <div class="assignment-row">
-                        <div class="assignment-date ${dateClass}">${dateHtml}</div>
+                        <div class="assignment-date ${dateClass}">${dateHtml || ''}</div>
                         <div class="assignment-info">
-                            <div class="title">${a.description}</div>
+                            <div class="title">${a.description || ''}</div>
                             ${a.category ? `<div class="assignment-meta">${a.category}</div>` : ''}
+                            <div class="assn-status ${st.status}">${st.label}</div>
+                            ${comment ? `<div class="assignment-meta">${comment}</div>` : ''}
                         </div>
                         <div class="assignment-score">${scoreHtml}</div>
                     </div>`;
             }
             return html + '</div>';
+        }
+
+        function formatPostedGrade(c) {
+            const g = formatGradeDisplay(c);
+            const parts = [g.letter, g.pct && g.letter !== g.pct ? g.pct : ''].filter(Boolean);
+            return parts.join(' ') || '—';
+        }
+
+        function renderCountedInsight(c) {
+            const insight = c.counted_insight;
+            if (!insight || !(insight.categories || []).length) return '';
+            const posted = formatPostedGrade(c);
+            const rows = (insight.categories || []).map(cat => {
+                const weight = cat.weight_pct == null ? '' : `${cat.weight_pct}% of grade`;
+                let meta = '';
+                if (cat.reason === 'empty_0_0') {
+                    meta = `${weight} · empty (not in mix yet)`;
+                } else if (cat.reason === 'zero_weight') {
+                    meta = '0% category (doesn\'t count)';
+                } else if (cat.reason === 'extra_credit') {
+                    meta = 'extra credit';
+                } else if (cat.counts && cat.perc != null) {
+                    meta = `${weight} · ${Number(cat.perc).toFixed(0)}%`;
+                } else if (weight) {
+                    meta = weight;
+                }
+                const cls = cat.counts ? 'counts' : 'dropped';
+                return `<div class="cat-mix-row ${cls}">
+                    <span class="cat-name">${cat.name || ''}</span>
+                    <span class="cat-meta">${meta}</span>
+                </div>`;
+            }).join('');
+
+            let rebuild = '';
+            if (insight.rebuild_pct != null) {
+                const match = insight.matches_posted
+                    ? 'matches posted'
+                    : 'differs — posted stays official';
+                rebuild = `<details class="rebuild-debug">
+                    <summary>Our rebuild (hidden by default)</summary>
+                    <p>${Number(insight.rebuild_pct).toFixed(1)}% (${match}). This is not the class grade.</p>
+                </details>`;
+            }
+            const scale = (insight.min_assignment_pct != null || insight.max_assignment_pct != null)
+                ? `<div class="counted-note">Assignment scale in effect: min ${insight.min_assignment_pct ?? '—'}% · max ${insight.max_assignment_pct ?? '—'}%.</div>`
+                : '';
+
+            return `<div class="panel-block">
+                <div class="panel-block-label">What counts</div>
+                <div class="counted-insight">
+                    <div class="counted-note">Aeries posted grade is <strong>${posted}</strong> — not an average of assignment %.</div>
+                    ${rows}
+                    ${scale}
+                    ${rebuild}
+                </div>
+            </div>`;
         }
 
         function renderClassPanel(profile, student) {
@@ -2049,9 +2234,8 @@ python3 -m http.server 8765</pre>
             const doTonight = (profile.liveDoTonight || '').trim();
             const snap = (profile.snap || '').trim();
             const storyText = story || snap;
-            const g = formatGradeDisplay(c);
             const gradeClass = getGradeClass(c.percent);
-            const gradeShow = [g.letter, g.pct && g.letter !== g.pct ? g.pct : ''].filter(Boolean).join(' ');
+            const gradeShow = formatPostedGrade(c);
 
             const t = findClassTrend(student, c.course_name);
             const hist = t?.pct_history || [];
@@ -2067,7 +2251,7 @@ python3 -m http.server 8765</pre>
             // Stats row
             let stats = `<div class="panel-stats">
                 <div class="stat-tile">
-                    <div class="stat-label">Grade</div>
+                    <div class="stat-label">Posted</div>
                     <div class="stat-value ${gradeClass}">${gradeShow || '—'}</div>
                 </div>
                 <div class="stat-tile">
@@ -2104,6 +2288,8 @@ python3 -m http.server 8765</pre>
                 </div>`;
             }
 
+            blocks += renderCountedInsight(c);
+
             if (spark || deltaStr != null) {
                 let caption = '';
                 if (deltaStr != null) {
@@ -2122,24 +2308,25 @@ python3 -m http.server 8765</pre>
                 </div>`;
             }
 
-            // Assignment sections — always show structure when data exists
+            // Assignment sections — action lists plus the honest full list
+            const insight = c.counted_insight;
             const listBlocks = [];
             if (profile.missing.length) {
                 listBlocks.push(`<div class="panel-block">
                     <div class="panel-block-label alert">Missing <span class="count">${profile.missing.length}</span></div>
-                    ${renderAssignmentList(profile.missing, 'missing')}
+                    ${renderAssignmentList(profile.missing, 'missing', insight)}
                 </div>`);
             }
             if (profile.upcoming.length) {
                 listBlocks.push(`<div class="panel-block">
                     <div class="panel-block-label">Upcoming <span class="count">${profile.upcoming.length}</span></div>
-                    ${renderAssignmentList(profile.upcoming, 'upcoming')}
+                    ${renderAssignmentList(profile.upcoming, 'upcoming', insight)}
                 </div>`);
             }
-            if (profile.recent.length) {
+            if (profile.assignments.length) {
                 listBlocks.push(`<div class="panel-block full">
-                    <div class="panel-block-label">Scores <span class="count">${profile.recent.length}</span></div>
-                    ${renderAssignmentList(profile.recent, 'recent')}
+                    <div class="panel-block-label">All work <span class="count">${profile.assignments.length}</span></div>
+                    ${renderAssignmentList(profile.assignments, 'all', insight)}
                 </div>`);
             }
 
