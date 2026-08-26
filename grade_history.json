@@ -4345,7 +4345,7 @@
         },
         {
           "date": "2026-08-25",
-          "captured_at": "2026-08-25T23:18:32.788098+00:00",
+          "captured_at": "2026-08-26T03:52:05.683385+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -4421,7 +4421,7 @@
             }
           },
           "previous_briefing": {
-            "headline": "Daniel has a 0% in Rapid Prototype; most classes have no work posted yet, and he earned an A in Bus of Gaming.",
+            "headline": "Daniel has a 0% in Rapid Prototype; he earned an A in Bus of Gaming. Most classes have no work posted yet.",
             "focus_tonight": ""
           }
         }
@@ -8451,7 +8451,7 @@
         },
         {
           "date": "2026-08-25",
-          "captured_at": "2026-08-25T23:18:45.547420+00:00",
+          "captured_at": "2026-08-26T03:52:09.085221+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -8527,8 +8527,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "DNA Structure Exit Ticket due today in Tech of Biology; most classes have no work posted yet. Leah holds A's in Bus of Gaming and Mkt Adv GrphDes.",
-            "focus_tonight": "DNA Structure Exit Ticket (Tech of Biology)"
+            "headline": "Engineering Geo at 0% needs attention; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE; most classes have no work posted yet.",
+            "focus_tonight": ""
           }
         }
       ]
