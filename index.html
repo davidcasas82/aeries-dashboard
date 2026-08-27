@@ -1344,8 +1344,19 @@
     </div>
 
     <script>
-        const TODAY = new Date();
-        TODAY.setHours(0, 0, 0, 0);
+        const DATA_CACHE_BUST = '20260827-p12';
+
+        function pacificToday() {
+            const parts = new Date().toLocaleDateString('en-US', {
+                timeZone: 'America/Los_Angeles',
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+            }).split('/');
+            return new Date(Number(parts[2]), Number(parts[0]) - 1, Number(parts[1]));
+        }
+
+        const TODAY = pacificToday();
 
         let currentData = null;
         let activeStudentIndex = 0;
@@ -1370,7 +1381,7 @@ python3 -m http.server 8765</pre>
                 return null;
             }
             try {
-                const resp = await fetch('grades_data.json');
+                const resp = await fetch('grades_data.json?v=' + DATA_CACHE_BUST, { cache: 'no-store' });
                 if (!resp.ok) throw new Error('No data');
                 return await resp.json();
             } catch (e) {
@@ -1400,8 +1411,21 @@ python3 -m http.server 8765</pre>
             return date.toLocaleDateString('en-US', { weekday: 'short' });
         }
 
+        function daysFromToday(date) {
+            if (!date) return null;
+            const a = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+            const b = Date.UTC(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+            return Math.round((a - b) / 86400000);
+        }
+
+        const WEEK_BUCKET_ORDER = [
+            'Earlier', '2 weeks ago', 'Last week', 'This week', 'Next week', 'In 2 weeks', 'Later',
+        ];
+
         function getWeekLabel(date) {
-            const diff = Math.floor((date - TODAY) / (1000 * 60 * 60 * 24));
+            if (!date) return 'Later';
+            const diff = daysFromToday(date);
+            if (diff == null || isNaN(diff)) return 'Later';
             if (diff < 0 && diff >= -7) return 'Last week';
             if (diff < -7 && diff >= -14) return '2 weeks ago';
             if (diff < -14) return 'Earlier';
@@ -1412,7 +1436,8 @@ python3 -m http.server 8765</pre>
         }
 
         function getDateClass(date) {
-            const diff = Math.floor((date - TODAY) / (1000 * 60 * 60 * 24));
+            const diff = daysFromToday(date);
+            if (diff == null || isNaN(diff)) return '';
             if (diff < 0) return 'overdue';
             if (diff === 0) return 'today';
             if (diff <= 7) return 'this-week';
@@ -1490,17 +1515,44 @@ python3 -m http.server 8765</pre>
             return `${sign}${n.toFixed(1)}`;
         }
 
+        function historyWithoutLeadingPhantom(points) {
+            const list = points || [];
+            let i = 0;
+            while (i < list.length && (list[i].pct == null || Number(list[i].pct) === 0)) i++;
+            return list.slice(i);
+        }
+
+        function isFirstPostedGradeDelta(t, delta) {
+            if (delta == null || Number(delta) === 0) return false;
+            const hist = (t && t.pct_history) || [];
+            if (hist.length < 2) return false;
+            const firstReal = hist.find(p => p.pct != null && Number(p.pct) !== 0);
+            if (!firstReal) return false;
+            const leadingPhantom = hist.some(p => p.pct != null && Number(p.pct) === 0);
+            if (!leadingPhantom) return false;
+            const last = hist[hist.length - 1];
+            const lastPct = last && last.pct != null ? Number(last.pct) : null;
+            return Math.abs(Number(delta) - Number(firstReal.pct)) < 0.2
+                || (lastPct != null && Math.abs(Number(delta) - lastPct) < 0.2);
+        }
+
         function pickTrendDelta(t) {
             if (!t) return { delta: null, window: '' };
-            if (t.delta_7d != null && t.delta_7d !== 0) return { delta: t.delta_7d, window: '7d' };
-            if (t.delta_14d != null && t.delta_14d !== 0) return { delta: t.delta_14d, window: '14d' };
-            if (t.delta_span != null) return { delta: t.delta_span, window: t.span_window || 'term' };
-            if (t.delta_7d != null) return { delta: t.delta_7d, window: '7d' };
-            if (t.delta_14d != null) return { delta: t.delta_14d, window: '14d' };
+            const candidates = [
+                [t.delta_7d, '7d'],
+                [t.delta_14d, '14d'],
+                [t.delta_span, t.span_window || 'term'],
+            ];
+            for (const [delta, window] of candidates) {
+                if (delta == null || delta === 0) continue;
+                if (isFirstPostedGradeDelta(t, delta)) continue;
+                return { delta, window };
+            }
             return { delta: null, window: '' };
         }
 
         function renderSparkline(points, width, height, strokeWidth) {
+            points = historyWithoutLeadingPhantom(points);
             if (!points || points.length < 2) return '';
             const w = width || 44;
             const h = height || 16;
@@ -1726,6 +1778,15 @@ python3 -m http.server 8765</pre>
             return best;
         }
 
+        function formatClassesCount(focusCount, total) {
+            const parts = [];
+            if (focusCount > 0) {
+                parts.push(focusCount === 1 ? '1 needs attention' : `${focusCount} need attention`);
+            }
+            parts.push(total === 1 ? '1 class' : `${total} classes`);
+            return parts.join(' · ');
+        }
+
         function urgencyToRank(urgency) {
             return { critical: 4, watch: 3, ok: 2, strong: 1 }[urgency] || 2;
         }
@@ -1742,9 +1803,134 @@ python3 -m http.server 8765</pre>
             const pct = parseFloat(raw);
             if (isNaN(pct)) return false;
             if (pct > 0) return true;
-            // Phantom 0% at year start: only count if missing work or scored assignments exist
+            // 0% + empty mark is a placeholder. Scored assignments do not make it a class grade.
             if (parseMissingCount(c) > 0) return true;
-            return hasScoredAssignments(assignments);
+            return false;
+        }
+
+        function isPhantomZero(c, assignments) {
+            if (c && c.phantom_zero) return true;
+            const mark = (c && c.mark || '').trim();
+            const pct = parseFloat(c && c.percent);
+            return !mark && !isNaN(pct) && pct === 0 && !hasRealGrade(c, assignments);
+        }
+
+        function assignmentsForClassMeta(student, c) {
+            for (const ca of (student && student.assignments_by_class) || []) {
+                if (ca.period != null && c && ca.period === c.period) return ca.assignments || [];
+                const cn = normalizeName(c && c.course_name);
+                const gn = normalizeName(ca.class_name);
+                if (cn && gn && (cn.includes(gn) || gn.includes(cn))) return ca.assignments || [];
+            }
+            return [];
+        }
+
+        function formatScorePair(earned, possible) {
+            const fmt = n => (typeof n === 'number' && Number.isInteger(n)) || (typeof n === 'number' && n % 1 === 0)
+                ? String(Math.round(n))
+                : String(n);
+            return `${fmt(earned)}/${fmt(possible)}`;
+        }
+
+        function formatDueLabel(a, opts) {
+            if (a && a.due_label) return a.due_label;
+            const due = parseDate(a && a.due_date);
+            if (!due) return '';
+            const datePart = formatShortDate(due);
+            const weekdayDate = `${formatDayOfWeek(due)} ${datePart}`;
+            const scored = assignmentHasScoreMark(a);
+            const days = daysFromToday(due);
+            const isMissing = !!(opts && opts.isMissing);
+            if (scored && days < 0) {
+                if (a.points_earned != null && a.points_possible != null) {
+                    return formatScorePair(a.points_earned, a.points_possible);
+                }
+                if (a.percentage != null) return `${Number(a.percentage)}%`;
+                return `completed ${datePart}`;
+            }
+            if (days === 0 && !scored) return 'due today';
+            if (days > 0) return `due ${weekdayDate}`;
+            if (isMissing) return `overdue ${datePart}`;
+            return `awaiting score · was due ${weekdayDate}`;
+        }
+
+        function escapeRegExp(s) {
+            return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function rewriteStaleDueCopy(text, profile) {
+            if (!text) return text;
+            let out = String(text);
+            const weekdays = 'Mon|Tue|Wed|Thu|Fri|Sat|Sun|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday';
+            const dueWeekday = new RegExp(`\\bdue\\s+(${weekdays})\\b(?!\\s+[A-Za-z]{3}\\s+\\d)`, 'gi');
+            const missingNames = new Set((profile.missing || []).map(a => a.description));
+            const assignments = [...(profile.assignments || [])]
+                .filter(a => a && a.description)
+                .sort((a, b) => (b.description || '').length - (a.description || '').length);
+            for (const a of assignments) {
+                const name = a.description;
+                if (out.indexOf(name) === -1) continue;
+                const label = formatDueLabel(a, { isMissing: missingNames.has(name) });
+                const due = parseDate(a.due_date);
+                const days = due ? daysFromToday(due) : null;
+                const namedWeekday = new RegExp(
+                    `${escapeRegExp(name)}(\\s*[·\\-–—:]\\s*)due\\s+(?:${weekdays})\\b(?!\\s+[A-Za-z]{3}\\s+\\d)`,
+                    'gi'
+                );
+                if (namedWeekday.test(out)) {
+                    namedWeekday.lastIndex = 0;
+                    out = out.replace(namedWeekday, (_, sep) => name + sep + label);
+                    continue;
+                }
+                if (days != null && days < 0) {
+                    const namedDue = new RegExp(
+                        `${escapeRegExp(name)}(\\s*[·\\-–—:]\\s*)due\\s+[^\\n·]+`,
+                        'i'
+                    );
+                    if (namedDue.test(out)) {
+                        out = out.replace(namedDue, (_, sep) => name + sep + label);
+                    }
+                }
+            }
+            dueWeekday.lastIndex = 0;
+            if (dueWeekday.test(out)) {
+                dueWeekday.lastIndex = 0;
+                const past = assignments.find(a => {
+                    const d = parseDate(a.due_date);
+                    return d && daysFromToday(d) < 0;
+                });
+                const upcoming = assignments.find(a => {
+                    const d = parseDate(a.due_date);
+                    return d && daysFromToday(d) >= 0;
+                });
+                const any = past || upcoming || assignments[0];
+                if (any) {
+                    const label = formatDueLabel(any, { isMissing: missingNames.has(any.description) });
+                    out = out.replace(dueWeekday, label);
+                }
+            }
+            return out;
+        }
+
+        function rewritePhantomZeroCopy(text) {
+            if (!text) return text;
+            let out = String(text);
+            out = out.replace(/\bGrade at 0%/gi, 'No grade yet');
+            out = out.replace(/\bat 0%/gi, 'with no grade yet');
+            out = out.replace(/\b0%\s+needs attention/gi, 'no grade yet needs attention');
+            out = out.replace(/\bposted grade remains 0%/gi, 'no grade posted yet');
+            out = out.replace(/\bremains 0%/gi, 'is not posted yet');
+            out = out.replace(/(?<![\d.])0%/g, 'no grade yet');
+            return out;
+        }
+
+        function rewriteStaleCopy(text, profile) {
+            if (!text) return text;
+            let out = rewriteStaleDueCopy(text, profile);
+            if (isPhantomZero(profile.classMeta, profile.assignments)) {
+                out = rewritePhantomZeroCopy(out);
+            }
+            return out;
         }
 
         function pickTonightItems(profiles) {
@@ -1786,11 +1972,14 @@ python3 -m http.server 8765</pre>
 
         function snapNamesStaleWork(snap, profile) {
             if (!snap) return false;
+            if (/\bdue\s+(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b(?!\s+[A-Za-z]{3}\s+\d)/i.test(snap)) {
+                return true;
+            }
             for (const a of profile.assignments || []) {
                 if (!a.description || snap.indexOf(a.description) === -1) continue;
-                if (isPastDueUngraded(a) && !(profile.missing || []).some(m => m.description === a.description)) {
-                    return true;
-                }
+                const due = parseDate(a.due_date);
+                if (!due || daysFromToday(due) >= 0) continue;
+                if (/\bdue\b/i.test(snap)) return true;
             }
             return false;
         }
@@ -1840,28 +2029,32 @@ python3 -m http.server 8765</pre>
                 const aiClass = normalizeAiClass(rawAi);
                 const urgency = inferUrgency(p, aiClass);
                 let snap = (aiClass?.snap || inferUrgencyReason(p, urgency) || '').trim();
+                snap = rewriteStaleCopy(snap, p);
                 if (snapNamesStaleWork(snap, p)) {
-                    snap = inferUrgencyReason(p, urgency) || '';
+                    const fallback = inferUrgencyReason(p, urgency) || '';
+                    snap = rewriteStaleCopy(fallback, p) || fallback;
                 }
+                const story = rewriteStaleCopy((aiClass?.story || '').trim(), p);
                 return {
                     ...p,
-                    aiClass,
+                    aiClass: aiClass ? { ...aiClass, snap, story } : aiClass,
                     urgency,
                     snap,
+                    story,
                     liveDoTonight: liveDoTonight(p),
                     urgencyRank: urgencyToRank(urgency),
                 };
             }).sort((a, b) => a.period - b.period);
         }
 
-        function formatGradeDisplay(c) {
+        function formatGradeDisplay(c, assignments) {
             const mark = (c.mark || '').trim();
             const raw = c.percent;
             const hasPct = raw !== undefined && raw !== null && String(raw).trim() !== '';
             const pctNum = hasPct ? parseFloat(raw) : NaN;
             const pct = !isNaN(pctNum) ? Math.round(pctNum) : null;
             // Treat phantom 0% with no letter mark as "no grade yet"
-            if (!mark && (pct === null || pct === 0) && !hasRealGrade(c)) {
+            if (!mark && (pct === null || pct === 0) && !hasRealGrade(c, assignments)) {
                 return { letter: '—', pct: '' };
             }
             if (mark && pct !== null) return { letter: mark, pct: pct + '%' };
@@ -1871,7 +2064,10 @@ python3 -m http.server 8765</pre>
         }
 
         function renderMovers(student) {
-            const summary = (student.trend_summary || []).filter(t => t.delta != null && t.delta !== 0);
+            const summary = (student.trend_summary || []).filter(t => {
+                if (t.delta == null || t.delta === 0) return false;
+                return !isFirstPostedGradeDelta(findClassTrend(student, t.class_name), t.delta);
+            });
             if (!summary.length) return '';
             const items = summary.slice(0, 4).map(t => {
                 const dir = t.direction || (t.delta > 0 ? 'up' : (t.delta < 0 ? 'down' : 'same'));
@@ -1921,7 +2117,7 @@ python3 -m http.server 8765</pre>
         }
 
         function hasGradedClasses(student) {
-            return (student.classes || []).some(c => hasRealGrade(c));
+            return (student.classes || []).some(c => hasRealGrade(c, assignmentsForClassMeta(student, c)));
         }
 
         function hasScheduledClasses(student) {
@@ -2024,6 +2220,14 @@ python3 -m http.server 8765</pre>
                     headline = '';
                 }
             }
+            const allAssignments = [];
+            for (const p of profiles || []) {
+                allAssignments.push(...(p.assignments || []));
+            }
+            headline = rewriteStaleDueCopy(headline, { assignments: allAssignments, missing: (profiles || []).flatMap(p => p.missing || []) });
+            if ((profiles || []).some(p => isPhantomZero(p.classMeta, p.assignments))) {
+                headline = rewritePhantomZeroCopy(headline);
+            }
 
             let html = `<div class="masthead" id="hero-card-${idx}">`;
             html += `<div class="masthead-kicker"><h2>Briefing</h2>`;
@@ -2123,64 +2327,85 @@ python3 -m http.server 8765</pre>
 
         function renderAssignmentList(assignments, kind, insight) {
             if (!assignments.length) return '';
+            const sorted = [...assignments].sort((a, b) => {
+                const da = parseDate(a.due_date);
+                const db = parseDate(b.due_date);
+                if (!da && !db) return 0;
+                if (!da) return 1;
+                if (!db) return -1;
+                return da - db;
+            });
             let html = `<div class="list-panel">`;
-            let currentWeek = '';
-
-            for (const a of assignments) {
-                const due = parseDate(a.due_date);
-                if (kind !== 'missing') {
-                    const week = getWeekLabel(due);
-                    if (week !== currentWeek) {
-                        currentWeek = week;
-                        html += `<div class="week-label">${week}</div>`;
-                    }
+            if (kind === 'missing') {
+                for (const a of sorted) {
+                    html += renderAssignmentRow(a, kind, insight);
                 }
-
-                const dateClass = kind === 'missing' ? 'overdue' : getDateClass(due);
-                const dateHtml = kind === 'missing'
-                    ? formatShortDate(due)
-                    : `${formatDayOfWeek(due)} ${formatShortDate(due)}`;
-
-                const st = inferAssignmentStatus(a, insight);
-                const score = assignmentScoreDisplay(a);
-                let scoreHtml = '';
-                if (kind === 'missing') {
-                    scoreHtml = a.points_possible
-                        ? `<span class="pts-badge">${a.points_possible} pts</span>`
-                        : '';
-                } else if (kind === 'upcoming' && !assignmentHasScoreMark(a)) {
-                    scoreHtml = `<span class="badge badge-upcoming">Due</span>`;
-                } else {
-                    scoreHtml = `<div class="score ${score.cls}">${score.text}</div>
-                        ${score.pct ? `<div class="max">${score.pct}</div>` : ''}`;
+                return html + '</div>';
+            }
+            const groups = new Map();
+            for (const a of sorted) {
+                const week = getWeekLabel(parseDate(a.due_date));
+                if (!groups.has(week)) groups.set(week, []);
+                groups.get(week).push(a);
+            }
+            for (const week of WEEK_BUCKET_ORDER) {
+                const items = groups.get(week);
+                if (!items || !items.length) continue;
+                html += `<div class="week-label">${week}</div>`;
+                for (const a of items) {
+                    html += renderAssignmentRow(a, kind, insight);
                 }
-
-                const comment = (a.comment || '').trim();
-                html += `
-                    <div class="assignment-row">
-                        <div class="assignment-date ${dateClass}">${dateHtml || ''}</div>
-                        <div class="assignment-info">
-                            <div class="title">${a.description || ''}</div>
-                            ${a.category ? `<div class="assignment-meta">${a.category}</div>` : ''}
-                            <div class="assn-status ${st.status}">${st.label}</div>
-                            ${comment ? `<div class="assignment-meta">${comment}</div>` : ''}
-                        </div>
-                        <div class="assignment-score">${scoreHtml}</div>
-                    </div>`;
             }
             return html + '</div>';
         }
 
-        function formatPostedGrade(c) {
-            const g = formatGradeDisplay(c);
+        function renderAssignmentRow(a, kind, insight) {
+            const due = parseDate(a.due_date);
+            const dateClass = kind === 'missing' ? 'overdue' : getDateClass(due);
+            const dateHtml = kind === 'missing'
+                ? formatShortDate(due)
+                : `${formatDayOfWeek(due)} ${formatShortDate(due)}`;
+
+            const st = inferAssignmentStatus(a, insight);
+            const score = assignmentScoreDisplay(a);
+            let scoreHtml = '';
+            if (kind === 'missing') {
+                scoreHtml = a.points_possible
+                    ? `<span class="pts-badge">${a.points_possible} pts</span>`
+                    : '';
+            } else if (kind === 'upcoming' && !assignmentHasScoreMark(a)) {
+                scoreHtml = `<span class="badge badge-upcoming">Due</span>`;
+            } else {
+                scoreHtml = `<div class="score ${score.cls}">${score.text}</div>
+                    ${score.pct ? `<div class="max">${score.pct}</div>` : ''}`;
+            }
+
+            const comment = (a.comment || '').trim();
+            return `
+                <div class="assignment-row">
+                    <div class="assignment-date ${dateClass}">${dateHtml || ''}</div>
+                    <div class="assignment-info">
+                        <div class="title">${a.description || ''}</div>
+                        ${a.category ? `<div class="assignment-meta">${a.category}</div>` : ''}
+                        <div class="assn-status ${st.status}">${st.label}</div>
+                        ${comment ? `<div class="assignment-meta">${comment}</div>` : ''}
+                    </div>
+                    <div class="assignment-score">${scoreHtml}</div>
+                </div>`;
+        }
+
+        function formatPostedGrade(c, assignments) {
+            const g = formatGradeDisplay(c, assignments);
             const parts = [g.letter, g.pct && g.letter !== g.pct ? g.pct : ''].filter(Boolean);
             return parts.join(' ') || '—';
         }
 
-        function renderCountedInsight(c) {
+        function renderCountedInsight(c, assignments) {
             const insight = c.counted_insight;
             if (!insight || !(insight.categories || []).length) return '';
-            const posted = formatPostedGrade(c);
+            const posted = isPhantomZero(c, assignments)
+                ? 'not posted yet'
+                : formatPostedGrade(c, assignments);
             const rows = (insight.categories || []).map(cat => {
                 const weight = cat.weight_pct == null ? '' : `${cat.weight_pct}% of grade`;
                 let meta = '';
@@ -2230,15 +2455,19 @@ python3 -m http.server 8765</pre>
         function renderClassPanel(profile, student) {
             const c = profile.classMeta;
             const ai = normalizeAiClass(profile.aiClass);
-            const story = (ai?.story || '').trim();
+            const story = (profile.story || ai?.story || '').trim();
             const doTonight = (profile.liveDoTonight || '').trim();
             const snap = (profile.snap || '').trim();
             const storyText = story || snap;
-            const gradeClass = getGradeClass(c.percent);
-            const gradeShow = formatPostedGrade(c);
+            const realGrade = hasRealGrade(c, profile.assignments);
+            const phantomZero = isPhantomZero(c, profile.assignments);
+            const gradeClass = realGrade ? getGradeClass(c.percent) : 'grade-none';
+            const gradeShow = phantomZero || !realGrade
+                ? 'No grade yet'
+                : formatPostedGrade(c, profile.assignments);
 
             const t = findClassTrend(student, c.course_name);
-            const hist = t?.pct_history || [];
+            const hist = historyWithoutLeadingPhantom(t?.pct_history || []);
             const { delta, window } = pickTrendDelta(t);
             const deltaStr = formatTrendDelta(delta);
             const dir = delta == null || delta === 0 ? '' : (delta > 0 ? 'up' : 'down');
@@ -2248,20 +2477,24 @@ python3 -m http.server 8765</pre>
             const room = (c.room || '').trim();
             const teacherLine = [teacher, room ? `Rm ${room}` : ''].filter(Boolean).join(' · ');
 
+            const missingTile = (!realGrade && profile.missingCount === 0)
+                ? ''
+                : `<div class="stat-tile">
+                    <div class="stat-label">Missing</div>
+                    <div class="stat-value ${profile.missingCount > 0 ? 'alert' : ''}">${profile.missingCount}</div>
+                </div>`;
+
             // Stats row
             let stats = `<div class="panel-stats">
                 <div class="stat-tile">
-                    <div class="stat-label">Posted</div>
+                    <div class="stat-label">${realGrade ? 'Posted' : 'Grade'}</div>
                     <div class="stat-value ${gradeClass}">${gradeShow || '—'}</div>
                 </div>
                 <div class="stat-tile">
                     <div class="stat-label">Change</div>
                     <div class="stat-value ${dir || ''}">${deltaStr != null ? deltaStr + (window ? ' · ' + window : '') : '—'}</div>
                 </div>
-                <div class="stat-tile">
-                    <div class="stat-label">Missing</div>
-                    <div class="stat-value ${profile.missingCount > 0 ? 'alert' : ''}">${profile.missingCount}</div>
-                </div>
+                ${missingTile}
                 <div class="stat-tile">
                     <div class="stat-label">Upcoming</div>
                     <div class="stat-value">${profile.upcoming.length}</div>
@@ -2288,16 +2521,23 @@ python3 -m http.server 8765</pre>
                 </div>`;
             }
 
-            blocks += renderCountedInsight(c);
+            blocks += renderCountedInsight(c, profile.assignments);
 
             if (spark || deltaStr != null) {
                 let caption = '';
+                const firstDate = hist[0] && hist[0].date
+                    ? new Date(`${hist[0].date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    : '';
+                const windowLabel = window === '7d' ? 'over 7 days'
+                    : window === '14d' ? 'over 14 days'
+                    : window && window.endsWith('d') ? `over ${window.replace('d', ' days')}`
+                    : window ? `over ${window}` : '';
                 if (deltaStr != null) {
                     caption = `<span class="delta ${dir}">${deltaStr} pts</span>`;
-                    if (window) caption += ` over ${window}`;
-                    if (hist.length >= 2) caption += ` · ${hist.length} scrapes`;
-                } else if (hist.length >= 2) {
-                    caption = `Grade over ${hist.length} scrapes`;
+                    if (windowLabel) caption += ` ${windowLabel}`;
+                    else if (firstDate) caption += ` since ${firstDate}`;
+                } else if (firstDate) {
+                    caption = `Grade since ${firstDate}`;
                 }
                 blocks += `<div class="panel-block">
                     <div class="panel-block-label">Trend</div>
@@ -2350,8 +2590,8 @@ python3 -m http.server 8765</pre>
 
             const rows = profiles.map(p => {
                 const c = p.classMeta;
-                const g = formatGradeDisplay(c);
-                const gradeClass = getGradeClass(c.percent);
+                const g = formatGradeDisplay(c, p.assignments);
+                const gradeClass = hasRealGrade(c, p.assignments) ? getGradeClass(c.percent) : 'grade-none';
                 const urgency = p.urgency || 'ok';
                 const snap = p.snap || '';
                 const missingBadge = p.missingCount > 0
@@ -2404,7 +2644,7 @@ python3 -m http.server 8765</pre>
             return `
                 <div class="feed-header">
                     <h2>Classes</h2>
-                    <span class="count">${focusCount > 0 ? focusCount + ' need attention · ' : ''}${profiles.length}</span>
+                    <span class="count">${formatClassesCount(focusCount, profiles.length)}</span>
                 </div>
                 <div class="class-feed">${rows}</div>`;
         }
@@ -2613,8 +2853,8 @@ python3 -m http.server 8765</pre>
             const isToday = updated.toLocaleDateString('en-US', opts) === now.toLocaleDateString('en-US', opts);
             const timeStr = updated.toLocaleTimeString('en-US', { ...opts, hour: 'numeric', minute: '2-digit' });
             document.getElementById('lastUpdated').textContent = isToday
-                ? `Updated today ${timeStr}`
-                : `Updated ${updated.toLocaleDateString('en-US', { ...opts, month: 'short', day: 'numeric' })} ${timeStr}`;
+                ? `Scraped today ${timeStr}`
+                : `Scraped ${updated.toLocaleDateString('en-US', { ...opts, month: 'short', day: 'numeric' })} ${timeStr}`;
 
             const pickerEl = document.getElementById('studentPicker');
             const dashboardsEl = document.getElementById('dashboards');
