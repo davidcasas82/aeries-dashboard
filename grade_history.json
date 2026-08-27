@@ -4509,7 +4509,7 @@
         },
         {
           "date": "2026-08-27",
-          "captured_at": "2026-08-27T13:47:25.857424+00:00",
+          "captured_at": "2026-08-27T19:44:07.603860+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -4537,7 +4537,7 @@
             },
             "Rapid Prototype": {
               "period": 3,
-              "pct": 0.0,
+              "pct": null,
               "mark": "",
               "missing_count": 0,
               "missing_names": [],
@@ -4585,7 +4585,7 @@
             }
           },
           "previous_briefing": {
-            "headline": "Daniel needs attention in Rapid Prototype at 0%; he earned an A in Bus of Gaming. Most classes have no work posted yet.",
+            "headline": "Daniel needs attention in Rapid Prototype with no grade yet while holding an A in Bus of Gaming; most classes have no work posted yet.",
             "focus_tonight": ""
           }
         }
@@ -8779,7 +8779,7 @@
         },
         {
           "date": "2026-08-27",
-          "captured_at": "2026-08-27T13:47:38.020494+00:00",
+          "captured_at": "2026-08-27T19:44:10.807593+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -8799,7 +8799,7 @@
             },
             "Engineering Geo": {
               "period": 2,
-              "pct": 0.0,
+              "pct": null,
               "mark": "",
               "missing_count": 0,
               "missing_names": [],
@@ -8855,7 +8855,7 @@
             }
           },
           "previous_briefing": {
-            "headline": "Engineering Geo at 0% needs attention; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE.",
+            "headline": "Engineering Geo with no grade yet needs attention; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE; most classes have no work posted yet.",
             "focus_tonight": ""
           }
         }

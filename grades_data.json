@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-27T13:47:10.026331+00:00",
+  "last_updated": "2026-08-27T19:44:04.064862+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -19,7 +19,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-123",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": false
         },
         {
           "period": 1,
@@ -32,7 +33,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "Gym",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": true
         },
         {
           "period": 2,
@@ -45,7 +47,8 @@
           "missing_assignments": "",
           "trend": "",
           "room": "2-203",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": false
         },
         {
           "period": 3,
@@ -58,7 +61,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "3-140",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": true
         },
         {
           "period": 4,
@@ -71,7 +75,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-126",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": true
         },
         {
           "period": 5,
@@ -84,7 +89,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-114",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": true
         },
         {
           "period": 6,
@@ -97,7 +103,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-217",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": true
         },
         {
           "period": 7,
@@ -110,7 +117,8 @@
           "missing_assignments": "",
           "trend": "",
           "room": "2-114",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": false
         },
         {
           "period": 8,
@@ -123,7 +131,8 @@
           "missing_assignments": "",
           "trend": "",
           "room": "2-202",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": false
         }
       ],
       "assignments_by_class": [
@@ -152,7 +161,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Summatives",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "5/5",
+              "due_state": "completed"
             }
           ]
         },
@@ -187,7 +198,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Classwork",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "1/3",
+              "due_state": "completed"
             },
             {
               "number": "2",
@@ -209,7 +222,9 @@
               "extra_credit": false,
               "status": "pending",
               "status_label": "pending",
-              "counts_toward_grade": false
+              "counts_toward_grade": false,
+              "due_label": "due Fri Aug 28",
+              "due_state": "upcoming"
             }
           ]
         },
@@ -238,7 +253,9 @@
               "extra_credit": false,
               "status": "pending",
               "status_label": "pending",
-              "counts_toward_grade": false
+              "counts_toward_grade": false,
+              "due_label": "due Wed Sep 9",
+              "due_state": "upcoming"
             }
           ]
         },
@@ -267,7 +284,7 @@
         "raw": "Year Days Enrolled: 11 Days Present: 11 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel needs attention in Rapid Prototype at 0% while holding an A in Bus of Gaming; most classes have no work posted yet.",
+        "headline": "Daniel needs attention in Rapid Prototype with no grade yet while holding an A in Bus of Gaming; most classes have no work posted yet.",
         "focus_tonight": "",
         "wins": [
           "A 100% in Bus of Gaming with no missing work"
@@ -276,21 +293,21 @@
           {
             "class_name": "Rapid Prototype",
             "urgency": "critical",
-            "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator \u00b7 due Fri",
-            "story": "Grade at 0% after 33% on Article: Design Principle Jigsaw.",
+            "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator \u00b7 due Fri Aug 28",
+            "story": "No grade yet after 33% on Article: Design Principle Jigsaw.",
             "do_tonight": ""
           },
           {
             "class_name": "US Hist Media",
             "urgency": "ok",
-            "snap": "LT 1.1 - CER # 1 \u00b7 due Wed",
+            "snap": "LT 1.1 - CER # 1 \u00b7 due Wed Sep 9",
             "story": "No grade posted yet.",
             "do_tonight": ""
           },
           {
             "class_name": "Bus of Gaming",
             "urgency": "strong",
-            "snap": "Anatomy of a Great Game \u00b7 due Wed",
+            "snap": "Anatomy of a Great Game \u00b7 5/5",
             "story": "100% on first summative.",
             "do_tonight": ""
           }
@@ -318,6 +335,10 @@
             {
               "date": "2026-08-26",
               "pct": 100.0
+            },
+            {
+              "date": "2026-08-27",
+              "pct": 100.0
             }
           ],
           "delta_7d": null,
@@ -327,36 +348,7 @@
           "trend_label": "insufficient_history"
         },
         "Rapid Prototype": {
-          "pct_history": [
-            {
-              "date": "2026-08-20",
-              "pct": 0.0
-            },
-            {
-              "date": "2026-08-21",
-              "pct": 0.0
-            },
-            {
-              "date": "2026-08-22",
-              "pct": 0.0
-            },
-            {
-              "date": "2026-08-23",
-              "pct": 0.0
-            },
-            {
-              "date": "2026-08-24",
-              "pct": 0.0
-            },
-            {
-              "date": "2026-08-25",
-              "pct": 0.0
-            },
-            {
-              "date": "2026-08-26",
-              "pct": 0.0
-            }
-          ],
+          "pct_history": [],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
@@ -389,7 +381,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-123",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": false
         },
         {
           "period": 1,
@@ -402,7 +395,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-222",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": false
         },
         {
           "period": 2,
@@ -415,7 +409,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-211",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": true
         },
         {
           "period": 3,
@@ -428,7 +423,8 @@
           "missing_assignments": "",
           "trend": "",
           "room": "2-225",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": false
         },
         {
           "period": 4,
@@ -441,7 +437,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "Gym",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": false
         },
         {
           "period": 5,
@@ -454,7 +451,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-125",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": true
         },
         {
           "period": 6,
@@ -467,7 +465,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-115",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": false
         },
         {
           "period": 7,
@@ -480,7 +479,8 @@
           "missing_assignments": "",
           "trend": "",
           "room": "2-126",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": false
         },
         {
           "period": 8,
@@ -493,7 +493,8 @@
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-126",
-          "school_name": "Legacy Magnet Academy"
+          "school_name": "Legacy Magnet Academy",
+          "phantom_zero": true
         }
       ],
       "assignments_by_class": [
@@ -522,7 +523,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Summatives",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "5/5",
+              "due_state": "completed"
             }
           ]
         },
@@ -551,7 +554,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Assignments",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "5/5",
+              "due_state": "completed"
             },
             {
               "number": "2",
@@ -573,7 +578,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Presentations",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "8.5/10",
+              "due_state": "completed"
             },
             {
               "number": "3",
@@ -595,7 +602,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Daily Assignments",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "1/1",
+              "due_state": "completed"
             }
           ]
         },
@@ -624,7 +633,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "8/10",
+              "due_state": "completed"
             },
             {
               "number": "2",
@@ -646,7 +657,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "7/10",
+              "due_state": "completed"
             },
             {
               "number": "3",
@@ -668,7 +681,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "5/10",
+              "due_state": "completed"
             },
             {
               "number": "4",
@@ -690,7 +705,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "7/10",
+              "due_state": "completed"
             },
             {
               "number": "5",
@@ -712,7 +729,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "7/10",
+              "due_state": "completed"
             },
             {
               "number": "6",
@@ -734,7 +753,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "7/10",
+              "due_state": "completed"
             },
             {
               "number": "7",
@@ -756,7 +777,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "10/10",
+              "due_state": "completed"
             }
           ]
         },
@@ -785,7 +808,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Affective",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "8/8",
+              "due_state": "completed"
             }
           ]
         },
@@ -820,7 +845,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Practice Assignments",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "2/3",
+              "due_state": "completed"
             },
             {
               "number": "2",
@@ -842,7 +869,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Assessments",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "5/5",
+              "due_state": "completed"
             },
             {
               "number": "3",
@@ -864,7 +893,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Practice Assignments",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "3/3",
+              "due_state": "completed"
             },
             {
               "number": "4",
@@ -886,7 +917,9 @@
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Practice Assignments",
-              "counts_toward_grade": true
+              "counts_toward_grade": true,
+              "due_label": "3/3",
+              "due_state": "completed"
             }
           ]
         },
@@ -909,7 +942,7 @@
         "raw": "Year Days Enrolled: 11 Days Present: 11 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Engineering Geo at 0% needs attention; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE; most classes have no work posted yet.",
+        "headline": "Engineering Geo with no grade yet needs attention; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE; most classes have no work posted yet.",
         "focus_tonight": "",
         "wins": [
           "Bus of Gaming: A 100% on Anatomy of a Great Game",
@@ -919,35 +952,35 @@
           {
             "class_name": "Engineering Geo",
             "urgency": "critical",
-            "snap": "Algebra Boot Camp assignments \u00b7 due Thu",
-            "story": "Seven scored items average 72.9% but posted grade remains 0%.",
+            "snap": "Algebra Boot Camp assignments \u00b7 7/10",
+            "story": "Seven scored items average 72.9% but no grade posted yet.",
             "do_tonight": ""
           },
           {
             "class_name": "Bus of Gaming",
             "urgency": "strong",
-            "snap": "Anatomy of a Great Game \u00b7 due Wed",
+            "snap": "Anatomy of a Great Game \u00b7 5/5",
             "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "Daily Assignment (Shark Tank) \u00b7 due Wed",
+            "snap": "Daily Assignment (Shark Tank) \u00b7 1/1",
             "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "PE Course 1",
             "urgency": "strong",
-            "snap": "August \u00b7 due Wed",
+            "snap": "August \u00b7 8/8",
             "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "Tech of Biology",
             "urgency": "ok",
-            "snap": "DNA Structure Exit Ticket \u00b7 due Tue",
+            "snap": "DNA Structure Exit Ticket \u00b7 3/3",
             "story": "",
             "do_tonight": ""
           }
@@ -959,15 +992,7 @@
           "history_span_days": 101
         }
       },
-      "trend_summary": [
-        {
-          "class_name": "Mkt Adv GrphDes",
-          "delta": 95.0,
-          "window": "15d",
-          "pct_now": 95.0,
-          "direction": "up"
-        }
-      ],
+      "trend_summary": [],
       "history_span_days": 101,
       "class_trends": {
         "Bus of Gaming": {
@@ -983,6 +1008,10 @@
             {
               "date": "2026-08-26",
               "pct": 100.0
+            },
+            {
+              "date": "2026-08-27",
+              "pct": 100.0
             }
           ],
           "delta_7d": null,
@@ -993,10 +1022,6 @@
         },
         "Mkt Adv GrphDes": {
           "pct_history": [
-            {
-              "date": "2026-08-12",
-              "pct": 0.0
-            },
             {
               "date": "2026-08-19",
               "pct": 95.0
@@ -1028,25 +1053,20 @@
             {
               "date": "2026-08-26",
               "pct": 95.0
+            },
+            {
+              "date": "2026-08-27",
+              "pct": 95.0
             }
           ],
           "delta_7d": 0.0,
           "delta_14d": null,
-          "delta_span": 95.0,
-          "span_window": "15d",
+          "delta_span": null,
+          "span_window": null,
           "trend_label": "stable"
         },
         "Engineering Geo": {
-          "pct_history": [
-            {
-              "date": "2026-08-25",
-              "pct": 0.0
-            },
-            {
-              "date": "2026-08-26",
-              "pct": 0.0
-            }
-          ],
+          "pct_history": [],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
@@ -1062,6 +1082,10 @@
             {
               "date": "2026-08-26",
               "pct": 100.0
+            },
+            {
+              "date": "2026-08-27",
+              "pct": 100.0
             }
           ],
           "delta_7d": null,
@@ -1072,10 +1096,6 @@
         },
         "Tech of Biology": {
           "pct_history": [
-            {
-              "date": "2026-08-20",
-              "pct": 0.0
-            },
             {
               "date": "2026-08-21",
               "pct": 100.0
@@ -1098,6 +1118,10 @@
             },
             {
               "date": "2026-08-26",
+              "pct": 100.0
+            },
+            {
+              "date": "2026-08-27",
               "pct": 100.0
             }
           ],
