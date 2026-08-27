@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-27T04:09:51.640513+00:00",
+  "last_updated": "2026-08-27T13:47:10.026331+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -260,50 +260,50 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 10,
-        "days_present": 10,
+        "days_enrolled": 11,
+        "days_present": 11,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 10 Days Present: 10 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 11 Days Present: 11 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel needs attention in Rapid Prototype at 0%; he earned an A in Bus of Gaming. Most classes have no work posted yet.",
+        "headline": "Daniel needs attention in Rapid Prototype at 0% while holding an A in Bus of Gaming; most classes have no work posted yet.",
         "focus_tonight": "",
         "wins": [
-          "A 100% in Bus of Gaming"
+          "A 100% in Bus of Gaming with no missing work"
         ],
         "classes": [
           {
             "class_name": "Rapid Prototype",
             "urgency": "critical",
             "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator \u00b7 due Fri",
-            "story": "Recent Classwork assignment scored 33%.",
+            "story": "Grade at 0% after 33% on Article: Design Principle Jigsaw.",
             "do_tonight": ""
           },
           {
             "class_name": "US Hist Media",
             "urgency": "ok",
             "snap": "LT 1.1 - CER # 1 \u00b7 due Wed",
-            "story": "",
+            "story": "No grade posted yet.",
             "do_tonight": ""
           },
           {
             "class_name": "Bus of Gaming",
             "urgency": "strong",
             "snap": "Anatomy of a Great Game \u00b7 due Wed",
-            "story": "",
+            "story": "100% on first summative.",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-27T04:10:02.099026+00:00",
+        "generated_at": "2026-08-27T13:47:25.855826+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
-          "history_span_days": 100
+          "history_span_days": 101
         }
       },
       "trend_summary": [],
-      "history_span_days": 100,
+      "history_span_days": 101,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [
@@ -902,25 +902,25 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 10,
-        "days_present": 10,
+        "days_enrolled": 11,
+        "days_present": 11,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 10 Days Present: 10 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 11 Days Present: 11 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Engineering Geo at 0% needs attention; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE.",
+        "headline": "Engineering Geo at 0% needs attention; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE; most classes have no work posted yet.",
         "focus_tonight": "",
         "wins": [
-          "Bus of Gaming 100% on Anatomy of a Great Game",
-          "Mkt Adv GrphDes 100% on About Me Slides"
+          "Bus of Gaming: A 100% on Anatomy of a Great Game",
+          "Mkt Adv GrphDes: A 95% with no missing work"
         ],
         "classes": [
           {
             "class_name": "Engineering Geo",
             "urgency": "critical",
-            "snap": "Algebra Boot Camp scores \u00b7 due Thu",
-            "story": "Current grade shows 0% despite scored work.",
+            "snap": "Algebra Boot Camp assignments \u00b7 due Thu",
+            "story": "Seven scored items average 72.9% but posted grade remains 0%.",
             "do_tonight": ""
           },
           {
@@ -933,42 +933,42 @@
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "About Me Slides 100% and presentation 85% \u00b7 due Thu",
+            "snap": "Daily Assignment (Shark Tank) \u00b7 due Wed",
             "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "PE Course 1",
             "urgency": "strong",
-            "snap": "Affective category at 100%",
+            "snap": "August \u00b7 due Wed",
             "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "Tech of Biology",
             "urgency": "ok",
-            "snap": "DNA Structure Exit Ticket 100% \u00b7 due Tue",
+            "snap": "DNA Structure Exit Ticket \u00b7 due Tue",
             "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-27T04:10:17.846560+00:00",
+        "generated_at": "2026-08-27T13:47:38.018298+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
-          "history_span_days": 100
+          "history_span_days": 101
         }
       },
       "trend_summary": [
         {
           "class_name": "Mkt Adv GrphDes",
           "delta": 95.0,
-          "window": "14d",
+          "window": "15d",
           "pct_now": 95.0,
           "direction": "up"
         }
       ],
-      "history_span_days": 100,
+      "history_span_days": 101,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [
@@ -1033,7 +1033,7 @@
           "delta_7d": 0.0,
           "delta_14d": null,
           "delta_span": 95.0,
-          "span_window": "14d",
+          "span_window": "15d",
           "trend_label": "stable"
         },
         "Engineering Geo": {
