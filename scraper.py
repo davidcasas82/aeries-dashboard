@@ -18,7 +18,7 @@ EMAIL = os.getenv("AERIES_EMAIL", "")
 PASSWORD = os.getenv("AERIES_PASSWORD", "")
 GROK_API_KEY = os.getenv("GROK_API_KEY", "")
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
-GROK_MODEL = "grok-3-mini"
+GROK_MODEL = "grok-4"
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
 
@@ -2065,7 +2065,13 @@ def parse_class_summary(raw_data):
 
 
 def class_has_real_grade(class_meta, assignments=None):
-    """True when the portal has a meaningful posted grade (not schedule-only / phantom 0%)."""
+    """True when the portal has a meaningful posted grade (not schedule-only / phantom 0%).
+
+    Aeries often posts 0% with an empty CurrentMark before a class grade exists.
+    Scored assignments do not make that placeholder a real class grade. A letter
+    mark, a percent above 0, or a 0% with Aeries-flagged missing work does.
+    `assignments` is accepted so call sites can pass the same evidence the UI has.
+    """
     mark = str(class_meta.get("mark") or "").strip()
     if mark:
         return True
@@ -2078,13 +2084,27 @@ def class_has_real_grade(class_meta, assignments=None):
         return False
     if pct > 0:
         return True
-    # 0% only counts if there is evidence of graded or missing work
+    # 0% + empty mark is a placeholder unless Aeries also flags missing work
     if class_meta.get("missing_count"):
         return True
-    if assignments:
-        # Ungraded rows often show 0% / complete with no points earned — not a real F
-        return any(a.get("points_earned") is not None for a in assignments)
     return False
+
+
+def is_phantom_zero_grade(class_meta, assignments=None):
+    """Posted 0% + empty mark that the tile hides as no grade yet."""
+    mark = str(class_meta.get("mark") or "").strip()
+    if mark:
+        return False
+    pct_raw = class_meta.get("percent")
+    if pct_raw in (None, ""):
+        return False
+    try:
+        pct = float(pct_raw)
+    except (TypeError, ValueError):
+        return False
+    if pct != 0:
+        return False
+    return not class_has_real_grade(class_meta, assignments)
 
 
 def extract_period_from_label(label):
@@ -2284,10 +2304,22 @@ def _pct_delta(current_pct, past_cls):
     past_pct = past_cls.get("pct")
     if past_pct is None:
         return None
-    # Ignore phantom 0% baselines from empty gradebooks at term start
-    if past_pct == 0 and not (past_cls.get("mark") or "").strip():
+    if _is_phantom_history_point(past_cls):
         return None
     return round(current_pct - past_pct, 1)
+
+
+def _is_phantom_history_point(cls):
+    """History row is a no-grade / phantom 0 placeholder, not a first real score."""
+    if not cls or cls.get("pct") is None:
+        return True
+    try:
+        pct = float(cls.get("pct"))
+    except (TypeError, ValueError):
+        return True
+    if pct != 0:
+        return False
+    return not str(cls.get("mark") or "").strip()
 
 
 def trend_label_from_delta(delta):
@@ -2371,11 +2403,14 @@ def build_history_context(student_sn, student_data, class_analytics_list, histor
         chronic = sorted(past_missing & now_missing)
         resolved = sorted(past_missing - now_missing)
 
-        # Full series for span delta; downsampled series for UI sparklines
+        # Full series for span delta; downsampled series for UI sparklines.
+        # Skip phantom 0% placeholders so first posted score is not a +95 jump.
         full_hist = []
         for snap in snapshots:
             cls = (snap.get("classes") or {}).get(course_name)
             if cls is None or cls.get("pct") is None:
+                continue
+            if _is_phantom_history_point(cls):
                 continue
             full_hist.append({"date": snap.get("date"), "pct": cls.get("pct")})
         if pct is not None:
@@ -2749,6 +2784,29 @@ def detect_performance_pattern(grade_pct, missing_count, category_breakdown, sco
     return "mixed"
 
 
+def extract_grade_mix_flags(counted_insight, min_high_weight=20):
+    """Empty high-weight buckets and 0% categories for briefing WHY facts."""
+    empty_high = []
+    zero_weight = []
+    for cat in (counted_insight or {}).get("categories") or []:
+        try:
+            weight = float(cat["weight_pct"]) if cat.get("weight_pct") is not None else None
+        except (TypeError, ValueError):
+            weight = None
+        if cat.get("empty") and weight not in (None, 0) and weight >= min_high_weight:
+            empty_high.append({
+                "name": cat.get("name"),
+                "weight_pct": weight,
+                "reason": cat.get("reason") or "empty_0_0",
+            })
+        if cat.get("reason") == "zero_weight" or weight == 0:
+            zero_weight.append({
+                "name": cat.get("name"),
+                "weight_pct": 0 if weight is None else weight,
+            })
+    return empty_high, zero_weight
+
+
 def infer_urgency_from_analytics(grade_pct, missing_count, trend, performance_pattern):
     if grade_pct is None:
         if missing_count > 0:
@@ -2772,14 +2830,106 @@ def infer_urgency_from_analytics(grade_pct, missing_count, trend, performance_pa
     return "ok", "on_track"
 
 
+def _as_calendar_date(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return None
+
+
+def _short_month_day(due):
+    due_d = _as_calendar_date(due) or due
+    return f"{due_d.strftime('%b')} {due_d.day}"
+
+
+def _weekday_and_date(due):
+    due_d = _as_calendar_date(due) or due
+    return f"{due_d.strftime('%a')} {_short_month_day(due_d)}"
+
+
+def _format_score_pair(earned, possible):
+    def _fmt(n):
+        if isinstance(n, float) and n.is_integer():
+            return str(int(n))
+        return f"{n:g}"
+
+    return f"{_fmt(earned)}/{_fmt(possible)}"
+
+
+def assignment_due_state(assignment, today, kind=None, is_missing=False):
+    """today / upcoming / overdue / completed / pending — never weekday-only."""
+    due = parse_due_date(assignment.get("due_date"))
+    if not due:
+        return None
+    today_d = _as_calendar_date(today)
+    due_d = _as_calendar_date(due)
+    if today_d is None or due_d is None:
+        return None
+    days = (due_d - today_d).days
+    scored = assignment_has_score_mark(assignment)
+    missing = bool(is_missing or kind == "missing")
+    if scored and days < 0:
+        return "completed"
+    if days == 0 and not scored:
+        return "today"
+    if days > 0:
+        return "upcoming"
+    if missing:
+        return "overdue"
+    if days == 0 and scored:
+        return "completed"
+    return "pending"
+
+
+def assignment_due_label(assignment, today, kind=None, is_missing=False):
+    """Parent-facing due copy. Never weekday-only ('due Tue')."""
+    due = parse_due_date(assignment.get("due_date"))
+    if not due:
+        return None
+    state = assignment_due_state(assignment, today, kind=kind, is_missing=is_missing)
+    date_part = _short_month_day(due)
+    weekday_date = _weekday_and_date(due)
+    if state == "today":
+        return "due today"
+    if state == "upcoming":
+        return f"due {weekday_date}"
+    if state == "completed":
+        earned = assignment.get("points_earned")
+        possible = assignment.get("points_possible")
+        if earned is not None and possible is not None:
+            return _format_score_pair(earned, possible)
+        pct = assignment.get("percentage")
+        if pct is not None:
+            return f"{pct:g}%"
+        raw = str(assignment.get("score_raw") or "").strip()
+        if raw:
+            return raw
+        return f"completed {date_part}"
+    if state == "overdue":
+        return f"overdue {date_part}"
+    if state == "pending":
+        return f"awaiting score · was due {weekday_date}"
+    return None
+
+
 def format_assignment_entry(assignment, today, kind):
     due = parse_due_date(assignment.get("due_date"))
+    is_missing = kind == "missing"
     entry = {
         "name": assignment.get("description", ""),
         "category": assignment.get("category", ""),
         "due_date": assignment.get("due_date", ""),
         "points_possible": assignment.get("points_possible"),
     }
+    state = assignment_due_state(assignment, today, kind=kind, is_missing=is_missing)
+    label = assignment_due_label(assignment, today, kind=kind, is_missing=is_missing)
+    if state:
+        entry["due_state"] = state
+    if label:
+        entry["due_label"] = label
     if due:
         entry["due_weekday"] = due.strftime("%a")
         if kind == "missing":
@@ -2867,6 +3017,17 @@ def analyze_class(class_meta, assignments, today):
             else round((ordered[mid - 1] + ordered[mid]) / 2)
         )
 
+    phantom_zero = is_phantom_zero_grade(class_meta, assignments)
+    empty_high, zero_weight = extract_grade_mix_flags(counted_insight)
+    posted_vs_counted = {
+        "posted_pct": grade_pct,
+        "posted_mark": mark,
+        "rebuild_pct": (counted_insight or {}).get("rebuild_pct"),
+        "matches_posted": False if phantom_zero else (counted_insight or {}).get("matches_posted"),
+        "official_is_posted": (not phantom_zero) and grade_pct is not None,
+        "phantom_zero": phantom_zero,
+    }
+
     return {
         "period": class_meta.get("period"),
         "course_name": class_meta.get("course_name", ""),
@@ -2874,12 +3035,16 @@ def analyze_class(class_meta, assignments, today):
         "current_grade_pct": grade_pct,
         "current_grade_mark": mark,
         "current_grade_source": "aeries_class_summary",
+        "phantom_zero": phantom_zero,
+        "posted_vs_counted": posted_vs_counted,
+        "empty_high_weight_categories": empty_high,
+        "zero_weight_categories": zero_weight,
         "trend": trend,
         "missing_assignments": [
             format_assignment_entry(a, today, "missing") for a in missing
         ],
         "pending_grade": [
-            format_assignment_entry(a, today, "missing") for a in pending_grade[:8]
+            format_assignment_entry(a, today, "pending") for a in pending_grade[:8]
         ],
         "recoverable_points": round(recoverable_points, 1),
         "oldest_missing_days": oldest_missing_days,
@@ -3197,6 +3362,196 @@ def academic_fingerprint(student_data):
     )
 
 
+_DUE_WEEKDAY_RE = re.compile(
+    r"\bdue\s+(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Monday|Tuesday|Wednesday|Thursday|"
+    r"Friday|Saturday|Sunday)\b(?!\s+[A-Za-z]{3}\s+\d)",
+    re.IGNORECASE,
+)
+
+
+def _assignment_display_name(entry):
+    return (entry.get("name") or entry.get("description") or "").strip()
+
+
+def iter_analytics_assignments(class_analytics):
+    for key in ("missing_assignments", "pending_grade", "recent_scores", "upcoming"):
+        for item in (class_analytics or {}).get(key) or []:
+            yield item
+
+
+def rewrite_stale_due_copy(text, assignment_entries):
+    """Replace weekday-only or past-date 'due …' with precomputed due_label."""
+    if not text:
+        return text
+    out = str(text)
+    entries = [
+        a for a in (assignment_entries or [])
+        if _assignment_display_name(a) and a.get("due_label")
+    ]
+    entries.sort(key=lambda a: len(_assignment_display_name(a)), reverse=True)
+    weekday = (
+        r"(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Monday|Tuesday|Wednesday|"
+        r"Thursday|Friday|Saturday|Sunday)"
+    )
+    for a in entries:
+        name = _assignment_display_name(a)
+        label = a.get("due_label")
+        state = a.get("due_state")
+        if name not in out:
+            continue
+        named_weekday = re.compile(
+            re.escape(name) + rf"(\s*[·\-–—:]\s*)due\s+{weekday}\b(?!\s+[A-Za-z]{{3}}\s+\d)",
+            re.IGNORECASE,
+        )
+        if named_weekday.search(out):
+            out = named_weekday.sub(lambda m, n=name, lb=label: n + m.group(1) + lb, out)
+            continue
+        if state in ("completed", "overdue", "pending"):
+            named_due = re.compile(
+                re.escape(name) + r"(\s*[·\-–—:]\s*)due\s+[^\n·]+",
+                re.IGNORECASE,
+            )
+            if named_due.search(out):
+                out = named_due.sub(lambda m, n=name, lb=label: n + m.group(1) + lb, out)
+    if _DUE_WEEKDAY_RE.search(out):
+        fallback = next(
+            (
+                a for a in entries
+                if a.get("due_state") in ("completed", "overdue", "pending")
+            ),
+            None,
+        )
+        if fallback and fallback.get("due_label"):
+            out = _DUE_WEEKDAY_RE.sub(fallback["due_label"], out)
+        else:
+            upcoming = next(
+                (
+                    a for a in entries
+                    if a.get("due_state") in ("upcoming", "today") and a.get("due_label")
+                ),
+                None,
+            )
+            if upcoming:
+                out = _DUE_WEEKDAY_RE.sub(upcoming["due_label"], out)
+    return out
+
+
+def rewrite_phantom_zero_copy(text):
+    """Parent copy must not call a hidden 0% tile 'at 0%'."""
+    if not text:
+        return text
+    out = str(text)
+    out = re.sub(r"\bGrade at 0%", "No grade yet", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bat 0%", "with no grade yet", out, flags=re.IGNORECASE)
+    out = re.sub(r"\b0%\s+needs attention", "no grade yet needs attention", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bposted grade remains 0%", "no grade posted yet", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bremains 0%", "is not posted yet", out, flags=re.IGNORECASE)
+    out = re.sub(r"(?<![\d.])0%", "no grade yet", out)
+    return out
+
+
+def sanitize_briefing_copy(summary, analytics):
+    """Post-process Grok JSON so leftover due-Tue / at-0% copy cannot ship."""
+    if not isinstance(summary, dict):
+        return summary
+    by_name = {}
+    for ca in (analytics or {}).get("classes") or []:
+        name = (ca.get("course_name") or "").strip()
+        if name:
+            by_name[name] = ca
+
+    def _match_class(class_name):
+        key = (class_name or "").strip()
+        if key in by_name:
+            return by_name[key]
+        kn = _norm_course_name(key)
+        best = None
+        best_len = 0
+        for name, ca in by_name.items():
+            cn = _norm_course_name(name)
+            if kn and cn and (kn in cn or cn in kn) and len(cn) > best_len:
+                best = ca
+                best_len = len(cn)
+        return best
+
+    any_phantom = any(ca.get("phantom_zero") for ca in by_name.values())
+    all_entries = []
+    for ca in by_name.values():
+        all_entries.extend(iter_analytics_assignments(ca))
+
+    headline = summary.get("headline") or ""
+    headline = rewrite_stale_due_copy(headline, all_entries)
+    if any_phantom:
+        headline = rewrite_phantom_zero_copy(headline)
+    summary["headline"] = headline
+
+    wins = []
+    for win in summary.get("wins") or []:
+        text = rewrite_stale_due_copy(win, all_entries)
+        if any_phantom:
+            text = rewrite_phantom_zero_copy(text)
+        wins.append(text)
+    if "wins" in summary:
+        summary["wins"] = wins
+
+    for cls in summary.get("classes") or []:
+        if not isinstance(cls, dict):
+            continue
+        ca = _match_class(cls.get("class_name"))
+        entries = list(iter_analytics_assignments(ca)) if ca else all_entries
+        for field in ("snap", "story"):
+            text = cls.get(field) or ""
+            text = rewrite_stale_due_copy(text, entries)
+            if ca and ca.get("phantom_zero"):
+                text = rewrite_phantom_zero_copy(text)
+            cls[field] = text
+    return summary
+
+
+def annotate_assignment_due_fields(student_data, today=None):
+    """Attach due_label / due_state onto portal assignment rows the UI also reads."""
+    today = today or pacific_today_dt()
+    for group in student_data.get("assignments_by_class") or []:
+        class_meta = {}
+        g_period = group.get("period")
+        g_name = _norm_course_name(group.get("class_name"))
+        for c in student_data.get("classes") or []:
+            same_period = g_period is not None and c.get("period") == g_period
+            same_name = g_name and _norm_course_name(c.get("course_name")) == g_name
+            if same_period or same_name:
+                class_meta = c
+                break
+        assignments = group.get("assignments") or []
+        missing = select_missing_assignments(assignments, class_meta, today)
+        missing_ids = {id(a) for a in missing}
+        for a in assignments:
+            if id(a) in missing_ids:
+                kind = "missing"
+            elif assignment_has_score_mark(a):
+                kind = "recent"
+            else:
+                due = parse_due_date(a.get("due_date"))
+                if due and due >= today:
+                    kind = "upcoming"
+                else:
+                    kind = "pending"
+            a["due_label"] = assignment_due_label(
+                a, today, kind=kind, is_missing=(kind == "missing")
+            )
+            a["due_state"] = assignment_due_state(
+                a, today, kind=kind, is_missing=(kind == "missing")
+            )
+    return student_data
+
+
+def annotate_class_truth_flags(student_data):
+    """Mark phantom-0 classes so the dashboard and briefing share one truth."""
+    for class_meta in student_data.get("classes") or []:
+        assignments = assignments_for_class(student_data, class_meta)
+        class_meta["phantom_zero"] = is_phantom_zero_grade(class_meta, assignments)
+    return student_data
+
+
 def generate_ai_summary(student_data, history_context=None):
     """Call Grok API to generate a unified family daily briefing."""
     # No real grades and no posted work yet — don't invent urgency
@@ -3237,19 +3592,21 @@ def generate_ai_summary(student_data, history_context=None):
     today_label = now_pt.strftime("%A, %B %d, %Y")
     system_prompt = f"""You write the daily briefing a parent reads in 10 seconds on a phone or car screen. One output. {student_name}'s family may all see it. Facts at a glance — not a coaching script.
 
-Today is {today_label} (Pacific). Due dates in PRECOMPUTED_ANALYTICS already use Pacific time. Trust days_overdue / days_until_due. Never call something overdue or "yesterday" unless days_overdue >= 1. Due today is not missing.
+Today is {today_label} (Pacific). Due dates in PRECOMPUTED_ANALYTICS already use Pacific time. Trust due_label / due_state / days_overdue / days_until_due. Never call something overdue or "yesterday" unless days_overdue >= 1 or due_state is overdue. Due today is not missing.
 
 DATA SCOPE
 - Facts only from PRECOMPUTED_ANALYTICS (Aeries parent portal). Do not redo math.
-- current_grade_pct / current_grade_mark is the official Aeries ClassSummary Percent / CurrentMark. Never replace it with assignment averages, category averages, or counted_insight.rebuild_pct.
-- category_breakdown.*.assignment_avg_pct is the unweighted mean of scored assignment percentages in that bucket — not the class grade and not Aeries' weighted category %. Do not write a class as "at 72%" because seven assignments average 72.
-- If counted_insight is present, you may name which categories count, are 0% weight, or are empty (0/0). If rebuild_pct differs from current_grade_pct, still use the posted grade.
+- current_grade_pct / current_grade_mark is the official Aeries ClassSummary Percent / CurrentMark when phantom_zero is false. Never replace a real posted grade with assignment averages, category averages, or counted_insight.rebuild_pct.
+- If phantom_zero is true, Aeries posted 0% with no letter mark — the family tile shows "—" / no grade yet. Never write "at 0%", "0% needs attention", or treat that placeholder as a current grade.
+- You MAY explain WHY using precomputed facts only: phantom_zero, posted_vs_counted (rebuild vs posted), empty_high_weight_categories (e.g. empty 70% Assessments), zero_weight_categories (e.g. 0% Daily Assignments). Do not invent other causes.
+- category_breakdown.*.assignment_avg_pct is the unweighted mean of scored assignment percentages in that bucket — not the class grade and not Aeries' weighted category %. Do not write a class as "at 72%" because seven assignments average 72. You may say scored work averages 73% while no class grade is posted when phantom_zero is true and posted_vs_counted.rebuild_pct is present.
+- If counted_insight is present, you may name which categories count, are 0% weight, or are empty. If rebuild_pct differs from current_grade_pct and the posted grade is real, still use the posted grade.
 - Portal can lag (turned in but not graded, Canvas/paper work). Prefer "portal still shows …" over "never did …".
-- Do not invent causes, effort, or teacher fairness.
+- Do not invent causes, effort, psychology, or teacher fairness.
 - Do not invent week-scale stories unless history.delta_7d / trend_label is present.
 
 PARENT SKIM (this is the job)
-- Headline: one sentence — what needs attention, plus one real win if there is one. Not a roster of every class.
+- Headline: one sentence — what needs attention, plus one real win if there is one. Not a roster of every class. A WHY clause is welcome when a precomputed flag explains it.
 - If coverage.classes_with_portal_work is much smaller than coverage.scheduled_classes, add a short clause that most classes have no work posted yet (normal early in the term). Do not treat silence as all-clear, and do not panic about empty gradebooks.
 - focus_tonight: copy tonight_plan.label exactly (empty if tonight_plan.items is empty). Due today always beats overdue. pending_grade is submitted/awaiting a teacher score — not tonight, not missing.
 - wins: 0–2 specifics with evidence (grade + assignment). Skip empty praise.
@@ -3258,7 +3615,7 @@ VOICE
 - Third person with "{student_name}" (never "you", never "as a parent…")
 - Plain English, calm, specific. Short sentences.
 - No jargon: never say completion_gap, performance_pattern, recoverable points, dominant_theme, issue_type, Summatives, or "Pattern suggests"
-- Name the assignment, not the Aeries category
+- Name the assignment, not the Aeries category — except when empty_high_weight_categories / zero_weight_categories is the WHY
 - No pep talks, conversation openers, or parent tips
 
 Respond ONLY with valid JSON matching this exact schema:
@@ -3270,8 +3627,8 @@ Respond ONLY with valid JSON matching this exact schema:
     {{
       "class_name": "must match course_name from analytics",
       "urgency": "critical | watch | ok | strong",
-      "snap": "≤12 words; name the assignment and due day (e.g. Anatomy of a Great Game · due Tue)",
-      "story": "One sentence of context the closed card does not already say. Do not repeat the missing list.",
+      "snap": "Name the assignment and copy due_label (e.g. Anatomy of a Great Game · 5/5). May be longer than 12 words if needed to tell the truth.",
+      "story": "One sentence of context the closed card does not already say. Do not repeat the missing list. WHY from precomputed flags is allowed.",
       "do_tonight": "Named assignment if action is needed; else empty"
     }}
   ]
@@ -3287,10 +3644,10 @@ Rules:
 - Include EVERY class from analytics.classes (not the full 9-period schedule)
 - If analytics.classes is empty: headline says no posted work yet — do not invent status
 - Order classes: critical → watch → ok → strong
-- ok/strong: short snap; leave do_tonight empty
+- ok/strong: leave do_tonight empty
 - critical/watch: do_tonight is that class's tonight_plan item; empty if the class is not in tonight_plan
 - pending_grade: do not tell the family to redo it tonight; portal often lags after turn-in
-- Use due_weekday / days_until_due for "due Tue"; use days_overdue only when >= 1
+- Copy each assignment's due_label (and due_state). Never write weekday-only due lines ("due Tue", "due Wednesday"). Past scored work must not say "due".
 - Do not write "portal shows no missing work" as the story. If the only news is a due-today item, leave story short or empty.
 - wins must be real — skip them if there are none
 - Prefer empty strings over filler
@@ -3336,7 +3693,7 @@ Rules:
             "total_recoverable_pts": analytics.get("total_recoverable_pts"),
             "history_span_days": (history_context or {}).get("history_span_days"),
         }
-        return apply_tonight_plan(summary, analytics)
+        return sanitize_briefing_copy(apply_tonight_plan(summary, analytics), analytics)
 
     except requests.exceptions.Timeout:
         print("  WARNING: Grok API timed out")
@@ -3352,6 +3709,8 @@ def _prepare_student_for_briefing(student_data, history, aeries_series_by_class=
         student_data.get("classes") or [],
         student_data.get("assignments_by_class") or [],
     )
+    annotate_assignment_due_fields(student_data)
+    annotate_class_truth_flags(student_data)
     # First pass: class analytics without history (for snapshot + context base)
     base_analytics = build_class_analytics(student_data, history_context=None)
     class_list = base_analytics.get("classes") or []
@@ -3577,8 +3936,9 @@ def scrape_all():
             analytics = build_class_analytics(
                 student_data, history_context=history_context
             )
-            student_data["ai_summary"] = apply_tonight_plan(
-                student_data["ai_summary"], analytics
+            student_data["ai_summary"] = sanitize_briefing_copy(
+                apply_tonight_plan(student_data["ai_summary"], analytics),
+                analytics,
             )
 
         # Append today's grade snapshot after briefing (stores previous_briefing from prior AI)
