@@ -1,0 +1,53 @@
+name: After-School Grade Scrape
+
+on:
+  schedule:
+    # GitHub skipped the 23:00 UTC slot when it shared a file with the other crons; this file re-registers 4pm PT at the same time.
+    - cron: '0 23 * * *'   # ~4pm PT — after school
+    - cron: '5 23 * * *'   # ~4:05 PT — backup if GitHub drops the :00 slot
+
+concurrency:
+  group: grades-scrape
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scraper
+        env:
+          AERIES_EMAIL: ${{ secrets.AERIES_EMAIL }}
+          AERIES_PASSWORD: ${{ secrets.AERIES_PASSWORD }}
+          STUDENT_1_SN: ${{ secrets.STUDENT_1_SN }}
+          STUDENT_1_NAME: ${{ secrets.STUDENT_1_NAME }}
+          STUDENT_1_SCHOOL_CODE: ${{ secrets.STUDENT_1_SCHOOL_CODE }}
+          STUDENT_2_SN: ${{ secrets.STUDENT_2_SN }}
+          STUDENT_2_NAME: ${{ secrets.STUDENT_2_NAME }}
+          STUDENT_2_SCHOOL_CODE: ${{ secrets.STUDENT_2_SCHOOL_CODE }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          PYTHONUNBUFFERED: "1"
+          # Optional override only. Leave unset to auto-pause from TUSD school calendar
+          # (school_calendar.json / live calendars-school-year page).
+          # true = force pause Aeries + Grok; false = force scrape even in summer
+          SUMMER_BREAK: ${{ vars.SUMMER_BREAK }}
+        run: python scraper.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add grades_data.json grade_history.json
+          git diff --cached --quiet || git commit -m "Update grades data"
+          git push

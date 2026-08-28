@@ -4,7 +4,6 @@ on:
   schedule:
     # Pacific times shift one hour in winter (PST). GitHub cron is UTC.
     - cron: '0 9 * * *'    # ~2am PT — overnight catch-up
-    - cron: '0 23 * * *'   # ~4pm PT — after school
     - cron: '0 3 * * *'    # ~8pm PT — evening, before parents usually look
   workflow_dispatch:
     inputs:
