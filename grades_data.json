@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-28T04:48:19.357328+00:00",
+  "last_updated": "2026-08-28T23:27:04.131646+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -124,11 +124,11 @@
           "period": 8,
           "course_name": "Int Eng&Marktg",
           "teacher": "Patterson, V",
-          "percent": "50.0",
-          "mark": "F",
-          "mark_and_score": "F (50.0%)",
+          "percent": "75.0",
+          "mark": "C",
+          "mark_and_score": "C (75.0%)",
           "missing_count": 0,
-          "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=6137419&amp;Missing=1&amp;Term=F&amp;CDS=30736430000000&amp;SC=95\"><span>1</span></a>",
+          "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-202",
           "school_name": "Legacy Magnet Academy",
@@ -223,8 +223,8 @@
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
-              "due_label": "due Fri Aug 28",
-              "due_state": "upcoming"
+              "due_label": "due today",
+              "due_state": "today"
             }
           ]
         },
@@ -263,13 +263,135 @@
           "class_name": "Alg ll Bus Mang",
           "period": 5,
           "term": "fall",
-          "assignments": []
+          "assignments": [
+            {
+              "number": "1",
+              "description": "MC- LT 1.4",
+              "category": "Assessment",
+              "score_raw": "/ 10",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "correct_raw": "0 / 10",
+              "correct_earned": 0.0,
+              "correct_possible": 10.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "08/28/2026",
+              "date_completed": "",
+              "due_date": "08/28/2026",
+              "grading_complete": false,
+              "extra_credit": false,
+              "status": "pending",
+              "status_label": "pending",
+              "counts_toward_grade": false,
+              "due_label": "due today",
+              "due_state": "today"
+            },
+            {
+              "number": "2",
+              "description": "MC- LT 1.5",
+              "category": "Assessment",
+              "score_raw": "/ 10",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "correct_raw": "0 / 10",
+              "correct_earned": 0.0,
+              "correct_possible": 10.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "08/28/2026",
+              "date_completed": "",
+              "due_date": "08/28/2026",
+              "grading_complete": false,
+              "extra_credit": false,
+              "status": "pending",
+              "status_label": "pending",
+              "counts_toward_grade": false,
+              "due_label": "due today",
+              "due_state": "today"
+            },
+            {
+              "number": "3",
+              "description": "MC- LT 1.6",
+              "category": "Assessment",
+              "score_raw": "/ 10",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "correct_raw": "0 / 10",
+              "correct_earned": 0.0,
+              "correct_possible": 10.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "08/28/2026",
+              "date_completed": "",
+              "due_date": "08/28/2026",
+              "grading_complete": false,
+              "extra_credit": false,
+              "status": "pending",
+              "status_label": "pending",
+              "counts_toward_grade": false,
+              "due_label": "due today",
+              "due_state": "today"
+            }
+          ]
         },
         {
           "class_name": "Physics & Eng",
           "period": 6,
           "term": "fall",
-          "assignments": []
+          "assignments": [
+            {
+              "number": "2",
+              "description": "Exit Ticket",
+              "category": "Formative",
+              "score_raw": "/ 4",
+              "points_earned": null,
+              "points_possible": 4.0,
+              "percentage": null,
+              "correct_raw": "/ 4",
+              "correct_earned": null,
+              "correct_possible": 4.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "08/27/2026",
+              "date_completed": "08/28/2026",
+              "due_date": "08/28/2026",
+              "grading_complete": true,
+              "extra_credit": false,
+              "status": "counts",
+              "status_label": "counts in Formative",
+              "counts_toward_grade": true,
+              "due_label": "due today",
+              "due_state": "today"
+            },
+            {
+              "number": "3",
+              "description": "Unit 0.2 Notes",
+              "category": "Formative",
+              "score_raw": "1 / 3",
+              "points_earned": 1.0,
+              "points_possible": 3.0,
+              "percentage": 33.33,
+              "correct_raw": "1 / 3",
+              "correct_earned": 1.0,
+              "correct_possible": 3.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "08/27/2026",
+              "date_completed": "08/28/2026",
+              "due_date": "08/28/2026",
+              "grading_complete": false,
+              "extra_credit": false,
+              "status": "counts",
+              "status_label": "counts in Formative",
+              "counts_toward_grade": true,
+              "due_label": "1/3",
+              "due_state": "completed"
+            }
+          ]
         },
         {
           "class_name": "Int Eng&Marktg",
@@ -280,66 +402,80 @@
               "number": "1",
               "description": "LT3: AI Character Reference Letter",
               "category": "Writing",
-              "score_raw": "/ 5",
-              "points_earned": null,
+              "score_raw": "3.75 / 5",
+              "points_earned": 3.75,
               "points_possible": 5.0,
-              "percentage": 0.0,
-              "correct_raw": "0 / 10",
-              "correct_earned": 0.0,
+              "percentage": 75.0,
+              "correct_raw": "7.5 / 10",
+              "correct_earned": 7.5,
               "correct_possible": 10.0,
               "comment": "",
               "documents": "",
               "date_assigned": "08/21/2026",
-              "date_completed": "",
+              "date_completed": "08/25/2026",
               "due_date": "08/25/2026",
               "grading_complete": true,
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Writing",
               "counts_toward_grade": true,
-              "due_label": "overdue Aug 25",
-              "due_state": "overdue"
+              "due_label": "3.75/5",
+              "due_state": "completed"
             }
           ]
         }
       ],
       "attendance": {
         "absences": 0,
-        "tardies": 0,
+        "tardies": 1,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 11,
-        "days_present": 11,
+        "days_enrolled": 12,
+        "days_present": 12,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 11 Days Present: 11 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 12 Days Present: 12 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 1 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel needs attention in Int Eng&Marktg at 50% with an overdue assignment while holding an A in Bus of Gaming.",
-        "focus_tonight": "LT3: AI Character Reference Letter (Int Eng&Marktg)",
+        "headline": "Daniel needs attention in Int Eng&Marktg at 75% while holding an A in Bus of Gaming.",
+        "focus_tonight": "LT 1.1 - Poster of Myself in Adobe Illustrator (Rapid Prototype); MC- LT 1.4 (Alg ll Bus Mang)",
         "wins": [
-          "A 100% in Bus of Gaming with Anatomy of a Great Game 5/5"
+          "Bus of Gaming: A 100% with Anatomy of a Great Game at 5/5"
         ],
         "classes": [
           {
             "class_name": "Int Eng&Marktg",
             "urgency": "critical",
-            "snap": "LT3: AI Character Reference Letter \u00b7 overdue Aug 25",
-            "story": "Posted grade at 50% from the missing 5-point assignment.",
-            "do_tonight": "LT3: AI Character Reference Letter"
+            "snap": "LT3: AI Character Reference Letter \u00b7 3.75/5",
+            "story": "Current grade is C at 75%.",
+            "do_tonight": ""
           },
           {
             "class_name": "Rapid Prototype",
-            "urgency": "ok",
-            "snap": "Article: Design Principle Jigsaw \u00b7 1/3",
-            "story": "No grade posted yet; one upcoming assignment due tomorrow.",
+            "urgency": "watch",
+            "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator \u00b7 due today",
+            "story": "No class grade posted yet.",
+            "do_tonight": "LT 1.1 - Poster of Myself in Adobe Illustrator"
+          },
+          {
+            "class_name": "Alg ll Bus Mang",
+            "urgency": "watch",
+            "snap": "MC- LT 1.4 \u00b7 due today",
+            "story": "No class grade posted yet.",
+            "do_tonight": "MC- LT 1.4"
+          },
+          {
+            "class_name": "Physics & Eng",
+            "urgency": "watch",
+            "snap": "Exit Ticket \u00b7 due today",
+            "story": "No class grade posted yet.",
             "do_tonight": ""
           },
           {
             "class_name": "US Hist Media",
             "urgency": "ok",
             "snap": "LT 1.1 - CER # 1 \u00b7 due Wed Sep 9",
-            "story": "No work posted yet.",
+            "story": "No class grade posted yet.",
             "do_tonight": ""
           },
           {
@@ -350,15 +486,15 @@
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-28T00:44:18.344024+00:00",
+        "generated_at": "2026-08-28T23:27:18.651412+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
-          "total_recoverable_pts": 5.0,
-          "history_span_days": 101
+          "total_recoverable_pts": 0,
+          "history_span_days": 102
         }
       },
       "trend_summary": [],
-      "history_span_days": 101,
+      "history_span_days": 102,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [
@@ -401,11 +537,31 @@
           "span_window": null,
           "trend_label": "insufficient_history"
         },
+        "Alg ll Bus Mang": {
+          "pct_history": [],
+          "delta_7d": null,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "insufficient_history"
+        },
+        "Physics & Eng": {
+          "pct_history": [],
+          "delta_7d": null,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "insufficient_history"
+        },
         "Int Eng&Marktg": {
           "pct_history": [
             {
               "date": "2026-08-27",
               "pct": 50.0
+            },
+            {
+              "date": "2026-08-28",
+              "pct": 75.0
             }
           ],
           "delta_7d": null,
@@ -855,13 +1011,61 @@
               "date_assigned": "08/13/2026",
               "date_completed": "08/26/2026",
               "due_date": "08/26/2026",
-              "grading_complete": false,
+              "grading_complete": true,
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Affective",
               "counts_toward_grade": true,
               "due_label": "8/8",
               "due_state": "completed"
+            },
+            {
+              "number": "2",
+              "description": "Weight Room Rules Quiz",
+              "category": "Cognitive",
+              "score_raw": "10 / 10",
+              "points_earned": 10.0,
+              "points_possible": 10.0,
+              "percentage": 100.0,
+              "correct_raw": "10 / 10",
+              "correct_earned": 10.0,
+              "correct_possible": 10.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "08/28/2026",
+              "date_completed": "08/28/2026",
+              "due_date": "08/28/2026",
+              "grading_complete": true,
+              "extra_credit": false,
+              "status": "counts",
+              "status_label": "counts in Cognitive",
+              "counts_toward_grade": true,
+              "due_label": "10/10",
+              "due_state": "completed"
+            },
+            {
+              "number": "3",
+              "description": "Mini Golf Course Design",
+              "category": "Projects",
+              "score_raw": "/ 5",
+              "points_earned": null,
+              "points_possible": 5.0,
+              "percentage": 0.0,
+              "correct_raw": "0 / 5",
+              "correct_earned": 0.0,
+              "correct_possible": 5.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "08/26/2026",
+              "date_completed": "",
+              "due_date": "08/28/2026",
+              "grading_complete": false,
+              "extra_credit": false,
+              "status": "pending",
+              "status_label": "pending",
+              "counts_toward_grade": false,
+              "due_label": "due today",
+              "due_state": "today"
             }
           ]
         },
@@ -869,7 +1073,32 @@
           "class_name": "Eng 9 Entre Fall",
           "period": 5,
           "term": "fall",
-          "assignments": []
+          "assignments": [
+            {
+              "number": "2",
+              "description": "LT 1.1 Formative Project",
+              "category": "Formative",
+              "score_raw": "/ 10",
+              "points_earned": null,
+              "points_possible": 10.0,
+              "percentage": 0.0,
+              "correct_raw": "0 / 10",
+              "correct_earned": 0.0,
+              "correct_possible": 10.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "08/28/2026",
+              "date_completed": "",
+              "due_date": "08/31/2026",
+              "grading_complete": false,
+              "extra_credit": false,
+              "status": "pending",
+              "status_label": "pending",
+              "counts_toward_grade": false,
+              "due_label": "due Mon Aug 31",
+              "due_state": "upcoming"
+            }
+          ]
         },
         {
           "class_name": "Tech of Biology",
@@ -971,6 +1200,30 @@
               "counts_toward_grade": true,
               "due_label": "3/3",
               "due_state": "completed"
+            },
+            {
+              "number": "5",
+              "description": "DNA Replication Exit Ticket",
+              "category": "Practice Assignments",
+              "score_raw": "/ 3",
+              "points_earned": null,
+              "points_possible": 3.0,
+              "percentage": null,
+              "correct_raw": "/ 3",
+              "correct_earned": null,
+              "correct_possible": 3.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "08/28/2026",
+              "date_completed": "",
+              "due_date": "08/28/2026",
+              "grading_complete": false,
+              "extra_credit": false,
+              "status": "pending",
+              "status_label": "pending",
+              "counts_toward_grade": false,
+              "due_label": "due today",
+              "due_state": "today"
             }
           ]
         },
@@ -986,25 +1239,46 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 11,
-        "days_present": 11,
+        "days_enrolled": 12,
+        "days_present": 12,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 11 Days Present: 11 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 12 Days Present: 12 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Engineering Geo with no grade yet needs attention; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE; most classes have no work posted yet.",
-        "focus_tonight": "",
+        "headline": "Leah has two assignments due today in PE Course 1 and Tech of Biology; strong A's in Bus of Gaming and Mkt Adv GrphDes.",
+        "focus_tonight": "Mini Golf Course Design (PE Course 1); DNA Replication Exit Ticket (Tech of Biology)",
         "wins": [
-          "Bus of Gaming: A 100% on Anatomy of a Great Game",
-          "Mkt Adv GrphDes: A 95% with no missing work"
+          "Bus of Gaming at A 100% with Anatomy of a Great Game 5/5",
+          "Mkt Adv GrphDes at A 95% with About Me Slides 5/5"
         ],
         "classes": [
           {
+            "class_name": "PE Course 1",
+            "urgency": "watch",
+            "snap": "Mini Golf Course Design \u00b7 due today",
+            "story": "",
+            "do_tonight": "Mini Golf Course Design"
+          },
+          {
+            "class_name": "Tech of Biology",
+            "urgency": "watch",
+            "snap": "DNA Replication Exit Ticket \u00b7 due today",
+            "story": "",
+            "do_tonight": "DNA Replication Exit Ticket"
+          },
+          {
             "class_name": "Engineering Geo",
-            "urgency": "critical",
-            "snap": "Algebra Boot Camp assignments \u00b7 7/10",
-            "story": "Seven scored items average 72.9% but no grade posted yet.",
+            "urgency": "ok",
+            "snap": "Algebra Boot Camp work posted with scores from 50% to 100%",
+            "story": "No class grade posted yet.",
+            "do_tonight": ""
+          },
+          {
+            "class_name": "Eng 9 Entre",
+            "urgency": "ok",
+            "snap": "LT 1.1 Formative Project \u00b7 due Mon Aug 31",
+            "story": "No class grade posted yet.",
             "do_tonight": ""
           },
           {
@@ -1017,34 +1291,20 @@
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "Daily Assignment (Shark Tank) \u00b7 1/1",
-            "story": "",
-            "do_tonight": ""
-          },
-          {
-            "class_name": "PE Course 1",
-            "urgency": "strong",
-            "snap": "August \u00b7 8/8",
-            "story": "",
-            "do_tonight": ""
-          },
-          {
-            "class_name": "Tech of Biology",
-            "urgency": "ok",
-            "snap": "DNA Structure Exit Ticket \u00b7 3/3",
+            "snap": "About Me Slides 5/5 and Presentation 8.5/10",
             "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-27T13:47:38.018298+00:00",
+        "generated_at": "2026-08-28T23:27:30.953207+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
-          "history_span_days": 101
+          "history_span_days": 102
         }
       },
       "trend_summary": [],
-      "history_span_days": 101,
+      "history_span_days": 102,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [
@@ -1145,6 +1405,14 @@
           "span_window": null,
           "trend_label": "insufficient_history"
         },
+        "Eng 9 Entre": {
+          "pct_history": [],
+          "delta_7d": null,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "insufficient_history"
+        },
         "Tech of Biology": {
           "pct_history": [
             {
@@ -1176,11 +1444,11 @@
               "pct": 100.0
             }
           ],
-          "delta_7d": null,
+          "delta_7d": 0.0,
           "delta_14d": null,
           "delta_span": null,
           "span_window": null,
-          "trend_label": "insufficient_history"
+          "trend_label": "stable"
         }
       }
     }

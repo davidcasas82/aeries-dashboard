@@ -4590,6 +4590,88 @@
             "headline": "Daniel needs attention in Int Eng&Marktg at 50% with an overdue assignment while holding an A in Bus of Gaming.",
             "focus_tonight": "LT3: AI Character Reference Letter (Int Eng&Marktg)"
           }
+        },
+        {
+          "date": "2026-08-28",
+          "captured_at": "2026-08-28T23:27:18.657963+00:00",
+          "classes": {
+            "Bus of Gaming": {
+              "period": 0,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "PE Course 2": {
+              "period": 1,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Span 1 (IVC)": {
+              "period": 2,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Rapid Prototype": {
+              "period": 3,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "US Hist Media": {
+              "period": 4,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Alg ll Bus Mang": {
+              "period": 5,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Physics & Eng": {
+              "period": 6,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Point Break": {
+              "period": 7,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Int Eng&Marktg": {
+              "period": 8,
+              "pct": 75.0,
+              "mark": "C",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            }
+          },
+          "previous_briefing": {
+            "headline": "Daniel needs attention in Int Eng&Marktg at 50% with an overdue assignment while holding an A in Bus of Gaming.",
+            "focus_tonight": "LT3: AI Character Reference Letter (Int Eng&Marktg)"
+          }
         }
       ]
     },
@@ -8782,6 +8864,88 @@
         {
           "date": "2026-08-27",
           "captured_at": "2026-08-28T04:48:27.407581+00:00",
+          "classes": {
+            "Bus of Gaming": {
+              "period": 0,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Mkt Adv GrphDes": {
+              "period": 1,
+              "pct": 95.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Engineering Geo": {
+              "period": 2,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "COMM 1 (IVC)": {
+              "period": 3,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "PE Course 1": {
+              "period": 4,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Eng 9 Entre": {
+              "period": 5,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Tech of Biology": {
+              "period": 6,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Point Break": {
+              "period": 7,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "WrldHis by Dsgn": {
+              "period": 8,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            }
+          },
+          "previous_briefing": {
+            "headline": "Engineering Geo with no grade yet needs attention; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE; most classes have no work posted yet.",
+            "focus_tonight": ""
+          }
+        },
+        {
+          "date": "2026-08-28",
+          "captured_at": "2026-08-28T23:27:30.959362+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
