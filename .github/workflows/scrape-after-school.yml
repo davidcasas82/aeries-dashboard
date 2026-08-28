@@ -1,28 +1,9 @@
-name: Daily Grade Scrape
+name: After-School Grade Scrape
 
 on:
   schedule:
-    # Pacific times shift one hour in winter (PST). GitHub cron is UTC.
-    - cron: '0 9 * * *'    # ~2am PT — overnight catch-up
-    - cron: '0 3 * * *'    # ~8pm PT — evening, before parents usually look
-  workflow_dispatch:
-    inputs:
-      grok_only:
-        description: 'Regenerate AI briefings only (skip Aeries scrape)'
-        type: boolean
-        default: false
-      probe_attendance:
-        description: 'Debug: dump Attendance page structure only'
-        type: boolean
-        default: false
-      probe_gradebook:
-        description: 'Debug: dump GradebookDetails dropdown terms only'
-        type: boolean
-        default: false
-      attendance_only:
-        description: 'Refresh absences/tardies only (no grades/Grok)'
-        type: boolean
-        default: false
+    # GitHub skipped the 23:00 UTC slot when it shared a file with the other crons; this file re-registers 4pm PT at the same time.
+    - cron: '0 23 * * *'   # ~4pm PT — after school
 
 concurrency:
   group: grades-scrape
@@ -60,21 +41,9 @@ jobs:
           # (school_calendar.json / live calendars-school-year page).
           # true = force pause Aeries + Grok; false = force scrape even in summer
           SUMMER_BREAK: ${{ vars.SUMMER_BREAK }}
-        run: |
-          if [ "${{ inputs.probe_attendance }}" = "true" ]; then
-            python scraper.py --probe-attendance
-          elif [ "${{ inputs.probe_gradebook }}" = "true" ]; then
-            python scraper.py --probe-gradebook
-          elif [ "${{ inputs.attendance_only }}" = "true" ]; then
-            python scraper.py --attendance-only
-          elif [ "${{ inputs.grok_only }}" = "true" ]; then
-            python scraper.py --grok-only
-          else
-            python scraper.py
-          fi
+        run: python scraper.py
 
       - name: Commit updated data
-        if: ${{ inputs.probe_attendance != true && inputs.probe_gradebook != true }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
