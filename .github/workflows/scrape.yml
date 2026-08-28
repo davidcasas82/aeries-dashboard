@@ -3,8 +3,9 @@ name: Daily Grade Scrape
 on:
   schedule:
     # Pacific times shift one hour in winter (PST). GitHub cron is UTC.
-    - cron: '0 9 * * *'    # ~2am PT — overnight catch-up
-    - cron: '0 3 * * *'    # ~8pm PT — evening, before parents usually look
+    # Minute 7 avoids GitHub dropping :00 slots.
+    - cron: '7 9 * * *'    # ~2:07am PT — overnight catch-up
+    - cron: '7 3 * * *'    # ~8:07pm PT — evening, before parents usually look
   workflow_dispatch:
     inputs:
       grok_only:
