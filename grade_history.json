@@ -4509,7 +4509,7 @@
         },
         {
           "date": "2026-08-27",
-          "captured_at": "2026-08-28T00:44:18.348875+00:00",
+          "captured_at": "2026-08-28T04:48:23.657559+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -4587,8 +4587,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Daniel needs attention in Rapid Prototype with no grade yet while holding an A in Bus of Gaming; most classes have no work posted yet.",
-            "focus_tonight": ""
+            "headline": "Daniel needs attention in Int Eng&Marktg at 50% with an overdue assignment while holding an A in Bus of Gaming.",
+            "focus_tonight": "LT3: AI Character Reference Letter (Int Eng&Marktg)"
           }
         }
       ]
@@ -8781,7 +8781,7 @@
         },
         {
           "date": "2026-08-27",
-          "captured_at": "2026-08-28T00:44:21.971405+00:00",
+          "captured_at": "2026-08-28T04:48:27.407581+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
