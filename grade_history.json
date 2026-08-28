@@ -4509,7 +4509,7 @@
         },
         {
           "date": "2026-08-27",
-          "captured_at": "2026-08-27T19:44:07.603860+00:00",
+          "captured_at": "2026-08-28T00:44:18.348875+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -4577,10 +4577,12 @@
             },
             "Int Eng&Marktg": {
               "period": 8,
-              "pct": null,
-              "mark": "",
-              "missing_count": 0,
-              "missing_names": [],
+              "pct": 50.0,
+              "mark": "F",
+              "missing_count": 1,
+              "missing_names": [
+                "LT3: AI Character Reference Letter"
+              ],
               "aeries_trend": null
             }
           },
@@ -8779,7 +8781,7 @@
         },
         {
           "date": "2026-08-27",
-          "captured_at": "2026-08-27T19:44:10.807593+00:00",
+          "captured_at": "2026-08-28T00:44:21.971405+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,

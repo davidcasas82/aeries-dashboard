@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-27T19:44:04.064862+00:00",
+  "last_updated": "2026-08-28T00:44:05.331008+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -124,11 +124,11 @@
           "period": 8,
           "course_name": "Int Eng&Marktg",
           "teacher": "Patterson, V",
-          "percent": "",
-          "mark": "",
-          "mark_and_score": "",
+          "percent": "50.0",
+          "mark": "F",
+          "mark_and_score": "F (50.0%)",
           "missing_count": 0,
-          "missing_assignments": "",
+          "missing_assignments": "<a class=\"MissingAssignment\" href=\"Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=6137419&amp;Missing=1&amp;Term=F&amp;CDS=30736430000000&amp;SC=95\"><span>1</span></a>",
           "trend": "",
           "room": "2-202",
           "school_name": "Legacy Magnet Academy",
@@ -270,6 +270,37 @@
           "period": 6,
           "term": "fall",
           "assignments": []
+        },
+        {
+          "class_name": "Int Eng&Marktg",
+          "period": 8,
+          "term": "fall",
+          "assignments": [
+            {
+              "number": "1",
+              "description": "LT3: AI Character Reference Letter",
+              "category": "Writing",
+              "score_raw": "/ 5",
+              "points_earned": null,
+              "points_possible": 5.0,
+              "percentage": 0.0,
+              "correct_raw": "0 / 10",
+              "correct_earned": 0.0,
+              "correct_possible": 10.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "08/21/2026",
+              "date_completed": "",
+              "due_date": "08/25/2026",
+              "grading_complete": true,
+              "extra_credit": false,
+              "status": "counts",
+              "status_label": "counts in Writing",
+              "counts_toward_grade": true,
+              "due_label": "overdue Aug 25",
+              "due_state": "overdue"
+            }
+          ]
         }
       ],
       "attendance": {
@@ -284,38 +315,45 @@
         "raw": "Year Days Enrolled: 11 Days Present: 11 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel needs attention in Rapid Prototype with no grade yet while holding an A in Bus of Gaming; most classes have no work posted yet.",
-        "focus_tonight": "",
+        "headline": "Daniel needs attention in Int Eng&Marktg at 50% with an overdue assignment while holding an A in Bus of Gaming.",
+        "focus_tonight": "LT3: AI Character Reference Letter (Int Eng&Marktg)",
         "wins": [
-          "A 100% in Bus of Gaming with no missing work"
+          "A 100% in Bus of Gaming with Anatomy of a Great Game 5/5"
         ],
         "classes": [
           {
-            "class_name": "Rapid Prototype",
+            "class_name": "Int Eng&Marktg",
             "urgency": "critical",
-            "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator \u00b7 due Fri Aug 28",
-            "story": "No grade yet after 33% on Article: Design Principle Jigsaw.",
+            "snap": "LT3: AI Character Reference Letter \u00b7 overdue Aug 25",
+            "story": "Posted grade at 50% from the missing 5-point assignment.",
+            "do_tonight": "LT3: AI Character Reference Letter"
+          },
+          {
+            "class_name": "Rapid Prototype",
+            "urgency": "ok",
+            "snap": "Article: Design Principle Jigsaw \u00b7 1/3",
+            "story": "No grade posted yet; one upcoming assignment due tomorrow.",
             "do_tonight": ""
           },
           {
             "class_name": "US Hist Media",
             "urgency": "ok",
             "snap": "LT 1.1 - CER # 1 \u00b7 due Wed Sep 9",
-            "story": "No grade posted yet.",
+            "story": "No work posted yet.",
             "do_tonight": ""
           },
           {
             "class_name": "Bus of Gaming",
             "urgency": "strong",
             "snap": "Anatomy of a Great Game \u00b7 5/5",
-            "story": "100% on first summative.",
+            "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-27T13:47:25.855826+00:00",
+        "generated_at": "2026-08-28T00:44:18.344024+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
-          "total_recoverable_pts": 0,
+          "total_recoverable_pts": 5.0,
           "history_span_days": 101
         }
       },
@@ -357,6 +395,19 @@
         },
         "US Hist Media": {
           "pct_history": [],
+          "delta_7d": null,
+          "delta_14d": null,
+          "delta_span": null,
+          "span_window": null,
+          "trend_label": "insufficient_history"
+        },
+        "Int Eng&Marktg": {
+          "pct_history": [
+            {
+              "date": "2026-08-27",
+              "pct": 50.0
+            }
+          ],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
