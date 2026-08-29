@@ -4672,6 +4672,90 @@
             "headline": "Daniel needs attention in Int Eng&Marktg at 75% while holding an A in Bus of Gaming.",
             "focus_tonight": "LT 1.1 - Poster of Myself in Adobe Illustrator (Rapid Prototype); MC- LT 1.4 (Alg ll Bus Mang)"
           }
+        },
+        {
+          "date": "2026-08-29",
+          "captured_at": "2026-08-29T09:58:14.466181+00:00",
+          "classes": {
+            "Bus of Gaming": {
+              "period": 0,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "PE Course 2": {
+              "period": 1,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Span 1 (IVC)": {
+              "period": 2,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Rapid Prototype": {
+              "period": 3,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "US Hist Media": {
+              "period": 4,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Alg ll Bus Mang": {
+              "period": 5,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Physics & Eng": {
+              "period": 6,
+              "pct": null,
+              "mark": "",
+              "missing_count": 1,
+              "missing_names": [
+                "Exit Ticket"
+              ],
+              "aeries_trend": null
+            },
+            "Point Break": {
+              "period": 7,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Int Eng&Marktg": {
+              "period": 8,
+              "pct": 75.0,
+              "mark": "C",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            }
+          },
+          "previous_briefing": {
+            "headline": "Daniel needs attention in Int Eng&Marktg at 75% while holding an A in Bus of Gaming.",
+            "focus_tonight": "LT 1.1 - Poster of Myself in Adobe Illustrator (Rapid Prototype); MC- LT 1.4 (Alg ll Bus Mang)"
+          }
         }
       ]
     },
@@ -8946,6 +9030,88 @@
         {
           "date": "2026-08-28",
           "captured_at": "2026-08-29T04:07:31.135623+00:00",
+          "classes": {
+            "Bus of Gaming": {
+              "period": 0,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Mkt Adv GrphDes": {
+              "period": 1,
+              "pct": 95.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Engineering Geo": {
+              "period": 2,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "COMM 1 (IVC)": {
+              "period": 3,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "PE Course 1": {
+              "period": 4,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Eng 9 Entre": {
+              "period": 5,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Tech of Biology": {
+              "period": 6,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Point Break": {
+              "period": 7,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "WrldHis by Dsgn": {
+              "period": 8,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            }
+          },
+          "previous_briefing": {
+            "headline": "Leah has two assignments due today in PE Course 1 and Tech of Biology; strong A's in Bus of Gaming and Mkt Adv GrphDes.",
+            "focus_tonight": "Mini Golf Course Design (PE Course 1); DNA Replication Exit Ticket (Tech of Biology)"
+          }
+        },
+        {
+          "date": "2026-08-29",
+          "captured_at": "2026-08-29T09:58:30.183842+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
