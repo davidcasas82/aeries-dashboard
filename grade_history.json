@@ -4843,7 +4843,7 @@
         },
         {
           "date": "2026-08-31",
-          "captured_at": "2026-08-31T09:37:55.015554+00:00",
+          "captured_at": "2026-08-31T17:01:16.502711+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -9443,7 +9443,7 @@
         },
         {
           "date": "2026-08-31",
-          "captured_at": "2026-08-31T09:38:05.522844+00:00",
+          "captured_at": "2026-08-31T17:01:21.759510+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -9519,8 +9519,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology; Engineering Geo and Eng 9 Entre show no grade posted yet.",
-            "focus_tonight": ""
+            "headline": "Leah must finish LT 1.1 Formative Project in Eng 9 Entre today; strong A's in Bus of Gaming, Mkt Adv GrphDes, and PE Course 1.",
+            "focus_tonight": "LT 1.1 Formative Project (Eng 9 Entre)"
           }
         }
       ]
