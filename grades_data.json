@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-08-31T01:20:40.349729+00:00",
+  "last_updated": "2026-08-31T09:37:44.058138+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -430,17 +430,17 @@
         "tardies": 1,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 12,
-        "days_present": 12,
+        "days_enrolled": 13,
+        "days_present": 13,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 12 Days Present: 12 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 1 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 13 Days Present: 13 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 1 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
         "headline": "Daniel needs attention in Int Eng&Marktg at C 75% while holding an A in Bus of Gaming.",
         "focus_tonight": "Exit Ticket (Physics & Eng)",
         "wins": [
-          "A in Bus of Gaming (100%)"
+          "A 100% in Bus of Gaming with Anatomy of a Great Game 5/5"
         ],
         "classes": [
           {
@@ -454,14 +454,14 @@
             "class_name": "Physics & Eng",
             "urgency": "watch",
             "snap": "Exit Ticket \u00b7 overdue Aug 28",
-            "story": "One missing assignment worth 4 points.",
+            "story": "",
             "do_tonight": "Exit Ticket"
           },
           {
             "class_name": "Rapid Prototype",
             "urgency": "ok",
             "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator \u00b7 awaiting score \u00b7 was due Fri Aug 28",
-            "story": "No posted grade yet.",
+            "story": "",
             "do_tonight": ""
           },
           {
@@ -475,7 +475,7 @@
             "class_name": "Alg ll Bus Mang",
             "urgency": "ok",
             "snap": "MC- LT 1.4 \u00b7 awaiting score \u00b7 was due Fri Aug 28",
-            "story": "No posted grade yet.",
+            "story": "",
             "do_tonight": ""
           },
           {
@@ -486,15 +486,15 @@
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-30T09:09:16.023764+00:00",
+        "generated_at": "2026-08-31T09:37:55.008689+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 4.0,
-          "history_span_days": 104
+          "history_span_days": 105
         }
       },
       "trend_summary": [],
-      "history_span_days": 104,
+      "history_span_days": 105,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [
@@ -527,11 +527,11 @@
               "pct": 100.0
             }
           ],
-          "delta_7d": null,
+          "delta_7d": 0.0,
           "delta_14d": null,
           "delta_span": null,
           "span_window": null,
-          "trend_label": "insufficient_history"
+          "trend_label": "stable"
         },
         "Rapid Prototype": {
           "pct_history": [],
@@ -1115,8 +1115,8 @@
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
-              "due_label": "due Mon Aug 31",
-              "due_state": "upcoming"
+              "due_label": "due today",
+              "due_state": "today"
             }
           ]
         },
@@ -1259,39 +1259,39 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 12,
-        "days_present": 12,
+        "days_enrolled": 13,
+        "days_present": 13,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 12 Days Present: 12 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 13 Days Present: 13 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology; Engineering Geo and Eng 9 Entre show no grade posted yet.",
-        "focus_tonight": "",
+        "headline": "Leah must finish LT 1.1 Formative Project in Eng 9 Entre today; strong A's in Bus of Gaming, Mkt Adv GrphDes, and PE Course 1.",
+        "focus_tonight": "LT 1.1 Formative Project (Eng 9 Entre)",
         "wins": [
-          "Bus of Gaming: A 100% with Anatomy of a Great Game at 5/5",
-          "Mkt Adv GrphDes: A 95% with About Me Slides at 5/5"
+          "Bus of Gaming: A 100% (Anatomy of a Great Game 5/5)",
+          "Mkt Adv GrphDes: A 95% (About Me Slides 5/5, Shark Tank 1/1)"
         ],
         "classes": [
           {
-            "class_name": "Engineering Geo",
-            "urgency": "ok",
-            "snap": "0.1 Simplify Expressions \u00b7 8/10",
-            "story": "Phantom zero in Aeries; scored Algebra Boot Camp work averages 72.9%.",
-            "do_tonight": ""
+            "class_name": "Eng 9 Entre",
+            "urgency": "watch",
+            "snap": "LT 1.1 Formative Project \u00b7 due today",
+            "story": "No grade posted yet.",
+            "do_tonight": "LT 1.1 Formative Project"
           },
           {
-            "class_name": "Eng 9 Entre",
+            "class_name": "Engineering Geo",
             "urgency": "ok",
-            "snap": "LT 1.1 Formative Project \u00b7 due Mon Aug 31",
-            "story": "No grade posted yet.",
+            "snap": "Algebra Boot Camp assignments \u00b7 7 completed",
+            "story": "No class grade posted yet.",
             "do_tonight": ""
           },
           {
             "class_name": "Tech of Biology",
             "urgency": "ok",
-            "snap": "DNA Replication Exit Ticket \u00b7 awaiting score \u00b7 was due Fri Aug 28",
-            "story": "",
+            "snap": "DNA Structure Exit Ticket \u00b7 3/3",
+            "story": "Pending score on DNA Replication Exit Ticket.",
             "do_tonight": ""
           },
           {
@@ -1311,20 +1311,20 @@
           {
             "class_name": "PE Course 1",
             "urgency": "strong",
-            "snap": "Mini Golf Course Design \u00b7 awaiting score \u00b7 was due Fri Aug 28",
+            "snap": "Weight Room Rules Quiz \u00b7 10/10",
             "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-08-30T09:09:30.614949+00:00",
+        "generated_at": "2026-08-31T09:38:05.516079+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
-          "history_span_days": 104
+          "history_span_days": 105
         }
       },
       "trend_summary": [],
-      "history_span_days": 104,
+      "history_span_days": 105,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [
@@ -1357,11 +1357,11 @@
               "pct": 100.0
             }
           ],
-          "delta_7d": null,
+          "delta_7d": 0.0,
           "delta_14d": null,
           "delta_span": null,
           "span_window": null,
-          "trend_label": "insufficient_history"
+          "trend_label": "stable"
         },
         "Mkt Adv GrphDes": {
           "pct_history": [
