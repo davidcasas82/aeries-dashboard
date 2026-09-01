@@ -4927,7 +4927,7 @@
         },
         {
           "date": "2026-09-01",
-          "captured_at": "2026-09-01T08:33:50.295271+00:00",
+          "captured_at": "2026-09-01T14:06:02.644763+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -5006,7 +5006,7 @@
           },
           "previous_briefing": {
             "headline": "Daniel needs attention in Int Eng&Marktg at C 75% while holding an A in Bus of Gaming.",
-            "focus_tonight": "Exit Ticket (Physics & Eng)"
+            "focus_tonight": "Unit 0 Warm Ups (Physics & Eng); Exit Ticket (Physics & Eng)"
           }
         }
       ]
@@ -9609,7 +9609,7 @@
         },
         {
           "date": "2026-09-01",
-          "captured_at": "2026-09-01T08:34:07.664886+00:00",
+          "captured_at": "2026-09-01T14:06:06.254594+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -9685,8 +9685,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Leah must finish LT 1.1 Formative Project in Eng 9 Entre today; strong A's in Bus of Gaming, Mkt Adv GrphDes, and PE Course 1.",
-            "focus_tonight": "LT 1.1 Formative Project (Eng 9 Entre)"
+            "headline": "Leah holds strong A's in Bus of Gaming and PE Course 1 with no work due today.",
+            "focus_tonight": ""
           }
         }
       ]
