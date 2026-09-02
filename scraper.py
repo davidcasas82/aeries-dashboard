@@ -1812,9 +1812,14 @@ def annotate_assignment_status(assignment, weights=None):
         assignment["counts_toward_grade"] = False
         return assignment
 
-    if assignment.get("points_earned") is None and not assignment.get("grading_complete"):
-        assignment["status"] = "pending"
-        assignment["status_label"] = "pending"
+    if assignment.get("points_earned") is None:
+        # "Grading Completed" is a teacher bookkeeping flag; a blank is still unscored.
+        if assignment_turned_in(assignment):
+            assignment["status"] = "turned_in"
+            assignment["status_label"] = "turned in · awaiting score"
+        else:
+            assignment["status"] = "pending"
+            assignment["status_label"] = "pending"
         assignment["counts_toward_grade"] = False
         return assignment
 
@@ -2691,40 +2696,38 @@ def is_past_due_ungraded(assignment, today):
     return assignment.get("points_earned") is None
 
 
-def select_missing_assignments(assignments, class_meta, today):
-    """Past-due ungraded work is missing only if Aeries says so (or graded as zero).
+def assignment_turned_in(assignment):
+    """Aeries stamps Date Completed when work was handed in (often in class)."""
+    return bool(str((assignment or {}).get("date_completed") or "").strip())
 
-    Teachers often leave submitted work ungraded for a day. That is pending_grade,
-    not tonight's homework and not a missing flag.
+
+def select_missing_assignments(assignments, class_meta, today):
+    """Past-due ungraded work is missing only if the Aeries portal flags it.
+
+    Much of the kids' work is done in class and scored days later. A blank score —
+    even with the teacher's "Grading Completed" box ticked — is pending_grade until
+    the portal's own missing badge says otherwise. When Aeries reports N missing,
+    pick the N most likely rows: not turned in first, then grading-complete, oldest.
     """
-    past_due = [a for a in assignments if is_past_due_ungraded(a, today)]
-    graded_zero = [a for a in past_due if a.get("grading_complete")]
     aeries_n = aeries_missing_count(class_meta)
     if aeries_n <= 0:
-        return graded_zero
-
-    picked = list(graded_zero)
-    already = {id(a) for a in picked}
-    rest = [a for a in past_due if id(a) not in already]
-    rest.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
-    for a in rest:
-        if len(picked) >= aeries_n:
-            break
-        picked.append(a)
+        return []
+    past_due = [a for a in assignments if is_past_due_ungraded(a, today)]
+    past_due.sort(key=lambda a: (
+        assignment_turned_in(a),
+        not a.get("grading_complete"),
+        parse_due_date(a.get("due_date")) or datetime.min,
+    ))
+    picked = past_due[:aeries_n]
     picked.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
     return picked
 
 
 def is_missing_assignment(assignment, today, class_meta=None):
     """Compatibility wrapper; prefer select_missing_assignments for class context."""
-    if class_meta is not None:
-        return assignment in select_missing_assignments([assignment], class_meta, today)
-    due = parse_due_date(assignment.get("due_date"))
-    if not due or due >= today:
+    if class_meta is None:
         return False
-    if assignment.get("points_earned") is not None:
-        return False
-    return bool(assignment.get("grading_complete"))
+    return assignment in select_missing_assignments([assignment], class_meta, today)
 
 
 def _norm_course_name(name):
@@ -3039,6 +3042,8 @@ def format_assignment_entry(assignment, today, kind):
             entry["days_overdue"] = (today - due).days
         elif kind == "upcoming":
             entry["days_until_due"] = (due - today).days
+    if assignment_turned_in(assignment):
+        entry["turned_in"] = True
     if kind == "recent":
         entry["points_earned"] = assignment.get("points_earned")
         entry["percentage"] = assignment.get("percentage")
@@ -3100,6 +3105,7 @@ def analyze_class(class_meta, assignments, today):
         a for a in upcoming
         if parse_due_date(a.get("due_date"))
         and (parse_due_date(a.get("due_date")).date() - today.date()).days == 0
+        and not assignment_turned_in(a)
     ]
     if due_today and urgency in ("ok", "strong"):
         urgency, issue_type = "watch", "due_today"
@@ -3293,14 +3299,18 @@ def build_class_analytics(student_data, history_context=None):
     return result
 
 
-def build_tonight_plan(class_analytics, limit=2):
-    """Due today first; Aeries-confirmed missing next. Never pending_grade."""
+def build_tonight_plan(class_analytics, limit=3):
+    """Heads-up list: due today, then Aeries-confirmed missing, then due tomorrow.
+
+    Never pending_grade, and never anything Aeries shows as turned in — most of the
+    kids' work happens in class, so a blank score is not a to-do.
+    """
     items = []
     seen = set()
 
     def add(course, assignment, reason):
         name = (assignment.get("name") or "").strip()
-        if not name or not course:
+        if not name or not course or assignment.get("turned_in"):
             return
         key = (_norm_course_name(course), name.lower())
         if key in seen:
@@ -3310,13 +3320,19 @@ def build_tonight_plan(class_analytics, limit=2):
             "name": name,
             "class_name": course,
             "reason": reason,
+            "due_date": assignment.get("due_date") or "",
         })
 
-    for c in class_analytics or []:
-        course = (c.get("course_name") or "").strip()
-        for a in c.get("upcoming") or []:
-            if a.get("days_until_due") == 0:
-                add(course, a, "due_today")
+    def add_upcoming(days, reason):
+        for c in class_analytics or []:
+            course = (c.get("course_name") or "").strip()
+            for a in c.get("upcoming") or []:
+                if a.get("days_until_due") == days:
+                    add(course, a, reason)
+                    if len(items) >= limit:
+                        return
+
+    add_upcoming(0, "due_today")
 
     if len(items) < limit:
         for c in class_analytics or []:
@@ -3327,6 +3343,9 @@ def build_tonight_plan(class_analytics, limit=2):
                     break
             if len(items) >= limit:
                 break
+
+    if len(items) < limit:
+        add_upcoming(1, "due_tomorrow")
 
     items = items[:limit]
     label = "; ".join(f"{i['name']} ({i['class_name']})" for i in items)
@@ -3452,6 +3471,7 @@ def build_student_view(student_data, history_context=None):
                 a for a in upcoming
                 if parse_due_date(a.get("due_date"))
                 and (parse_due_date(a.get("due_date")).date() - today.date()).days == 0
+                and not assignment_turned_in(a)
             ]
             if due_today:
                 tonight_name = due_today[0].get("description") or ""
@@ -3851,7 +3871,8 @@ DATA SCOPE
 PARENT SKIM (this is the job)
 - Headline: one sentence — what needs attention, plus one real win if there is one. Not a roster of every class. A WHY clause is welcome when a precomputed flag explains it.
 - If coverage.classes_with_portal_work is much smaller than coverage.scheduled_classes, add a short clause that most classes have no work posted yet (normal early in the term). Do not treat silence as all-clear, and do not panic about empty gradebooks.
-- focus_tonight: copy tonight_plan.label exactly (empty if tonight_plan.items is empty). Due today always beats overdue. pending_grade is submitted/awaiting a teacher score — not tonight, not missing.
+- focus_tonight: copy tonight_plan.label exactly (empty if tonight_plan.items is empty). Due today beats missing beats due tomorrow. pending_grade is submitted/awaiting a teacher score — not tonight, not missing. Anything with turned_in true was handed in (usually in class) and is never a to-do.
+- Most of this work happens in class. Missing means only what the Aeries portal itself flags; a blank score is not missing and not homework.
 - wins: 0–2 specifics with evidence (grade + assignment). Skip empty praise.
 
 VOICE
@@ -3864,7 +3885,7 @@ VOICE
 Respond ONLY with valid JSON matching this exact schema:
 {{
   "headline": "ONE sentence a parent can skim",
-  "focus_tonight": "Named assignment(s) + class; empty if nothing due/missing today",
+  "focus_tonight": "Named assignment(s) + class; empty if nothing due today/tomorrow or Aeries-flagged missing",
   "wins": ["0–2 short genuine positives with evidence"],
   "classes": [
     {{

@@ -205,6 +205,51 @@ class ViewModelTests(unittest.TestCase):
         self.assertEqual(view["tonight"][0]["name"], "Lab writeup")
         self.assertEqual(view["classes"][0]["urgency"], "watch")
         self.assertEqual(view["classes"][0]["do_tonight"], "Lab writeup")
+        # Aeries says 0 missing, so the old grading-complete blank is pending, not missing
+        self.assertEqual(view["classes"][0]["missing_count"], 0)
+
+    def test_in_class_work_done_today_is_not_a_to_do(self):
+        today = datetime(2026, 9, 1)
+        due = today.strftime("%m/%d/%Y")
+        student = {
+            "name": "Kid",
+            "sn": "1",
+            "classes": [
+                {
+                    "period": 6,
+                    "course_name": "Physics & Eng",
+                    "teacher": "Chung",
+                    "percent": "100",
+                    "mark": "A",
+                    "missing_count": 0,
+                }
+            ],
+            "assignments_by_class": [
+                {
+                    "class_name": "6- Physics & Eng- Fall",
+                    "period": 6,
+                    "assignments": [
+                        {
+                            "description": "Unit 0 Warm Ups",
+                            "due_date": due,
+                            "date_completed": due,
+                            "points_earned": None,
+                            "points_possible": 3,
+                            "grading_complete": True,
+                        },
+                    ],
+                }
+            ],
+            "class_trends": {},
+            "ai_summary": {},
+        }
+        with patch.object(scraper, "pacific_today_dt", return_value=today):
+            with patch.object(scraper, "pacific_today", return_value=today.date()):
+                view = scraper.build_student_view(student)
+        self.assertEqual(view["tonight"], [])
+        self.assertEqual(view["classes"][0]["do_tonight"], "")
+        self.assertEqual(view["classes"][0]["missing_count"], 0)
+        self.assertEqual(view["classes"][0]["urgency"], "strong")
 
 
 if __name__ == "__main__":
