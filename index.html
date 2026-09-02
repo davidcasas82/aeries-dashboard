@@ -18,23 +18,25 @@
             --border-strong: rgba(40, 40, 35, 0.12);
             --text: #1c1c1a;
             --text-2: #5c5c56;
-            --text-3: #8a8a82;
+            /* Secondary colors are tuned to clear 4.5:1 on the cream surfaces */
+            --text-3: #6d6d66;
             --teal: #1f5c52;
-            --teal-mid: #3d8a7a;
+            --teal-mid: #2f7566;
             --teal-soft: #c8e6df;
             --teal-wash: rgba(31, 92, 82, 0.08);
             --green: #2a7a5c;
             --green-soft: rgba(42, 122, 92, 0.12);
-            --amber: #a67c1a;
+            --amber: #8a6512;
             --amber-soft: rgba(166, 124, 26, 0.12);
-            --red: #c45c3e;
+            --red: #b04a2e;
             --red-soft: rgba(196, 92, 62, 0.12);
-            --blue: #3d8a7a;
+            --blue: #2f7566;
             --shadow-sm: 0 1px 2px rgba(40, 40, 35, 0.04);
             --shadow-card: 0 1px 2px rgba(40, 40, 35, 0.04), 0 8px 24px rgba(40, 40, 35, 0.05);
             --shadow-raised: 0 4px 20px rgba(40, 40, 35, 0.08);
             --touch-min: 56px;
-            --top-bar-h: 64px;
+            /* Fallback only — script measures the rendered header and overrides this */
+            --top-bar-h: 74px;
             --radius: 16px;
             --radius-sm: 12px;
             --content-max: min(1680px, calc(100vw - 20px));
@@ -108,10 +110,14 @@
         }
 
         .last-updated {
+            display: block;
             font-size: var(--fs-small);
             color: var(--text-3);
             margin-top: 1px;
         }
+
+        .last-updated.stale { color: var(--amber); font-weight: 600; }
+        .last-updated.very-stale { color: var(--red); font-weight: 600; }
 
         .settings-btn {
             display: flex;
@@ -168,7 +174,7 @@
         /* ── Sticky tonight ── */
         .tonight-sticky {
             position: sticky;
-            top: calc(var(--top-bar-h) + env(safe-area-inset-top, 0px));
+            top: var(--top-bar-h);
             z-index: 90;
             display: none;
             align-items: center;
@@ -258,6 +264,7 @@
             line-height: 1.25;
             letter-spacing: -0.35px;
             color: var(--text);
+            max-width: 32em;
         }
 
         .masthead-headline.muted {
@@ -287,6 +294,60 @@
             font-weight: 600;
             line-height: 1.35;
             color: var(--text);
+        }
+
+        .tonight-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .tonight-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            width: 100%;
+            min-height: 48px;
+            padding: 6px 4px 6px 0;
+            border: none;
+            background: none;
+            cursor: pointer;
+            text-align: left;
+            color: inherit;
+            font: inherit;
+            border-radius: 8px;
+        }
+
+        .tonight-item:hover .tonight-item-name { text-decoration: underline; }
+
+        .tonight-item-main { min-width: 0; }
+
+        .tonight-item-name {
+            display: block;
+            font-size: calc(var(--fs-body) + 2px);
+            font-weight: 600;
+            line-height: 1.3;
+            color: var(--text);
+        }
+
+        .tonight-item-sub {
+            display: block;
+            font-size: var(--fs-small);
+            color: var(--text-2);
+            margin-top: 2px;
+            line-height: 1.3;
+        }
+
+        .tonight-item-sub .status { font-weight: 650; }
+        .tonight-item-sub .status.overdue { color: var(--red); }
+        .tonight-item-sub .status.today { color: var(--amber); }
+        .tonight-item-sub .status.tomorrow { color: var(--teal); }
+
+        .tonight-item .row-chevron {
+            margin-left: 0;
+            transform: rotate(-90deg);
         }
 
         .masthead-wins {
@@ -523,7 +584,8 @@
         .row-title {
             display: flex;
             align-items: center;
-            gap: 7px;
+            flex-wrap: wrap;
+            gap: 4px 7px;
             min-width: 0;
         }
 
@@ -599,13 +661,14 @@
             color: var(--text-3);
         }
 
-        .grade-a, .grade-b { color: var(--teal); }
+        .grade-a { color: var(--teal); }
+        .grade-b { color: var(--green); }
         .grade-c { color: var(--amber); }
         .grade-d, .grade-f { color: var(--red); }
         .grade-none { color: var(--text-3); }
 
-        .stat-tile .stat-value.grade-a,
-        .stat-tile .stat-value.grade-b { color: var(--teal); }
+        .stat-tile .stat-value.grade-a { color: var(--teal); }
+        .stat-tile .stat-value.grade-b { color: var(--green); }
         .stat-tile .stat-value.grade-c { color: var(--amber); }
         .stat-tile .stat-value.grade-d,
         .stat-tile .stat-value.grade-f { color: var(--red); }
@@ -742,7 +805,28 @@
             font-size: var(--fs-meta);
             color: var(--text-2);
             line-height: 1.45;
+            max-width: 60ch;
         }
+
+        .panel-collapse {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            min-height: 48px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text-2);
+            font: inherit;
+            font-size: var(--fs-small);
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+        }
+
+        .panel-collapse:hover { color: var(--text); }
+        .panel-collapse .row-chevron { margin-left: 0; transform: rotate(180deg); }
 
         .panel-tonight-text {
             font-size: var(--fs-body);
@@ -920,7 +1004,8 @@
             color: var(--text-3);
         }
         .assn-status.counts { color: var(--teal); }
-        .assn-status.pending { color: var(--amber); }
+        .assn-status.pending { color: var(--text-2); }
+        .assn-status.turned_in { color: var(--text-2); }
         .assn-status.zero_weight { color: var(--text-3); }
         .assn-status.na,
         .assn-status.tx,
@@ -1105,8 +1190,8 @@
         }
 
         .settings-close {
-            width: 36px;
-            height: 36px;
+            width: 44px;
+            height: 44px;
             border: none;
             background: var(--bg);
             color: var(--text-2);
@@ -1124,48 +1209,6 @@
             text-transform: uppercase;
             color: var(--text-3);
             margin-bottom: 10px;
-        }
-
-        .toggle-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            cursor: pointer;
-            min-height: 44px;
-        }
-
-        .toggle-row input { display: none; }
-
-        .toggle-slider {
-            width: 44px;
-            height: 26px;
-            background: rgba(40, 40, 35, 0.12);
-            border-radius: 999px;
-            position: relative;
-            flex-shrink: 0;
-            transition: background 0.15s;
-        }
-
-        .toggle-slider:after {
-            content: "";
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            background: #fff;
-            border-radius: 50%;
-            top: 3px;
-            left: 3px;
-            box-shadow: 0 1px 3px rgba(40, 40, 35, 0.2);
-            transition: transform 0.15s;
-        }
-
-        .toggle-row input:checked + .toggle-slider { background: var(--teal); }
-        .toggle-row input:checked + .toggle-slider:after { transform: translateX(18px); }
-
-        .toggle-label {
-            font-size: var(--fs-body);
-            font-weight: 500;
-            color: var(--text);
         }
 
         .settings-hint {
@@ -1191,6 +1234,16 @@
             font-family: inherit;
         }
 
+        /* ── Focus ── */
+        :focus-visible {
+            outline: 3px solid var(--teal);
+            outline-offset: 2px;
+        }
+        .class-row-btn:focus-visible {
+            outline-offset: -3px;
+            border-radius: var(--radius);
+        }
+
         /* ── Tablet / laptop ── */
         @media (min-width: 760px) {
             :root {
@@ -1200,6 +1253,9 @@
                 --fs-class: 23px;
                 --fs-grade: 30px;
                 --fs-snap: 19px;
+                --fs-meta: 17px;
+                --fs-small: 16px;
+                --fs-label: 14px;
                 --content-max: min(1680px, calc(100vw - 24px));
             }
 
@@ -1248,7 +1304,9 @@
                 --fs-class: 24px;
                 --fs-grade: 32px;
                 --fs-snap: 20px;
-                --fs-meta: 17px;
+                --fs-meta: 18px;
+                --fs-small: 17px;
+                --fs-label: 15px;
                 --content-max: min(1760px, calc(100vw - 32px));
                 --row-pad-y: 18px;
                 --row-pad-x: 20px;
@@ -1310,7 +1368,7 @@
 
     <div class="student-picker" id="studentPicker"></div>
     <button type="button" class="tonight-sticky" id="tonightSticky" hidden>
-        <span class="tonight-sticky-label">Tonight</span>
+        <span class="tonight-sticky-label">Heads up</span>
         <span class="tonight-sticky-text" id="tonightStickyText"></span>
     </button>
 
@@ -1327,7 +1385,7 @@
     </div>
 
     <div class="settings-overlay" id="settingsOverlay">
-        <div class="settings-drawer" role="dialog" aria-label="Settings">
+        <div class="settings-drawer" role="dialog" aria-modal="true" aria-label="Settings">
             <div class="settings-header">
                 <h2>Settings</h2>
                 <button class="settings-close" id="settingsClose" aria-label="Close">&times;</button>
@@ -1372,6 +1430,8 @@
         let currentData = null;
         let activeStudentIndex = 0;
         let studentFocusMap = {};
+        let studentTonightMap = {};
+        let lastPaintedStamp = null;
 
         async function loadData() {
             // file:// cannot fetch grades_data.json in Chrome/Safari — need a local server
@@ -1397,8 +1457,8 @@
             } catch (e) {
                 document.getElementById('dashboards').innerHTML = `
                     <div class="empty-state">
-                        <strong>No grade data yet</strong>
-                        <p>Could not load <code>grades_data.json</code>. Run a scrape, or check that the file sits next to this page.</p>
+                        <strong>Grades didn’t load</strong>
+                        <p>Try again in a few minutes. If it keeps happening, check that <code>grades_data.json</code> sits next to this page.</p>
                     </div>`;
                 return null;
             }
@@ -1498,14 +1558,19 @@
             return a.points_earned === null;
         }
 
-        function isDueTodayUngraded(a) {
-            const due = parseDate(a.due_date);
-            if (!due || assignmentHasScoreMark(a)) return false;
-            return due.getTime() === TODAY.getTime();
+        // Aeries stamps Date Completed when work was handed in — usually in class.
+        function isTurnedIn(a) {
+            return !!(a && String(a.date_completed || '').trim()) || !!(a && a.turned_in);
         }
 
-        function isMissingAssignment(a) {
-            return isPastDueUngraded(a) && a.grading_complete === true;
+        function isDueInDaysUngraded(a, days) {
+            const due = parseDate(a.due_date);
+            if (!due || assignmentHasScoreMark(a) || isTurnedIn(a)) return false;
+            return daysFromToday(due) === days;
+        }
+
+        function isDueTodayUngraded(a) {
+            return isDueInDaysUngraded(a, 0);
         }
 
         function normalizeAiClass(ai) {
@@ -1617,25 +1682,20 @@
             return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         }
 
+        // Missing is only what the Aeries portal flags. Most work is done in class and scored
+        // later, so a blank score (even with "Grading Completed" ticked) is just awaiting a score.
+        // When Aeries reports N, pick the N most likely: not turned in first, then grading-complete, oldest.
         function filterMissingAssignments(assignments, aeriesCount) {
-            const pastDue = (assignments || []).filter(isPastDueUngraded);
-            const gradedZero = pastDue.filter(a => a.grading_complete === true);
-            const rest = pastDue
-                .filter(a => a.grading_complete !== true)
-                .sort((a, b) => (parseDate(a.due_date) || 0) - (parseDate(b.due_date) || 0));
-            let picked;
-            if (!aeriesCount || aeriesCount <= 0) {
-                picked = gradedZero;
-            } else {
-                picked = gradedZero.slice();
-                for (const a of rest) {
-                    if (picked.length >= aeriesCount) break;
-                    picked.push(a);
-                }
-            }
-            return picked.sort((a, b) => {
-                    return (parseDate(a.due_date) || 0) - (parseDate(b.due_date) || 0);
-                });
+            if (!aeriesCount || aeriesCount <= 0) return [];
+            const byDue = (a, b) => (parseDate(a.due_date) || 0) - (parseDate(b.due_date) || 0);
+            const pastDue = (assignments || []).filter(isPastDueUngraded).sort((a, b) => {
+                const t = Number(isTurnedIn(a)) - Number(isTurnedIn(b));
+                if (t) return t;
+                const g = Number(a.grading_complete !== true) - Number(b.grading_complete !== true);
+                if (g) return g;
+                return byDue(a, b);
+            });
+            return pastDue.slice(0, aeriesCount).sort(byDue);
         }
 
         function filterUpcomingAssignments(assignments) {
@@ -1654,13 +1714,16 @@
         }
 
         function inferAssignmentStatus(a, insight) {
-            if (a.status && a.status_label) {
-                return { status: a.status, label: a.status_label };
-            }
             const code = scoreStatusCode(a);
             if (code) return { status: code.toLowerCase(), label: code };
-            if (a.points_earned == null && !a.grading_complete) {
-                return { status: 'pending', label: 'pending' };
+            // Blank score: decide here rather than trusting an older payload's "counts" label.
+            if (a.points_earned == null) {
+                if (isTurnedIn(a)) return { status: 'turned_in', label: 'turned in · awaiting score' };
+                if (isPastDueUngraded(a)) return { status: 'pending', label: 'awaiting score' };
+                return { status: 'pending', label: '' };
+            }
+            if (a.status && a.status_label) {
+                return { status: a.status, label: a.status_label };
             }
             const cat = (a.category || '').trim();
             const mix = (insight && insight.categories) || [];
@@ -1841,7 +1904,8 @@
         }
 
         function formatDueLabel(a, opts) {
-            if (a && a.due_label) return a.due_label;
+            // Past-due blanks are where the missing rule changed; recompute rather than trust a stored label.
+            if (a && a.due_label && !isPastDueUngraded(a)) return a.due_label;
             const due = parseDate(a && a.due_date);
             if (!due) return '';
             const datePart = formatShortDate(due);
@@ -1859,6 +1923,7 @@
             if (days === 0 && !scored) return 'due today';
             if (days > 0) return `due ${weekdayDate}`;
             if (isMissing) return `overdue ${datePart}`;
+            if (isTurnedIn(a)) return `turned in · awaiting score`;
             return `awaiting score · was due ${weekdayDate}`;
         }
 
@@ -1889,6 +1954,17 @@
                     namedWeekday.lastIndex = 0;
                     out = out.replace(namedWeekday, (_, sep) => name + sep + label);
                     continue;
+                }
+                // Older briefings may call this "overdue" even though Aeries does not flag it missing.
+                if (!missingNames.has(name)) {
+                    const namedOverdue = new RegExp(
+                        `${escapeRegExp(name)}(\\s*[·\\-–—:]\\s*)overdue\\b[^\\n·]*`,
+                        'i'
+                    );
+                    if (namedOverdue.test(out)) {
+                        out = out.replace(namedOverdue, (_, sep) => name + sep + label);
+                        continue;
+                    }
                 }
                 if (days != null && days < 0) {
                     const namedDue = new RegExp(
@@ -1942,27 +2018,30 @@
         }
 
         function pickTonightItems(profiles) {
+            // Due today, then Aeries-flagged missing, then due tomorrow. Turned-in work never appears.
             const dueToday = [];
             const missing = [];
+            const dueTomorrow = [];
             for (const p of profiles || []) {
                 const className = (p.classMeta && p.classMeta.course_name) || '';
+                const item = (a, status) => ({ name: a.description, className, period: p.period, status, dueDate: a.due_date });
                 for (const a of p.upcoming || []) {
-                    if (isDueTodayUngraded(a) && a.description) {
-                        dueToday.push({ name: a.description, className });
-                    }
+                    if (!a.description) continue;
+                    if (isDueTodayUngraded(a)) dueToday.push(item(a, 'today'));
+                    else if (isDueInDaysUngraded(a, 1)) dueTomorrow.push(item(a, 'tomorrow'));
                 }
                 for (const a of p.missing || []) {
-                    if (a.description) missing.push({ name: a.description, className });
+                    if (a.description && !isTurnedIn(a)) missing.push(item(a, 'overdue'));
                 }
             }
             const seen = new Set();
             const items = [];
-            for (const item of dueToday.concat(missing)) {
+            for (const item of dueToday.concat(missing, dueTomorrow)) {
                 const key = `${normalizeName(item.className)}|${(item.name || '').toLowerCase()}`;
                 if (seen.has(key)) continue;
                 seen.add(key);
                 items.push(item);
-                if (items.length >= 2) break;
+                if (items.length >= 3) break;
             }
             return items;
         }
@@ -1971,11 +2050,80 @@
             return (items || []).map(i => `${i.name} (${i.className})`).join('; ');
         }
 
+        function tonightItemStatus(item) {
+            if (item.status === 'overdue') {
+                const due = parseDate(item.dueDate);
+                return { cls: 'overdue', text: due ? `overdue since ${formatShortDate(due)}` : 'overdue' };
+            }
+            if (item.status === 'today') return { cls: 'today', text: 'due today' };
+            if (item.status === 'tomorrow') return { cls: 'tomorrow', text: 'due tomorrow' };
+            return { cls: '', text: '' };
+        }
+
+        function tonightStatusFromReason(reason) {
+            return { due_today: 'today', missing: 'overdue', due_tomorrow: 'tomorrow' }[reason] || '';
+        }
+
+        // Fill in period/status for server-provided tonight rows by matching against the profiles.
+        function resolveTonightItems(items, profiles) {
+            const out = [];
+            for (const item of items || []) {
+                const row = { ...item };
+                let hit = null;
+                for (const p of profiles || []) {
+                    const cn = (p.classMeta && p.classMeta.course_name) || '';
+                    if (item.className && normalizeName(cn) !== normalizeName(item.className)) continue;
+                    hit = (p.assignments || []).find(a => a.description === item.name);
+                    if (!hit) continue;
+                    if (row.period == null) row.period = p.period;
+                    if (!row.dueDate) row.dueDate = hit.due_date;
+                    if (!row.status) {
+                        row.status = (p.missing || []).includes(hit) || isPastDueUngraded(hit) ? 'overdue'
+                            : (isDueTodayUngraded(hit) ? 'today' : (isDueInDaysUngraded(hit, 1) ? 'tomorrow' : ''));
+                    }
+                    break;
+                }
+                // Work Aeries shows as handed in is not a to-do, whatever the payload said.
+                if (hit && isTurnedIn(hit)) continue;
+                out.push(row);
+            }
+            return out;
+        }
+
+        function renderTonightCard(items, idx) {
+            const chevron = `<svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+            const rows = items.map(item => {
+                const st = tonightItemStatus(item);
+                const sub = [
+                    st.text ? `<span class="status ${st.cls}">${esc(st.text)}</span>` : '',
+                    item.className ? esc(item.className) : '',
+                ].filter(Boolean).join(' · ');
+                const linkable = item.period != null;
+                const tag = linkable ? 'button' : 'div';
+                const attrs = linkable
+                    ? ` type="button" data-jump-student="${idx}" data-jump-period="${item.period}" aria-label="${esc(item.name)} — open ${esc(item.className || 'class')}"`
+                    : '';
+                return `<li><${tag} class="tonight-item"${attrs}>
+                    <span class="tonight-item-main">
+                        <span class="tonight-item-name">${esc(item.name)}</span>
+                        ${sub ? `<span class="tonight-item-sub">${sub}</span>` : ''}
+                    </span>
+                    ${linkable ? chevron : ''}
+                </${tag}></li>`;
+            }).join('');
+            return `<div class="masthead-tonight" id="focus-card-${idx}">
+                <div class="label">Heads up</div>
+                <ul class="tonight-list">${rows}</ul>
+            </div>`;
+        }
+
         function liveDoTonight(profile) {
             const dueToday = (profile.upcoming || []).find(isDueTodayUngraded);
             if (dueToday && dueToday.description) return dueToday.description;
-            const miss = (profile.missing || [])[0];
-            return (miss && miss.description) || '';
+            const miss = (profile.missing || []).find(a => a.description && !isTurnedIn(a));
+            if (miss) return miss.description;
+            const dueTomorrow = (profile.upcoming || []).find(a => isDueInDaysUngraded(a, 1));
+            return (dueTomorrow && dueTomorrow.description) || '';
         }
 
         function snapNamesStaleWork(snap, profile) {
@@ -2097,13 +2245,14 @@
             if (!a || a.parse_failed) return '';
             const chips = [];
             const notStarted = !!(a.not_started || ((a.days_enrolled == null || a.days_enrolled === 0) && a.absences === 0 && a.tardies === 0));
+            const plural = (n, one, many) => (n === 1 ? one : many);
             if (a.absences != null) {
                 const cls = a.absences >= 5 ? 'alert' : (a.absences > 0 ? 'warn' : 'ok');
-                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.absences}</span><span class="stat-lbl">absences</span></span>`);
+                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.absences}</span><span class="stat-lbl">${plural(a.absences, 'absence', 'absences')}</span></span>`);
             }
             if (a.tardies != null) {
                 const cls = a.tardies >= 5 ? 'alert' : (a.tardies > 0 ? 'warn' : 'ok');
-                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.tardies}</span><span class="stat-lbl">tardies</span></span>`);
+                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.tardies}</span><span class="stat-lbl">${plural(a.tardies, 'tardy', 'tardies')}</span></span>`);
             }
             if (a.unexcused != null && a.unexcused > 0) {
                 chips.push(`<span class="masthead-stat alert"><span class="stat-num">${a.unexcused}</span><span class="stat-lbl">unexcused</span></span>`);
@@ -2154,13 +2303,21 @@
             const emptyTerm = !hasScheduledClasses(student);
             const summer = isSummerMode() && emptyTerm;
             const viewTonight = (!summer && !scheduleOnly && student.view && Array.isArray(student.view.tonight))
-                ? student.view.tonight.map(i => ({ name: i.name, className: i.class_name || i.className }))
+                ? student.view.tonight.map(i => ({
+                    name: i.name,
+                    className: i.class_name || i.className,
+                    period: i.period,
+                    status: i.status || tonightStatusFromReason(i.reason),
+                    dueDate: i.due_date,
+                }))
                 : null;
             const tonightItems = (!summer && !scheduleOnly)
-                ? (viewTonight && viewTonight.length ? viewTonight : pickTonightItems(profiles || []))
+                ? resolveTonightItems(viewTonight && viewTonight.length ? viewTonight : pickTonightItems(profiles || []), profiles)
                 : [];
-            const focus = (student.view && student.view.tonight_label) || formatTonightLabel(tonightItems);
+            // Build the label from the resolved items so a dropped (turned-in) item can't linger in it.
+            const focus = formatTonightLabel(tonightItems);
             studentFocusMap[idx] = focus;
+            studentTonightMap[idx] = tonightItems;
             const attendanceHtml = renderAttendanceStats(student);
 
             // True summer with no schedule: clear empty-state message
@@ -2223,10 +2380,14 @@
                 )
             );
             if (headlineNamesStaleTonight) {
+                const first = tonightItems[0];
+                const phrase = first && first.status === 'tomorrow' ? 'is due tomorrow'
+                    : first && first.status === 'overdue' ? 'is still missing'
+                    : 'is due today';
                 if (tonightItems.length === 1) {
-                    headline = `${tonightItems[0].name} is due today in ${tonightItems[0].className}.`;
+                    headline = `${first.name} ${phrase} in ${first.className}.`;
                 } else if (tonightItems.length > 1) {
-                    headline = `Due today: ${focus}.`;
+                    headline = `Heads up: ${focus}.`;
                 } else if (s.wins && s.wins[0]) {
                     headline = s.wins[0];
                 } else {
@@ -2248,9 +2409,11 @@
             html += `</div>`;
             if (headline) html += `<div class="masthead-headline">${esc(headline)}</div>`;
 
-            if (focus) {
+            if (tonightItems.length) {
+                html += renderTonightCard(tonightItems, idx);
+            } else if (focus) {
                 html += `<div class="masthead-tonight" id="focus-card-${idx}">
-                    <div class="label">Tonight</div>
+                    <div class="label">Heads up</div>
                     <div class="text">${esc(focus)}</div>
                 </div>`;
             }
@@ -2358,13 +2521,16 @@
                 }
                 return html + '</div>';
             }
+            // Upcoming reads soonest-first; the full list reads newest-first.
+            const ordered = kind === 'all' ? sorted.reverse() : sorted;
+            const bucketOrder = kind === 'all' ? [...WEEK_BUCKET_ORDER].reverse() : WEEK_BUCKET_ORDER;
             const groups = new Map();
-            for (const a of sorted) {
+            for (const a of ordered) {
                 const week = getWeekLabel(parseDate(a.due_date));
                 if (!groups.has(week)) groups.set(week, []);
                 groups.get(week).push(a);
             }
-            for (const week of WEEK_BUCKET_ORDER) {
+            for (const week of bucketOrder) {
                 const items = groups.get(week);
                 if (!items || !items.length) continue;
                 html += `<div class="week-label">${week}</div>`;
@@ -2377,7 +2543,9 @@
 
         function renderAssignmentRow(a, kind, insight) {
             const due = parseDate(a.due_date);
-            const dateClass = kind === 'missing' ? 'overdue' : getDateClass(due);
+            // A past date only reads as "overdue" when nothing has been scored yet.
+            const dateClass = kind === 'missing' ? 'overdue'
+                : (assignmentHasScoreMark(a) ? '' : getDateClass(due));
             const dateHtml = kind === 'missing'
                 ? formatShortDate(due)
                 : `${formatDayOfWeek(due)} ${formatShortDate(due)}`;
@@ -2397,13 +2565,19 @@
             }
 
             const comment = (a.comment || '').trim();
+            // "counts in <Category>" repeats the category line — collapse to one line in that case.
+            const cat = (a.category || '').trim();
+            const labelRepeatsCategory = cat && normalizeName(st.label) === normalizeName(`counts in ${cat}`);
+            const metaLine = labelRepeatsCategory
+                ? `<div class="assn-status ${st.status}">${esc(cat)}</div>`
+                : `${cat ? `<div class="assignment-meta">${esc(cat)}</div>` : ''}${st.label ? `<div class="assn-status ${st.status}">${esc(st.label)}</div>` : ''}`;
+
             return `
                 <div class="assignment-row">
                     <div class="assignment-date ${dateClass}">${dateHtml || ''}</div>
                     <div class="assignment-info">
                         <div class="title">${esc(a.description || '')}</div>
-                        ${a.category ? `<div class="assignment-meta">${esc(a.category)}</div>` : ''}
-                        <div class="assn-status ${st.status}">${esc(st.label)}</div>
+                        ${metaLine}
                         ${comment ? `<div class="assignment-meta">${esc(comment)}</div>` : ''}
                     </div>
                     <div class="assignment-score">${scoreHtml}</div>
@@ -2474,11 +2648,15 @@
             const story = (profile.story || ai?.story || '').trim();
             const doTonight = (profile.liveDoTonight || '').trim();
             const snap = (profile.snap || '').trim();
-            const storyText = story || snap;
+            // The snap already shows on the collapsed row; only repeat it here when there is no real story.
+            // A briefing written under older rules may still claim missing work the portal doesn't flag.
+            const storyClaimsMissing = /\bmissing\b/i.test(story) && (profile.missingCount || 0) === 0;
+            const storyText = story && !storyClaimsMissing && normalizeName(story) !== normalizeName(snap) ? story : '';
             const realGrade = hasRealGrade(c, profile.assignments);
             const phantomZero = isPhantomZero(c, profile.assignments);
             const gradeClass = realGrade ? getGradeClass(c.percent) : 'grade-none';
-            const gradeShow = phantomZero || !realGrade
+            const gradeIsText = phantomZero || !realGrade;
+            const gradeShow = gradeIsText
                 ? 'No grade yet'
                 : formatPostedGrade(c, profile.assignments);
 
@@ -2504,7 +2682,7 @@
             let stats = `<div class="panel-stats">
                 <div class="stat-tile">
                     <div class="stat-label">${realGrade ? 'Posted' : 'Grade'}</div>
-                    <div class="stat-value ${gradeClass}">${gradeShow || '—'}</div>
+                    <div class="stat-value ${gradeClass}${gradeIsText ? ' sm' : ''}">${gradeShow || '—'}</div>
                 </div>
                 <div class="stat-tile">
                     <div class="stat-label">Change</div>
@@ -2525,7 +2703,7 @@
 
             if (doTonight) {
                 blocks += `<div class="panel-block panel-block-tonight">
-                    <div class="panel-block-label tonight">Tonight</div>
+                    <div class="panel-block-label tonight">Heads up</div>
                     <div class="panel-tonight-text">${esc(doTonight)}</div>
                 </div>`;
             }
@@ -2595,6 +2773,13 @@
                 blocks += `<div class="panel-block"><p class="panel-empty">No extra detail for this class yet.</p></div>`;
             }
 
+            if (listBlocks.length) {
+                blocks += `<button type="button" class="panel-collapse" data-collapse-period="${profile.period == null ? '' : profile.period}">
+                    <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    Collapse ${esc(c.course_name || '')}
+                </button>`;
+            }
+
             return `<div class="class-panel">${stats}${blocks}</div>`;
         }
 
@@ -2611,7 +2796,7 @@
                 const urgency = p.urgency || 'ok';
                 const snap = p.snap || '';
                 const missingBadge = p.missingCount > 0
-                    ? `<span class="row-missing">${p.missingCount}</span>`
+                    ? `<span class="row-missing">${p.missingCount} missing</span>`
                     : '';
 
                 const t = findClassTrend(student, c.course_name);
@@ -2621,37 +2806,38 @@
                 const deltaStr = formatTrendDelta(delta);
                 const dir = delta == null || delta === 0 ? '' : (delta > 0 ? 'up' : 'down');
 
-                const letterShow = g.pct && g.letter !== g.pct ? g.letter : g.letter;
+                const letterShow = g.letter;
                 const pctShow = g.pct && g.letter !== g.pct ? g.pct : '';
+                const detailId = `${classRowId(idx, p.period)}-detail`;
 
                 // Always start collapsed — no auto-expand
                 return `
                     <div class="class-row urgency-${urgency}" id="${classRowId(idx, p.period)}">
-                        <button type="button" class="class-row-btn" data-student-idx="${idx}" data-period="${p.period == null ? '' : p.period}" aria-expanded="false">
+                        <button type="button" class="class-row-btn" data-student-idx="${idx}" data-period="${p.period == null ? '' : p.period}" aria-expanded="false" aria-controls="${detailId}">
                             <span class="urgency-bar" aria-hidden="true"></span>
-                            <div class="row-main">
-                                <div class="row-title">
+                            <span class="row-main">
+                                <span class="row-title">
                                     <span class="row-period">P${p.period}</span>
                                     <span class="row-name">${esc(c.course_name)}</span>
                                     ${missingBadge}
-                                </div>
-                                ${snap ? `<div class="row-meta ${urgency === 'critical' || urgency === 'watch' ? urgency : ''}">${esc(snap)}</div>` : ''}
-                            </div>
-                            <div class="row-trail-wrap">
-                                <div class="row-trail">
-                                    <div class="row-grade">
-                                        <span class="letter ${gradeClass}">${letterShow}</span>
-                                        ${pctShow ? `<span class="pct">${pctShow}</span>` : ''}
-                                    </div>
-                                    <div class="row-trend">
+                                </span>
+                                ${snap ? `<span class="row-meta ${urgency === 'critical' || urgency === 'watch' ? urgency : ''}">${esc(snap)}</span>` : ''}
+                            </span>
+                            <span class="row-trail-wrap">
+                                <span class="row-trail">
+                                    <span class="row-grade">
+                                        <span class="letter ${gradeClass}">${esc(letterShow)}</span>
+                                        ${pctShow ? `<span class="pct">${esc(pctShow)}</span>` : ''}
+                                    </span>
+                                    <span class="row-trend">
                                         ${micro}
                                         ${deltaStr != null && delta !== 0 ? `<span class="row-delta ${dir}">${deltaStr}</span>` : ''}
-                                    </div>
-                                </div>
+                                    </span>
+                                </span>
                                 ${chevron}
-                            </div>
+                            </span>
                         </button>
-                        <div class="class-row-detail">
+                        <div class="class-row-detail" id="${detailId}">
                             ${renderClassPanel(p, student)}
                         </div>
                     </div>`;
@@ -2706,12 +2892,21 @@
             const btn = row.querySelector('.class-row-btn');
             if (btn) btn.setAttribute('aria-expanded', 'true');
 
-            const topBar = document.querySelector('.top-bar');
+            // The sticky bar shows once the Tonight card scrolls away, so include it in the offset
+            // even if it is not visible yet.
             const sticky = document.getElementById('tonightSticky');
-            const stickyH = (sticky && sticky.classList.contains('visible')) ? sticky.offsetHeight : 0;
+            let stickyH = 0;
+            if (sticky && !sticky.hidden) {
+                const wasVisible = sticky.classList.contains('visible');
+                sticky.classList.add('visible');
+                stickyH = sticky.offsetHeight;
+                if (!wasVisible) sticky.classList.remove('visible');
+            }
+            const topBar = document.querySelector('.top-bar');
             const offset = (topBar ? topBar.offsetHeight : 0) + stickyH + 10;
             const y = row.getBoundingClientRect().top + window.scrollY - offset;
             window.scrollTo({ top: y, behavior: 'smooth' });
+            if (btn) btn.focus({ preventScroll: true });
         }
 
         function profilesFromView(student) {
@@ -2827,6 +3022,12 @@
             if (!sticky) return;
 
             sticky.addEventListener('click', () => {
+                // Prefer opening the class the first Tonight item belongs to; fall back to the card.
+                const first = (studentTonightMap[activeStudentIndex] || [])[0];
+                if (first && first.period != null) {
+                    jumpToClass(activeStudentIndex, first.period);
+                    return;
+                }
                 const hero = document.getElementById(`focus-card-${activeStudentIndex}`)
                     || document.getElementById(`hero-card-${activeStudentIndex}`);
                 if (!hero) return;
@@ -2871,11 +3072,21 @@
             const overlay = document.getElementById('settingsOverlay');
             const openBtn = document.getElementById('settingsBtn');
             const closeBtn = document.getElementById('settingsClose');
-            openBtn.addEventListener('click', () => overlay.classList.add('open'));
-            closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
+            const open = () => {
+                overlay.classList.add('open');
+                closeBtn.focus();
+            };
+            const close = () => {
+                if (!overlay.classList.contains('open')) return;
+                overlay.classList.remove('open');
+                openBtn.focus();
+            };
+            openBtn.addEventListener('click', open);
+            closeBtn.addEventListener('click', close);
             overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) overlay.classList.remove('open');
+                if (e.target === overlay) close();
             });
+            overlay.closeSettings = close;
         }
 
         function applySummerBreakFromData(active) {
@@ -2907,7 +3118,9 @@
                 const tag = (e.target && e.target.tagName) || '';
                 if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
                 if (e.key === 'Escape') {
-                    document.getElementById('settingsOverlay').classList.remove('open');
+                    const overlay = document.getElementById('settingsOverlay');
+                    if (overlay.closeSettings) overlay.closeSettings();
+                    else overlay.classList.remove('open');
                     return;
                 }
                 if (e.key === '1' || e.key === '2') {
@@ -2919,23 +3132,65 @@
             });
         }
 
-        function paint(data) {
-            if (typeof data.summer_break === 'undefined') data.summer_break = false;
-            currentData = data;
-            applySummerBreakFromData(!!data.summer_break);
-
+        function renderLastUpdated(data) {
+            const el = document.getElementById('lastUpdated');
             const updated = new Date(data.last_updated);
+            if (Number.isNaN(updated.getTime())) {
+                el.textContent = '';
+                el.className = 'last-updated';
+                return;
+            }
             const opts = { timeZone: 'America/Los_Angeles' };
             const now = new Date();
             const isToday = updated.toLocaleDateString('en-US', opts) === now.toLocaleDateString('en-US', opts);
             const timeStr = updated.toLocaleTimeString('en-US', { ...opts, hour: 'numeric', minute: '2-digit' });
-            document.getElementById('lastUpdated').textContent = isToday
-                ? `Scraped today ${timeStr}`
-                : `Scraped ${updated.toLocaleDateString('en-US', { ...opts, month: 'short', day: 'numeric' })} ${timeStr}`;
+            const ageH = (now - updated) / 3600000;
+            const summer = !!data.summer_break;
+            // Scrapes land ~3× a day; anything older than a day means a run failed.
+            const stale = !summer && ageH > 20;
+            const veryStale = !summer && ageH > 44;
+            const when = isToday
+                ? `today ${timeStr}`
+                : `${updated.toLocaleDateString('en-US', { ...opts, month: 'short', day: 'numeric' })} ${timeStr}`;
+            el.textContent = veryStale
+                ? `Not updated since ${when}`
+                : `Updated ${when}`;
+            el.className = `last-updated${veryStale ? ' very-stale' : (stale ? ' stale' : '')}`;
+        }
+
+        function expandedRowIds() {
+            return Array.from(document.querySelectorAll('.class-row.expanded')).map(el => el.id);
+        }
+
+        function restoreExpandedRows(ids) {
+            for (const id of ids) {
+                const row = document.getElementById(id);
+                if (!row) continue;
+                row.classList.add('expanded');
+                const btn = row.querySelector('.class-row-btn');
+                if (btn) btn.setAttribute('aria-expanded', 'true');
+            }
+        }
+
+        function paint(data, opts) {
+            if (typeof data.summer_break === 'undefined') data.summer_break = false;
+            const force = !!(opts && opts.force);
+            // Rebuilding the DOM collapses open rows and resets scroll; skip when nothing changed.
+            if (!force && lastPaintedStamp && data.last_updated === lastPaintedStamp) {
+                currentData = data;
+                renderLastUpdated(data);
+                return;
+            }
+            lastPaintedStamp = data.last_updated;
+            currentData = data;
+            applySummerBreakFromData(!!data.summer_break);
+            renderLastUpdated(data);
 
             const pickerEl = document.getElementById('studentPicker');
             const dashboardsEl = document.getElementById('dashboards');
             const keepIndex = activeStudentIndex;
+            const keepExpanded = expandedRowIds();
+            const keepScroll = window.scrollY;
             dashboardsEl.innerHTML = '';
             pickerEl.innerHTML = '';
 
@@ -2955,20 +3210,58 @@
 
             pickerEl.style.display = data.students.length < 2 ? 'none' : '';
             if (keepIndex >= data.students.length) activeStudentIndex = 0;
+            restoreExpandedRows(keepExpanded);
+            if (keepExpanded.length && keepScroll > 0) window.scrollTo({ top: keepScroll, behavior: 'auto' });
             updateTopBarTitle();
+            syncTopBarHeight();
             window.dispatchEvent(new Event('scroll'));
+        }
+
+        function parsePeriodAttr(raw) {
+            if (raw === '' || raw == null) return null;
+            const n = Number(raw);
+            return Number.isNaN(n) ? null : n;
         }
 
         function setupClassCards() {
             const dashboardsEl = document.getElementById('dashboards');
             dashboardsEl.addEventListener('click', (e) => {
+                const jump = e.target.closest('[data-jump-period]');
+                if (jump) {
+                    jumpToClass(Number(jump.dataset.jumpStudent), parsePeriodAttr(jump.dataset.jumpPeriod));
+                    return;
+                }
+                const collapse = e.target.closest('.panel-collapse');
+                if (collapse) {
+                    const row = collapse.closest('.class-row');
+                    const rowBtn = row && row.querySelector('.class-row-btn');
+                    if (row && rowBtn) {
+                        toggleClassCard(Number(rowBtn.dataset.studentIdx), parsePeriodAttr(rowBtn.dataset.period));
+                        const y = row.getBoundingClientRect().top + window.scrollY - stickyOffset() - 10;
+                        window.scrollTo({ top: y, behavior: 'smooth' });
+                        rowBtn.focus({ preventScroll: true });
+                    }
+                    return;
+                }
                 const btn = e.target.closest('.class-row-btn');
                 if (!btn) return;
-                const idx = Number(btn.dataset.studentIdx);
-                const raw = btn.dataset.period;
-                const period = raw === '' || raw == null ? null : Number(raw);
-                toggleClassCard(idx, Number.isNaN(period) ? null : period);
+                toggleClassCard(Number(btn.dataset.studentIdx), parsePeriodAttr(btn.dataset.period));
             });
+        }
+
+        // The header's real height depends on font size and safe-area insets; keep the CSS variable honest.
+        function syncTopBarHeight() {
+            const topBar = document.querySelector('.top-bar');
+            if (!topBar) return;
+            const h = Math.round(topBar.getBoundingClientRect().height);
+            if (h > 0) document.documentElement.style.setProperty('--top-bar-h', `${h}px`);
+        }
+
+        function stickyOffset() {
+            const topBar = document.querySelector('.top-bar');
+            const sticky = document.getElementById('tonightSticky');
+            const stickyH = (sticky && sticky.classList.contains('visible')) ? sticky.offsetHeight : 0;
+            return (topBar ? topBar.offsetHeight : 0) + stickyH;
         }
 
         function scheduleRefresh() {
@@ -2986,12 +3279,14 @@
             const data = await loadData();
             if (!data) return null;
             activeStudentIndex = 0;
-            paint(data);
+            syncTopBarHeight();
+            paint(data, { force: true });
             if (!listenersBound) {
                 setupSettings();
                 setupTonightSticky();
                 setupKeyboard();
                 setupClassCards();
+                window.addEventListener('resize', syncTopBarHeight, { passive: true });
                 document.addEventListener('visibilitychange', () => {
                     if (document.visibilityState === 'visible') refreshDashboard();
                 });

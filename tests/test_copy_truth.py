@@ -273,6 +273,77 @@ class EmptyHighWeightTests(unittest.TestCase):
         self.assertEqual(zero_weight[0]["name"], "Daily Assignments")
 
 
+class ClassworkIsNotHomeworkTests(unittest.TestCase):
+    """Most work happens in class. Missing = Aeries flag only; turned-in is never a to-do."""
+
+    def _exit_ticket(self, **extra):
+        # Blank score, teacher ticked Grading Completed, Aeries stamped Date Completed.
+        return _asgn(
+            description="Exit Ticket",
+            due_date="08/19/2026",
+            points_possible=4.0,
+            score_raw="/ 4",
+            grading_complete=True,
+            date_completed="08/19/2026",
+            category="Formative",
+            **extra,
+        )
+
+    def test_grading_complete_blank_is_not_missing_when_aeries_says_zero(self):
+        class_meta = {"percent": "100.0", "mark": "A", "missing_count": 0}
+        self.assertEqual(
+            scraper.select_missing_assignments([self._exit_ticket()], class_meta, TODAY),
+            [],
+        )
+        self.assertFalse(scraper.is_missing_assignment(self._exit_ticket(), TODAY, class_meta))
+
+    def test_aeries_count_picks_not_turned_in_first(self):
+        turned_in = self._exit_ticket()
+        never_handed_in = _asgn(
+            description="Homework 3",
+            due_date="08/24/2026",
+            points_possible=10.0,
+            grading_complete=False,
+        )
+        class_meta = {"percent": "88.0", "mark": "B", "missing_count": 1}
+        picked = scraper.select_missing_assignments([turned_in, never_handed_in], class_meta, TODAY)
+        self.assertEqual([a["description"] for a in picked], ["Homework 3"])
+
+    def test_blank_score_status_is_awaiting_not_counts(self):
+        a = scraper.annotate_assignment_status(self._exit_ticket(), {"Formative": 30})
+        self.assertEqual(a["status"], "turned_in")
+        self.assertFalse(a["counts_toward_grade"])
+        entry = scraper.format_assignment_entry(a, TODAY, "pending")
+        self.assertTrue(entry.get("turned_in"))
+        self.assertEqual(entry["due_label"], "awaiting score · was due Wed Aug 19")
+
+    def test_tonight_plan_skips_turned_in_and_adds_due_tomorrow(self):
+        analytics = [
+            {
+                "course_name": "Physics & Eng",
+                "upcoming": [
+                    {"name": "Warm Ups", "days_until_due": 0, "turned_in": True, "due_date": "08/27/2026"},
+                    {"name": "Lab Report", "days_until_due": 1, "due_date": "08/28/2026"},
+                ],
+                "missing_assignments": [
+                    {"name": "Exit Ticket", "turned_in": True, "due_date": "08/19/2026"},
+                ],
+            },
+            {
+                "course_name": "English",
+                "upcoming": [
+                    {"name": "Essay draft", "days_until_due": 0, "due_date": "08/27/2026"},
+                ],
+                "missing_assignments": [],
+            },
+        ]
+        plan = scraper.build_tonight_plan(analytics)
+        names = [(i["name"], i["reason"]) for i in plan["items"]]
+        self.assertEqual(names, [("Essay draft", "due_today"), ("Lab Report", "due_tomorrow")])
+        self.assertNotIn("Exit Ticket", plan["label"])
+        self.assertNotIn("Warm Ups", plan["label"])
+
+
 class ModelAndPromptTests(unittest.TestCase):
     def test_not_mini(self):
         self.assertEqual(scraper.GROK_MODEL, "grok-4")
