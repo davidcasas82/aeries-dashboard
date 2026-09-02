@@ -19,5 +19,10 @@
     }
   ],
   "updated_at": "2026-07-20",
-  "notes": "First/last instructional days. Scraper auto-pauses Aeries + Grok outside these windows (summer). SUMMER_BREAK env can still force on/off."
+  "term_cutovers": {
+    "q1_last_md": "10-12",
+    "fall_last_md": "01-04",
+    "q3_last_md": "03-15"
+  },
+  "notes": "First/last instructional days. Scraper auto-pauses Aeries + Grok outside these windows (summer). term_cutovers drive GradebookDetails term selection. SUMMER_BREAK env can still force on/off."
 }

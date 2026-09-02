@@ -1344,7 +1344,18 @@
     </div>
 
     <script>
-        const DATA_CACHE_BUST = '20260827-p12';
+        const REFRESH_MS = 30 * 60 * 1000;
+        let refreshTimer = null;
+        let listenersBound = false;
+
+        function esc(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
 
         function pacificToday() {
             const parts = new Date().toLocaleDateString('en-US', {
@@ -1372,8 +1383,7 @@
                             Browsers block loading <code>grades_data.json</code> from a
                             <code>file://</code> link. In Terminal:
                         </p>
-                        <pre style="text-align:left;display:inline-block;margin:14px auto 0;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;font-size:12.5px;line-height:1.5;color:var(--text);box-shadow:var(--shadow-sm)">cd "/Users/davidcasas/My Dev Folder/aeries-dashboard"
-python3 -m http.server 8765</pre>
+                        <pre style="text-align:left;display:inline-block;margin:14px auto 0;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;font-size:12.5px;line-height:1.5;color:var(--text);box-shadow:var(--shadow-sm)">python3 -m http.server 8765</pre>
                         <p style="margin-top:14px">Then open
                             <a href="http://localhost:8765/" style="color:var(--teal);font-weight:600">http://localhost:8765/</a>
                         </p>
@@ -1381,7 +1391,7 @@ python3 -m http.server 8765</pre>
                 return null;
             }
             try {
-                const resp = await fetch('grades_data.json?v=' + DATA_CACHE_BUST, { cache: 'no-store' });
+                const resp = await fetch('grades_data.json?t=' + Date.now(), { cache: 'no-store' });
                 if (!resp.ok) throw new Error('No data');
                 return await resp.json();
             } catch (e) {
@@ -1624,8 +1634,6 @@ python3 -m http.server 8765</pre>
                 }
             }
             return picked.sort((a, b) => {
-                    const ptsDiff = (b.points_possible || 0) - (a.points_possible || 0);
-                    if (ptsDiff !== 0) return ptsDiff;
                     return (parseDate(a.due_date) || 0) - (parseDate(b.due_date) || 0);
                 });
         }
@@ -1994,7 +2002,7 @@ python3 -m http.server 8765</pre>
             const pct = parseFloat(profile.classMeta.percent);
             const belowB = !isNaN(pct) && pct < 80;
             const belowC = !isNaN(pct) && pct < 70;
-            if (belowC || (belowB && mc > 0)) return 'critical';
+            if (belowC || belowB) return 'critical';
             if (mc > 0 && !isNaN(pct) && pct >= 80) return 'watch';
             if (dueToday) return 'watch';
             if (!isNaN(pct) && pct >= 90 && mc === 0) return 'strong';
@@ -2073,7 +2081,7 @@ python3 -m http.server 8765</pre>
                 const dir = t.direction || (t.delta > 0 ? 'up' : (t.delta < 0 ? 'down' : 'same'));
                 const deltaStr = formatTrendDelta(t.delta);
                 return `<span class="mover ${dir}">
-                    <span class="name">${t.class_name || ''}</span>
+                    <span class="name">${esc(t.class_name || '')}</span>
                     <span class="delta">${deltaStr}</span>
                     <span class="win">${t.window || ''}</span>
                 </span>`;
@@ -2145,8 +2153,13 @@ python3 -m http.server 8765</pre>
             const scheduleOnly = isScheduleOnly(student);
             const emptyTerm = !hasScheduledClasses(student);
             const summer = isSummerMode() && emptyTerm;
-            const tonightItems = (!summer && !scheduleOnly) ? pickTonightItems(profiles || []) : [];
-            const focus = formatTonightLabel(tonightItems);
+            const viewTonight = (!summer && !scheduleOnly && student.view && Array.isArray(student.view.tonight))
+                ? student.view.tonight.map(i => ({ name: i.name, className: i.class_name || i.className }))
+                : null;
+            const tonightItems = (!summer && !scheduleOnly)
+                ? (viewTonight && viewTonight.length ? viewTonight : pickTonightItems(profiles || []))
+                : [];
+            const focus = (student.view && student.view.tonight_label) || formatTonightLabel(tonightItems);
             studentFocusMap[idx] = focus;
             const attendanceHtml = renderAttendanceStats(student);
 
@@ -2179,7 +2192,7 @@ python3 -m http.server 8765</pre>
                 html += `<div class="masthead-kicker"><h2>Briefing</h2>`;
                 if (dateStr) html += `<span class="masthead-date">${dateStr}</span>`;
                 html += `</div>`;
-                html += `<div class="masthead-headline">${headline}</div>`;
+                html += `<div class="masthead-headline">${esc(headline)}</div>`;
                 html += attendanceHtml;
                 html += `</div>`;
                 return html;
@@ -2233,19 +2246,22 @@ python3 -m http.server 8765</pre>
             html += `<div class="masthead-kicker"><h2>Briefing</h2>`;
             if (dateStr) html += `<span class="masthead-date">${dateStr}</span>`;
             html += `</div>`;
-            if (headline) html += `<div class="masthead-headline">${headline}</div>`;
+            if (headline) html += `<div class="masthead-headline">${esc(headline)}</div>`;
 
             if (focus) {
                 html += `<div class="masthead-tonight" id="focus-card-${idx}">
                     <div class="label">Tonight</div>
-                    <div class="text">${focus}</div>
+                    <div class="text">${esc(focus)}</div>
                 </div>`;
             }
 
-            if (s.wins && s.wins.length) {
+            const wins = (student.view && student.view.wins && student.view.wins.length)
+                ? student.view.wins
+                : (s.wins || []);
+            if (wins.length) {
                 html += `<div class="masthead-wins">`;
-                s.wins.slice(0, 2).forEach(win => {
-                    html += `<div class="win-line">${win}</div>`;
+                wins.slice(0, 2).forEach(win => {
+                    html += `<div class="win-line">${esc(win)}</div>`;
                 });
                 html += `</div>`;
             }
@@ -2256,7 +2272,7 @@ python3 -m http.server 8765</pre>
                     html += `<div class="masthead-wins" style="margin-top:10px">`;
                     s.whats_happened.slice(0, 3).forEach(item => {
                         const event = (typeof item === 'string') ? item : (item.event || '');
-                        html += `<div class="win-line" style="color:var(--text-2)">${event}</div>`;
+                        html += `<div class="win-line" style="color:var(--text-2)">${esc(event)}</div>`;
                     });
                     html += `</div>`;
                 }
@@ -2376,8 +2392,8 @@ python3 -m http.server 8765</pre>
             } else if (kind === 'upcoming' && !assignmentHasScoreMark(a)) {
                 scoreHtml = `<span class="badge badge-upcoming">Due</span>`;
             } else {
-                scoreHtml = `<div class="score ${score.cls}">${score.text}</div>
-                    ${score.pct ? `<div class="max">${score.pct}</div>` : ''}`;
+                scoreHtml = `<div class="score ${score.cls}">${esc(score.text)}</div>
+                    ${score.pct ? `<div class="max">${esc(score.pct)}</div>` : ''}`;
             }
 
             const comment = (a.comment || '').trim();
@@ -2385,10 +2401,10 @@ python3 -m http.server 8765</pre>
                 <div class="assignment-row">
                     <div class="assignment-date ${dateClass}">${dateHtml || ''}</div>
                     <div class="assignment-info">
-                        <div class="title">${a.description || ''}</div>
-                        ${a.category ? `<div class="assignment-meta">${a.category}</div>` : ''}
-                        <div class="assn-status ${st.status}">${st.label}</div>
-                        ${comment ? `<div class="assignment-meta">${comment}</div>` : ''}
+                        <div class="title">${esc(a.description || '')}</div>
+                        ${a.category ? `<div class="assignment-meta">${esc(a.category)}</div>` : ''}
+                        <div class="assn-status ${st.status}">${esc(st.label)}</div>
+                        ${comment ? `<div class="assignment-meta">${esc(comment)}</div>` : ''}
                     </div>
                     <div class="assignment-score">${scoreHtml}</div>
                 </div>`;
@@ -2422,8 +2438,8 @@ python3 -m http.server 8765</pre>
                 }
                 const cls = cat.counts ? 'counts' : 'dropped';
                 return `<div class="cat-mix-row ${cls}">
-                    <span class="cat-name">${cat.name || ''}</span>
-                    <span class="cat-meta">${meta}</span>
+                    <span class="cat-name">${esc(cat.name || '')}</span>
+                    <span class="cat-meta">${esc(meta)}</span>
                 </div>`;
             }).join('');
 
@@ -2504,20 +2520,20 @@ python3 -m http.server 8765</pre>
             let blocks = '';
 
             if (teacherLine) {
-                blocks += `<div class="panel-meta-line">${teacherLine}</div>`;
+                blocks += `<div class="panel-meta-line">${esc(teacherLine)}</div>`;
             }
 
             if (doTonight) {
                 blocks += `<div class="panel-block panel-block-tonight">
                     <div class="panel-block-label tonight">Tonight</div>
-                    <div class="panel-tonight-text">${doTonight}</div>
+                    <div class="panel-tonight-text">${esc(doTonight)}</div>
                 </div>`;
             }
 
             if (storyText) {
                 blocks += `<div class="panel-block">
                     <div class="panel-block-label">Summary</div>
-                    <div class="panel-story">${storyText}</div>
+                    <div class="panel-story">${esc(storyText)}</div>
                 </div>`;
             }
 
@@ -2610,16 +2626,16 @@ python3 -m http.server 8765</pre>
 
                 // Always start collapsed — no auto-expand
                 return `
-                    <div class="class-row urgency-${urgency}" id="class-${idx}-${p.period}">
-                        <button type="button" class="class-row-btn" onclick="toggleClassCard(${idx}, ${p.period})" aria-expanded="false">
+                    <div class="class-row urgency-${urgency}" id="${classRowId(idx, p.period)}">
+                        <button type="button" class="class-row-btn" data-student-idx="${idx}" data-period="${p.period == null ? '' : p.period}" aria-expanded="false">
                             <span class="urgency-bar" aria-hidden="true"></span>
                             <div class="row-main">
                                 <div class="row-title">
                                     <span class="row-period">P${p.period}</span>
-                                    <span class="row-name">${c.course_name}</span>
+                                    <span class="row-name">${esc(c.course_name)}</span>
                                     ${missingBadge}
                                 </div>
-                                ${snap ? `<div class="row-meta ${urgency === 'critical' || urgency === 'watch' ? urgency : ''}">${snap}</div>` : ''}
+                                ${snap ? `<div class="row-meta ${urgency === 'critical' || urgency === 'watch' ? urgency : ''}">${esc(snap)}</div>` : ''}
                             </div>
                             <div class="row-trail-wrap">
                                 <div class="row-trail">
@@ -2654,7 +2670,7 @@ python3 -m http.server 8765</pre>
         }
 
         function toggleClassCard(studentIdx, period) {
-            const row = document.getElementById(`class-${studentIdx}-${period}`);
+            const row = document.getElementById(classRowId(studentIdx, period));
             if (!row) return;
             const dashboard = document.getElementById(`dashboard-${studentIdx}`);
             const wasExpanded = row.classList.contains('expanded');
@@ -2675,7 +2691,7 @@ python3 -m http.server 8765</pre>
         }
 
         function jumpToClass(studentIdx, period) {
-            const row = document.getElementById(`class-${studentIdx}-${period}`);
+            const row = document.getElementById(classRowId(studentIdx, period));
             if (!row) return;
 
             if (!isDesktopLayout()) {
@@ -2698,10 +2714,74 @@ python3 -m http.server 8765</pre>
             window.scrollTo({ top: y, behavior: 'smooth' });
         }
 
+        function profilesFromView(student) {
+            const view = student.view;
+            if (!view || !Array.isArray(view.classes) || !view.classes.length) return null;
+            return view.classes.map(row => {
+                const classMeta = (student.classes || []).find(c =>
+                    c.period === row.period
+                    && normalizeName(c.course_name) === normalizeName(row.course_name)
+                ) || {
+                    period: row.period,
+                    course_name: row.course_name,
+                    teacher: row.teacher,
+                    room: row.room,
+                    percent: row.percent,
+                    mark: row.mark,
+                    counted_insight: row.counted_insight,
+                    phantom_zero: row.phantom_zero,
+                };
+                if (row.counted_insight && !classMeta.counted_insight) {
+                    classMeta.counted_insight = row.counted_insight;
+                }
+                if (row.phantom_zero && !classMeta.phantom_zero) {
+                    classMeta.phantom_zero = true;
+                }
+                if ((row.pct_history || []).length) {
+                    student.class_trends = student.class_trends || {};
+                    if (!student.class_trends[row.course_name]) {
+                        student.class_trends[row.course_name] = {
+                            pct_history: row.pct_history,
+                            delta_7d: row.delta_7d,
+                            delta_14d: row.delta_14d,
+                            delta_span: row.delta_span,
+                            span_window: row.span_window,
+                        };
+                    }
+                }
+                return {
+                    classMeta,
+                    assignments: row.assignments || [],
+                    missing: row.missing || [],
+                    upcoming: row.upcoming || [],
+                    recent: row.recent || [],
+                    missingCount: row.missing_count || 0,
+                    period: row.period,
+                    aiClass: {
+                        snap: row.snap,
+                        story: row.story,
+                        do_tonight: row.do_tonight,
+                        urgency: row.urgency,
+                        class_name: row.course_name,
+                    },
+                    urgency: row.urgency || 'ok',
+                    snap: row.snap || '',
+                    story: row.story || '',
+                    liveDoTonight: row.do_tonight || '',
+                    urgencyRank: urgencyToRank(row.urgency),
+                };
+            }).sort((a, b) => (a.period ?? 99) - (b.period ?? 99));
+        }
+
+        function classRowId(studentIdx, period) {
+            return `class-${studentIdx}-${period == null ? 'none' : period}`;
+        }
+
         function renderStudent(student, idx) {
             // Dedupe phantom duplicate ClassSummary rows before building the feed
             student = { ...student, classes: dedupeStudentClasses(student.classes || []) };
-            const profiles = enrichProfiles(student, buildClassProfiles(student));
+            const profiles = profilesFromView(student)
+                || enrichProfiles(student, buildClassProfiles(student));
             const noSchedule = !hasScheduledClasses(student) || profiles.length === 0;
             // True summer with nothing scheduled: empty-state card
             if (noSchedule && isSummerMode()) {
@@ -2839,10 +2919,7 @@ python3 -m http.server 8765</pre>
             });
         }
 
-        async function init() {
-            const data = await loadData();
-            if (!data) return null;
-
+        function paint(data) {
             if (typeof data.summer_break === 'undefined') data.summer_break = false;
             currentData = data;
             applySummerBreakFromData(!!data.summer_break);
@@ -2858,33 +2935,69 @@ python3 -m http.server 8765</pre>
 
             const pickerEl = document.getElementById('studentPicker');
             const dashboardsEl = document.getElementById('dashboards');
+            const keepIndex = activeStudentIndex;
             dashboardsEl.innerHTML = '';
             pickerEl.innerHTML = '';
 
             data.students.forEach((student, i) => {
                 const seg = document.createElement('button');
-                seg.className = `student-seg ${i === 0 ? 'active' : ''}`;
+                seg.className = `student-seg ${i === keepIndex ? 'active' : ''}`;
                 seg.textContent = student.name;
                 seg.addEventListener('click', () => switchStudent(i));
                 pickerEl.appendChild(seg);
 
                 const dashboard = document.createElement('div');
-                dashboard.className = `dashboard ${i === 0 ? 'active' : ''}`;
+                dashboard.className = `dashboard ${i === keepIndex ? 'active' : ''}`;
                 dashboard.id = `dashboard-${i}`;
                 dashboard.innerHTML = renderStudent(student, i);
                 dashboardsEl.appendChild(dashboard);
             });
 
-            if (data.students.length < 2) {
-                pickerEl.style.display = 'none';
-            }
-
-            activeStudentIndex = 0;
+            pickerEl.style.display = data.students.length < 2 ? 'none' : '';
+            if (keepIndex >= data.students.length) activeStudentIndex = 0;
             updateTopBarTitle();
-            setupSettings();
-            setupTonightSticky();
-            setupKeyboard();
             window.dispatchEvent(new Event('scroll'));
+        }
+
+        function setupClassCards() {
+            const dashboardsEl = document.getElementById('dashboards');
+            dashboardsEl.addEventListener('click', (e) => {
+                const btn = e.target.closest('.class-row-btn');
+                if (!btn) return;
+                const idx = Number(btn.dataset.studentIdx);
+                const raw = btn.dataset.period;
+                const period = raw === '' || raw == null ? null : Number(raw);
+                toggleClassCard(idx, Number.isNaN(period) ? null : period);
+            });
+        }
+
+        function scheduleRefresh() {
+            clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(() => refreshDashboard(), REFRESH_MS);
+        }
+
+        async function refreshDashboard() {
+            const data = await loadData();
+            if (data) paint(data);
+            scheduleRefresh();
+        }
+
+        async function init() {
+            const data = await loadData();
+            if (!data) return null;
+            activeStudentIndex = 0;
+            paint(data);
+            if (!listenersBound) {
+                setupSettings();
+                setupTonightSticky();
+                setupKeyboard();
+                setupClassCards();
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') refreshDashboard();
+                });
+                listenersBound = true;
+            }
+            scheduleRefresh();
             return data;
         }
 

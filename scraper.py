@@ -20,6 +20,30 @@ GROK_API_KEY = os.getenv("GROK_API_KEY", "")
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 GROK_MODEL = "grok-4"
 PACIFIC = ZoneInfo("America/Los_Angeles")
+DEFAULT_HTTP_TIMEOUT = 60
+
+# Month-day cutovers for TUSD 6-12 gradebook term selection (overridable in school_calendar.json)
+_DEFAULT_TERM_CUTOVERS = {
+    "q1_last_md": "10-12",
+    "fall_last_md": "01-04",
+    "q3_last_md": "03-15",
+}
+
+
+class ScrapeError(Exception):
+    """Fatal config/login error; CLI exits 1."""
+
+
+class TimeoutSession(requests.Session):
+    """requests.Session that always applies a timeout unless the caller set one."""
+
+    def __init__(self, timeout=DEFAULT_HTTP_TIMEOUT):
+        super().__init__()
+        self._default_timeout = timeout
+
+    def request(self, method, url, **kwargs):
+        kwargs.setdefault("timeout", self._default_timeout)
+        return super().request(method, url, **kwargs)
 
 
 def pacific_now():
@@ -206,12 +230,26 @@ def load_school_calendar(refresh=True):
             for y in remote_years:
                 by_id[y["id"]] = y
             data["years"] = sorted(by_id.values(), key=lambda y: y.get("first_day") or "")
-            data["updated_at"] = datetime.now(timezone.utc).date().isoformat()
             data["source_url"] = TUSD_CALENDAR_URL
-            try:
-                CALENDAR_FILE.write_text(json.dumps(data, indent=2) + "\n")
-            except OSError:
-                pass
+            # Only rewrite the committed file when year dates actually change.
+            # CI should not churn updated_at on every scrape.
+            prev_years = []
+            if CALENDAR_FILE.exists():
+                try:
+                    prev_years = (json.loads(CALENDAR_FILE.read_text()) or {}).get("years") or []
+                except (json.JSONDecodeError, OSError):
+                    prev_years = []
+            years_changed = [
+                (y.get("id"), y.get("first_day"), y.get("last_day")) for y in data.get("years") or []
+            ] != [
+                (y.get("id"), y.get("first_day"), y.get("last_day")) for y in prev_years
+            ]
+            if years_changed and os.getenv("GITHUB_ACTIONS") != "true":
+                data["updated_at"] = datetime.now(timezone.utc).date().isoformat()
+                try:
+                    CALENDAR_FILE.write_text(json.dumps(data, indent=2) + "\n")
+                except OSError:
+                    pass
     return data
 
 
@@ -362,17 +400,57 @@ def is_summer_break(previous_data=None):
     return bool(previous_data.get("summer_break", False))
 
 
+def student_log_label(index, student=None):
+    """CI-safe label — never print names or student numbers."""
+    return f"student {index}"
+
+
+def assignment_count(student_data):
+    return sum(
+        len(group.get("assignments") or [])
+        for group in (student_data or {}).get("assignments_by_class") or []
+    )
+
+
+def portal_looks_incomplete(student_data, prior, in_session=True):
+    """Return a reason string when a scrape looks like portal HTML drift, else None."""
+    if not in_session or not prior:
+        return None
+    classes = [
+        c for c in (student_data or {}).get("classes") or []
+        if (c.get("course_name") or "").strip()
+    ]
+    prior_classes = [
+        c for c in (prior.get("classes") or [])
+        if (c.get("course_name") or "").strip()
+    ]
+    if prior_classes and not classes:
+        return "class list empty after a prior scrape with classes"
+    prev_n = assignment_count(prior)
+    now_n = assignment_count(student_data)
+    if prev_n >= 10 and now_n < prev_n * 0.5:
+        return f"assignment count dropped {prev_n} → {now_n}"
+    return None
+
+
+def redact_probe_text(text, student):
+    """Strip configured identifiers from probe dumps (public Actions logs)."""
+    out = text or ""
+    for val in (student.get("name"), student.get("sn"), EMAIL):
+        if val:
+            out = out.replace(str(val), "[redacted]")
+    return out
+
+
 def require_scrape_config():
     if not EMAIL or not PASSWORD:
-        print("ERROR: AERIES_EMAIL and AERIES_PASSWORD must be set in .env")
-        sys.exit(1)
+        raise ScrapeError("AERIES_EMAIL and AERIES_PASSWORD must be set in .env")
     if not STUDENTS:
-        print("ERROR: No students configured in .env (need STUDENT_1_SN at minimum)")
-        sys.exit(1)
+        raise ScrapeError("No students configured in .env (need STUDENT_1_SN at minimum)")
 
 
 def login():
-    session = requests.Session()
+    session = TimeoutSession()
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
     })
@@ -380,8 +458,7 @@ def login():
     login_url = f"{BASE_URL}/student/LoginParent.aspx"
     resp = session.get(login_url)
     if resp.status_code != 200:
-        print(f"ERROR: Could not load login page (status {resp.status_code})")
-        sys.exit(1)
+        raise ScrapeError(f"Could not load login page (status {resp.status_code})")
 
     login_data = {
         "portalAccountUsername": EMAIL,
@@ -395,11 +472,8 @@ def login():
 
     if "LoginParent" in resp.url:
         error_match = re.search(r'class="[^"]*error[^"]*"[^>]*>([^<]+)', resp.text, re.IGNORECASE)
-        if error_match:
-            print(f"ERROR: Login failed — {error_match.group(1).strip()}")
-        else:
-            print("ERROR: Login failed — still on login page after submit")
-        sys.exit(1)
+        detail = error_match.group(1).strip() if error_match else "still on login page after submit"
+        raise ScrapeError(f"Login failed — {detail}")
 
     print("Logged in successfully")
     return session
@@ -648,13 +722,11 @@ def refresh_attendance_only():
     """Login and update attendance on existing grades_data (works in summer)."""
     require_scrape_config()
     if not OUTPUT_FILE.exists():
-        print(f"ERROR: {OUTPUT_FILE} not found — run a full scrape first")
-        sys.exit(1)
+        raise ScrapeError(f"{OUTPUT_FILE} not found — run a full scrape first")
     try:
         data = json.loads(OUTPUT_FILE.read_text())
     except json.JSONDecodeError as e:
-        print(f"ERROR: Could not parse {OUTPUT_FILE}: {e}")
-        sys.exit(1)
+        raise ScrapeError(f"Could not parse {OUTPUT_FILE}: {e}")
 
     cal = load_school_calendar(refresh=True)
     prefer_year = target_attendance_year_label(calendar=cal)
@@ -664,12 +736,16 @@ def refresh_attendance_only():
     students = data.get("students") or []
     by_sn = {str(s.get("sn")): s for s in students}
 
-    for student in STUDENTS:
+    for i, student in enumerate(STUDENTS, start=1):
         sn = str(student["sn"])
-        name = student.get("name", sn)
-        print(f"  {name}...")
-        switch_student(session, student["school_code"], student["sn"])
-        att = fetch_attendance(session, prefer_year=prefer_year)
+        label = student_log_label(i)
+        print(f"  {label}...")
+        try:
+            switch_student(session, student["school_code"], student["sn"])
+            att = fetch_attendance(session, prefer_year=prefer_year)
+        except Exception as e:
+            print(f"    WARNING: attendance failed for {label} ({e})")
+            continue
         if att:
             print(
                 f"    year={att.get('year')} absences={att.get('absences')} "
@@ -681,7 +757,7 @@ def refresh_attendance_only():
             else:
                 students.append({
                     "sn": student["sn"],
-                    "name": name,
+                    "name": student.get("name", f"Student {i}"),
                     "school_code": student["school_code"],
                     "classes": [],
                     "assignments_by_class": [],
@@ -690,6 +766,12 @@ def refresh_attendance_only():
                 by_sn[sn] = students[-1]
         else:
             print("    WARNING: no attendance parsed")
+
+    for row in students:
+        try:
+            attach_student_view(row)
+        except Exception as e:
+            print(f"    WARNING: view rebuild skipped ({e})")
 
     data["students"] = students
     data["last_updated"] = datetime.now(timezone.utc).isoformat()
@@ -717,8 +799,8 @@ def probe_attendance():
         "/student/StudentAttendanceHistory.aspx",
         "/student/AttendanceSummary.aspx",
     ]
-    for student in STUDENTS:
-        print(f"\n=== PROBE attendance: {student['name']} (SN {student['sn']}) ===")
+    for i, student in enumerate(STUDENTS, start=1):
+        print(f"\n=== PROBE attendance: {student_log_label(i)} ===")
         switch_student(session, student["school_code"], student["sn"])
         for path in paths:
             resp = session.get(f"{BASE_URL}{path}", allow_redirects=True, timeout=60)
@@ -734,25 +816,25 @@ def probe_attendance():
             body = text[idx + 40 :] if idx >= 0 else text
             # Also try to find summary blocks
             print("--- body sample ---")
-            print(body[:2500])
+            print(redact_probe_text(body[:400], student))
             # Links containing attendance
             for a in soup.find_all("a", href=True):
                 label = a.get_text(" ", strip=True)
                 href = a["href"]
                 if re.search(r"attend", href + " " + label, re.I) and label:
-                    print(f"  link: {label[:60]!r} -> {href[:90]}")
+                    print(f"  link: {redact_probe_text(label[:60], student)!r} -> {href[:90]}")
             # Title attributes / legends often hold totals
             for el in soup.find_all(attrs={"title": True})[:30]:
                 t = el.get("title") or ""
                 if re.search(r"absent|tardy|excused|total", t, re.I):
-                    print(f"  title: {t[:120]!r}")
+                    print(f"  title: {redact_probe_text(t[:120], student)!r}")
             # Any element with id/class containing attend
             for el in soup.find_all(True):
                 cid = " ".join(filter(None, [el.get("id"), " ".join(el.get("class") or [])]))
                 if re.search(r"attend|absent|tardy", cid, re.I):
                     snippet = el.get_text(" ", strip=True)[:100]
                     if snippet:
-                        print(f"  node {cid[:60]!r}: {snippet!r}")
+                        print(f"  node {cid[:60]!r}: {redact_probe_text(snippet, student)!r}")
             parsed = parse_attendance_html(html)
             print("--- parsed ---")
             print(json.dumps(parsed, indent=2))
@@ -907,21 +989,42 @@ def normalize_gradebook_term(term):
     return _GRADEBOOK_TERM_ALIASES.get(t, t)
 
 
-def preferred_gradebook_terms(today=None):
+def _md_tuple(token, default):
+    raw = token or default
+    try:
+        month, day = str(raw).split("-")
+        return int(month), int(day)
+    except (ValueError, AttributeError):
+        month, day = default.split("-")
+        return int(month), int(day)
+
+
+def preferred_gradebook_terms(today=None, calendar=None):
     """Ordered term keys for the current TUSD 6-12 season (Fall first half, Spring second)."""
-    today = today or date.today()
+    today = today or pacific_today()
+    if isinstance(today, datetime):
+        today = today.date()
+    if calendar is None:
+        try:
+            calendar = load_school_calendar(refresh=False)
+        except Exception:
+            calendar = {}
+    cut = {**_DEFAULT_TERM_CUTOVERS, **((calendar or {}).get("term_cutovers") or {})}
+    q1_m, q1_d = _md_tuple(cut.get("q1_last_md"), "10-12")
+    fall_m, fall_d = _md_tuple(cut.get("fall_last_md"), "01-04")
+    q3_m, q3_d = _md_tuple(cut.get("q3_last_md"), "03-15")
     month, day = today.month, today.day
     if month >= 7:
         terms = ["fall", "1st semester", "year"]
-        if month < 10 or (month == 10 and day <= 12):
+        if month < q1_m or (month == q1_m and day <= q1_d):
             terms.extend(["q1", "t1"])
         else:
             terms.append("q2")
         return terms
-    if month == 1 and day <= 4:
+    if month < fall_m or (month == fall_m and day <= fall_d):
         return ["fall", "1st semester", "q2", "year"]
     terms = ["spring", "2nd semester", "year"]
-    if month <= 3 and not (month == 3 and day > 15):
+    if month < q3_m or (month == q3_m and day <= q3_d):
         terms.extend(["q3", "t2"])
     else:
         terms.extend(["q4", "t3"])
@@ -1012,10 +1115,10 @@ def select_current_gradebook_options(option_tags, today=None, calendar=None):
     scrape them into the new term. Year-long courses are included alongside the
     current season term.
     """
-    today = today or date.today()
+    today = today or pacific_today()
     calendar = calendar or load_school_calendar(refresh=False)
     session = school_session_window(today=today, calendar=calendar)
-    preferred = preferred_gradebook_terms(today=today)
+    preferred = preferred_gradebook_terms(today=today, calendar=calendar)
 
     parsed_opts = []
     selected_value = None
@@ -3256,6 +3359,146 @@ def apply_tonight_plan(summary, analytics):
     return summary
 
 
+def _view_assignment(assignment, today, kind):
+    """Assignment dict the dashboard can render without re-deriving rules."""
+    entry = dict(assignment or {})
+    formatted = format_assignment_entry(assignment, today, kind)
+    entry.update(formatted)
+    entry["description"] = (
+        assignment.get("description")
+        or formatted.get("name")
+        or entry.get("name")
+        or ""
+    )
+    return entry
+
+
+def _urgency_reason(analyzed):
+    missing_n = len(analyzed.get("missing_assignments") or [])
+    mark = analyzed.get("current_grade_mark") or ""
+    pct = analyzed.get("current_grade_pct")
+    urgency = analyzed.get("suggested_urgency") or "ok"
+    if pct is None and not mark:
+        return f"{missing_n} missing" if missing_n else "No grade yet"
+    pct_s = f"{round(pct)}%" if pct is not None else ""
+    if urgency == "watch":
+        return f"{mark} {pct_s} · {missing_n} missing".strip()
+    if urgency == "critical":
+        return f"At risk · {missing_n} missing" if missing_n else "Needs improvement"
+    if urgency == "strong":
+        return "On track"
+    return ""
+
+
+def build_student_view(student_data, history_context=None):
+    """Ready-to-render payload so the dashboard does not re-implement scrape rules."""
+    today = pacific_today_dt()
+    history_context = history_context or {}
+    analytics = build_class_analytics(student_data, history_context=history_context)
+    tonight = analytics.get("tonight_plan") or {}
+    ai = student_data.get("ai_summary") or {}
+    trends = student_data.get("class_trends") or {}
+    analyzed_by = {
+        (c.get("period"), _norm_course_name(c.get("course_name"))): c
+        for c in analytics.get("classes") or []
+    }
+
+    classes_out = []
+    for class_meta in student_data.get("classes") or []:
+        name = (class_meta.get("course_name") or "").strip()
+        if not name:
+            continue
+        assignments = assignments_for_class(student_data, class_meta)
+        analyzed = analyzed_by.get(
+            (class_meta.get("period"), _norm_course_name(name))
+        )
+        if analyzed is None:
+            analyzed = analyze_class(class_meta, assignments, today)
+
+        missing = select_missing_assignments(assignments, class_meta, today)
+        upcoming = []
+        recent = []
+        for assignment in assignments:
+            due = parse_due_date(assignment.get("due_date"))
+            if not due:
+                continue
+            days_diff = (due - today).days
+            if assignment.get("points_earned") is not None and -14 <= days_diff < 0:
+                recent.append(assignment)
+            elif 0 <= days_diff <= 14 and assignment.get("points_earned") is None:
+                upcoming.append(assignment)
+        recent.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min, reverse=True)
+        upcoming.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
+
+        ai_cls = None
+        for row in ai.get("classes") or []:
+            if _norm_course_name(row.get("class_name")) == _norm_course_name(name):
+                ai_cls = row
+                break
+            cn = _norm_course_name(name)
+            an = _norm_course_name(row.get("class_name"))
+            if cn and an and (cn in an or an in cn):
+                ai_cls = row
+
+        tonight_name = ""
+        for item in tonight.get("items") or []:
+            if _norm_course_name(item.get("class_name")) == _norm_course_name(name):
+                tonight_name = item.get("name") or ""
+                break
+        if not tonight_name and ai_cls:
+            tonight_name = (ai_cls.get("do_tonight") or "").strip()
+        if not tonight_name:
+            due_today = [
+                a for a in upcoming
+                if parse_due_date(a.get("due_date"))
+                and (parse_due_date(a.get("due_date")).date() - today.date()).days == 0
+            ]
+            if due_today:
+                tonight_name = due_today[0].get("description") or ""
+            elif missing:
+                tonight_name = missing[0].get("description") or ""
+
+        trend = trends.get(name) or {}
+        classes_out.append({
+            "period": class_meta.get("period"),
+            "course_name": name,
+            "teacher": class_meta.get("teacher") or "",
+            "room": class_meta.get("room") or "",
+            "percent": class_meta.get("percent"),
+            "mark": analyzed.get("current_grade_mark") or class_meta.get("mark") or "",
+            "urgency": analyzed.get("suggested_urgency") or "ok",
+            "snap": ((ai_cls or {}).get("snap") or _urgency_reason(analyzed) or "").strip(),
+            "story": ((ai_cls or {}).get("story") or "").strip(),
+            "do_tonight": tonight_name,
+            "missing_count": len(missing),
+            "missing": [_view_assignment(a, today, "missing") for a in missing],
+            "upcoming": [_view_assignment(a, today, "upcoming") for a in upcoming],
+            "recent": [_view_assignment(a, today, "recent") for a in recent],
+            "assignments": [_view_assignment(a, today, "recent") for a in assignments],
+            "pct_history": trend.get("pct_history") or [],
+            "delta_7d": trend.get("delta_7d"),
+            "delta_14d": trend.get("delta_14d"),
+            "delta_span": trend.get("delta_span"),
+            "span_window": trend.get("span_window"),
+            "phantom_zero": analyzed.get("phantom_zero"),
+            "counted_insight": class_meta.get("counted_insight"),
+        })
+
+    return {
+        "tonight": tonight.get("items") or [],
+        "tonight_label": (tonight.get("label") or "").strip(),
+        "headline": (ai.get("headline") or "").strip(),
+        "wins": list(ai.get("wins") or [])[:2],
+        "classes": classes_out,
+        "generated_at": ai.get("generated_at"),
+    }
+
+
+def attach_student_view(student_data, history_context=None):
+    student_data["view"] = build_student_view(student_data, history_context=history_context)
+    return student_data
+
+
 def briefing_generated_on_pacific_date(ai, day):
     raw = (ai or {}).get("generated_at") or ""
     if not raw:
@@ -3732,18 +3975,15 @@ def _prepare_student_for_briefing(student_data, history, aeries_series_by_class=
 def regenerate_grok_summaries():
     """Re-run Grok briefings against existing grades_data.json (no Aeries scrape)."""
     if not GROK_API_KEY:
-        print("ERROR: GROK_API_KEY must be set")
-        sys.exit(1)
+        raise ScrapeError("GROK_API_KEY must be set")
 
     if not OUTPUT_FILE.exists():
-        print(f"ERROR: {OUTPUT_FILE} not found — run a full scrape first")
-        sys.exit(1)
+        raise ScrapeError(f"{OUTPUT_FILE} not found — run a full scrape first")
 
     try:
         data = json.loads(OUTPUT_FILE.read_text())
     except json.JSONDecodeError as e:
-        print(f"ERROR: Could not parse {OUTPUT_FILE}: {e}")
-        sys.exit(1)
+        raise ScrapeError(f"Could not parse {OUTPUT_FILE}: {e}")
 
     if is_summer_break(data):
         print("Summer break mode is active (SUMMER_BREAK) — skipping Grok API calls.")
@@ -3754,15 +3994,13 @@ def regenerate_grok_summaries():
 
     students = data.get("students", [])
     if not students:
-        print("ERROR: No students found in grades_data.json")
-        sys.exit(1)
+        raise ScrapeError("No students found in grades_data.json")
 
     history = load_grade_history()
     print(f"Regenerating AI briefings for {len(students)} student(s) from {OUTPUT_FILE.name}...")
 
-    for student in students:
-        name = student.get("name", "Student")
-        print(f"  {name}...")
+    for i, student in enumerate(students, start=1):
+        print(f"  {student_log_label(i)}...")
         # Keep prior briefing for previous_briefing context before overwrite
         history_context, _ = _prepare_student_for_briefing(student, history)
         ai_summary = generate_ai_summary(student, history_context=history_context)
@@ -3771,6 +4009,7 @@ def regenerate_grok_summaries():
             print(f"    AI summary generated ({len(ai_summary.get('classes', []))} classes)")
         else:
             print("    WARNING: AI summary failed — keeping previous briefing if any")
+        attach_student_view(student, history_context=history_context)
 
     data["last_updated"] = datetime.now(timezone.utc).isoformat()
     data["summer_break"] = False
@@ -3812,7 +4051,7 @@ def scrape_all():
             try:
                 refresh_attendance_only()
                 return
-            except SystemExit:
+            except (SystemExit, ScrapeError):
                 raise
             except Exception as e:
                 print(f"  WARNING: attendance refresh failed ({e}); preserving prior data")
@@ -3855,104 +4094,127 @@ def scrape_all():
         },
     }
 
-    for student in STUDENTS:
-        print(f"Fetching data for {student['name']} (SN: {student['sn']})...")
-
-        switch_student(session, student["school_code"], student["sn"])
-
-        # Class summary (grades overview)
-        raw_summary = fetch_class_summary(session)
-        classes = parse_class_summary(raw_summary)
-        print(f"  {len(classes)} classes")
-
-        # Assignments per class
-        print("  Fetching assignments...")
-        class_assignments = fetch_all_assignments(session)
-        attach_gradebook_insights(classes, class_assignments)
-        total_assignments = sum(len(ca["assignments"]) for ca in class_assignments)
-        totals_n = sum(1 for ca in class_assignments if ca.get("totals"))
-        print(f"  {total_assignments} assignments across {len(class_assignments)} classes")
-        print(f"  GradebookDetails totals parsed for {totals_n}/{len(class_assignments)} class(es)")
-
-        # Optional within-term grade curves from GradebookSummary
-        print("  Fetching gradebook trend series...")
-        labeled_series = fetch_gradebook_summary(session)
-        aeries_series = match_aeries_series_to_classes(classes, labeled_series)
-        if aeries_series:
-            print(f"  Aeries series for {len(aeries_series)} class(es)")
-        else:
-            print("  Aeries series unavailable (using daily snapshots only)")
-
-        print("  Fetching attendance...")
-        attendance = fetch_attendance(session)
-        if attendance and not attendance.get("parse_failed"):
-            print(
-                f"  Attendance: absences={attendance.get('absences')} "
-                f"tardies={attendance.get('tardies')}"
-            )
-        elif attendance and attendance.get("parse_failed"):
-            print("  Attendance: page OK, counts not parsed yet")
-        else:
-            print("  Attendance: skipped")
-
-        student_data = {
-            "sn": student["sn"],
-            "name": student["name"],
-            "school_code": student["school_code"],
-            "classes": classes,
-            "assignments_by_class": class_assignments,
-            "attendance": attendance,
-        }
-
-        # Carry prior briefing so history_context can reference last focus
+    failed = 0
+    for i, student in enumerate(STUDENTS, start=1):
+        label = student_log_label(i)
         prior = previous_by_sn.get(str(student["sn"])) or {}
-        if prior.get("ai_summary"):
-            student_data["ai_summary"] = prior["ai_summary"]
+        print(f"Fetching data for {label}...")
+        try:
+            switch_student(session, student["school_code"], student["sn"])
 
-        history_context, class_list = _prepare_student_for_briefing(
-            student_data, history, aeries_series_by_class=aeries_series
-        )
+            # Class summary (grades overview)
+            raw_summary = fetch_class_summary(session)
+            classes = parse_class_summary(raw_summary)
+            print(f"  {len(classes)} classes")
 
-        if GROK_API_KEY:
-            portal_changed = academic_fingerprint(student_data) != academic_fingerprint(prior)
-            briefing_today = briefing_generated_on_pacific_date(
-                prior.get("ai_summary"), pacific_today()
-            )
-            if not portal_changed and briefing_today and prior.get("ai_summary"):
-                student_data["ai_summary"] = prior["ai_summary"]
-                print("  AI summary kept (grades/missing unchanged)")
+            # Assignments per class
+            print("  Fetching assignments...")
+            class_assignments = fetch_all_assignments(session)
+            attach_gradebook_insights(classes, class_assignments)
+            total_assignments = sum(len(ca["assignments"]) for ca in class_assignments)
+            totals_n = sum(1 for ca in class_assignments if ca.get("totals"))
+            print(f"  {total_assignments} assignments across {len(class_assignments)} classes")
+            print(f"  GradebookDetails totals parsed for {totals_n}/{len(class_assignments)} class(es)")
+
+            # Optional within-term grade curves from GradebookSummary
+            print("  Fetching gradebook trend series...")
+            labeled_series = fetch_gradebook_summary(session)
+            aeries_series = match_aeries_series_to_classes(classes, labeled_series)
+            if aeries_series:
+                print(f"  Aeries series for {len(aeries_series)} class(es)")
             else:
-                print(f"  Generating AI summary ({GROK_MODEL})...")
-                ai_summary = generate_ai_summary(
+                print("  Aeries series unavailable (using daily snapshots only)")
+
+            print("  Fetching attendance...")
+            attendance = fetch_attendance(session)
+            if attendance and not attendance.get("parse_failed"):
+                print(
+                    f"  Attendance: absences={attendance.get('absences')} "
+                    f"tardies={attendance.get('tardies')}"
+                )
+            elif attendance and attendance.get("parse_failed"):
+                print("  Attendance: page OK, counts not parsed yet")
+            else:
+                print("  Attendance: skipped")
+
+            student_data = {
+                "sn": student["sn"],
+                "name": student["name"],
+                "school_code": student["school_code"],
+                "classes": classes,
+                "assignments_by_class": class_assignments,
+                "attendance": attendance,
+            }
+
+            issue = portal_looks_incomplete(student_data, prior, in_session=True)
+            if issue:
+                print(f"  WARNING: {issue} — keeping previous snapshot")
+                failed += 1
+                if prior:
+                    data["students"].append(prior)
+                continue
+
+            # Carry prior briefing so history_context can reference last focus
+            if prior.get("ai_summary"):
+                student_data["ai_summary"] = prior["ai_summary"]
+
+            history_context, class_list = _prepare_student_for_briefing(
+                student_data, history, aeries_series_by_class=aeries_series
+            )
+
+            if GROK_API_KEY:
+                portal_changed = academic_fingerprint(student_data) != academic_fingerprint(prior)
+                briefing_today = briefing_generated_on_pacific_date(
+                    prior.get("ai_summary"), pacific_today()
+                )
+                if not portal_changed and briefing_today and prior.get("ai_summary"):
+                    student_data["ai_summary"] = prior["ai_summary"]
+                    print("  AI summary kept (grades/missing unchanged)")
+                else:
+                    print(f"  Generating AI summary ({GROK_MODEL})...")
+                    ai_summary = generate_ai_summary(
+                        student_data, history_context=history_context
+                    )
+                    if ai_summary:
+                        student_data["ai_summary"] = ai_summary
+                        print("  AI summary generated")
+                    else:
+                        print("  AI summary skipped")
+
+            if student_data.get("ai_summary"):
+                analytics = build_class_analytics(
                     student_data, history_context=history_context
                 )
-                if ai_summary:
-                    student_data["ai_summary"] = ai_summary
-                    print("  AI summary generated")
-                else:
-                    print("  AI summary skipped")
+                student_data["ai_summary"] = sanitize_briefing_copy(
+                    apply_tonight_plan(student_data["ai_summary"], analytics),
+                    analytics,
+                )
 
-        if student_data.get("ai_summary"):
-            analytics = build_class_analytics(
-                student_data, history_context=history_context
+            attach_student_view(student_data, history_context=history_context)
+
+            # Append today's grade snapshot after briefing (stores previous_briefing from prior AI)
+            # Prefer storing the briefing we just replaced as previous — rebuild snapshot with prior AI
+            snap_source = dict(student_data)
+            if prior.get("ai_summary"):
+                snap_source["ai_summary"] = prior["ai_summary"]
+            snapshot = build_student_snapshot(snap_source, class_list)
+            upsert_student_snapshot(
+                history, student["sn"], student["name"], snapshot
             )
-            student_data["ai_summary"] = sanitize_briefing_copy(
-                apply_tonight_plan(student_data["ai_summary"], analytics),
-                analytics,
+            print(
+                "  History snapshots: "
+                f"{len((history.get('students') or {}).get(str(student['sn']), {}).get('snapshots') or [])}"
             )
 
-        # Append today's grade snapshot after briefing (stores previous_briefing from prior AI)
-        # Prefer storing the briefing we just replaced as previous — rebuild snapshot with prior AI
-        snap_source = dict(student_data)
-        if prior.get("ai_summary"):
-            snap_source["ai_summary"] = prior["ai_summary"]
-        snapshot = build_student_snapshot(snap_source, class_list)
-        upsert_student_snapshot(
-            history, student["sn"], student["name"], snapshot
-        )
-        print(f"  History snapshots: {len((history.get('students') or {}).get(str(student['sn']), {}).get('snapshots') or [])}")
+            data["students"].append(student_data)
+        except Exception as e:
+            print(f"  WARNING: scrape failed for {label} ({e})")
+            failed += 1
+            if prior:
+                data["students"].append(prior)
 
-        data["students"].append(student_data)
+    if not data["students"] and previous_data.get("students"):
+        data["students"] = previous_data["students"]
 
     data["summer_break"] = False
 
@@ -3962,14 +4224,16 @@ def scrape_all():
     print(f"History written to {HISTORY_FILE}")
     print(f"Last updated: {data['last_updated']}")
     print(f"Summer break: {data['summer_break']}")
+    if STUDENTS and failed == len(STUDENTS):
+        raise ScrapeError("every student scrape failed or failed the portal sanity check")
 
 
 def probe_gradebook():
     """Login and dump GradebookDetails dropdown terms for each student (debug)."""
     require_scrape_config()
     session = login()
-    for student in STUDENTS:
-        print(f"\n=== PROBE gradebook: {student['name']} (SN {student['sn']}) ===")
+    for i, student in enumerate(STUDENTS, start=1):
+        print(f"\n=== PROBE gradebook: {student_log_label(i)} ===")
         switch_student(session, student["school_code"], student["sn"])
         resp = session.get(
             f"{BASE_URL}/student/GradebookDetails.aspx",
@@ -4003,6 +4267,26 @@ def probe_gradebook():
         print("  chosen", [(value, extract_class_name(label)) for value, label in chosen])
 
 
+def rebuild_views_only():
+    """Rebuild dashboard view payloads from existing grades_data.json (no Aeries)."""
+    if not OUTPUT_FILE.exists():
+        raise ScrapeError(f"{OUTPUT_FILE} not found — run a full scrape first")
+    try:
+        data = json.loads(OUTPUT_FILE.read_text())
+    except json.JSONDecodeError as e:
+        raise ScrapeError(f"Could not parse {OUTPUT_FILE}: {e}")
+    history = load_grade_history()
+    students = data.get("students") or []
+    print(f"Rebuilding dashboard views for {len(students)} student(s)...")
+    for i, student in enumerate(students, start=1):
+        print(f"  {student_log_label(i)}...")
+        history_context, _ = _prepare_student_for_briefing(student, history)
+        attach_student_view(student, history_context=history_context)
+    data["last_updated"] = datetime.now(timezone.utc).isoformat()
+    OUTPUT_FILE.write_text(json.dumps(data, indent=2))
+    print(f"Views written to {OUTPUT_FILE}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Aeries grade scraper + Grok briefings")
     parser.add_argument(
@@ -4025,15 +4309,26 @@ if __name__ == "__main__":
         action="store_true",
         help="Refresh absences/tardies only (works during summer; no Grok)",
     )
+    parser.add_argument(
+        "--rebuild-view",
+        action="store_true",
+        help="Rebuild dashboard view JSON from existing grades_data.json (no Aeries)",
+    )
     args = parser.parse_args()
 
-    if args.probe_attendance:
-        probe_attendance()
-    elif args.probe_gradebook:
-        probe_gradebook()
-    elif args.attendance_only:
-        refresh_attendance_only()
-    elif args.grok_only:
-        regenerate_grok_summaries()
-    else:
-        scrape_all()
+    try:
+        if args.probe_attendance:
+            probe_attendance()
+        elif args.probe_gradebook:
+            probe_gradebook()
+        elif args.attendance_only:
+            refresh_attendance_only()
+        elif args.grok_only:
+            regenerate_grok_summaries()
+        elif args.rebuild_view:
+            rebuild_views_only()
+        else:
+            scrape_all()
+    except ScrapeError as e:
+        print(f"ERROR: {e}")
+        sys.exit(1)
