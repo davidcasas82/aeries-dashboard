@@ -4927,7 +4927,7 @@
         },
         {
           "date": "2026-09-01",
-          "captured_at": "2026-09-01T14:06:02.644763+00:00",
+          "captured_at": "2026-09-02T01:00:01.498328+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -4979,8 +4979,8 @@
             },
             "Physics & Eng": {
               "period": 6,
-              "pct": null,
-              "mark": "",
+              "pct": 100.0,
+              "mark": "A",
               "missing_count": 1,
               "missing_names": [
                 "Exit Ticket"
@@ -9609,7 +9609,7 @@
         },
         {
           "date": "2026-09-01",
-          "captured_at": "2026-09-01T14:06:06.254594+00:00",
+          "captured_at": "2026-09-02T01:00:14.311081+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,

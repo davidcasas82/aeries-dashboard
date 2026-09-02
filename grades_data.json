@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-09-01T14:05:54.983098+00:00",
+  "last_updated": "2026-09-02T00:59:51.172199+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -96,15 +96,15 @@
           "period": 6,
           "course_name": "Physics & Eng",
           "teacher": "Chung, C",
-          "percent": "0.0",
-          "mark": "",
-          "mark_and_score": " (0.0%)",
+          "percent": "100.0",
+          "mark": "A",
+          "mark_and_score": "A (100.0%)",
           "missing_count": 0,
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "2-217",
           "school_name": "Legacy Magnet Academy",
-          "phantom_zero": true
+          "phantom_zero": false
         },
         {
           "period": 7,
@@ -383,7 +383,7 @@
               "date_assigned": "08/27/2026",
               "date_completed": "08/28/2026",
               "due_date": "08/28/2026",
-              "grading_complete": false,
+              "grading_complete": true,
               "extra_credit": false,
               "status": "counts",
               "status_label": "counts in Formative",
@@ -405,13 +405,13 @@
               "comment": "",
               "documents": "",
               "date_assigned": "08/31/2026",
-              "date_completed": "",
+              "date_completed": "09/01/2026",
               "due_date": "09/01/2026",
-              "grading_complete": false,
+              "grading_complete": true,
               "extra_credit": false,
-              "status": "pending",
-              "status_label": "pending",
-              "counts_toward_grade": false,
+              "status": "counts",
+              "status_label": "counts in Coursework",
+              "counts_toward_grade": true,
               "due_label": "due today",
               "due_state": "today"
             }
@@ -471,46 +471,46 @@
             "class_name": "Int Eng&Marktg",
             "urgency": "critical",
             "snap": "LT3: AI Character Reference Letter \u00b7 3.75/5",
-            "story": "Posted grade at C 75%.",
+            "story": "Current grade at 75% from Writing category.",
             "do_tonight": ""
           },
           {
             "class_name": "Physics & Eng",
             "urgency": "watch",
             "snap": "Exit Ticket \u00b7 overdue Aug 28",
-            "story": "4 points in missing work.",
+            "story": "A 100% posted with one missing 4-point assignment.",
             "do_tonight": "Unit 0 Warm Ups"
           },
           {
             "class_name": "Rapid Prototype",
             "urgency": "ok",
             "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator \u00b7 awaiting score \u00b7 was due Fri Aug 28",
-            "story": "",
+            "story": "No posted grade yet; one pending assessment.",
             "do_tonight": ""
           },
           {
             "class_name": "US Hist Media",
             "urgency": "ok",
             "snap": "LT 1.1 - CER # 1 \u00b7 due Wed Sep 9",
-            "story": "",
+            "story": "No posted grade; upcoming assessment in 8 days.",
             "do_tonight": ""
           },
           {
             "class_name": "Alg ll Bus Mang",
             "urgency": "ok",
             "snap": "MC- LT 1.4 \u00b7 awaiting score \u00b7 was due Fri Aug 28",
-            "story": "",
+            "story": "No posted grade; three pending assessments.",
             "do_tonight": ""
           },
           {
             "class_name": "Bus of Gaming",
             "urgency": "strong",
             "snap": "Anatomy of a Great Game \u00b7 5/5",
-            "story": "",
+            "story": "Stable A at 100% with no missing work.",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-09-01T08:33:50.287409+00:00",
+        "generated_at": "2026-09-02T01:00:01.491378+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 4.0,
@@ -590,7 +590,12 @@
           "trend_label": "insufficient_history"
         },
         "Physics & Eng": {
-          "pct_history": [],
+          "pct_history": [
+            {
+              "date": "2026-09-01",
+              "pct": 100.0
+            }
+          ],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
@@ -1159,7 +1164,7 @@
           "term": "fall",
           "assignments": [
             {
-              "number": "2",
+              "number": "1",
               "description": "LT 1.1 Formative Project",
               "category": "Formative",
               "score_raw": "/ 10",
@@ -1173,14 +1178,14 @@
               "documents": "",
               "date_assigned": "08/28/2026",
               "date_completed": "",
-              "due_date": "08/31/2026",
+              "due_date": "09/01/2026",
               "grading_complete": false,
               "extra_credit": false,
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
-              "due_label": "awaiting score \u00b7 was due Mon Aug 31",
-              "due_state": "pending"
+              "due_label": "due today",
+              "due_state": "today"
             }
           ]
         },
@@ -1330,31 +1335,31 @@
         "raw": "Year Days Enrolled: 14 Days Present: 14 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Leah holds strong A's in Bus of Gaming and PE Course 1 with no work due today.",
-        "focus_tonight": "",
+        "headline": "Leah has the LT 1.1 Formative Project due today in Eng 9 Entre while holding strong A's in Bus of Gaming and PE Course 1.",
+        "focus_tonight": "LT 1.1 Formative Project (Eng 9 Entre)",
         "wins": [
-          "Bus of Gaming: A 100% no missing work",
-          "PE Course 1: A 100% no missing work"
+          "Bus of Gaming: A 100% with Anatomy of a Great Game at 5/5",
+          "PE Course 1: A 100% with Weight Room Rules Quiz at 10/10"
         ],
         "classes": [
+          {
+            "class_name": "Eng 9 Entre",
+            "urgency": "watch",
+            "snap": "LT 1.1 Formative Project \u00b7 due today",
+            "story": "No grade posted yet.",
+            "do_tonight": "LT 1.1 Formative Project"
+          },
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "ok",
             "snap": "About Me Slides Presentation \u00b7 8.5/10",
-            "story": "Scored work averages 95% with stable trend.",
+            "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "Engineering Geo",
             "urgency": "ok",
-            "snap": "0.7 Perfect square & Square roots \u00b7 10/10",
-            "story": "No class grade posted yet; Algebra Boot Camp assignments scored.",
-            "do_tonight": ""
-          },
-          {
-            "class_name": "Eng 9 Entre",
-            "urgency": "ok",
-            "snap": "LT 1.1 Formative Project \u00b7 awaiting score \u00b7 was due Mon Aug 31",
+            "snap": "Algebra Boot Camp work averages 72.9% across 7 assignments",
             "story": "No class grade posted yet.",
             "do_tonight": ""
           },
@@ -1362,7 +1367,7 @@
             "class_name": "Tech of Biology",
             "urgency": "ok",
             "snap": "DNA Structure Exit Ticket \u00b7 3/3",
-            "story": "Current grade 100% with pending DNA Replication Exit Ticket.",
+            "story": "",
             "do_tonight": ""
           },
           {
@@ -1376,11 +1381,11 @@
             "class_name": "PE Course 1",
             "urgency": "strong",
             "snap": "Weight Room Rules Quiz \u00b7 10/10",
-            "story": "Pending Mini Golf Course Design awaiting score.",
+            "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-09-01T08:34:07.654712+00:00",
+        "generated_at": "2026-09-02T01:00:14.304057+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
