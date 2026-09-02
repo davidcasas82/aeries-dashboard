@@ -5008,6 +5008,91 @@
             "headline": "Daniel needs attention in Int Eng&Marktg at C 75% while holding an A in Bus of Gaming.",
             "focus_tonight": "Unit 0 Warm Ups (Physics & Eng); Exit Ticket (Physics & Eng)"
           }
+        },
+        {
+          "date": "2026-09-02",
+          "captured_at": "2026-09-02T13:32:28.254179+00:00",
+          "classes": {
+            "Bus of Gaming": {
+              "period": 0,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "PE Course 2": {
+              "period": 1,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Span 1 (IVC)": {
+              "period": 2,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Rapid Prototype": {
+              "period": 3,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "US Hist Media": {
+              "period": 4,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Alg ll Bus Mang": {
+              "period": 5,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Physics & Eng": {
+              "period": 6,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 2,
+              "missing_names": [
+                "Exit Ticket",
+                "Unit 0 Warm Ups"
+              ],
+              "aeries_trend": null
+            },
+            "Point Break": {
+              "period": 7,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Int Eng&Marktg": {
+              "period": 8,
+              "pct": 75.0,
+              "mark": "C",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            }
+          },
+          "previous_briefing": {
+            "headline": "Daniel needs attention in Int Eng&Marktg at C 75% while holding an A in Bus of Gaming.",
+            "focus_tonight": "Unit 0 Warm Ups (Physics & Eng); Exit Ticket (Physics & Eng)"
+          }
         }
       ]
     },
@@ -9610,6 +9695,88 @@
         {
           "date": "2026-09-01",
           "captured_at": "2026-09-02T01:01:06.074452+00:00",
+          "classes": {
+            "Bus of Gaming": {
+              "period": 0,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Mkt Adv GrphDes": {
+              "period": 1,
+              "pct": 95.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Engineering Geo": {
+              "period": 2,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "COMM 1 (IVC)": {
+              "period": 3,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "PE Course 1": {
+              "period": 4,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Eng 9 Entre": {
+              "period": 5,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Tech of Biology": {
+              "period": 6,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Point Break": {
+              "period": 7,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "WrldHis by Dsgn": {
+              "period": 8,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            }
+          },
+          "previous_briefing": {
+            "headline": "Leah has the LT 1.1 Formative Project due today in Eng 9 Entre while holding strong A's in Bus of Gaming and PE Course 1.",
+            "focus_tonight": "LT 1.1 Formative Project (Eng 9 Entre)"
+          }
+        },
+        {
+          "date": "2026-09-02",
+          "captured_at": "2026-09-02T13:32:46.640827+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
