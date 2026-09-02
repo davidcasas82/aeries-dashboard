@@ -32,6 +32,9 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
+      - name: Pull latest main
+        run: git pull --rebase origin main
+
       - name: Run scraper
         env:
           AERIES_EMAIL: ${{ secrets.AERIES_EMAIL }}
@@ -54,7 +57,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main
           git add grades_data.json grade_history.json
           git diff --cached --quiet || git commit -m "Update grades data"
           git push
