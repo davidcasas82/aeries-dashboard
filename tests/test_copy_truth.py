@@ -317,6 +317,53 @@ class ClassworkIsNotHomeworkTests(unittest.TestCase):
         self.assertTrue(entry.get("turned_in"))
         self.assertEqual(entry["due_label"], "awaiting score · was due Wed Aug 19")
 
+    def test_mi_marker_is_missing_even_when_count_says_zero(self):
+        # ClassSummary can lag the gradebook; a per-row "MI" is authoritative.
+        flagged = _asgn(description="Homework 2", due_date="08/21/2026", score_raw="MI", aeries_missing=True)
+        class_meta = {"percent": "91.0", "mark": "A", "missing_count": 0}
+        picked = scraper.select_missing_assignments([self._exit_ticket(), flagged], class_meta, TODAY)
+        self.assertEqual([a["description"] for a in picked], ["Homework 2"])
+        self.assertTrue(scraper.is_missing_assignment(flagged, TODAY, class_meta))
+        # The flagged row uses up the portal's count before any heuristic pick.
+        class_meta["missing_count"] = 1
+        picked = scraper.select_missing_assignments([self._exit_ticket(), flagged], class_meta, TODAY)
+        self.assertEqual([a["description"] for a in picked], ["Homework 2"])
+
+    def test_mi_marker_status_is_missing_not_awaiting(self):
+        flagged = _asgn(description="Homework 2", due_date="08/21/2026", score_raw="MI", aeries_missing=True)
+        a = scraper.annotate_assignment_status(flagged, {"Formative": 30})
+        self.assertEqual(a["status"], "missing")
+        self.assertFalse(a["counts_toward_grade"])
+        entry = scraper.format_assignment_entry(a, TODAY, "missing")
+        self.assertTrue(entry.get("aeries_missing"))
+
+    def test_awaiting_entry_carries_days_past_due_and_turned_in(self):
+        entry = scraper.format_assignment_entry(self._exit_ticket(), TODAY, "pending")
+        self.assertEqual(entry["days_past_due"], 8)
+        self.assertTrue(entry["turned_in"])
+        self.assertNotIn("stale", entry)
+
+    def test_stale_awaiting_flag_starts_at_ten_days(self):
+        nine = _asgn(description="Nine", due_date="08/18/2026", score_raw="")
+        ten = _asgn(description="Ten", due_date="08/17/2026", score_raw="")
+        self.assertNotIn("stale", scraper.format_assignment_entry(nine, TODAY, "pending"))
+        self.assertTrue(scraper.format_assignment_entry(ten, TODAY, "pending")["stale"])
+        self.assertEqual(scraper.STALE_AWAITING_DAYS, 10)
+
+    def test_analyze_class_counts_awaiting_and_stale_separately_from_missing(self):
+        class_meta = {"percent": "95.0", "mark": "A", "missing_count": 0}
+        stale = _asgn(description="Old lab", due_date="08/10/2026", score_raw="")
+        analyzed = scraper.analyze_class(class_meta, [self._exit_ticket(), stale], TODAY)
+        self.assertEqual(analyzed["missing_assignments"], [])
+        self.assertEqual(analyzed["awaiting_count"], 2)
+        self.assertEqual(analyzed["stale_awaiting_count"], 1)
+        names = [p["name"] for p in analyzed["pending_grade"]]
+        self.assertEqual(names, ["Old lab", "Exit Ticket"])
+
+    def test_prompt_says_awaiting_is_not_missing(self):
+        src = Path(scraper.__file__).read_text()
+        self.assertIn("Awaiting score is not missing", src)
+
     def test_tonight_plan_skips_turned_in_and_adds_due_tomorrow(self):
         analytics = [
             {

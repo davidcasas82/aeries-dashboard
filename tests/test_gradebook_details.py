@@ -50,6 +50,26 @@ class ParseAssignmentRowsTests(unittest.TestCase):
         self.assertEqual(by_name["Bonus article"]["points_earned"], 2.0)
         self.assertEqual(by_name["Bonus article"]["points_possible"], 0.0)
 
+    def test_mi_score_cell_sets_aeries_missing(self):
+        html = """
+        <table><tr class="assignment-info">
+          <td>4<br>Date Assigned: 08/17/2026</td>
+          <td>Homework 2</td><td>Assignments</td>
+          <td>MI</td>
+          <td></td><td>/</td><td>10</td>
+          <td></td><td></td><td></td><td></td>
+          <td></td><td></td><td></td>
+          <td>08/21/2026</td><td></td><td></td>
+        </tr></table>"""
+        rows = scraper.parse_assignment_rows(BeautifulSoup(html, "html.parser"))
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0]["aeries_missing"])
+        self.assertIsNone(rows[0]["points_earned"])
+        self.assertEqual(rows[0]["score_raw"], "MI")
+        # An ordinary blank is not flagged
+        soup = load_soup("gradebook_perc_of_grade.html")
+        self.assertFalse(scraper.parse_assignment_rows(soup)[3]["aeries_missing"])
+
     def test_safe_float_still_returns_none_for_codes(self):
         self.assertIsNone(scraper.safe_float("NA"))
         self.assertIsNone(scraper.safe_float("TX"))

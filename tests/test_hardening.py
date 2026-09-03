@@ -251,6 +251,115 @@ class ViewModelTests(unittest.TestCase):
         self.assertEqual(view["classes"][0]["missing_count"], 0)
         self.assertEqual(view["classes"][0]["urgency"], "strong")
 
+    def test_view_splits_awaiting_from_missing_and_flags_newly_missing(self):
+        today = datetime(2026, 9, 1)
+        fmt = lambda d: d.strftime("%m/%d/%Y")  # noqa: E731
+        student = {
+            "name": "Kid",
+            "sn": "1",
+            "classes": [
+                {
+                    "period": 3,
+                    "course_name": "Rapid Prototype",
+                    "teacher": "Ireland",
+                    "percent": "90",
+                    "mark": "A",
+                    "missing_count": 1,
+                }
+            ],
+            "assignments_by_class": [
+                {
+                    "class_name": "3- Rapid Prototype- Fall",
+                    "period": 3,
+                    "assignments": [
+                        {
+                            # Never handed in; the portal's 1 missing lands here
+                            "description": "Homework 2",
+                            "due_date": fmt(datetime(2026, 8, 28)),
+                            "points_earned": None,
+                            "points_possible": 10,
+                            "grading_complete": False,
+                        },
+                        {
+                            # Handed in 15 days ago, still unscored: awaiting, and stale
+                            "description": "Poster",
+                            "due_date": fmt(datetime(2026, 8, 17)),
+                            "date_completed": fmt(datetime(2026, 8, 17)),
+                            "points_earned": None,
+                            "points_possible": 10,
+                            "grading_complete": True,
+                        },
+                        {
+                            # Blank from a few days ago: awaiting, not stale
+                            "description": "Exit Ticket",
+                            "due_date": fmt(datetime(2026, 8, 27)),
+                            "date_completed": fmt(datetime(2026, 8, 27)),
+                            "points_earned": None,
+                            "points_possible": 4,
+                            "grading_complete": True,
+                        },
+                    ],
+                }
+            ],
+            "class_trends": {},
+            "ai_summary": {},
+        }
+        history = {
+            "students": {
+                "1": {
+                    "name": "Kid",
+                    "snapshots": [
+                        {
+                            "date": "2026-08-31",
+                            "classes": {
+                                "Rapid Prototype": {
+                                    "period": 3,
+                                    "pct": 90.0,
+                                    "mark": "A",
+                                    "missing_count": 0,
+                                    "missing_names": [],
+                                }
+                            },
+                        }
+                    ],
+                }
+            }
+        }
+        with patch.object(scraper, "pacific_today_dt", return_value=today):
+            with patch.object(scraper, "pacific_today", return_value=today.date()):
+                analytics = scraper.build_class_analytics(student)
+                ctx = scraper.build_history_context("1", student, analytics["classes"], history)
+                view = scraper.build_student_view(student, history_context=ctx)
+        row = view["classes"][0]
+        self.assertEqual([a["name"] for a in row["missing"]], ["Homework 2"])
+        self.assertEqual(row["missing_count"], 1)
+        self.assertEqual([a["name"] for a in row["awaiting"]], ["Poster", "Exit Ticket"])
+        self.assertEqual(row["awaiting_count"], 2)
+        self.assertEqual(row["stale_awaiting_count"], 1)
+        poster, ticket = row["awaiting"]
+        self.assertTrue(poster["stale"])
+        self.assertEqual(poster["days_past_due"], 15)
+        self.assertTrue(poster["turned_in"])
+        self.assertNotIn("stale", ticket)
+        self.assertEqual(ctx["classes"]["Rapid Prototype"]["newly_missing"], ["Homework 2"])
+        self.assertEqual(row["newly_missing"], ["Homework 2"])
+
+    def test_newly_missing_is_empty_without_a_prior_snapshot(self):
+        analytics = [
+            {"course_name": "Bio", "current_grade_pct": 90.0, "missing_assignments": [{"name": "Lab"}]}
+        ]
+        with patch.object(scraper, "pacific_today", return_value=date(2026, 9, 1)):
+            ctx = scraper.build_history_context("1", {"name": "Kid"}, analytics, {"students": {}})
+        self.assertEqual(ctx["classes"]["Bio"]["newly_missing"], [])
+        # Already missing in the last snapshot: chronic, not new
+        history = {"students": {"1": {"snapshots": [
+            {"date": "2026-08-31", "classes": {"Bio": {"pct": 90.0, "mark": "A", "missing_count": 1, "missing_names": ["Lab"]}}}
+        ]}}}
+        with patch.object(scraper, "pacific_today", return_value=date(2026, 9, 1)):
+            ctx = scraper.build_history_context("1", {"name": "Kid"}, analytics, history)
+        self.assertEqual(ctx["classes"]["Bio"]["newly_missing"], [])
+        self.assertEqual(ctx["classes"]["Bio"]["chronic_missing"], ["Lab"])
+
 
 if __name__ == "__main__":
     unittest.main()
