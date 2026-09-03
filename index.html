@@ -607,7 +607,8 @@
             text-overflow: ellipsis;
         }
 
-        .row-missing {
+        .row-missing,
+        .row-awaiting {
             font-size: var(--fs-label);
             font-weight: 650;
             color: var(--red);
@@ -616,6 +617,17 @@
             border-radius: 999px;
             flex-shrink: 0;
             white-space: nowrap;
+        }
+
+        /* Awaiting score is quiet gray; it turns amber only when something has sat unscored for weeks. */
+        .row-awaiting {
+            color: var(--text-2);
+            background: rgba(40, 40, 35, 0.07);
+        }
+
+        .row-awaiting.stale {
+            color: var(--amber);
+            background: var(--amber-soft);
         }
 
         .row-meta {
@@ -763,6 +775,8 @@
         .stat-tile .stat-value.up { color: var(--teal); }
         .stat-tile .stat-value.down { color: var(--red); }
         .stat-tile .stat-value.alert { color: var(--red); }
+        .stat-tile .stat-value.quiet { color: var(--text-2); }
+        .stat-tile .stat-value.stale { color: var(--amber); }
 
         .panel-block {
             background: var(--surface-2);
@@ -794,7 +808,19 @@
 
         .panel-block-label.alert { color: var(--red); }
         .panel-block-label.alert .count { color: var(--red); }
+        .panel-block-label.quiet { color: var(--text-2); }
         .panel-block-label.tonight { color: var(--amber); }
+
+        .panel-block-label .label-note {
+            margin-left: 8px;
+            font-weight: 600;
+            letter-spacing: 0;
+            text-transform: none;
+            color: var(--text-3);
+        }
+
+        .panel-block-label.alert .label-note { color: var(--red); }
+        .panel-block-label .label-note.stale { color: var(--amber); }
 
         .panel-block-tonight {
             background: var(--amber-soft);
@@ -979,6 +1005,8 @@
             border: 1px solid var(--border);
         }
 
+        .pts-badge.muted { color: var(--text-3); }
+
         .badge {
             font-size: var(--fs-label);
             font-weight: 600;
@@ -1006,6 +1034,8 @@
         .assn-status.counts { color: var(--teal); }
         .assn-status.pending { color: var(--text-2); }
         .assn-status.turned_in { color: var(--text-2); }
+        .assn-status.missing { color: var(--red); }
+        .assn-status.stale { color: var(--amber); font-weight: 600; }
         .assn-status.zero_weight { color: var(--text-3); }
         .assn-status.na,
         .assn-status.tx,
@@ -1685,17 +1715,50 @@
         // Missing is only what the Aeries portal flags. Most work is done in class and scored
         // later, so a blank score (even with "Grading Completed" ticked) is just awaiting a score.
         // When Aeries reports N, pick the N most likely: not turned in first, then grading-complete, oldest.
+        // Rows Aeries marks missing in the gradebook itself ("MI"/"Missing") are always missing.
+        function isAeriesFlaggedMissing(a) {
+            return !!(a && a.aeries_missing && a.points_earned == null);
+        }
+
         function filterMissingAssignments(assignments, aeriesCount) {
-            if (!aeriesCount || aeriesCount <= 0) return [];
             const byDue = (a, b) => (parseDate(a.due_date) || 0) - (parseDate(b.due_date) || 0);
-            const pastDue = (assignments || []).filter(isPastDueUngraded).sort((a, b) => {
-                const t = Number(isTurnedIn(a)) - Number(isTurnedIn(b));
-                if (t) return t;
-                const g = Number(a.grading_complete !== true) - Number(b.grading_complete !== true);
-                if (g) return g;
-                return byDue(a, b);
-            });
-            return pastDue.slice(0, aeriesCount).sort(byDue);
+            const flagged = (assignments || []).filter(isAeriesFlaggedMissing);
+            const n = Math.max(Number(aeriesCount) || 0, flagged.length);
+            if (n <= 0) return [];
+            const pastDue = (assignments || [])
+                .filter(a => isPastDueUngraded(a) && !flagged.includes(a))
+                .sort((a, b) => {
+                    const t = Number(isTurnedIn(a)) - Number(isTurnedIn(b));
+                    if (t) return t;
+                    const g = Number(a.grading_complete !== true) - Number(b.grading_complete !== true);
+                    if (g) return g;
+                    return byDue(a, b);
+                });
+            return flagged.concat(pastDue.slice(0, Math.max(0, n - flagged.length))).sort(byDue);
+        }
+
+        // Past-due, unscored, and not flagged by Aeries: the teacher just hasn't posted a score yet.
+        function filterAwaitingAssignments(assignments, missing) {
+            const missingSet = new Set(missing || []);
+            return (assignments || [])
+                .filter(a => isPastDueUngraded(a) && !missingSet.has(a))
+                .sort((a, b) => (parseDate(a.due_date) || 0) - (parseDate(b.due_date) || 0));
+        }
+
+        const STALE_AWAITING_DAYS = 10;
+
+        function daysPastDue(a) {
+            const due = parseDate(a && a.due_date);
+            if (!due) return null;
+            const d = -daysFromToday(due);
+            return d > 0 ? d : 0;
+        }
+
+        // Unscored this long past due is worth a question to the teacher, but it is still not "missing".
+        function isStaleAwaiting(a) {
+            if (!isPastDueUngraded(a)) return false;
+            const d = daysPastDue(a);
+            return d != null && d >= STALE_AWAITING_DAYS;
         }
 
         function filterUpcomingAssignments(assignments) {
@@ -1718,6 +1781,12 @@
             if (code) return { status: code.toLowerCase(), label: code };
             // Blank score: decide here rather than trusting an older payload's "counts" label.
             if (a.points_earned == null) {
+                if (isAeriesFlaggedMissing(a)) return { status: 'missing', label: 'marked missing in Aeries' };
+                if (isStaleAwaiting(a)) {
+                    const d = daysPastDue(a);
+                    const age = `awaiting score ${d} days · worth asking`;
+                    return { status: 'stale', label: isTurnedIn(a) ? `turned in · ${age}` : age };
+                }
                 if (isTurnedIn(a)) return { status: 'turned_in', label: 'turned in · awaiting score' };
                 if (isPastDueUngraded(a)) return { status: 'pending', label: 'awaiting score' };
                 return { status: 'pending', label: '' };
@@ -1799,6 +1868,7 @@
                 const aeriesMissing = parseMissingCount(c);
                 const missing = filterMissingAssignments(assignments, aeriesMissing);
                 const missingCount = assignments.length ? missing.length : aeriesMissing;
+                const awaiting = filterAwaitingAssignments(assignments, missing);
                 const upcoming = filterUpcomingAssignments(assignments);
                 const recent = filterScoredAssignments(assignments);
 
@@ -1821,9 +1891,13 @@
                     classMeta: c,
                     assignments,
                     missing,
+                    awaiting,
                     upcoming,
                     recent,
                     missingCount,
+                    awaitingCount: awaiting.length,
+                    staleAwaitingCount: awaiting.filter(isStaleAwaiting).length,
+                    newlyMissing: [],
                     period: c.period,
                 });
             }
@@ -2046,6 +2120,20 @@
             return items;
         }
 
+        function mergeTonightItems(primary, extra) {
+            const seen = new Set();
+            const out = [];
+            for (const item of (primary || []).concat(extra || [])) {
+                if (!item || !item.name) continue;
+                const key = `${normalizeName(item.className)}|${item.name.toLowerCase()}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push(item);
+                if (out.length >= 3) break;
+            }
+            return out;
+        }
+
         function formatTonightLabel(items) {
             return (items || []).map(i => `${i.name} (${i.className})`).join('; ');
         }
@@ -2070,21 +2158,28 @@
             for (const item of items || []) {
                 const row = { ...item };
                 let hit = null;
+                let hitProfile = null;
                 for (const p of profiles || []) {
                     const cn = (p.classMeta && p.classMeta.course_name) || '';
                     if (item.className && normalizeName(cn) !== normalizeName(item.className)) continue;
                     hit = (p.assignments || []).find(a => a.description === item.name);
                     if (!hit) continue;
+                    hitProfile = p;
                     if (row.period == null) row.period = p.period;
                     if (!row.dueDate) row.dueDate = hit.due_date;
-                    if (!row.status) {
-                        row.status = (p.missing || []).includes(hit) || isPastDueUngraded(hit) ? 'overdue'
-                            : (isDueTodayUngraded(hit) ? 'today' : (isDueInDaysUngraded(hit, 1) ? 'tomorrow' : ''));
-                    }
                     break;
                 }
-                // Work Aeries shows as handed in is not a to-do, whatever the payload said.
-                if (hit && isTurnedIn(hit)) continue;
+                if (hit) {
+                    // Work Aeries shows as handed in or already scored is not a to-do, whatever the payload said.
+                    if (isTurnedIn(hit) || assignmentHasScoreMark(hit)) continue;
+                    const flagged = (hitProfile.missing || []).includes(hit);
+                    // Past due but not flagged missing is "awaiting score" — not something to do tonight.
+                    if (isPastDueUngraded(hit) && !flagged) continue;
+                    // Re-derive the status from the row itself rather than trusting a stored reason.
+                    row.status = flagged ? 'overdue'
+                        : (isDueTodayUngraded(hit) ? 'today' : (isDueInDaysUngraded(hit, 1) ? 'tomorrow' : row.status || ''));
+                    if (!row.status) continue;
+                }
                 out.push(row);
             }
             return out;
@@ -2179,27 +2274,41 @@
             return '';
         }
 
+        // Apply the truth rules (urgency, snap/story rewrites, heads-up pick) to a base profile.
+        // Used for both the raw-assignment path and the server view payload, so neither path
+        // can show copy the current rules would not produce.
+        function enrichProfile(p, aiClass) {
+            const urgency = inferUrgency(p, aiClass);
+            let snap = (aiClass?.snap || inferUrgencyReason(p, urgency) || '').trim();
+            snap = rewriteStaleCopy(snap, p);
+            if (snapNamesStaleWork(snap, p) || snapClaimsMissing(snap, p)) {
+                const fallback = inferUrgencyReason(p, urgency) || '';
+                snap = rewriteStaleCopy(fallback, p) || fallback;
+            }
+            const story = rewriteStaleCopy((aiClass?.story || '').trim(), p);
+            return {
+                ...p,
+                aiClass: aiClass ? { ...aiClass, snap, story } : aiClass,
+                urgency,
+                snap,
+                story,
+                liveDoTonight: liveDoTonight(p),
+                urgencyRank: urgencyToRank(urgency),
+            };
+        }
+
+        // "2 missing" in a snap written under older rules when Aeries now flags none.
+        function snapClaimsMissing(snap, profile) {
+            if (!snap) return false;
+            const m = snap.match(/\b(\d+)\s+missing\b/i);
+            if (!m) return false;
+            return parseInt(m[1], 10) !== (profile.missingCount || 0);
+        }
+
         function enrichProfiles(student, profiles) {
             return profiles.map(p => {
                 const rawAi = findAiClass(student, p.classMeta.course_name);
-                const aiClass = normalizeAiClass(rawAi);
-                const urgency = inferUrgency(p, aiClass);
-                let snap = (aiClass?.snap || inferUrgencyReason(p, urgency) || '').trim();
-                snap = rewriteStaleCopy(snap, p);
-                if (snapNamesStaleWork(snap, p)) {
-                    const fallback = inferUrgencyReason(p, urgency) || '';
-                    snap = rewriteStaleCopy(fallback, p) || fallback;
-                }
-                const story = rewriteStaleCopy((aiClass?.story || '').trim(), p);
-                return {
-                    ...p,
-                    aiClass: aiClass ? { ...aiClass, snap, story } : aiClass,
-                    urgency,
-                    snap,
-                    story,
-                    liveDoTonight: liveDoTonight(p),
-                    urgencyRank: urgencyToRank(urgency),
-                };
+                return enrichProfile(p, normalizeAiClass(rawAi));
             }).sort((a, b) => a.period - b.period);
         }
 
@@ -2311,8 +2420,13 @@
                     dueDate: i.due_date,
                 }))
                 : null;
+            // The live pick from the (already rule-checked) profiles is the source of truth; payload
+            // rows only supplement it, and go through the same guards so stale ones drop out.
             const tonightItems = (!summer && !scheduleOnly)
-                ? resolveTonightItems(viewTonight && viewTonight.length ? viewTonight : pickTonightItems(profiles || []), profiles)
+                ? mergeTonightItems(
+                    pickTonightItems(profiles || []),
+                    resolveTonightItems(viewTonight || [], profiles),
+                )
                 : [];
             // Build the label from the resolved items so a dropped (turned-in) item can't linger in it.
             const focus = formatTonightLabel(tonightItems);
@@ -2515,7 +2629,7 @@
                 return da - db;
             });
             let html = `<div class="list-panel">`;
-            if (kind === 'missing') {
+            if (kind === 'missing' || kind === 'awaiting') {
                 for (const a of sorted) {
                     html += renderAssignmentRow(a, kind, insight);
                 }
@@ -2544,8 +2658,11 @@
         function renderAssignmentRow(a, kind, insight) {
             const due = parseDate(a.due_date);
             // A past date only reads as "overdue" when nothing has been scored yet.
+            // Awaiting-score dates stay gray: past due is not the same as missing.
+            const awaitingLike = isPastDueUngraded(a) && !isAeriesFlaggedMissing(a);
             const dateClass = kind === 'missing' ? 'overdue'
-                : (assignmentHasScoreMark(a) ? '' : getDateClass(due));
+                : kind === 'awaiting' ? ''
+                : (assignmentHasScoreMark(a) || awaitingLike ? '' : getDateClass(due));
             const dateHtml = kind === 'missing'
                 ? formatShortDate(due)
                 : `${formatDayOfWeek(due)} ${formatShortDate(due)}`;
@@ -2553,9 +2670,9 @@
             const st = inferAssignmentStatus(a, insight);
             const score = assignmentScoreDisplay(a);
             let scoreHtml = '';
-            if (kind === 'missing') {
+            if (kind === 'missing' || kind === 'awaiting') {
                 scoreHtml = a.points_possible
-                    ? `<span class="pts-badge">${a.points_possible} pts</span>`
+                    ? `<span class="pts-badge${kind === 'awaiting' ? ' muted' : ''}">${a.points_possible} pts</span>`
                     : '';
             } else if (kind === 'upcoming' && !assignmentHasScoreMark(a)) {
                 scoreHtml = `<span class="badge badge-upcoming">Due</span>`;
@@ -2677,6 +2794,14 @@
                     <div class="stat-label">Missing</div>
                     <div class="stat-value ${profile.missingCount > 0 ? 'alert' : ''}">${profile.missingCount}</div>
                 </div>`;
+            const awaitingCount = profile.awaitingCount || (profile.awaiting || []).length;
+            const staleCount = profile.staleAwaitingCount || 0;
+            const awaitingTile = awaitingCount > 0
+                ? `<div class="stat-tile" title="Past due, not scored yet, and not flagged missing in Aeries">
+                    <div class="stat-label">Awaiting</div>
+                    <div class="stat-value ${staleCount > 0 ? 'stale' : 'quiet'}">${awaitingCount}</div>
+                </div>`
+                : '';
 
             // Stats row
             let stats = `<div class="panel-stats">
@@ -2689,6 +2814,7 @@
                     <div class="stat-value ${dir || ''}">${deltaStr != null ? deltaStr + (window ? ' · ' + window : '') : '—'}</div>
                 </div>
                 ${missingTile}
+                ${awaitingTile}
                 <div class="stat-tile">
                     <div class="stat-label">Upcoming</div>
                     <div class="stat-value">${profile.upcoming.length}</div>
@@ -2746,9 +2872,25 @@
             const insight = c.counted_insight;
             const listBlocks = [];
             if (profile.missing.length) {
+                const newly = (profile.newlyMissing || []).filter(n =>
+                    profile.missing.some(a => normalizeName(a.description) === normalizeName(n))
+                );
+                const newNote = newly.length
+                    ? `<span class="label-note">new since last check</span>`
+                    : '';
                 listBlocks.push(`<div class="panel-block">
-                    <div class="panel-block-label alert">Missing <span class="count">${profile.missing.length}</span></div>
+                    <div class="panel-block-label alert">Missing <span class="count">${profile.missing.length}</span>${newNote}</div>
                     ${renderAssignmentList(profile.missing, 'missing', insight)}
+                </div>`);
+            }
+            const awaiting = profile.awaiting || [];
+            if (awaiting.length) {
+                const staleNote = staleCount > 0
+                    ? `<span class="label-note stale">${staleCount} worth asking about</span>`
+                    : '';
+                listBlocks.push(`<div class="panel-block">
+                    <div class="panel-block-label quiet">Awaiting score <span class="count">${awaiting.length}</span>${staleNote}</div>
+                    ${renderAssignmentList(awaiting, 'awaiting', insight)}
                 </div>`);
             }
             if (profile.upcoming.length) {
@@ -2765,7 +2907,7 @@
             }
 
             if (listBlocks.length) {
-                const twoCol = listBlocks.length >= 2 && (profile.missing.length || profile.upcoming.length);
+                const twoCol = listBlocks.length >= 2 && (profile.missing.length || awaiting.length || profile.upcoming.length);
                 blocks += `<div class="panel-lists ${twoCol ? 'two-col' : ''}">${listBlocks.join('')}</div>`;
             }
 
@@ -2794,9 +2936,15 @@
                 const g = formatGradeDisplay(c, p.assignments);
                 const gradeClass = hasRealGrade(c, p.assignments) ? getGradeClass(c.percent) : 'grade-none';
                 const urgency = p.urgency || 'ok';
-                const snap = p.snap || '';
+                // The pill already says "N missing"; don't echo it as the snap line.
+                const rawSnap = p.snap || '';
+                const snap = normalizeName(rawSnap) === normalizeName(`${p.missingCount} missing`) ? '' : rawSnap;
                 const missingBadge = p.missingCount > 0
                     ? `<span class="row-missing">${p.missingCount} missing</span>`
+                    : '';
+                const awaitingN = p.awaitingCount || (p.awaiting || []).length;
+                const awaitingBadge = awaitingN > 0
+                    ? `<span class="row-awaiting${p.staleAwaitingCount > 0 ? ' stale' : ''}">${awaitingN} awaiting score</span>`
                     : '';
 
                 const t = findClassTrend(student, c.course_name);
@@ -2820,6 +2968,7 @@
                                     <span class="row-period">P${p.period}</span>
                                     <span class="row-name">${esc(c.course_name)}</span>
                                     ${missingBadge}
+                                    ${awaitingBadge}
                                 </span>
                                 ${snap ? `<span class="row-meta ${urgency === 'critical' || urgency === 'watch' ? urgency : ''}">${esc(snap)}</span>` : ''}
                             </span>
@@ -2923,6 +3072,7 @@
                     room: row.room,
                     percent: row.percent,
                     mark: row.mark,
+                    missing_count: row.missing_count,
                     counted_insight: row.counted_insight,
                     phantom_zero: row.phantom_zero,
                 };
@@ -2944,27 +3094,39 @@
                         };
                     }
                 }
-                return {
+                // The payload may have been written by an older scraper. When the raw rows are
+                // present, re-derive every list from them with the current rules; only fall back
+                // to the payload's lists when there is nothing to derive from.
+                const assignments = row.assignments || [];
+                const aeriesCount = parseMissingCount(classMeta);
+                const hasRows = assignments.length > 0;
+                const missing = hasRows ? filterMissingAssignments(assignments, aeriesCount) : (row.missing || []);
+                const awaiting = hasRows ? filterAwaitingAssignments(assignments, missing) : (row.awaiting || []);
+                const upcoming = hasRows ? filterUpcomingAssignments(assignments) : (row.upcoming || []);
+                const recent = hasRows ? filterScoredAssignments(assignments) : (row.recent || []);
+                const base = {
                     classMeta,
-                    assignments: row.assignments || [],
-                    missing: row.missing || [],
-                    upcoming: row.upcoming || [],
-                    recent: row.recent || [],
-                    missingCount: row.missing_count || 0,
+                    assignments,
+                    missing,
+                    awaiting,
+                    upcoming,
+                    recent,
+                    missingCount: hasRows ? missing.length : (row.missing_count || 0),
+                    awaitingCount: awaiting.length,
+                    staleAwaitingCount: hasRows
+                        ? awaiting.filter(isStaleAwaiting).length
+                        : (row.stale_awaiting_count || 0),
+                    newlyMissing: row.newly_missing || [],
                     period: row.period,
-                    aiClass: {
-                        snap: row.snap,
-                        story: row.story,
-                        do_tonight: row.do_tonight,
-                        urgency: row.urgency,
-                        class_name: row.course_name,
-                    },
-                    urgency: row.urgency || 'ok',
-                    snap: row.snap || '',
-                    story: row.story || '',
-                    liveDoTonight: row.do_tonight || '',
-                    urgencyRank: urgencyToRank(row.urgency),
                 };
+                const aiClass = normalizeAiClass({
+                    snap: row.snap,
+                    story: row.story,
+                    do_tonight: row.do_tonight,
+                    urgency: row.urgency,
+                    class_name: row.course_name,
+                });
+                return enrichProfile(base, aiClass);
             }).sort((a, b) => (a.period ?? 99) - (b.period ?? 99));
         }
 

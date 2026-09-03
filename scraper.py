@@ -1357,6 +1357,11 @@ def parse_assignment_rows(soup):
             points_possible == 0
             and points_earned is not None
         )
+        row_classes = " ".join(row.get("class") or [])
+        aeries_missing = bool(
+            _MISSING_MARK_RE.search(score_display or "")
+            or re.search(r"MissingAssignment", row_classes)
+        )
 
         assignment = {
             "number": assign_num,
@@ -1376,6 +1381,7 @@ def parse_assignment_rows(soup):
             "due_date": due_date,
             "grading_complete": grading_complete,
             "extra_credit": extra_credit,
+            "aeries_missing": aeries_missing,
         }
         assignments.append(assignment)
 
@@ -1387,6 +1393,10 @@ _SCORE_STATUS_RE = re.compile(
     r"\b(" + "|".join(SCORE_STATUS_CODES) + r")\b",
     re.IGNORECASE,
 )
+# Aeries may render a per-assignment missing marker in the Score cell ("MI" / "Missing").
+_MISSING_MARK_RE = re.compile(r"\b(MI|Missing)\b", re.IGNORECASE)
+# Past-due, unscored, not flagged missing for this long is worth a question to the teacher.
+STALE_AWAITING_DAYS = 10
 _TOTAL_ROW_RE = re.compile(r"^(total|overall|grand total)\b", re.IGNORECASE)
 _MIN_MAX_NOTE_RE = re.compile(
     r"min(?:imum)?(?:\s+assignment)?(?:\s+(?:value|score|pct|percent(?:age)?))?"
@@ -1813,6 +1823,11 @@ def annotate_assignment_status(assignment, weights=None):
         return assignment
 
     if assignment.get("points_earned") is None:
+        if assignment.get("aeries_missing"):
+            assignment["status"] = "missing"
+            assignment["status_label"] = "marked missing in Aeries"
+            assignment["counts_toward_grade"] = False
+            return assignment
         # "Grading Completed" is a teacher bookkeeping flag; a blank is still unscored.
         if assignment_turned_in(assignment):
             assignment["status"] = "turned_in"
@@ -2510,6 +2525,9 @@ def build_history_context(student_sn, student_data, class_analytics_list, histor
         now_missing = set(missing_names)
         chronic = sorted(past_missing & now_missing)
         resolved = sorted(past_missing - now_missing)
+        # Newly flagged since the most recent prior snapshot (no prior snapshot -> nothing is "new")
+        last_seen = set((past_any or {}).get("missing_names") or []) if past_any else None
+        newly_missing = sorted(now_missing - last_seen) if last_seen is not None else []
 
         # Full series for span delta; downsampled series for UI sparklines.
         # Skip phantom 0% placeholders so first posted score is not a +95 jump.
@@ -2561,6 +2579,7 @@ def build_history_context(student_sn, student_data, class_analytics_list, histor
             "missing_count_7d_ago": (past_7 or {}).get("missing_count"),
             "chronic_missing": chronic[:HISTORY_MISSING_NAMES_CAP],
             "resolved_missing": resolved[:HISTORY_MISSING_NAMES_CAP],
+            "newly_missing": newly_missing[:HISTORY_MISSING_NAMES_CAP],
             "trend_label": label,
             "pct_history": pct_history,
         }
@@ -2706,19 +2725,25 @@ def select_missing_assignments(assignments, class_meta, today):
 
     Much of the kids' work is done in class and scored days later. A blank score —
     even with the teacher's "Grading Completed" box ticked — is pending_grade until
-    the portal's own missing badge says otherwise. When Aeries reports N missing,
-    pick the N most likely rows: not turned in first, then grading-complete, oldest.
+    the portal's own missing badge says otherwise. Rows Aeries marks missing in the
+    gradebook itself (aeries_missing) always count. For the rest of the portal's N,
+    pick the most likely rows: not turned in first, then grading-complete, oldest.
     """
-    aeries_n = aeries_missing_count(class_meta)
+    flagged = [a for a in assignments if a.get("aeries_missing") and a.get("points_earned") is None]
+    aeries_n = max(aeries_missing_count(class_meta), len(flagged))
     if aeries_n <= 0:
         return []
-    past_due = [a for a in assignments if is_past_due_ungraded(a, today)]
+    flagged_ids = {id(a) for a in flagged}
+    past_due = [
+        a for a in assignments
+        if is_past_due_ungraded(a, today) and id(a) not in flagged_ids
+    ]
     past_due.sort(key=lambda a: (
         assignment_turned_in(a),
         not a.get("grading_complete"),
         parse_due_date(a.get("due_date")) or datetime.min,
     ))
-    picked = past_due[:aeries_n]
+    picked = flagged + past_due[:max(0, aeries_n - len(flagged))]
     picked.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
     return picked
 
@@ -3042,8 +3067,15 @@ def format_assignment_entry(assignment, today, kind):
             entry["days_overdue"] = (today - due).days
         elif kind == "upcoming":
             entry["days_until_due"] = (due - today).days
+        elif kind == "pending":
+            days_past = (today - due).days
+            entry["days_past_due"] = days_past
+            if days_past >= STALE_AWAITING_DAYS:
+                entry["stale"] = True
     if assignment_turned_in(assignment):
         entry["turned_in"] = True
+    if assignment.get("aeries_missing"):
+        entry["aeries_missing"] = True
     if kind == "recent":
         entry["points_earned"] = assignment.get("points_earned")
         entry["percentage"] = assignment.get("percentage")
@@ -3155,6 +3187,12 @@ def analyze_class(class_meta, assignments, today):
         "pending_grade": [
             format_assignment_entry(a, today, "pending") for a in pending_grade[:8]
         ],
+        "awaiting_count": len(pending_grade),
+        "stale_awaiting_count": sum(
+            1 for a in pending_grade
+            if (parse_due_date(a.get("due_date")) is not None
+                and (today - parse_due_date(a.get("due_date"))).days >= STALE_AWAITING_DAYS)
+        ),
         "recoverable_points": round(recoverable_points, 1),
         "oldest_missing_days": oldest_missing_days,
         "median_missing_days": median_missing_days,
@@ -3435,6 +3473,13 @@ def build_student_view(student_data, history_context=None):
             analyzed = analyze_class(class_meta, assignments, today)
 
         missing = select_missing_assignments(assignments, class_meta, today)
+        missing_ids = {id(a) for a in missing}
+        awaiting = [
+            a for a in assignments
+            if is_past_due_ungraded(a, today) and id(a) not in missing_ids
+        ]
+        awaiting.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
+        hist_cls = (history_context.get("classes") or {}).get(name) or {}
         upcoming = []
         recent = []
         for assignment in assignments:
@@ -3492,6 +3537,10 @@ def build_student_view(student_data, history_context=None):
             "do_tonight": tonight_name,
             "missing_count": len(missing),
             "missing": [_view_assignment(a, today, "missing") for a in missing],
+            "awaiting_count": len(awaiting),
+            "awaiting": [_view_assignment(a, today, "pending") for a in awaiting],
+            "stale_awaiting_count": analyzed.get("stale_awaiting_count") or 0,
+            "newly_missing": list(hist_cls.get("newly_missing") or []),
             "upcoming": [_view_assignment(a, today, "upcoming") for a in upcoming],
             "recent": [_view_assignment(a, today, "recent") for a in recent],
             "assignments": [_view_assignment(a, today, "recent") for a in assignments],
@@ -3873,6 +3922,7 @@ PARENT SKIM (this is the job)
 - If coverage.classes_with_portal_work is much smaller than coverage.scheduled_classes, add a short clause that most classes have no work posted yet (normal early in the term). Do not treat silence as all-clear, and do not panic about empty gradebooks.
 - focus_tonight: copy tonight_plan.label exactly (empty if tonight_plan.items is empty). Due today beats missing beats due tomorrow. pending_grade is submitted/awaiting a teacher score — not tonight, not missing. Anything with turned_in true was handed in (usually in class) and is never a to-do.
 - Most of this work happens in class. Missing means only what the Aeries portal itself flags; a blank score is not missing and not homework.
+- Awaiting score is not missing. Never count pending_grade items (awaiting_count) in any missing total or missing points; only missing_assignments are missing. If a pending_grade item is stale (10+ days), at most say it is worth asking the teacher about.
 - wins: 0–2 specifics with evidence (grade + assignment). Skip empty praise.
 
 VOICE
