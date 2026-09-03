@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-09-02T13:32:11.715632+00:00",
+  "last_updated": "2026-09-03T01:05:32.765499+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -159,6 +159,7 @@
               "due_date": "08/19/2026",
               "grading_complete": false,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Summatives",
               "counts_toward_grade": true,
@@ -196,6 +197,7 @@
               "due_date": "08/20/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Classwork",
               "counts_toward_grade": true,
@@ -220,6 +222,7 @@
               "due_date": "08/28/2026",
               "grading_complete": false,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
@@ -251,6 +254,7 @@
               "due_date": "09/09/2026",
               "grading_complete": false,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
@@ -282,6 +286,7 @@
               "due_date": "08/28/2026",
               "grading_complete": false,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
@@ -306,6 +311,7 @@
               "due_date": "08/28/2026",
               "grading_complete": false,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
@@ -330,6 +336,7 @@
               "due_date": "08/28/2026",
               "grading_complete": false,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
@@ -361,11 +368,12 @@
               "due_date": "08/28/2026",
               "grading_complete": true,
               "extra_credit": false,
-              "status": "counts",
-              "status_label": "counts in Formative",
-              "counts_toward_grade": true,
-              "due_label": "overdue Aug 28",
-              "due_state": "overdue"
+              "aeries_missing": false,
+              "status": "turned_in",
+              "status_label": "turned in \u00b7 awaiting score",
+              "counts_toward_grade": false,
+              "due_label": "awaiting score \u00b7 was due Fri Aug 28",
+              "due_state": "pending"
             },
             {
               "number": "3",
@@ -385,6 +393,7 @@
               "due_date": "08/28/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Formative",
               "counts_toward_grade": true,
@@ -409,11 +418,12 @@
               "due_date": "09/01/2026",
               "grading_complete": true,
               "extra_credit": false,
-              "status": "counts",
-              "status_label": "counts in Coursework",
-              "counts_toward_grade": true,
-              "due_label": "overdue Sep 1",
-              "due_state": "overdue"
+              "aeries_missing": false,
+              "status": "turned_in",
+              "status_label": "turned in \u00b7 awaiting score",
+              "counts_toward_grade": false,
+              "due_label": "awaiting score \u00b7 was due Tue Sep 1",
+              "due_state": "pending"
             }
           ]
         },
@@ -440,6 +450,7 @@
               "due_date": "08/25/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Writing",
               "counts_toward_grade": true,
@@ -462,7 +473,7 @@
       },
       "ai_summary": {
         "headline": "Daniel needs attention in Int Eng&Marktg at C 75% while holding an A in Bus of Gaming.",
-        "focus_tonight": "Exit Ticket (Physics & Eng); Unit 0 Warm Ups (Physics & Eng)",
+        "focus_tonight": "",
         "wins": [
           "A 100% in Bus of Gaming with Anatomy of a Great Game at 5/5"
         ],
@@ -479,7 +490,7 @@
             "urgency": "watch",
             "snap": "Exit Ticket \u00b7 overdue Aug 28; Unit 0 Warm Ups \u00b7 overdue Sep 1",
             "story": "Two missing assignments total 7 points.",
-            "do_tonight": "Exit Ticket"
+            "do_tonight": ""
           },
           {
             "class_name": "Rapid Prototype",
@@ -557,6 +568,10 @@
             {
               "date": "2026-09-01",
               "pct": 100.0
+            },
+            {
+              "date": "2026-09-02",
+              "pct": 100.0
             }
           ],
           "delta_7d": 0.0,
@@ -594,6 +609,10 @@
             {
               "date": "2026-09-01",
               "pct": 100.0
+            },
+            {
+              "date": "2026-09-02",
+              "pct": 100.0
             }
           ],
           "delta_7d": null,
@@ -627,6 +646,10 @@
             {
               "date": "2026-09-01",
               "pct": 75.0
+            },
+            {
+              "date": "2026-09-02",
+              "pct": 75.0
             }
           ],
           "delta_7d": null,
@@ -637,19 +660,8 @@
         }
       },
       "view": {
-        "tonight": [
-          {
-            "name": "Exit Ticket",
-            "class_name": "Physics & Eng",
-            "reason": "missing"
-          },
-          {
-            "name": "Unit 0 Warm Ups",
-            "class_name": "Physics & Eng",
-            "reason": "missing"
-          }
-        ],
-        "tonight_label": "Exit Ticket (Physics & Eng); Unit 0 Warm Ups (Physics & Eng)",
+        "tonight": [],
+        "tonight_label": "",
         "headline": "Daniel needs attention in Int Eng&Marktg at C 75% while holding an A in Bus of Gaming.",
         "wins": [
           "A 100% in Bus of Gaming with Anatomy of a Great Game at 5/5"
@@ -668,6 +680,10 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [
               {
@@ -688,13 +704,15 @@
                 "due_date": "08/19/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Summatives",
                 "counts_toward_grade": true,
                 "due_label": "5/5",
                 "due_state": "completed",
                 "name": "Anatomy of a Great Game",
-                "due_weekday": "Wed"
+                "due_weekday": "Wed",
+                "turned_in": true
               }
             ],
             "assignments": [
@@ -716,13 +734,15 @@
                 "due_date": "08/19/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Summatives",
                 "counts_toward_grade": true,
                 "due_label": "5/5",
                 "due_state": "completed",
                 "name": "Anatomy of a Great Game",
-                "due_weekday": "Wed"
+                "due_weekday": "Wed",
+                "turned_in": true
               }
             ],
             "pct_history": [
@@ -761,6 +781,10 @@
               {
                 "date": "2026-09-01",
                 "pct": 100.0
+              },
+              {
+                "date": "2026-09-02",
+                "pct": 100.0
               }
             ],
             "delta_7d": 0.0,
@@ -783,6 +807,10 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [],
             "assignments": [],
@@ -807,6 +835,10 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [],
             "assignments": [],
@@ -831,6 +863,39 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 1,
+            "awaiting": [
+              {
+                "number": "2",
+                "description": "LT 1.1 - Poster of Myself in Adobe Illustrator",
+                "category": "Assessments",
+                "score_raw": "/ 10",
+                "points_earned": null,
+                "points_possible": 10.0,
+                "percentage": 0.0,
+                "correct_raw": "0 / 10",
+                "correct_earned": 0.0,
+                "correct_possible": 10.0,
+                "comment": "",
+                "documents": "",
+                "date_assigned": "08/24/2026",
+                "date_completed": "",
+                "due_date": "08/28/2026",
+                "grading_complete": false,
+                "extra_credit": false,
+                "aeries_missing": false,
+                "status": "pending",
+                "status_label": "pending",
+                "counts_toward_grade": false,
+                "due_label": "awaiting score \u00b7 was due Fri Aug 28",
+                "due_state": "pending",
+                "name": "LT 1.1 - Poster of Myself in Adobe Illustrator",
+                "due_weekday": "Fri",
+                "days_past_due": 5
+              }
+            ],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [
               {
@@ -851,13 +916,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Classwork",
                 "counts_toward_grade": true,
                 "due_label": "1/3",
                 "due_state": "completed",
                 "name": "Article: Design Principle Jigsaw",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               }
             ],
             "assignments": [
@@ -879,13 +946,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Classwork",
                 "counts_toward_grade": true,
                 "due_label": "1/3",
                 "due_state": "completed",
                 "name": "Article: Design Principle Jigsaw",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "2",
@@ -905,6 +974,7 @@
                 "due_date": "08/28/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
@@ -935,6 +1005,10 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [
               {
                 "number": "1",
@@ -954,6 +1028,7 @@
                 "due_date": "09/09/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
@@ -984,6 +1059,7 @@
                 "due_date": "09/09/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
@@ -1014,6 +1090,95 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 3,
+            "awaiting": [
+              {
+                "number": "1",
+                "description": "MC- LT 1.4",
+                "category": "Assessment",
+                "score_raw": "/ 10",
+                "points_earned": null,
+                "points_possible": 10.0,
+                "percentage": 0.0,
+                "correct_raw": "0 / 10",
+                "correct_earned": 0.0,
+                "correct_possible": 10.0,
+                "comment": "",
+                "documents": "",
+                "date_assigned": "08/28/2026",
+                "date_completed": "",
+                "due_date": "08/28/2026",
+                "grading_complete": false,
+                "extra_credit": false,
+                "aeries_missing": false,
+                "status": "pending",
+                "status_label": "pending",
+                "counts_toward_grade": false,
+                "due_label": "awaiting score \u00b7 was due Fri Aug 28",
+                "due_state": "pending",
+                "name": "MC- LT 1.4",
+                "due_weekday": "Fri",
+                "days_past_due": 5
+              },
+              {
+                "number": "2",
+                "description": "MC- LT 1.5",
+                "category": "Assessment",
+                "score_raw": "/ 10",
+                "points_earned": null,
+                "points_possible": 10.0,
+                "percentage": 0.0,
+                "correct_raw": "0 / 10",
+                "correct_earned": 0.0,
+                "correct_possible": 10.0,
+                "comment": "",
+                "documents": "",
+                "date_assigned": "08/28/2026",
+                "date_completed": "",
+                "due_date": "08/28/2026",
+                "grading_complete": false,
+                "extra_credit": false,
+                "aeries_missing": false,
+                "status": "pending",
+                "status_label": "pending",
+                "counts_toward_grade": false,
+                "due_label": "awaiting score \u00b7 was due Fri Aug 28",
+                "due_state": "pending",
+                "name": "MC- LT 1.5",
+                "due_weekday": "Fri",
+                "days_past_due": 5
+              },
+              {
+                "number": "3",
+                "description": "MC- LT 1.6",
+                "category": "Assessment",
+                "score_raw": "/ 10",
+                "points_earned": null,
+                "points_possible": 10.0,
+                "percentage": 0.0,
+                "correct_raw": "0 / 10",
+                "correct_earned": 0.0,
+                "correct_possible": 10.0,
+                "comment": "",
+                "documents": "",
+                "date_assigned": "08/28/2026",
+                "date_completed": "",
+                "due_date": "08/28/2026",
+                "grading_complete": false,
+                "extra_credit": false,
+                "aeries_missing": false,
+                "status": "pending",
+                "status_label": "pending",
+                "counts_toward_grade": false,
+                "due_label": "awaiting score \u00b7 was due Fri Aug 28",
+                "due_state": "pending",
+                "name": "MC- LT 1.6",
+                "due_weekday": "Fri",
+                "days_past_due": 5
+              }
+            ],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [],
             "assignments": [
@@ -1035,6 +1200,7 @@
                 "due_date": "08/28/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
@@ -1061,6 +1227,7 @@
                 "due_date": "08/28/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
@@ -1087,6 +1254,7 @@
                 "due_date": "08/28/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
@@ -1111,12 +1279,14 @@
             "room": "2-217",
             "percent": "100.0",
             "mark": "A",
-            "urgency": "watch",
+            "urgency": "strong",
             "snap": "Exit Ticket \u00b7 overdue Aug 28; Unit 0 Warm Ups \u00b7 overdue Sep 1",
             "story": "Two missing assignments total 7 points.",
-            "do_tonight": "Exit Ticket",
-            "missing_count": 2,
-            "missing": [
+            "do_tonight": "",
+            "missing_count": 0,
+            "missing": [],
+            "awaiting_count": 2,
+            "awaiting": [
               {
                 "number": "2",
                 "description": "Exit Ticket",
@@ -1135,14 +1305,16 @@
                 "due_date": "08/28/2026",
                 "grading_complete": true,
                 "extra_credit": false,
-                "status": "counts",
-                "status_label": "counts in Formative",
-                "counts_toward_grade": true,
-                "due_label": "overdue Aug 28",
-                "due_state": "overdue",
+                "aeries_missing": false,
+                "status": "turned_in",
+                "status_label": "turned in \u00b7 awaiting score",
+                "counts_toward_grade": false,
+                "due_label": "awaiting score \u00b7 was due Fri Aug 28",
+                "due_state": "pending",
                 "name": "Exit Ticket",
                 "due_weekday": "Fri",
-                "days_overdue": 5
+                "days_past_due": 5,
+                "turned_in": true
               },
               {
                 "number": "4",
@@ -1162,16 +1334,20 @@
                 "due_date": "09/01/2026",
                 "grading_complete": true,
                 "extra_credit": false,
-                "status": "counts",
-                "status_label": "counts in Coursework",
-                "counts_toward_grade": true,
-                "due_label": "overdue Sep 1",
-                "due_state": "overdue",
+                "aeries_missing": false,
+                "status": "turned_in",
+                "status_label": "turned in \u00b7 awaiting score",
+                "counts_toward_grade": false,
+                "due_label": "awaiting score \u00b7 was due Tue Sep 1",
+                "due_state": "pending",
                 "name": "Unit 0 Warm Ups",
                 "due_weekday": "Tue",
-                "days_overdue": 1
+                "days_past_due": 1,
+                "turned_in": true
               }
             ],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [
               {
@@ -1192,13 +1368,15 @@
                 "due_date": "08/28/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Formative",
                 "counts_toward_grade": true,
                 "due_label": "1/3",
                 "due_state": "completed",
                 "name": "Unit 0.2 Notes",
-                "due_weekday": "Fri"
+                "due_weekday": "Fri",
+                "turned_in": true
               }
             ],
             "assignments": [
@@ -1220,13 +1398,15 @@
                 "due_date": "08/28/2026",
                 "grading_complete": true,
                 "extra_credit": false,
-                "status": "counts",
-                "status_label": "counts in Formative",
-                "counts_toward_grade": true,
+                "aeries_missing": false,
+                "status": "turned_in",
+                "status_label": "turned in \u00b7 awaiting score",
+                "counts_toward_grade": false,
                 "due_label": "awaiting score \u00b7 was due Fri Aug 28",
                 "due_state": "pending",
                 "name": "Exit Ticket",
-                "due_weekday": "Fri"
+                "due_weekday": "Fri",
+                "turned_in": true
               },
               {
                 "number": "3",
@@ -1246,13 +1426,15 @@
                 "due_date": "08/28/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Formative",
                 "counts_toward_grade": true,
                 "due_label": "1/3",
                 "due_state": "completed",
                 "name": "Unit 0.2 Notes",
-                "due_weekday": "Fri"
+                "due_weekday": "Fri",
+                "turned_in": true
               },
               {
                 "number": "4",
@@ -1272,18 +1454,24 @@
                 "due_date": "09/01/2026",
                 "grading_complete": true,
                 "extra_credit": false,
-                "status": "counts",
-                "status_label": "counts in Coursework",
-                "counts_toward_grade": true,
+                "aeries_missing": false,
+                "status": "turned_in",
+                "status_label": "turned in \u00b7 awaiting score",
+                "counts_toward_grade": false,
                 "due_label": "awaiting score \u00b7 was due Tue Sep 1",
                 "due_state": "pending",
                 "name": "Unit 0 Warm Ups",
-                "due_weekday": "Tue"
+                "due_weekday": "Tue",
+                "turned_in": true
               }
             ],
             "pct_history": [
               {
                 "date": "2026-09-01",
+                "pct": 100.0
+              },
+              {
+                "date": "2026-09-02",
                 "pct": 100.0
               }
             ],
@@ -1307,6 +1495,10 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [],
             "assignments": [],
@@ -1331,6 +1523,10 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [
               {
@@ -1351,13 +1547,15 @@
                 "due_date": "08/25/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Writing",
                 "counts_toward_grade": true,
                 "due_label": "3.75/5",
                 "due_state": "completed",
                 "name": "LT3: AI Character Reference Letter",
-                "due_weekday": "Tue"
+                "due_weekday": "Tue",
+                "turned_in": true
               }
             ],
             "assignments": [
@@ -1379,13 +1577,15 @@
                 "due_date": "08/25/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Writing",
                 "counts_toward_grade": true,
                 "due_label": "3.75/5",
                 "due_state": "completed",
                 "name": "LT3: AI Character Reference Letter",
-                "due_weekday": "Tue"
+                "due_weekday": "Tue",
+                "turned_in": true
               }
             ],
             "pct_history": [
@@ -1411,6 +1611,10 @@
               },
               {
                 "date": "2026-09-01",
+                "pct": 75.0
+              },
+              {
+                "date": "2026-09-02",
                 "pct": 75.0
               }
             ],
@@ -1581,6 +1785,7 @@
               "due_date": "08/19/2026",
               "grading_complete": false,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Summatives",
               "counts_toward_grade": true,
@@ -1612,6 +1817,7 @@
               "due_date": "08/20/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Assignments",
               "counts_toward_grade": true,
@@ -1636,6 +1842,7 @@
               "due_date": "08/20/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Presentations",
               "counts_toward_grade": true,
@@ -1660,6 +1867,7 @@
               "due_date": "08/26/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Daily Assignments",
               "counts_toward_grade": true,
@@ -1684,6 +1892,7 @@
               "due_date": "09/01/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Assignments",
               "counts_toward_grade": true,
@@ -1715,6 +1924,7 @@
               "due_date": "08/20/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
               "counts_toward_grade": true,
@@ -1739,6 +1949,7 @@
               "due_date": "08/20/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
               "counts_toward_grade": true,
@@ -1763,6 +1974,7 @@
               "due_date": "08/20/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
               "counts_toward_grade": true,
@@ -1787,6 +1999,7 @@
               "due_date": "08/20/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
               "counts_toward_grade": true,
@@ -1811,6 +2024,7 @@
               "due_date": "08/20/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
               "counts_toward_grade": true,
@@ -1835,6 +2049,7 @@
               "due_date": "08/20/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
               "counts_toward_grade": true,
@@ -1859,6 +2074,7 @@
               "due_date": "08/20/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Algebra Boot Camp",
               "counts_toward_grade": true,
@@ -1890,6 +2106,7 @@
               "due_date": "08/26/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Affective",
               "counts_toward_grade": true,
@@ -1914,6 +2131,7 @@
               "due_date": "08/28/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Cognitive",
               "counts_toward_grade": true,
@@ -1938,6 +2156,7 @@
               "due_date": "08/28/2026",
               "grading_complete": false,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
@@ -1950,32 +2169,7 @@
           "class_name": "Eng 9 Entre Fall",
           "period": 5,
           "term": "fall",
-          "assignments": [
-            {
-              "number": "1",
-              "description": "LT 1.1 Formative Project",
-              "category": "Formative",
-              "score_raw": "/ 10",
-              "points_earned": null,
-              "points_possible": 10.0,
-              "percentage": 0.0,
-              "correct_raw": "0 / 10",
-              "correct_earned": 0.0,
-              "correct_possible": 10.0,
-              "comment": "",
-              "documents": "",
-              "date_assigned": "08/28/2026",
-              "date_completed": "",
-              "due_date": "09/01/2026",
-              "grading_complete": false,
-              "extra_credit": false,
-              "status": "pending",
-              "status_label": "pending",
-              "counts_toward_grade": false,
-              "due_label": "awaiting score \u00b7 was due Tue Sep 1",
-              "due_state": "pending"
-            }
-          ]
+          "assignments": []
         },
         {
           "class_name": "Tech of Biology",
@@ -2000,6 +2194,7 @@
               "due_date": "08/21/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Practice Assignments",
               "counts_toward_grade": true,
@@ -2024,6 +2219,7 @@
               "due_date": "08/21/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Assessments",
               "counts_toward_grade": true,
@@ -2048,6 +2244,7 @@
               "due_date": "08/19/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Practice Assignments",
               "counts_toward_grade": true,
@@ -2072,6 +2269,7 @@
               "due_date": "08/25/2026",
               "grading_complete": true,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "counts",
               "status_label": "counts in Practice Assignments",
               "counts_toward_grade": true,
@@ -2096,6 +2294,7 @@
               "due_date": "08/28/2026",
               "grading_complete": false,
               "extra_credit": false,
+              "aeries_missing": false,
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
@@ -2123,39 +2322,32 @@
         "raw": "Year Days Enrolled: 15 Days Present: 15 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology while Engineering Geo and Eng 9 Entre show no posted grade yet.",
+        "headline": "Leah holds A's in four classes with no missing work; Engineering Geo shows no grade posted yet.",
         "focus_tonight": "",
         "wins": [
-          "Bus of Gaming: A 100% on Anatomy of a Great Game",
-          "PE Course 1: A 100% on Weight Room Rules Quiz"
+          "Bus of Gaming: A 100% (Anatomy of a Great Game 5/5)",
+          "PE Course 1: A 100%"
         ],
         "classes": [
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "ok",
             "snap": "Marketing Mix Assignment \u00b7 10/10",
-            "story": "Scored work averages 100% in Assignments and 85% in Presentations.",
+            "story": "Scored work averages 100% in Assignments.",
             "do_tonight": ""
           },
           {
             "class_name": "Engineering Geo",
             "urgency": "ok",
-            "snap": "No grade posted yet",
-            "story": "Phantom zero with Algebra Boot Camp work averaging 72.9%.",
-            "do_tonight": ""
-          },
-          {
-            "class_name": "Eng 9 Entre",
-            "urgency": "ok",
-            "snap": "No grade posted yet",
-            "story": "Phantom zero with LT 1.1 Formative Project awaiting score.",
+            "snap": "0.7 Perfect square & Square roots \u00b7 10/10",
+            "story": "No class grade posted yet.",
             "do_tonight": ""
           },
           {
             "class_name": "Tech of Biology",
             "urgency": "ok",
             "snap": "DNA Structure Exit Ticket \u00b7 3/3",
-            "story": "Scored work averages 88.9% in Practice Assignments.",
+            "story": "Awaiting score on DNA Replication Exit Ticket.",
             "do_tonight": ""
           },
           {
@@ -2169,11 +2361,11 @@
             "class_name": "PE Course 1",
             "urgency": "strong",
             "snap": "Weight Room Rules Quiz \u00b7 10/10",
-            "story": "Mini Golf Course Design awaiting score.",
+            "story": "Awaiting score on Mini Golf Course Design.",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-09-02T13:32:46.628678+00:00",
+        "generated_at": "2026-09-03T01:05:48.272925+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -2219,6 +2411,10 @@
             },
             {
               "date": "2026-09-01",
+              "pct": 100.0
+            },
+            {
+              "date": "2026-09-02",
               "pct": 100.0
             }
           ],
@@ -2285,6 +2481,10 @@
             {
               "date": "2026-09-01",
               "pct": 95.0
+            },
+            {
+              "date": "2026-09-02",
+              "pct": 95.0
             }
           ],
           "delta_7d": 0.0,
@@ -2334,6 +2534,10 @@
             {
               "date": "2026-09-01",
               "pct": 100.0
+            },
+            {
+              "date": "2026-09-02",
+              "pct": 100.0
             }
           ],
           "delta_7d": 0.0,
@@ -2341,14 +2545,6 @@
           "delta_span": null,
           "span_window": null,
           "trend_label": "stable"
-        },
-        "Eng 9 Entre": {
-          "pct_history": [],
-          "delta_7d": null,
-          "delta_14d": null,
-          "delta_span": null,
-          "span_window": null,
-          "trend_label": "insufficient_history"
         },
         "Tech of Biology": {
           "pct_history": [
@@ -2399,6 +2595,10 @@
             {
               "date": "2026-09-01",
               "pct": 100.0
+            },
+            {
+              "date": "2026-09-02",
+              "pct": 100.0
             }
           ],
           "delta_7d": 0.0,
@@ -2411,10 +2611,10 @@
       "view": {
         "tonight": [],
         "tonight_label": "",
-        "headline": "Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology while Engineering Geo and Eng 9 Entre show no posted grade yet.",
+        "headline": "Leah holds A's in four classes with no missing work; Engineering Geo shows no grade posted yet.",
         "wins": [
-          "Bus of Gaming: A 100% on Anatomy of a Great Game",
-          "PE Course 1: A 100% on Weight Room Rules Quiz"
+          "Bus of Gaming: A 100% (Anatomy of a Great Game 5/5)",
+          "PE Course 1: A 100%"
         ],
         "classes": [
           {
@@ -2430,6 +2630,10 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [
               {
@@ -2450,13 +2654,15 @@
                 "due_date": "08/19/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Summatives",
                 "counts_toward_grade": true,
                 "due_label": "5/5",
                 "due_state": "completed",
                 "name": "Anatomy of a Great Game",
-                "due_weekday": "Wed"
+                "due_weekday": "Wed",
+                "turned_in": true
               }
             ],
             "assignments": [
@@ -2478,13 +2684,15 @@
                 "due_date": "08/19/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Summatives",
                 "counts_toward_grade": true,
                 "due_label": "5/5",
                 "due_state": "completed",
                 "name": "Anatomy of a Great Game",
-                "due_weekday": "Wed"
+                "due_weekday": "Wed",
+                "turned_in": true
               }
             ],
             "pct_history": [
@@ -2523,6 +2731,10 @@
               {
                 "date": "2026-09-01",
                 "pct": 100.0
+              },
+              {
+                "date": "2026-09-02",
+                "pct": 100.0
               }
             ],
             "delta_7d": 0.0,
@@ -2541,10 +2753,14 @@
             "mark": "A",
             "urgency": "ok",
             "snap": "Marketing Mix Assignment \u00b7 10/10",
-            "story": "Scored work averages 100% in Assignments and 85% in Presentations.",
+            "story": "Scored work averages 100% in Assignments.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [
               {
@@ -2565,13 +2781,15 @@
                 "due_date": "09/01/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Assignments",
                 "counts_toward_grade": true,
                 "due_label": "10/10",
                 "due_state": "completed",
                 "name": "Marketing Mix Assignment",
-                "due_weekday": "Tue"
+                "due_weekday": "Tue",
+                "turned_in": true
               },
               {
                 "number": "3",
@@ -2591,13 +2809,15 @@
                 "due_date": "08/26/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Daily Assignments",
                 "counts_toward_grade": true,
                 "due_label": "1/1",
                 "due_state": "completed",
                 "name": "8/24 & 8/25 - Daily Assignment (Shark Tank)",
-                "due_weekday": "Wed"
+                "due_weekday": "Wed",
+                "turned_in": true
               },
               {
                 "number": "1",
@@ -2617,13 +2837,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Assignments",
                 "counts_toward_grade": true,
                 "due_label": "5/5",
                 "due_state": "completed",
                 "name": "About Me Slides",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "2",
@@ -2643,13 +2865,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Presentations",
                 "counts_toward_grade": true,
                 "due_label": "8.5/10",
                 "due_state": "completed",
                 "name": "About Me Slides Presentation",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               }
             ],
             "assignments": [
@@ -2671,13 +2895,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Assignments",
                 "counts_toward_grade": true,
                 "due_label": "5/5",
                 "due_state": "completed",
                 "name": "About Me Slides",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "2",
@@ -2697,13 +2923,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Presentations",
                 "counts_toward_grade": true,
                 "due_label": "8.5/10",
                 "due_state": "completed",
                 "name": "About Me Slides Presentation",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "3",
@@ -2723,13 +2951,15 @@
                 "due_date": "08/26/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Daily Assignments",
                 "counts_toward_grade": true,
                 "due_label": "1/1",
                 "due_state": "completed",
                 "name": "8/24 & 8/25 - Daily Assignment (Shark Tank)",
-                "due_weekday": "Wed"
+                "due_weekday": "Wed",
+                "turned_in": true
               },
               {
                 "number": "4",
@@ -2749,13 +2979,15 @@
                 "due_date": "09/01/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Assignments",
                 "counts_toward_grade": true,
                 "due_label": "10/10",
                 "due_state": "completed",
                 "name": "Marketing Mix Assignment",
-                "due_weekday": "Tue"
+                "due_weekday": "Tue",
+                "turned_in": true
               }
             ],
             "pct_history": [
@@ -2814,6 +3046,10 @@
               {
                 "date": "2026-09-01",
                 "pct": 95.0
+              },
+              {
+                "date": "2026-09-02",
+                "pct": 95.0
               }
             ],
             "delta_7d": 0.0,
@@ -2831,11 +3067,15 @@
             "percent": "0.0",
             "mark": "",
             "urgency": "ok",
-            "snap": "No grade posted yet",
-            "story": "Phantom zero with Algebra Boot Camp work averaging 72.9%.",
+            "snap": "0.7 Perfect square & Square roots \u00b7 10/10",
+            "story": "No class grade posted yet.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [
               {
@@ -2856,13 +3096,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "8/10",
                 "due_state": "completed",
                 "name": "0.1 Simplify Expressions",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "2",
@@ -2882,13 +3124,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "7/10",
                 "due_state": "completed",
                 "name": "0.2 Solve multi-step equations",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "3",
@@ -2908,13 +3152,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "5/10",
                 "due_state": "completed",
                 "name": "0.3 Solve proportions",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "4",
@@ -2934,13 +3180,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "7/10",
                 "due_state": "completed",
                 "name": "0.4 Coordinate plane",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "5",
@@ -2960,13 +3208,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "7/10",
                 "due_state": "completed",
                 "name": "0.5 Slope of line",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "6",
@@ -2986,13 +3236,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "7/10",
                 "due_state": "completed",
                 "name": "0.6 Area & Perimeter of rectangles & triangles",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "7",
@@ -3012,13 +3264,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "10/10",
                 "due_state": "completed",
                 "name": "0.7 Perfect square & Square roots",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               }
             ],
             "assignments": [
@@ -3040,13 +3294,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "8/10",
                 "due_state": "completed",
                 "name": "0.1 Simplify Expressions",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "2",
@@ -3066,13 +3322,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "7/10",
                 "due_state": "completed",
                 "name": "0.2 Solve multi-step equations",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "3",
@@ -3092,13 +3350,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "5/10",
                 "due_state": "completed",
                 "name": "0.3 Solve proportions",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "4",
@@ -3118,13 +3378,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "7/10",
                 "due_state": "completed",
                 "name": "0.4 Coordinate plane",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "5",
@@ -3144,13 +3406,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "7/10",
                 "due_state": "completed",
                 "name": "0.5 Slope of line",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "6",
@@ -3170,13 +3434,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "7/10",
                 "due_state": "completed",
                 "name": "0.6 Area & Perimeter of rectangles & triangles",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               },
               {
                 "number": "7",
@@ -3196,13 +3462,15 @@
                 "due_date": "08/20/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Algebra Boot Camp",
                 "counts_toward_grade": true,
                 "due_label": "10/10",
                 "due_state": "completed",
                 "name": "0.7 Perfect square & Square roots",
-                "due_weekday": "Thu"
+                "due_weekday": "Thu",
+                "turned_in": true
               }
             ],
             "pct_history": [],
@@ -3226,6 +3494,10 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [],
             "assignments": [],
@@ -3246,10 +3518,43 @@
             "mark": "A",
             "urgency": "strong",
             "snap": "Weight Room Rules Quiz \u00b7 10/10",
-            "story": "Mini Golf Course Design awaiting score.",
+            "story": "Awaiting score on Mini Golf Course Design.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 1,
+            "awaiting": [
+              {
+                "number": "3",
+                "description": "Mini Golf Course Design",
+                "category": "Projects",
+                "score_raw": "/ 5",
+                "points_earned": null,
+                "points_possible": 5.0,
+                "percentage": 0.0,
+                "correct_raw": "0 / 5",
+                "correct_earned": 0.0,
+                "correct_possible": 5.0,
+                "comment": "",
+                "documents": "",
+                "date_assigned": "08/26/2026",
+                "date_completed": "",
+                "due_date": "08/28/2026",
+                "grading_complete": false,
+                "extra_credit": false,
+                "aeries_missing": false,
+                "status": "pending",
+                "status_label": "pending",
+                "counts_toward_grade": false,
+                "due_label": "awaiting score \u00b7 was due Fri Aug 28",
+                "due_state": "pending",
+                "name": "Mini Golf Course Design",
+                "due_weekday": "Fri",
+                "days_past_due": 5
+              }
+            ],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [
               {
@@ -3270,13 +3575,15 @@
                 "due_date": "08/28/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Cognitive",
                 "counts_toward_grade": true,
                 "due_label": "10/10",
                 "due_state": "completed",
                 "name": "Weight Room Rules Quiz",
-                "due_weekday": "Fri"
+                "due_weekday": "Fri",
+                "turned_in": true
               },
               {
                 "number": "1",
@@ -3296,13 +3603,15 @@
                 "due_date": "08/26/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Affective",
                 "counts_toward_grade": true,
                 "due_label": "8/8",
                 "due_state": "completed",
                 "name": "August",
-                "due_weekday": "Wed"
+                "due_weekday": "Wed",
+                "turned_in": true
               }
             ],
             "assignments": [
@@ -3324,13 +3633,15 @@
                 "due_date": "08/26/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Affective",
                 "counts_toward_grade": true,
                 "due_label": "8/8",
                 "due_state": "completed",
                 "name": "August",
-                "due_weekday": "Wed"
+                "due_weekday": "Wed",
+                "turned_in": true
               },
               {
                 "number": "2",
@@ -3350,13 +3661,15 @@
                 "due_date": "08/28/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Cognitive",
                 "counts_toward_grade": true,
                 "due_label": "10/10",
                 "due_state": "completed",
                 "name": "Weight Room Rules Quiz",
-                "due_weekday": "Fri"
+                "due_weekday": "Fri",
+                "turned_in": true
               },
               {
                 "number": "3",
@@ -3376,6 +3689,7 @@
                 "due_date": "08/28/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
@@ -3417,6 +3731,10 @@
               {
                 "date": "2026-09-01",
                 "pct": 100.0
+              },
+              {
+                "date": "2026-09-02",
+                "pct": 100.0
               }
             ],
             "delta_7d": 0.0,
@@ -3434,41 +3752,18 @@
             "percent": "0.0",
             "mark": "",
             "urgency": "ok",
-            "snap": "No grade posted yet",
-            "story": "Phantom zero with LT 1.1 Formative Project awaiting score.",
+            "snap": "No grade yet",
+            "story": "",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [],
-            "assignments": [
-              {
-                "number": "1",
-                "description": "LT 1.1 Formative Project",
-                "category": "Formative",
-                "score_raw": "/ 10",
-                "points_earned": null,
-                "points_possible": 10.0,
-                "percentage": 0.0,
-                "correct_raw": "0 / 10",
-                "correct_earned": 0.0,
-                "correct_possible": 10.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/28/2026",
-                "date_completed": "",
-                "due_date": "09/01/2026",
-                "grading_complete": false,
-                "extra_credit": false,
-                "status": "pending",
-                "status_label": "pending",
-                "counts_toward_grade": false,
-                "due_label": "awaiting score \u00b7 was due Tue Sep 1",
-                "due_state": "pending",
-                "name": "LT 1.1 Formative Project",
-                "due_weekday": "Tue"
-              }
-            ],
+            "assignments": [],
             "pct_history": [],
             "delta_7d": null,
             "delta_14d": null,
@@ -3486,10 +3781,43 @@
             "mark": "A",
             "urgency": "ok",
             "snap": "DNA Structure Exit Ticket \u00b7 3/3",
-            "story": "Scored work averages 88.9% in Practice Assignments.",
+            "story": "Awaiting score on DNA Replication Exit Ticket.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 1,
+            "awaiting": [
+              {
+                "number": "5",
+                "description": "DNA Replication Exit Ticket",
+                "category": "Practice Assignments",
+                "score_raw": "/ 3",
+                "points_earned": null,
+                "points_possible": 3.0,
+                "percentage": null,
+                "correct_raw": "/ 3",
+                "correct_earned": null,
+                "correct_possible": 3.0,
+                "comment": "",
+                "documents": "",
+                "date_assigned": "08/28/2026",
+                "date_completed": "",
+                "due_date": "08/28/2026",
+                "grading_complete": false,
+                "extra_credit": false,
+                "aeries_missing": false,
+                "status": "pending",
+                "status_label": "pending",
+                "counts_toward_grade": false,
+                "due_label": "awaiting score \u00b7 was due Fri Aug 28",
+                "due_state": "pending",
+                "name": "DNA Replication Exit Ticket",
+                "due_weekday": "Fri",
+                "days_past_due": 5
+              }
+            ],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [
               {
@@ -3510,13 +3838,15 @@
                 "due_date": "08/25/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Practice Assignments",
                 "counts_toward_grade": true,
                 "due_label": "3/3",
                 "due_state": "completed",
                 "name": "DNA Structure Exit Ticket",
-                "due_weekday": "Tue"
+                "due_weekday": "Tue",
+                "turned_in": true
               },
               {
                 "number": "1",
@@ -3536,13 +3866,15 @@
                 "due_date": "08/21/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Practice Assignments",
                 "counts_toward_grade": true,
                 "due_label": "2/3",
                 "due_state": "completed",
                 "name": "Week 1 & 2 Warm-Ups",
-                "due_weekday": "Fri"
+                "due_weekday": "Fri",
+                "turned_in": true
               },
               {
                 "number": "2",
@@ -3562,13 +3894,15 @@
                 "due_date": "08/21/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Assessments",
                 "counts_toward_grade": true,
                 "due_label": "5/5",
                 "due_state": "completed",
                 "name": "Lab Safety Quiz",
-                "due_weekday": "Fri"
+                "due_weekday": "Fri",
+                "turned_in": true
               },
               {
                 "number": "3",
@@ -3588,13 +3922,15 @@
                 "due_date": "08/19/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Practice Assignments",
                 "counts_toward_grade": true,
                 "due_label": "3/3",
                 "due_state": "completed",
                 "name": "Syllabus Agreement Form",
-                "due_weekday": "Wed"
+                "due_weekday": "Wed",
+                "turned_in": true
               }
             ],
             "assignments": [
@@ -3616,13 +3952,15 @@
                 "due_date": "08/21/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Practice Assignments",
                 "counts_toward_grade": true,
                 "due_label": "2/3",
                 "due_state": "completed",
                 "name": "Week 1 & 2 Warm-Ups",
-                "due_weekday": "Fri"
+                "due_weekday": "Fri",
+                "turned_in": true
               },
               {
                 "number": "2",
@@ -3642,13 +3980,15 @@
                 "due_date": "08/21/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Assessments",
                 "counts_toward_grade": true,
                 "due_label": "5/5",
                 "due_state": "completed",
                 "name": "Lab Safety Quiz",
-                "due_weekday": "Fri"
+                "due_weekday": "Fri",
+                "turned_in": true
               },
               {
                 "number": "3",
@@ -3668,13 +4008,15 @@
                 "due_date": "08/19/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Practice Assignments",
                 "counts_toward_grade": true,
                 "due_label": "3/3",
                 "due_state": "completed",
                 "name": "Syllabus Agreement Form",
-                "due_weekday": "Wed"
+                "due_weekday": "Wed",
+                "turned_in": true
               },
               {
                 "number": "4",
@@ -3694,13 +4036,15 @@
                 "due_date": "08/25/2026",
                 "grading_complete": true,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "counts",
                 "status_label": "counts in Practice Assignments",
                 "counts_toward_grade": true,
                 "due_label": "3/3",
                 "due_state": "completed",
                 "name": "DNA Structure Exit Ticket",
-                "due_weekday": "Tue"
+                "due_weekday": "Tue",
+                "turned_in": true
               },
               {
                 "number": "5",
@@ -3720,6 +4064,7 @@
                 "due_date": "08/28/2026",
                 "grading_complete": false,
                 "extra_credit": false,
+                "aeries_missing": false,
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
@@ -3777,6 +4122,10 @@
               {
                 "date": "2026-09-01",
                 "pct": 100.0
+              },
+              {
+                "date": "2026-09-02",
+                "pct": 100.0
               }
             ],
             "delta_7d": 0.0,
@@ -3799,6 +4148,10 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [],
             "assignments": [],
@@ -3823,6 +4176,10 @@
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
             "upcoming": [],
             "recent": [],
             "assignments": [],
@@ -3835,7 +4192,7 @@
             "counted_insight": null
           }
         ],
-        "generated_at": "2026-09-02T13:32:46.628678+00:00"
+        "generated_at": "2026-09-03T01:05:48.272925+00:00"
       }
     }
   ],

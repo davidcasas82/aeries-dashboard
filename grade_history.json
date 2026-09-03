@@ -5011,7 +5011,7 @@
         },
         {
           "date": "2026-09-02",
-          "captured_at": "2026-09-02T13:32:28.254179+00:00",
+          "captured_at": "2026-09-03T01:05:36.471524+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -5065,11 +5065,8 @@
               "period": 6,
               "pct": 100.0,
               "mark": "A",
-              "missing_count": 2,
-              "missing_names": [
-                "Exit Ticket",
-                "Unit 0 Warm Ups"
-              ],
+              "missing_count": 0,
+              "missing_names": [],
               "aeries_trend": null
             },
             "Point Break": {
@@ -5091,7 +5088,7 @@
           },
           "previous_briefing": {
             "headline": "Daniel needs attention in Int Eng&Marktg at C 75% while holding an A in Bus of Gaming.",
-            "focus_tonight": "Unit 0 Warm Ups (Physics & Eng); Exit Ticket (Physics & Eng)"
+            "focus_tonight": ""
           }
         }
       ]
@@ -9776,7 +9773,7 @@
         },
         {
           "date": "2026-09-02",
-          "captured_at": "2026-09-02T13:32:46.640827+00:00",
+          "captured_at": "2026-09-03T01:05:48.282681+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -9852,8 +9849,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Leah has the LT 1.1 Formative Project due today in Eng 9 Entre while holding strong A's in Bus of Gaming and PE Course 1.",
-            "focus_tonight": "LT 1.1 Formative Project (Eng 9 Entre)"
+            "headline": "Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology while Engineering Geo and Eng 9 Entre show no posted grade yet.",
+            "focus_tonight": ""
           }
         }
       ]
