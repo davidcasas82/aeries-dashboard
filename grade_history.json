@@ -5175,7 +5175,7 @@
         },
         {
           "date": "2026-09-04",
-          "captured_at": "2026-09-04T18:29:07.238879+00:00",
+          "captured_at": "2026-09-04T23:08:18.550995+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -5245,17 +5245,14 @@
               "period": 8,
               "pct": 56.2,
               "mark": "F",
-              "missing_count": 2,
-              "missing_names": [
-                "LT4: Team Marketing Presentation",
-                "LT4: Team Marketing Ad"
-              ],
+              "missing_count": 0,
+              "missing_names": [],
               "aeries_trend": null
             }
           },
           "previous_briefing": {
-            "headline": "Daniel needs attention in Int Eng&Marktg at F 56.2% with two overdue assignments and Alg ll Bus Mang at C 73.3%, while holding A's in Bus of Gaming and Physics & Eng.",
-            "focus_tonight": "LT4: Team Marketing Ad (Int Eng&Marktg); LT4: Team Marketing Presentation (Int Eng&Marktg)"
+            "headline": "Daniel needs attention in Int Eng&Marktg at F 56.2% with work awaiting a teacher score and Alg ll Bus Mang at C 73.3%, while holding A's in Bus of Gaming and Physics & Eng.",
+            "focus_tonight": ""
           }
         }
       ]
@@ -10104,7 +10101,7 @@
         },
         {
           "date": "2026-09-04",
-          "captured_at": "2026-09-04T18:29:10.915999+00:00",
+          "captured_at": "2026-09-04T23:08:21.928707+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,

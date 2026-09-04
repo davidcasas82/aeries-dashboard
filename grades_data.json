@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-09-04T18:29:03.127527+00:00",
+  "last_updated": "2026-09-04T23:08:14.549856+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -479,8 +479,8 @@
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
-              "due_label": "overdue Sep 3",
-              "due_state": "overdue"
+              "due_label": "awaiting score \u00b7 was due Thu Sep 3",
+              "due_state": "pending"
             },
             {
               "number": "3",
@@ -504,8 +504,8 @@
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
-              "due_label": "overdue Sep 3",
-              "due_state": "overdue"
+              "due_label": "awaiting score \u00b7 was due Thu Sep 3",
+              "due_state": "pending"
             }
           ]
         }
@@ -522,8 +522,8 @@
         "raw": "Year Days Enrolled: 17 Days Present: 17 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 1 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel needs attention in Int Eng&Marktg at F 56.2% with two overdue assignments and Alg ll Bus Mang at C 73.3%, while holding A's in Bus of Gaming and Physics & Eng.",
-        "focus_tonight": "LT4: Team Marketing Ad (Int Eng&Marktg); LT4: Team Marketing Presentation (Int Eng&Marktg)",
+        "headline": "Daniel needs attention in Int Eng&Marktg at F 56.2% with work awaiting a teacher score and Alg ll Bus Mang at C 73.3%, while holding A's in Bus of Gaming and Physics & Eng.",
+        "focus_tonight": "",
         "wins": [
           "Bus of Gaming at A 100%",
           "Physics & Eng at A 100%"
@@ -532,9 +532,9 @@
           {
             "class_name": "Int Eng&Marktg",
             "urgency": "critical",
-            "snap": "LT4: Team Marketing Ad \u00b7 overdue Sep 3; LT4: Team Marketing Presentation \u00b7 overdue Sep 3",
+            "snap": "LT4: Team Marketing Ad \u00b7 awaiting score \u00b7 was due Thu Sep 3\u00b7 awaiting score \u00b7 was due Thu Sep 3",
             "story": "Grade slipped 18.8 points in the last 7 days.",
-            "do_tonight": "LT4: Team Marketing Ad"
+            "do_tonight": ""
           },
           {
             "class_name": "Alg ll Bus Mang",
@@ -752,22 +752,9 @@
         }
       },
       "view": {
-        "tonight": [
-          {
-            "name": "LT4: Team Marketing Ad",
-            "class_name": "Int Eng&Marktg",
-            "reason": "missing",
-            "due_date": "09/03/2026"
-          },
-          {
-            "name": "LT4: Team Marketing Presentation",
-            "class_name": "Int Eng&Marktg",
-            "reason": "missing",
-            "due_date": "09/03/2026"
-          }
-        ],
-        "tonight_label": "LT4: Team Marketing Ad (Int Eng&Marktg); LT4: Team Marketing Presentation (Int Eng&Marktg)",
-        "headline": "Daniel needs attention in Int Eng&Marktg at F 56.2% with two overdue assignments and Alg ll Bus Mang at C 73.3%, while holding A's in Bus of Gaming and Physics & Eng.",
+        "tonight": [],
+        "tonight_label": "",
+        "headline": "Daniel needs attention in Int Eng&Marktg at F 56.2% with work awaiting a teacher score and Alg ll Bus Mang at C 73.3%, while holding A's in Bus of Gaming and Physics & Eng.",
         "wins": [
           "Bus of Gaming at A 100%",
           "Physics & Eng at A 100%"
@@ -1594,11 +1581,13 @@
             "percent": "56.2",
             "mark": "F",
             "urgency": "critical",
-            "snap": "LT4: Team Marketing Ad \u00b7 overdue Sep 3; LT4: Team Marketing Presentation \u00b7 overdue Sep 3",
+            "snap": "LT4: Team Marketing Ad \u00b7 awaiting score \u00b7 was due Thu Sep 3\u00b7 awaiting score \u00b7 was due Thu Sep 3",
             "story": "Grade slipped 18.8 points in the last 7 days.",
-            "do_tonight": "LT4: Team Marketing Ad",
-            "missing_count": 2,
-            "missing": [
+            "do_tonight": "",
+            "missing_count": 0,
+            "missing": [],
+            "awaiting_count": 2,
+            "awaiting": [
               {
                 "number": "2",
                 "description": "LT4: Team Marketing Ad",
@@ -1621,11 +1610,11 @@
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
-                "due_label": "overdue Sep 3",
-                "due_state": "overdue",
+                "due_label": "awaiting score \u00b7 was due Thu Sep 3",
+                "due_state": "pending",
                 "name": "LT4: Team Marketing Ad",
                 "due_weekday": "Thu",
-                "days_overdue": 1
+                "days_past_due": 1
               },
               {
                 "number": "3",
@@ -1649,20 +1638,15 @@
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
-                "due_label": "overdue Sep 3",
-                "due_state": "overdue",
+                "due_label": "awaiting score \u00b7 was due Thu Sep 3",
+                "due_state": "pending",
                 "name": "LT4: Team Marketing Presentation",
                 "due_weekday": "Thu",
-                "days_overdue": 1
+                "days_past_due": 1
               }
             ],
-            "awaiting_count": 0,
-            "awaiting": [],
             "stale_awaiting_count": 0,
-            "newly_missing": [
-              "LT4: Team Marketing Ad",
-              "LT4: Team Marketing Presentation"
-            ],
+            "newly_missing": [],
             "upcoming": [],
             "recent": [
               {
