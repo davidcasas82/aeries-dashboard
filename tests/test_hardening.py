@@ -4,7 +4,9 @@ import sys
 import unittest
 from datetime import date, datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -54,6 +56,88 @@ class TimeoutSessionTests(unittest.TestCase):
                 session.request("GET", "https://example.com", timeout=3),
                 3,
             )
+
+
+def _ok_login_response(url="https://tustinusd.aeries.net/student/Dashboard.aspx"):
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.url = url
+    resp.text = "ok"
+    return resp
+
+
+class LoginTimeoutRetryTests(unittest.TestCase):
+    """login() retries portal timeouts; does not retry bad credentials."""
+
+    def _patch_session(self, session):
+        return patch.object(scraper, "TimeoutSession", return_value=session)
+
+    def test_retries_read_timeout_then_succeeds(self):
+        session = MagicMock()
+        ok = _ok_login_response()
+        session.get.side_effect = [requests.exceptions.ReadTimeout("timed out"), ok]
+        session.post.return_value = ok
+
+        with self._patch_session(session), patch.object(scraper.time, "sleep") as sleep:
+            result = scraper.login()
+
+        self.assertIs(result, session)
+        self.assertEqual(session.get.call_count, 2)
+        sleep.assert_called_once_with(scraper.LOGIN_RETRY_DELAY_SEC)
+
+    def test_retries_connect_timeout_then_succeeds(self):
+        session = MagicMock()
+        ok = _ok_login_response()
+        session.get.side_effect = [requests.exceptions.ConnectTimeout("connect timed out"), ok]
+        session.post.return_value = ok
+
+        with self._patch_session(session), patch.object(scraper.time, "sleep") as sleep:
+            result = scraper.login()
+
+        self.assertIs(result, session)
+        self.assertEqual(session.get.call_count, 2)
+        sleep.assert_called_once()
+
+    def test_retries_post_read_timeout_then_succeeds(self):
+        session = MagicMock()
+        ok = _ok_login_response()
+        session.get.return_value = ok
+        session.post.side_effect = [requests.exceptions.ReadTimeout("timed out"), ok]
+
+        with self._patch_session(session), patch.object(scraper.time, "sleep"):
+            result = scraper.login()
+
+        self.assertIs(result, session)
+        self.assertEqual(session.post.call_count, 2)
+
+    def test_raises_after_three_read_timeouts(self):
+        session = MagicMock()
+        session.get.side_effect = requests.exceptions.ReadTimeout("timed out")
+
+        with self._patch_session(session), patch.object(scraper.time, "sleep") as sleep:
+            with self.assertRaises(requests.exceptions.ReadTimeout):
+                scraper.login()
+
+        self.assertEqual(session.get.call_count, scraper.LOGIN_TIMEOUT_ATTEMPTS)
+        self.assertEqual(sleep.call_count, scraper.LOGIN_TIMEOUT_ATTEMPTS - 1)
+        self.assertEqual(session.post.call_count, 0)
+
+    def test_does_not_retry_login_failed_html(self):
+        session = MagicMock()
+        login_url = f"{scraper.BASE_URL}/student/LoginParent.aspx"
+        session.get.return_value = _ok_login_response(login_url)
+        failed = _ok_login_response(login_url)
+        failed.text = '<div class="error">Invalid email or password</div>'
+        session.post.return_value = failed
+
+        with self._patch_session(session), patch.object(scraper.time, "sleep") as sleep:
+            with self.assertRaises(scraper.ScrapeError) as ctx:
+                scraper.login()
+
+        self.assertIn("Login failed", str(ctx.exception))
+        self.assertEqual(session.get.call_count, 1)
+        self.assertEqual(session.post.call_count, 1)
+        sleep.assert_not_called()
 
 
 class PreferredTermsTests(unittest.TestCase):
