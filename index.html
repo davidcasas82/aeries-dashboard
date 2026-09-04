@@ -1712,29 +1712,15 @@
             return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         }
 
-        // Missing is only what the Aeries portal flags. Most work is done in class and scored
-        // later, so a blank score (even with "Grading Completed" ticked) is just awaiting a score.
-        // When Aeries reports N, pick the N most likely: not turned in first, then grading-complete, oldest.
-        // Rows Aeries marks missing in the gradebook itself ("MI"/"Missing") are always missing.
+        // Missing is only a gradebook-row flag (MI / MissingAssignment). The ClassSummary
+        // widget count often includes unscored past-due work the teacher has not marked missing.
         function isAeriesFlaggedMissing(a) {
             return !!(a && a.aeries_missing && a.points_earned == null);
         }
 
-        function filterMissingAssignments(assignments, aeriesCount) {
+        function filterMissingAssignments(assignments) {
             const byDue = (a, b) => (parseDate(a.due_date) || 0) - (parseDate(b.due_date) || 0);
-            const flagged = (assignments || []).filter(isAeriesFlaggedMissing);
-            const n = Math.max(Number(aeriesCount) || 0, flagged.length);
-            if (n <= 0) return [];
-            const pastDue = (assignments || [])
-                .filter(a => isPastDueUngraded(a) && !flagged.includes(a))
-                .sort((a, b) => {
-                    const t = Number(isTurnedIn(a)) - Number(isTurnedIn(b));
-                    if (t) return t;
-                    const g = Number(a.grading_complete !== true) - Number(b.grading_complete !== true);
-                    if (g) return g;
-                    return byDue(a, b);
-                });
-            return flagged.concat(pastDue.slice(0, Math.max(0, n - flagged.length))).sort(byDue);
+            return (assignments || []).filter(isAeriesFlaggedMissing).sort(byDue);
         }
 
         // Past-due, unscored, and not flagged by Aeries: the teacher just hasn't posted a score yet.
@@ -1865,9 +1851,8 @@
                 // Still skip completely empty junk rows without a course name.
                 if (!(c.course_name || '').trim() && !assignments.length) continue;
 
-                const aeriesMissing = parseMissingCount(c);
-                const missing = filterMissingAssignments(assignments, aeriesMissing);
-                const missingCount = assignments.length ? missing.length : aeriesMissing;
+                const missing = filterMissingAssignments(assignments);
+                const missingCount = missing.length;
                 const awaiting = filterAwaitingAssignments(assignments, missing);
                 const upcoming = filterUpcomingAssignments(assignments);
                 const recent = filterScoredAssignments(assignments);
@@ -2264,6 +2249,11 @@
             }
             const mark = profile.classMeta.mark || '';
             const pct = profile.classMeta.percent ? Math.round(parseFloat(profile.classMeta.percent)) + '%' : '';
+            const awaitingN = profile.awaitingCount || (profile.awaiting || []).length;
+            if (mc === 0 && awaitingN > 0) {
+                const posted = `${mark} ${pct}`.trim();
+                return posted ? `Posted ${posted} · ${awaitingN} awaiting score` : `${awaitingN} awaiting score`;
+            }
             if (urgency === 'watch') {
                 return `${mark} ${pct} · ${mc} missing`.trim();
             }
@@ -2281,7 +2271,7 @@
             const urgency = inferUrgency(p, aiClass);
             let snap = (aiClass?.snap || inferUrgencyReason(p, urgency) || '').trim();
             snap = rewriteStaleCopy(snap, p);
-            if (snapNamesStaleWork(snap, p) || snapClaimsMissing(snap, p)) {
+            if (snapNamesStaleWork(snap, p) || snapClaimsMissing(snap, p) || snapClaimsFalseOverdue(snap, p)) {
                 const fallback = inferUrgencyReason(p, urgency) || '';
                 snap = rewriteStaleCopy(fallback, p) || fallback;
             }
@@ -2303,6 +2293,12 @@
             const m = snap.match(/\b(\d+)\s+missing\b/i);
             if (!m) return false;
             return parseInt(m[1], 10) !== (profile.missingCount || 0);
+        }
+
+        function snapClaimsFalseOverdue(snap, profile) {
+            if (!snap || !/\boverdue\b/i.test(snap)) return false;
+            if ((profile.missingCount || 0) > 0) return false;
+            return (profile.awaitingCount || (profile.awaiting || []).length) > 0;
         }
 
         function enrichProfiles(student, profiles) {
@@ -2515,6 +2511,15 @@
             headline = rewriteStaleDueCopy(headline, { assignments: allAssignments, missing: (profiles || []).flatMap(p => p.missing || []) });
             if ((profiles || []).some(p => isPhantomZero(p.classMeta, p.assignments))) {
                 headline = rewritePhantomZeroCopy(headline);
+            }
+            const awaitingOnly = (profiles || []).some(p => (p.awaitingCount || (p.awaiting || []).length) > 0 && !p.missingCount);
+            const anyMissing = (profiles || []).some(p => p.missingCount > 0);
+            if (awaitingOnly && !anyMissing) {
+                headline = headline
+                    .replace(/\bwith two overdue assignments\b/i, 'with work awaiting a teacher score')
+                    .replace(/\bwith an overdue assignment\b/i, 'with work awaiting a teacher score')
+                    .replace(/\btwo overdue assignments\b/i, 'two assignments awaiting a score')
+                    .replace(/\boverdue assignments\b/i, 'assignments awaiting a score');
             }
 
             let html = `<div class="masthead" id="hero-card-${idx}">`;
@@ -2826,6 +2831,9 @@
             if (teacherLine) {
                 blocks += `<div class="panel-meta-line">${esc(teacherLine)}</div>`;
             }
+            if (awaitingCount > 0 && realGrade) {
+                blocks += `<div class="panel-meta-line">Posted grade may move when the teacher scores the ${awaitingCount === 1 ? 'assignment' : 'assignments'} below.</div>`;
+            }
 
             if (doTonight) {
                 blocks += `<div class="panel-block panel-block-tonight">
@@ -2975,6 +2983,7 @@
                             <span class="row-trail-wrap">
                                 <span class="row-trail">
                                     <span class="row-grade">
+                                        ${awaitingN > 0 && hasRealGrade(c, p.assignments) ? '<span class="pct">Posted</span>' : ''}
                                         <span class="letter ${gradeClass}">${esc(letterShow)}</span>
                                         ${pctShow ? `<span class="pct">${esc(pctShow)}</span>` : ''}
                                     </span>
@@ -3098,9 +3107,8 @@
                 // present, re-derive every list from them with the current rules; only fall back
                 // to the payload's lists when there is nothing to derive from.
                 const assignments = row.assignments || [];
-                const aeriesCount = parseMissingCount(classMeta);
                 const hasRows = assignments.length > 0;
-                const missing = hasRows ? filterMissingAssignments(assignments, aeriesCount) : (row.missing || []);
+                const missing = hasRows ? filterMissingAssignments(assignments) : (row.missing || []);
                 const awaiting = hasRows ? filterAwaitingAssignments(assignments, missing) : (row.awaiting || []);
                 const upcoming = hasRows ? filterUpcomingAssignments(assignments) : (row.upcoming || []);
                 const recent = hasRows ? filterScoredAssignments(assignments) : (row.recent || []);

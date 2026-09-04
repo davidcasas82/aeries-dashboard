@@ -292,6 +292,73 @@ class ViewModelTests(unittest.TestCase):
         # Aeries says 0 missing, so the old grading-complete blank is pending, not missing
         self.assertEqual(view["classes"][0]["missing_count"], 0)
 
+    def test_widget_missing_badge_without_row_flag_is_awaiting(self):
+        today = datetime(2026, 9, 4)
+        student = {
+            "name": "Kid",
+            "sn": "1",
+            "classes": [
+                {
+                    "period": 8,
+                    "course_name": "Int Eng&Marktg",
+                    "teacher": "Patterson",
+                    "percent": "56.2",
+                    "mark": "F",
+                    "missing_count": 0,
+                    "missing_assignments": '<a class="MissingAssignment"><span>2</span></a>',
+                }
+            ],
+            "assignments_by_class": [
+                {
+                    "class_name": "8- Int Eng&Marktg- Fall",
+                    "period": 8,
+                    "assignments": [
+                        {
+                            "description": "LT4: Team Marketing Ad",
+                            "due_date": "09/03/2026",
+                            "points_earned": None,
+                            "points_possible": 5,
+                            "grading_complete": True,
+                            "aeries_missing": False,
+                            "score_raw": "/ 5",
+                        },
+                        {
+                            "description": "LT4: Team Marketing Presentation",
+                            "due_date": "09/03/2026",
+                            "points_earned": None,
+                            "points_possible": 10,
+                            "grading_complete": True,
+                            "aeries_missing": False,
+                            "score_raw": "/ 10",
+                        },
+                    ],
+                }
+            ],
+            "class_trends": {},
+            "ai_summary": {
+                "headline": "Needs attention at F 56.2% with two overdue assignments.",
+                "classes": [
+                    {
+                        "class_name": "Int Eng&Marktg",
+                        "snap": "LT4: Team Marketing Ad · overdue Sep 3",
+                        "story": "Two overdue assignments.",
+                        "do_tonight": "LT4: Team Marketing Ad",
+                    }
+                ],
+            },
+        }
+        with patch.object(scraper, "pacific_today_dt", return_value=today):
+            with patch.object(scraper, "pacific_today", return_value=today.date()):
+                view = scraper.build_student_view(student)
+        row = view["classes"][0]
+        self.assertEqual(row["missing_count"], 0)
+        self.assertEqual(row["awaiting_count"], 2)
+        self.assertEqual(row["do_tonight"], "")
+        self.assertIn("awaiting score", row["snap"])
+        self.assertIn("Posted", row["snap"])
+        self.assertNotIn("overdue", row["snap"].lower())
+        self.assertFalse(view["tonight"])
+
     def test_in_class_work_done_today_is_not_a_to_do(self):
         today = datetime(2026, 9, 1)
         due = today.strftime("%m/%d/%Y")
@@ -357,12 +424,13 @@ class ViewModelTests(unittest.TestCase):
                     "period": 3,
                     "assignments": [
                         {
-                            # Never handed in; the portal's 1 missing lands here
+                            # Gradebook row marked missing (MI). Widget count alone is not enough.
                             "description": "Homework 2",
                             "due_date": fmt(datetime(2026, 8, 28)),
                             "points_earned": None,
                             "points_possible": 10,
                             "grading_complete": False,
+                            "aeries_missing": True,
                         },
                         {
                             # Handed in 15 days ago, still unscored: awaiting, and stale

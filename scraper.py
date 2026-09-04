@@ -2739,31 +2739,19 @@ def assignment_turned_in(assignment):
 
 
 def select_missing_assignments(assignments, class_meta, today):
-    """Past-due ungraded work is missing only if the Aeries portal flags it.
+    """Missing is only a gradebook-row flag (MI / MissingAssignment).
 
-    Much of the kids' work is done in class and scored days later. A blank score —
-    even with the teacher's "Grading Completed" box ticked — is pending_grade until
-    the portal's own missing badge says otherwise. Rows Aeries marks missing in the
-    gradebook itself (aeries_missing) always count. For the rest of the portal's N,
-    pick the most likely rows: not turned in first, then grading-complete, oldest.
+    The ClassSummary widget often counts unscored past-due work as “missing”
+    even when the teacher has not marked the row missing. Those rows are
+    pending_grade (awaiting a score). Filling from the widget count is what
+    turned blank LT4 projects into a red Missing list and a tonight to-do.
     """
-    flagged = [a for a in assignments if a.get("aeries_missing") and a.get("points_earned") is None]
-    aeries_n = max(aeries_missing_count(class_meta), len(flagged))
-    if aeries_n <= 0:
-        return []
-    flagged_ids = {id(a) for a in flagged}
-    past_due = [
+    flagged = [
         a for a in assignments
-        if is_past_due_ungraded(a, today) and id(a) not in flagged_ids
+        if a.get("aeries_missing") and a.get("points_earned") is None
     ]
-    past_due.sort(key=lambda a: (
-        assignment_turned_in(a),
-        not a.get("grading_complete"),
-        parse_due_date(a.get("due_date")) or datetime.min,
-    ))
-    picked = flagged + past_due[:max(0, aeries_n - len(flagged))]
-    picked.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
-    return picked
+    flagged.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
+    return flagged
 
 
 def is_missing_assignment(assignment, today, class_meta=None):
@@ -3456,6 +3444,10 @@ def _urgency_reason(analyzed):
     if pct is None and not mark:
         return f"{missing_n} missing" if missing_n else "No grade yet"
     pct_s = f"{round(pct)}%" if pct is not None else ""
+    awaiting_n = analyzed.get("awaiting_count") or 0
+    if missing_n == 0 and awaiting_n:
+        posted = f"{mark} {pct_s}".strip() or "Posted grade"
+        return f"Posted {posted} · {awaiting_n} awaiting score"
     if urgency == "watch":
         return f"{mark} {pct_s} · {missing_n} missing".strip()
     if urgency == "critical":
@@ -3527,8 +3519,6 @@ def build_student_view(student_data, history_context=None):
             if _norm_course_name(item.get("class_name")) == _norm_course_name(name):
                 tonight_name = item.get("name") or ""
                 break
-        if not tonight_name and ai_cls:
-            tonight_name = (ai_cls.get("do_tonight") or "").strip()
         if not tonight_name:
             due_today = [
                 a for a in upcoming
@@ -3542,6 +3532,15 @@ def build_student_view(student_data, history_context=None):
                 tonight_name = missing[0].get("description") or ""
 
         trend = trends.get(name) or {}
+        analyzed["awaiting_count"] = len(awaiting)
+        computed_snap = _urgency_reason(analyzed)
+        ai_snap = ((ai_cls or {}).get("snap") or "").strip()
+        snap = ai_snap or computed_snap
+        if not missing and awaiting and re.search(r"\boverdue\b|\bmissing\b", snap, re.I):
+            snap = computed_snap
+        story = ((ai_cls or {}).get("story") or "").strip()
+        if not missing and awaiting and re.search(r"\boverdue\b|\bmissing\b", story, re.I):
+            story = "Posted grade may move when the teacher scores this work."
         classes_out.append({
             "period": class_meta.get("period"),
             "course_name": name,
@@ -3550,8 +3549,8 @@ def build_student_view(student_data, history_context=None):
             "percent": class_meta.get("percent"),
             "mark": analyzed.get("current_grade_mark") or class_meta.get("mark") or "",
             "urgency": analyzed.get("suggested_urgency") or "ok",
-            "snap": ((ai_cls or {}).get("snap") or _urgency_reason(analyzed) or "").strip(),
-            "story": ((ai_cls or {}).get("story") or "").strip(),
+            "snap": snap,
+            "story": story,
             "do_tonight": tonight_name,
             "missing_count": len(missing),
             "missing": [_view_assignment(a, today, "missing") for a in missing],
@@ -3743,6 +3742,12 @@ def rewrite_stale_due_copy(text, assignment_entries):
             )
             if named_due.search(out):
                 out = named_due.sub(lambda m, n=name, lb=label: n + m.group(1) + lb, out)
+            named_overdue = re.compile(
+                re.escape(name) + r"(\s*[·\-–—:]\s*)overdue\b[^\n·]*",
+                re.IGNORECASE,
+            )
+            if state == "pending" and named_overdue.search(out):
+                out = named_overdue.sub(lambda m, n=name, lb=label: n + m.group(1) + lb, out)
     if _DUE_WEEKDAY_RE.search(out):
         fallback = next(
             (
@@ -3813,6 +3818,36 @@ def sanitize_briefing_copy(summary, analytics):
     headline = rewrite_stale_due_copy(headline, all_entries)
     if any_phantom:
         headline = rewrite_phantom_zero_copy(headline)
+    pending_only = any(
+        (ca.get("awaiting_count") or 0) > 0 and not (ca.get("missing_assignments") or [])
+        for ca in by_name.values()
+    )
+    missing_any = any(ca.get("missing_assignments") for ca in by_name.values())
+    if pending_only and not missing_any:
+        headline = re.sub(
+            r"\bwith two overdue assignments\b",
+            "with work awaiting a teacher score",
+            headline,
+            flags=re.I,
+        )
+        headline = re.sub(
+            r"\bwith an overdue assignment\b",
+            "with work awaiting a teacher score",
+            headline,
+            flags=re.I,
+        )
+        headline = re.sub(
+            r"\btwo overdue assignments\b",
+            "two assignments awaiting a score",
+            headline,
+            flags=re.I,
+        )
+        headline = re.sub(
+            r"\boverdue assignments\b",
+            "assignments awaiting a score",
+            headline,
+            flags=re.I,
+        )
     summary["headline"] = headline
 
     wins = []
