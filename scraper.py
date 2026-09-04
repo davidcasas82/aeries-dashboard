@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -21,6 +22,9 @@ GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 GROK_MODEL = "grok-4"
 PACIFIC = ZoneInfo("America/Los_Angeles")
 DEFAULT_HTTP_TIMEOUT = 60
+LOGIN_TIMEOUT_ATTEMPTS = 3
+LOGIN_RETRY_DELAY_SEC = 2
+_LOGIN_TIMEOUTS = (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout)
 
 # Month-day cutovers for TUSD 6-12 gradebook term selection (overridable in school_calendar.json)
 _DEFAULT_TERM_CUTOVERS = {
@@ -449,7 +453,7 @@ def require_scrape_config():
         raise ScrapeError("No students configured in .env (need STUDENT_1_SN at minimum)")
 
 
-def login():
+def _login_once():
     session = TimeoutSession()
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -477,6 +481,20 @@ def login():
 
     print("Logged in successfully")
     return session
+
+
+def login():
+    """Log into Aeries. Retry ReadTimeout/ConnectTimeout a few times, then fail."""
+    for attempt in range(1, LOGIN_TIMEOUT_ATTEMPTS + 1):
+        try:
+            return _login_once()
+        except _LOGIN_TIMEOUTS:
+            if attempt >= LOGIN_TIMEOUT_ATTEMPTS:
+                raise
+            print(
+                f"Login timed out (attempt {attempt}/{LOGIN_TIMEOUT_ATTEMPTS}); retrying..."
+            )
+            time.sleep(LOGIN_RETRY_DELAY_SEC)
 
 
 def switch_student(session, school_code, student_sn):
