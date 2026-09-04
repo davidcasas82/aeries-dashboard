@@ -297,7 +297,7 @@ class ClassworkIsNotHomeworkTests(unittest.TestCase):
         )
         self.assertFalse(scraper.is_missing_assignment(self._exit_ticket(), TODAY, class_meta))
 
-    def test_aeries_count_picks_not_turned_in_first(self):
+    def test_class_summary_count_does_not_invent_missing(self):
         turned_in = self._exit_ticket()
         never_handed_in = _asgn(
             description="Homework 3",
@@ -305,9 +305,16 @@ class ClassworkIsNotHomeworkTests(unittest.TestCase):
             points_possible=10.0,
             grading_complete=False,
         )
-        class_meta = {"percent": "88.0", "mark": "B", "missing_count": 1}
-        picked = scraper.select_missing_assignments([turned_in, never_handed_in], class_meta, TODAY)
-        self.assertEqual([a["description"] for a in picked], ["Homework 3"])
+        class_meta = {
+            "percent": "56.2",
+            "mark": "F",
+            "missing_count": 0,
+            "missing_assignments": '<a class="MissingAssignment"><span>2</span></a>',
+        }
+        picked = scraper.select_missing_assignments(
+            [turned_in, never_handed_in], class_meta, TODAY
+        )
+        self.assertEqual(picked, [])
 
     def test_blank_score_status_is_awaiting_not_counts(self):
         a = scraper.annotate_assignment_status(self._exit_ticket(), {"Formative": 30})
