@@ -1,11 +1,6 @@
 name: After-School Grade Scrape
 
 on:
-  schedule:
-    # GitHub skipped the 23:00 UTC slot when it shared a file with the other crons; this file re-registers 4pm PT at the same time.
-    # scheduler rebind 2026-08-31
-    - cron: '7 23 * * *'   # ~4:07 PT — after school
-    - cron: '12 23 * * *'  # ~4:12 PT — backup if GitHub drops the :00 slot
   workflow_dispatch:
 
 concurrency:
