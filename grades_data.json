@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-09-04T00:57:59.102269+00:00",
+  "last_updated": "2026-09-04T07:54:49.513037+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -479,8 +479,8 @@
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
-              "due_label": "due today",
-              "due_state": "today"
+              "due_label": "overdue Sep 3",
+              "due_state": "overdue"
             },
             {
               "number": "3",
@@ -504,8 +504,8 @@
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
-              "due_label": "due today",
-              "due_state": "today"
+              "due_label": "overdue Sep 3",
+              "due_state": "overdue"
             }
           ]
         }
@@ -515,80 +515,80 @@
         "tardies": 1,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 16,
-        "days_present": 16,
+        "days_enrolled": 17,
+        "days_present": 17,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 16 Days Present: 16 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 1 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 17 Days Present: 17 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 1 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Daniel needs attention in Alg ll Bus Mang at C 73.3% and Int Eng&Marktg at F 56.2%, while holding A's in Bus of Gaming and Physics & Eng.",
+        "headline": "Daniel needs attention in Int Eng&Marktg at F 56.2% with two overdue assignments and Alg ll Bus Mang at C 73.3%, while holding A's in Bus of Gaming and Physics & Eng.",
         "focus_tonight": "LT4: Team Marketing Ad (Int Eng&Marktg); LT4: Team Marketing Presentation (Int Eng&Marktg)",
         "wins": [
-          "Bus of Gaming A 100%",
-          "Physics & Eng A 100%"
+          "Bus of Gaming at A 100%",
+          "Physics & Eng at A 100%"
         ],
         "classes": [
           {
-            "class_name": "Alg ll Bus Mang",
-            "urgency": "critical",
-            "snap": "Assessment avg 73.3% \u00b7 3 scored",
-            "story": "Posted grade C 73.3% from three assessments.",
-            "do_tonight": ""
-          },
-          {
             "class_name": "Int Eng&Marktg",
             "urgency": "critical",
-            "snap": "LT4: Team Marketing Ad \u00b7 due today; LT4: Team Marketing Presentation \u00b7 due today",
-            "story": "Grade at F 56.2% after 6.2 pt gain last week.",
+            "snap": "LT4: Team Marketing Ad \u00b7 overdue Sep 3; LT4: Team Marketing Presentation \u00b7 overdue Sep 3",
+            "story": "Grade slipped 18.8 points in the last 7 days.",
             "do_tonight": "LT4: Team Marketing Ad"
+          },
+          {
+            "class_name": "Alg ll Bus Mang",
+            "urgency": "critical",
+            "snap": "Assessment average 73.3% from three scored items",
+            "story": "",
+            "do_tonight": ""
           },
           {
             "class_name": "Rapid Prototype",
             "urgency": "ok",
             "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator \u00b7 awaiting score \u00b7 was due Fri Aug 28",
-            "story": "No grade posted yet.",
+            "story": "No posted grade yet.",
             "do_tonight": ""
           },
           {
             "class_name": "US Hist Media",
             "urgency": "ok",
             "snap": "LT 1.1 - CER # 1 \u00b7 due Wed Sep 9",
-            "story": "No grade posted yet.",
+            "story": "No posted grade yet.",
             "do_tonight": ""
           },
           {
             "class_name": "Bus of Gaming",
             "urgency": "strong",
-            "snap": "Summatives 100% \u00b7 1 scored",
+            "snap": "Summatives average 100%",
             "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "Physics & Eng",
             "urgency": "strong",
-            "snap": "Unit 0.2 Notes \u00b7 1/3",
+            "snap": "Two items awaiting score",
             "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-09-04T00:56:56.534196+00:00",
+        "generated_at": "2026-09-04T07:54:59.930349+00:00",
         "analytics_snapshot": {
           "dominant_theme": "low_grades in 2 classes",
-          "total_recoverable_pts": 0,
-          "history_span_days": 108
+          "total_recoverable_pts": 15.0,
+          "history_span_days": 109
         }
       },
       "trend_summary": [
         {
           "class_name": "Int Eng&Marktg",
-          "delta": 6.2,
+          "delta": -18.8,
           "window": "7d",
           "pct_now": 56.2,
-          "direction": "up"
+          "direction": "down"
         }
       ],
-      "history_span_days": 108,
+      "history_span_days": 109,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [
@@ -728,11 +728,11 @@
               "pct": 56.2
             }
           ],
-          "delta_7d": 6.2,
+          "delta_7d": -18.8,
           "delta_14d": null,
           "delta_span": null,
           "span_window": null,
-          "trend_label": "improving"
+          "trend_label": "slipping"
         }
       },
       "view": {
@@ -740,21 +740,21 @@
           {
             "name": "LT4: Team Marketing Ad",
             "class_name": "Int Eng&Marktg",
-            "reason": "due_today",
+            "reason": "missing",
             "due_date": "09/03/2026"
           },
           {
             "name": "LT4: Team Marketing Presentation",
             "class_name": "Int Eng&Marktg",
-            "reason": "due_today",
+            "reason": "missing",
             "due_date": "09/03/2026"
           }
         ],
         "tonight_label": "LT4: Team Marketing Ad (Int Eng&Marktg); LT4: Team Marketing Presentation (Int Eng&Marktg)",
-        "headline": "Daniel needs attention in Alg ll Bus Mang at C 73.3% and Int Eng&Marktg at F 56.2%, while holding A's in Bus of Gaming and Physics & Eng.",
+        "headline": "Daniel needs attention in Int Eng&Marktg at F 56.2% with two overdue assignments and Alg ll Bus Mang at C 73.3%, while holding A's in Bus of Gaming and Physics & Eng.",
         "wins": [
-          "Bus of Gaming A 100%",
-          "Physics & Eng A 100%"
+          "Bus of Gaming at A 100%",
+          "Physics & Eng at A 100%"
         ],
         "classes": [
           {
@@ -765,7 +765,7 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "Summatives 100% \u00b7 1 scored",
+            "snap": "Summatives average 100%",
             "story": "",
             "do_tonight": "",
             "missing_count": 0,
@@ -924,7 +924,7 @@
             "mark": "",
             "urgency": "ok",
             "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator \u00b7 awaiting score \u00b7 was due Fri Aug 28",
-            "story": "No grade posted yet.",
+            "story": "No posted grade yet.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -956,42 +956,13 @@
                 "due_state": "pending",
                 "name": "LT 1.1 - Poster of Myself in Adobe Illustrator",
                 "due_weekday": "Fri",
-                "days_past_due": 6
+                "days_past_due": 7
               }
             ],
             "stale_awaiting_count": 0,
             "newly_missing": [],
             "upcoming": [],
-            "recent": [
-              {
-                "number": "1",
-                "description": "Article: Design Principle Jigsaw",
-                "category": "Classwork",
-                "score_raw": "1 / 3",
-                "points_earned": 1.0,
-                "points_possible": 3.0,
-                "percentage": 33.33,
-                "correct_raw": "1 / 3",
-                "correct_earned": 1.0,
-                "correct_possible": 3.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/17/2026",
-                "date_completed": "08/20/2026",
-                "due_date": "08/20/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Classwork",
-                "counts_toward_grade": true,
-                "due_label": "1/3",
-                "due_state": "completed",
-                "name": "Article: Design Principle Jigsaw",
-                "due_weekday": "Thu",
-                "turned_in": true
-              }
-            ],
+            "recent": [],
             "assignments": [
               {
                 "number": "1",
@@ -1066,7 +1037,7 @@
             "mark": "",
             "urgency": "ok",
             "snap": "LT 1.1 - CER # 1 \u00b7 due Wed Sep 9",
-            "story": "No grade posted yet.",
+            "story": "No posted grade yet.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -1101,7 +1072,7 @@
                 "due_state": "upcoming",
                 "name": "LT 1.1 - CER # 1",
                 "due_weekday": "Wed",
-                "days_until_due": 6
+                "days_until_due": 5
               }
             ],
             "recent": [],
@@ -1150,8 +1121,8 @@
             "percent": "73.3",
             "mark": "C",
             "urgency": "critical",
-            "snap": "Assessment avg 73.3% \u00b7 3 scored",
-            "story": "Posted grade C 73.3% from three assessments.",
+            "snap": "Assessment average 73.3% from three scored items",
+            "story": "",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -1353,7 +1324,7 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "Unit 0.2 Notes \u00b7 1/3",
+            "snap": "Two items awaiting score",
             "story": "",
             "do_tonight": "",
             "missing_count": 0,
@@ -1386,7 +1357,7 @@
                 "due_state": "pending",
                 "name": "Exit Ticket",
                 "due_weekday": "Fri",
-                "days_past_due": 6,
+                "days_past_due": 7,
                 "turned_in": true
               },
               {
@@ -1415,7 +1386,7 @@
                 "due_state": "pending",
                 "name": "Unit 0 Warm Ups",
                 "due_weekday": "Tue",
-                "days_past_due": 2,
+                "days_past_due": 3,
                 "turned_in": true
               }
             ],
@@ -1595,16 +1566,11 @@
             "percent": "56.2",
             "mark": "F",
             "urgency": "critical",
-            "snap": "LT4: Team Marketing Ad \u00b7 due today; LT4: Team Marketing Presentation \u00b7 due today",
-            "story": "Grade at F 56.2% after 6.2 pt gain last week.",
+            "snap": "LT4: Team Marketing Ad \u00b7 overdue Sep 3; LT4: Team Marketing Presentation \u00b7 overdue Sep 3",
+            "story": "Grade slipped 18.8 points in the last 7 days.",
             "do_tonight": "LT4: Team Marketing Ad",
-            "missing_count": 0,
-            "missing": [],
-            "awaiting_count": 0,
-            "awaiting": [],
-            "stale_awaiting_count": 0,
-            "newly_missing": [],
-            "upcoming": [
+            "missing_count": 2,
+            "missing": [
               {
                 "number": "2",
                 "description": "LT4: Team Marketing Ad",
@@ -1627,11 +1593,11 @@
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
-                "due_label": "due today",
-                "due_state": "today",
+                "due_label": "overdue Sep 3",
+                "due_state": "overdue",
                 "name": "LT4: Team Marketing Ad",
                 "due_weekday": "Thu",
-                "days_until_due": 0
+                "days_overdue": 1
               },
               {
                 "number": "3",
@@ -1655,13 +1621,21 @@
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
-                "due_label": "due today",
-                "due_state": "today",
+                "due_label": "overdue Sep 3",
+                "due_state": "overdue",
                 "name": "LT4: Team Marketing Presentation",
                 "due_weekday": "Thu",
-                "days_until_due": 0
+                "days_overdue": 1
               }
             ],
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [
+              "LT4: Team Marketing Ad",
+              "LT4: Team Marketing Presentation"
+            ],
+            "upcoming": [],
             "recent": [
               {
                 "number": "1",
@@ -1743,8 +1717,8 @@
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
-                "due_label": "due today",
-                "due_state": "today",
+                "due_label": "awaiting score \u00b7 was due Thu Sep 3",
+                "due_state": "pending",
                 "name": "LT4: Team Marketing Ad",
                 "due_weekday": "Thu"
               },
@@ -1770,8 +1744,8 @@
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
-                "due_label": "due today",
-                "due_state": "today",
+                "due_label": "awaiting score \u00b7 was due Thu Sep 3",
+                "due_state": "pending",
                 "name": "LT4: Team Marketing Presentation",
                 "due_weekday": "Thu"
               }
@@ -1810,7 +1784,7 @@
                 "pct": 56.2
               }
             ],
-            "delta_7d": 6.2,
+            "delta_7d": -18.8,
             "delta_14d": null,
             "delta_span": null,
             "span_window": null,
@@ -1818,7 +1792,7 @@
             "counted_insight": null
           }
         ],
-        "generated_at": "2026-09-04T00:56:56.534196+00:00"
+        "generated_at": "2026-09-04T07:54:59.930349+00:00"
       }
     },
     {
@@ -2557,32 +2531,32 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 16,
-        "days_present": 16,
+        "days_enrolled": 17,
+        "days_present": 17,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 16 Days Present: 16 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 17 Days Present: 17 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology with no missing work; Engineering Geo shows no grade posted yet.",
+        "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology; Engineering Geo shows no grade posted yet.",
         "focus_tonight": "",
         "wins": [
-          "Bus of Gaming at A 100%",
-          "Mkt Adv GrphDes at A 95%"
+          "Bus of Gaming at A 100% with no missing work",
+          "Mkt Adv GrphDes at A 95% with scored work averaging 100% in Assignments"
         ],
         "classes": [
           {
             "class_name": "Engineering Geo",
             "urgency": "ok",
-            "snap": "Algebra Boot Camp assignments scored",
-            "story": "Phantom zero shows no posted grade while seven scored items average 72.9%.",
+            "snap": "Algebra Boot Camp assignments averaging 72.9%",
+            "story": "Phantom zero in Aeries so no posted grade yet.",
             "do_tonight": ""
           },
           {
             "class_name": "Tech of Biology",
             "urgency": "ok",
-            "snap": "Two items awaiting score",
-            "story": "A 100% posted with recent practice and assessment work completed.",
+            "snap": "DNA Structure Exit Ticket 3/3",
+            "story": "Two assignments awaiting score.",
             "do_tonight": ""
           },
           {
@@ -2595,7 +2569,7 @@
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "Marketing Mix Assignment 10/10",
+            "snap": "TM & MS Assignment 10/10",
             "story": "",
             "do_tonight": ""
           },
@@ -2603,19 +2577,19 @@
             "class_name": "PE Course 1",
             "urgency": "strong",
             "snap": "Weight Room Rules Quiz 10/10",
-            "story": "",
+            "story": "One assignment awaiting score.",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-09-04T00:57:08.789643+00:00",
+        "generated_at": "2026-09-04T07:55:10.978440+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
-          "history_span_days": 108
+          "history_span_days": 109
         }
       },
       "trend_summary": [],
-      "history_span_days": 108,
+      "history_span_days": 109,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [
@@ -2740,7 +2714,7 @@
           "delta_7d": 0.0,
           "delta_14d": 0.0,
           "delta_span": 0.0,
-          "span_window": "15d",
+          "span_window": "16d",
           "trend_label": "stable"
         },
         "Engineering Geo": {
@@ -2860,19 +2834,19 @@
             }
           ],
           "delta_7d": 0.0,
-          "delta_14d": null,
-          "delta_span": null,
-          "span_window": null,
+          "delta_14d": 0.0,
+          "delta_span": 0.0,
+          "span_window": "14d",
           "trend_label": "stable"
         }
       },
       "view": {
         "tonight": [],
         "tonight_label": "",
-        "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology with no missing work; Engineering Geo shows no grade posted yet.",
+        "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology; Engineering Geo shows no grade posted yet.",
         "wins": [
-          "Bus of Gaming at A 100%",
-          "Mkt Adv GrphDes at A 95%"
+          "Bus of Gaming at A 100% with no missing work",
+          "Mkt Adv GrphDes at A 95% with scored work averaging 100% in Assignments"
         ],
         "classes": [
           {
@@ -2985,7 +2959,7 @@
             "percent": "95.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "Marketing Mix Assignment 10/10",
+            "snap": "TM & MS Assignment 10/10",
             "story": "",
             "do_tonight": "",
             "missing_count": 0,
@@ -2996,6 +2970,34 @@
             "newly_missing": [],
             "upcoming": [],
             "recent": [
+              {
+                "number": "5",
+                "description": "TM & MS Assignment",
+                "category": "Assignments",
+                "score_raw": "10 / 10",
+                "points_earned": 10.0,
+                "points_possible": 10.0,
+                "percentage": 100.0,
+                "correct_raw": "10 / 10",
+                "correct_earned": 10.0,
+                "correct_possible": 10.0,
+                "comment": "",
+                "documents": "",
+                "date_assigned": "09/02/2026",
+                "date_completed": "09/03/2026",
+                "due_date": "09/03/2026",
+                "grading_complete": true,
+                "extra_credit": false,
+                "aeries_missing": false,
+                "status": "counts",
+                "status_label": "counts in Assignments",
+                "counts_toward_grade": true,
+                "due_label": "10/10",
+                "due_state": "completed",
+                "name": "TM & MS Assignment",
+                "due_weekday": "Thu",
+                "turned_in": true
+              },
               {
                 "number": "4",
                 "description": "Marketing Mix Assignment",
@@ -3050,62 +3052,6 @@
                 "due_state": "completed",
                 "name": "8/24 & 8/25 - Daily Assignment (Shark Tank)",
                 "due_weekday": "Wed",
-                "turned_in": true
-              },
-              {
-                "number": "1",
-                "description": "About Me Slides",
-                "category": "Assignments",
-                "score_raw": "5 / 5",
-                "points_earned": 5.0,
-                "points_possible": 5.0,
-                "percentage": 100.0,
-                "correct_raw": "5 / 5",
-                "correct_earned": 5.0,
-                "correct_possible": 5.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/17/2026",
-                "date_completed": "08/20/2026",
-                "due_date": "08/20/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Assignments",
-                "counts_toward_grade": true,
-                "due_label": "5/5",
-                "due_state": "completed",
-                "name": "About Me Slides",
-                "due_weekday": "Thu",
-                "turned_in": true
-              },
-              {
-                "number": "2",
-                "description": "About Me Slides Presentation",
-                "category": "Presentations",
-                "score_raw": "8.5 / 10",
-                "points_earned": 8.5,
-                "points_possible": 10.0,
-                "percentage": 85.0,
-                "correct_raw": "8.5 / 10",
-                "correct_earned": 8.5,
-                "correct_possible": 10.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/17/2026",
-                "date_completed": "08/20/2026",
-                "due_date": "08/20/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Presentations",
-                "counts_toward_grade": true,
-                "due_label": "8.5/10",
-                "due_state": "completed",
-                "name": "About Me Slides Presentation",
-                "due_weekday": "Thu",
                 "turned_in": true
               }
             ],
@@ -3320,7 +3266,7 @@
             "delta_7d": 0.0,
             "delta_14d": 0.0,
             "delta_span": 0.0,
-            "span_window": "15d",
+            "span_window": "16d",
             "phantom_zero": false,
             "counted_insight": null
           },
@@ -3332,8 +3278,8 @@
             "percent": "0.0",
             "mark": "",
             "urgency": "ok",
-            "snap": "Algebra Boot Camp assignments scored",
-            "story": "Phantom zero shows no posted grade while seven scored items average 72.9%.",
+            "snap": "Algebra Boot Camp assignments averaging 72.9%",
+            "story": "Phantom zero in Aeries so no posted grade yet.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -3342,204 +3288,7 @@
             "stale_awaiting_count": 0,
             "newly_missing": [],
             "upcoming": [],
-            "recent": [
-              {
-                "number": "1",
-                "description": "0.1 Simplify Expressions",
-                "category": "Algebra Boot Camp",
-                "score_raw": "8 / 10",
-                "points_earned": 8.0,
-                "points_possible": 10.0,
-                "percentage": 80.0,
-                "correct_raw": "8 / 10",
-                "correct_earned": 8.0,
-                "correct_possible": 10.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/19/2026",
-                "date_completed": "08/20/2026",
-                "due_date": "08/20/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Algebra Boot Camp",
-                "counts_toward_grade": true,
-                "due_label": "8/10",
-                "due_state": "completed",
-                "name": "0.1 Simplify Expressions",
-                "due_weekday": "Thu",
-                "turned_in": true
-              },
-              {
-                "number": "2",
-                "description": "0.2 Solve multi-step equations",
-                "category": "Algebra Boot Camp",
-                "score_raw": "7 / 10",
-                "points_earned": 7.0,
-                "points_possible": 10.0,
-                "percentage": 70.0,
-                "correct_raw": "7 / 10",
-                "correct_earned": 7.0,
-                "correct_possible": 10.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/19/2026",
-                "date_completed": "08/20/2026",
-                "due_date": "08/20/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Algebra Boot Camp",
-                "counts_toward_grade": true,
-                "due_label": "7/10",
-                "due_state": "completed",
-                "name": "0.2 Solve multi-step equations",
-                "due_weekday": "Thu",
-                "turned_in": true
-              },
-              {
-                "number": "3",
-                "description": "0.3 Solve proportions",
-                "category": "Algebra Boot Camp",
-                "score_raw": "5 / 10",
-                "points_earned": 5.0,
-                "points_possible": 10.0,
-                "percentage": 50.0,
-                "correct_raw": "5 / 10",
-                "correct_earned": 5.0,
-                "correct_possible": 10.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/19/2026",
-                "date_completed": "08/20/2026",
-                "due_date": "08/20/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Algebra Boot Camp",
-                "counts_toward_grade": true,
-                "due_label": "5/10",
-                "due_state": "completed",
-                "name": "0.3 Solve proportions",
-                "due_weekday": "Thu",
-                "turned_in": true
-              },
-              {
-                "number": "4",
-                "description": "0.4 Coordinate plane",
-                "category": "Algebra Boot Camp",
-                "score_raw": "7 / 10",
-                "points_earned": 7.0,
-                "points_possible": 10.0,
-                "percentage": 70.0,
-                "correct_raw": "7 / 10",
-                "correct_earned": 7.0,
-                "correct_possible": 10.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/19/2026",
-                "date_completed": "08/20/2026",
-                "due_date": "08/20/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Algebra Boot Camp",
-                "counts_toward_grade": true,
-                "due_label": "7/10",
-                "due_state": "completed",
-                "name": "0.4 Coordinate plane",
-                "due_weekday": "Thu",
-                "turned_in": true
-              },
-              {
-                "number": "5",
-                "description": "0.5 Slope of line",
-                "category": "Algebra Boot Camp",
-                "score_raw": "7 / 10",
-                "points_earned": 7.0,
-                "points_possible": 10.0,
-                "percentage": 70.0,
-                "correct_raw": "7 / 10",
-                "correct_earned": 7.0,
-                "correct_possible": 10.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/19/2026",
-                "date_completed": "08/20/2026",
-                "due_date": "08/20/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Algebra Boot Camp",
-                "counts_toward_grade": true,
-                "due_label": "7/10",
-                "due_state": "completed",
-                "name": "0.5 Slope of line",
-                "due_weekday": "Thu",
-                "turned_in": true
-              },
-              {
-                "number": "6",
-                "description": "0.6 Area & Perimeter of rectangles & triangles",
-                "category": "Algebra Boot Camp",
-                "score_raw": "7 / 10",
-                "points_earned": 7.0,
-                "points_possible": 10.0,
-                "percentage": 70.0,
-                "correct_raw": "7 / 10",
-                "correct_earned": 7.0,
-                "correct_possible": 10.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/19/2026",
-                "date_completed": "08/20/2026",
-                "due_date": "08/20/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Algebra Boot Camp",
-                "counts_toward_grade": true,
-                "due_label": "7/10",
-                "due_state": "completed",
-                "name": "0.6 Area & Perimeter of rectangles & triangles",
-                "due_weekday": "Thu",
-                "turned_in": true
-              },
-              {
-                "number": "7",
-                "description": "0.7 Perfect square & Square roots",
-                "category": "Algebra Boot Camp",
-                "score_raw": "10 / 10",
-                "points_earned": 10.0,
-                "points_possible": 10.0,
-                "percentage": 100.0,
-                "correct_raw": "10 / 10",
-                "correct_earned": 10.0,
-                "correct_possible": 10.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/19/2026",
-                "date_completed": "08/20/2026",
-                "due_date": "08/20/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Algebra Boot Camp",
-                "counts_toward_grade": true,
-                "due_label": "10/10",
-                "due_state": "completed",
-                "name": "0.7 Perfect square & Square roots",
-                "due_weekday": "Thu",
-                "turned_in": true
-              }
-            ],
+            "recent": [],
             "assignments": [
               {
                 "number": "1",
@@ -3783,7 +3532,7 @@
             "mark": "A",
             "urgency": "strong",
             "snap": "Weight Room Rules Quiz 10/10",
-            "story": "",
+            "story": "One assignment awaiting score.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -3815,7 +3564,7 @@
                 "due_state": "pending",
                 "name": "Mini Golf Course Design",
                 "due_weekday": "Fri",
-                "days_past_due": 6
+                "days_past_due": 7
               }
             ],
             "stale_awaiting_count": 0,
@@ -4049,8 +3798,8 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "ok",
-            "snap": "Two items awaiting score",
-            "story": "A 100% posted with recent practice and assessment work completed.",
+            "snap": "DNA Structure Exit Ticket 3/3",
+            "story": "Two assignments awaiting score.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -4082,7 +3831,7 @@
                 "due_state": "pending",
                 "name": "DNA Replication Exit Ticket",
                 "due_weekday": "Fri",
-                "days_past_due": 6
+                "days_past_due": 7
               },
               {
                 "number": "6",
@@ -4110,7 +3859,7 @@
                 "due_state": "pending",
                 "name": "LT 1a Assessment",
                 "due_weekday": "Wed",
-                "days_past_due": 1
+                "days_past_due": 2
               }
             ],
             "stale_awaiting_count": 0,
@@ -4429,9 +4178,9 @@
               }
             ],
             "delta_7d": 0.0,
-            "delta_14d": null,
-            "delta_span": null,
-            "span_window": null,
+            "delta_14d": 0.0,
+            "delta_span": 0.0,
+            "span_window": "14d",
             "phantom_zero": false,
             "counted_insight": null
           },
@@ -4492,7 +4241,7 @@
             "counted_insight": null
           }
         ],
-        "generated_at": "2026-09-04T00:57:08.789643+00:00"
+        "generated_at": "2026-09-04T07:55:10.978440+00:00"
       }
     }
   ],
