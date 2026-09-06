@@ -5336,6 +5336,88 @@
             "headline": "Daniel needs attention in Alg ll Bus Mang at C 73.3% and Int Eng&Marktg at F 56.2%, while holding A's in Bus of Gaming and Physics & Eng.",
             "focus_tonight": ""
           }
+        },
+        {
+          "date": "2026-09-06",
+          "captured_at": "2026-09-06T09:07:47.374080+00:00",
+          "classes": {
+            "Bus of Gaming": {
+              "period": 0,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "PE Course 2": {
+              "period": 1,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Span 1 (IVC)": {
+              "period": 2,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Rapid Prototype": {
+              "period": 3,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "US Hist Media": {
+              "period": 4,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Alg ll Bus Mang": {
+              "period": 5,
+              "pct": 73.3,
+              "mark": "C",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Physics & Eng": {
+              "period": 6,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Point Break": {
+              "period": 7,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Int Eng&Marktg": {
+              "period": 8,
+              "pct": 56.2,
+              "mark": "F",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            }
+          },
+          "previous_briefing": {
+            "headline": "Daniel needs attention in Alg ll Bus Mang at C 73.3% and Int Eng&Marktg at F 56.2%, while holding A's in Bus of Gaming and Physics & Eng.",
+            "focus_tonight": ""
+          }
         }
       ]
     },
@@ -10266,6 +10348,88 @@
         {
           "date": "2026-09-05",
           "captured_at": "2026-09-06T03:07:37.430978+00:00",
+          "classes": {
+            "Bus of Gaming": {
+              "period": 0,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Mkt Adv GrphDes": {
+              "period": 1,
+              "pct": 95.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Engineering Geo": {
+              "period": 2,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "COMM 1 (IVC)": {
+              "period": 3,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "PE Course 1": {
+              "period": 4,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Eng 9 Entre": {
+              "period": 5,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Tech of Biology": {
+              "period": 6,
+              "pct": 100.0,
+              "mark": "A",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "Point Break": {
+              "period": 7,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            },
+            "WrldHis by Dsgn": {
+              "period": 8,
+              "pct": null,
+              "mark": "",
+              "missing_count": 0,
+              "missing_names": [],
+              "aeries_trend": null
+            }
+          },
+          "previous_briefing": {
+            "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology; Engineering Geo shows no grade posted yet.",
+            "focus_tonight": ""
+          }
+        },
+        {
+          "date": "2026-09-06",
+          "captured_at": "2026-09-06T09:07:59.237877+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
