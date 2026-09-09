@@ -50,4 +50,4 @@ Actions logs print `student 1`, not names or student numbers. The Pages site is 
 |------|------|
 | `grades_data.json` | Latest scrape the page reads |
 | `grade_history.json` | Daily snapshots for trends |
-| `school_calendar.json` | First/last day + term cutovers |
+| `school_calendar.json` | First/last day + official 6–12 quarter ends + term cutovers |
