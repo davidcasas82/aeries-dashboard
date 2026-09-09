@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-09-09T03:07:24.434894+00:00",
+  "last_updated": "2026-09-09T09:07:53.579467+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -359,8 +359,8 @@
               "status": "pending",
               "status_label": "pending",
               "counts_toward_grade": false,
-              "due_label": "due Wed Sep 9",
-              "due_state": "upcoming"
+              "due_label": "due today",
+              "due_state": "today"
             }
           ]
         },
@@ -616,75 +616,75 @@
         "tardies": 1,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 18,
-        "days_present": 18,
+        "days_enrolled": 19,
+        "days_present": 19,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 18 Days Present: 18 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 1 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 19 Days Present: 19 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 1 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
         "headline": "Daniel needs attention in Alg ll Bus Mang at C 73.3% and Int Eng&Marktg at F 56.2%, while holding A's in Bus of Gaming and Physics & Eng.",
         "focus_tonight": "LT 1.1 - CER # 1 (US Hist Media)",
         "wins": [
-          "Bus of Gaming A 100.0% no missing work",
-          "Physics & Eng A 100.0% no missing work"
+          "Bus of Gaming at A 100%",
+          "Physics & Eng at A 100%"
         ],
         "classes": [
           {
             "class_name": "Alg ll Bus Mang",
             "urgency": "critical",
-            "snap": "C 73.3% \u00b7 Assessment avg 73.3%",
-            "story": "Posted grade is C from three assessments.",
+            "snap": "Assessment category at 73.3%",
+            "story": "Current grade is C 73.3% from three scored assessments.",
             "do_tonight": ""
           },
           {
             "class_name": "Int Eng&Marktg",
             "urgency": "critical",
-            "snap": "F 56.2% \u00b7 Writing avg 75.0%",
+            "snap": "Current grade F 56.2%",
             "story": "Grade slipped 18.8 points in the last 7 days.",
             "do_tonight": ""
           },
           {
+            "class_name": "US Hist Media",
+            "urgency": "watch",
+            "snap": "LT 1.1 - CER # 1 \u00b7 due today",
+            "story": "",
+            "do_tonight": "LT 1.1 - CER # 1"
+          },
+          {
             "class_name": "PE Course 2",
             "urgency": "ok",
-            "snap": "August Fitness awaiting score \u00b7 was due Fri Sep 4",
-            "story": "No posted grade yet.",
+            "snap": "No grade posted yet",
+            "story": "One item awaiting score from Sep 4.",
             "do_tonight": ""
           },
           {
             "class_name": "Rapid Prototype",
             "urgency": "ok",
-            "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator awaiting score \u00b7 was due Fri Aug 28",
-            "story": "No posted grade yet.",
+            "snap": "No grade posted yet",
+            "story": "One item awaiting score from Aug 28.",
             "do_tonight": ""
-          },
-          {
-            "class_name": "US Hist Media",
-            "urgency": "ok",
-            "snap": "LT 1.1 - CER # 1 \u00b7 due Wed Sep 9",
-            "story": "",
-            "do_tonight": "LT 1.1 - CER # 1"
           },
           {
             "class_name": "Bus of Gaming",
             "urgency": "strong",
-            "snap": "A 100.0%",
-            "story": "",
+            "snap": "A 100%",
+            "story": "One summative at 100%.",
             "do_tonight": ""
           },
           {
             "class_name": "Physics & Eng",
             "urgency": "strong",
-            "snap": "A 100.0%",
-            "story": "",
+            "snap": "A 100%",
+            "story": "Two items awaiting score.",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-09-08T23:07:36.448231+00:00",
+        "generated_at": "2026-09-09T09:08:07.690153+00:00",
         "analytics_snapshot": {
           "dominant_theme": "low_grades in 2 classes",
           "total_recoverable_pts": 0,
-          "history_span_days": 113
+          "history_span_days": 114
         }
       },
       "trend_summary": [
@@ -696,7 +696,7 @@
           "direction": "down"
         }
       ],
-      "history_span_days": 113,
+      "history_span_days": 114,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [
@@ -768,7 +768,7 @@
           "delta_7d": 0.0,
           "delta_14d": 0.0,
           "delta_span": 0.0,
-          "span_window": "15d",
+          "span_window": "16d",
           "trend_label": "stable"
         },
         "PE Course 2": {
@@ -936,15 +936,15 @@
           {
             "name": "LT 1.1 - CER # 1",
             "class_name": "US Hist Media",
-            "reason": "due_tomorrow",
+            "reason": "due_today",
             "due_date": "09/09/2026"
           }
         ],
         "tonight_label": "LT 1.1 - CER # 1 (US Hist Media)",
         "headline": "Daniel needs attention in Alg ll Bus Mang at C 73.3% and Int Eng&Marktg at F 56.2%, while holding A's in Bus of Gaming and Physics & Eng.",
         "wins": [
-          "Bus of Gaming A 100.0% no missing work",
-          "Physics & Eng A 100.0% no missing work"
+          "Bus of Gaming at A 100%",
+          "Physics & Eng at A 100%"
         ],
         "classes": [
           {
@@ -955,8 +955,8 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "A 100.0%",
-            "story": "",
+            "snap": "A 100%",
+            "story": "One summative at 100%.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -1065,7 +1065,7 @@
             "delta_7d": 0.0,
             "delta_14d": 0.0,
             "delta_span": 0.0,
-            "span_window": "15d",
+            "span_window": "16d",
             "phantom_zero": false,
             "counted_insight": null
           },
@@ -1077,8 +1077,8 @@
             "percent": "0.0",
             "mark": "",
             "urgency": "ok",
-            "snap": "August Fitness awaiting score \u00b7 was due Fri Sep 4",
-            "story": "No posted grade yet.",
+            "snap": "No grade posted yet",
+            "story": "One item awaiting score from Sep 4.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -1110,7 +1110,7 @@
                 "due_state": "pending",
                 "name": "August Fitness",
                 "due_weekday": "Fri",
-                "days_past_due": 4
+                "days_past_due": 5
               }
             ],
             "stale_awaiting_count": 0,
@@ -1142,7 +1142,7 @@
                 "due_state": "upcoming",
                 "name": "Table Tennis Psychomotor",
                 "due_weekday": "Fri",
-                "days_until_due": 3
+                "days_until_due": 2
               },
               {
                 "number": "3",
@@ -1170,7 +1170,7 @@
                 "due_state": "upcoming",
                 "name": "Table Tennis Cognitive",
                 "due_weekday": "Fri",
-                "days_until_due": 3
+                "days_until_due": 2
               },
               {
                 "number": "4",
@@ -1198,7 +1198,7 @@
                 "due_state": "upcoming",
                 "name": "Table Tennis Affective",
                 "due_weekday": "Fri",
-                "days_until_due": 3
+                "days_until_due": 2
               }
             ],
             "recent": [],
@@ -1356,8 +1356,8 @@
             "percent": "0.0",
             "mark": "",
             "urgency": "ok",
-            "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator awaiting score \u00b7 was due Fri Aug 28",
-            "story": "No posted grade yet.",
+            "snap": "No grade posted yet",
+            "story": "One item awaiting score from Aug 28.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -1389,7 +1389,7 @@
                 "due_state": "pending",
                 "name": "LT 1.1 - Poster of Myself in Adobe Illustrator",
                 "due_weekday": "Fri",
-                "days_past_due": 11,
+                "days_past_due": 12,
                 "stale": true
               }
             ],
@@ -1469,8 +1469,8 @@
             "room": "2-126",
             "percent": "0.0",
             "mark": "",
-            "urgency": "ok",
-            "snap": "LT 1.1 - CER # 1 \u00b7 due Wed Sep 9",
+            "urgency": "watch",
+            "snap": "LT 1.1 - CER # 1 \u00b7 due today",
             "story": "",
             "do_tonight": "LT 1.1 - CER # 1",
             "missing_count": 0,
@@ -1502,11 +1502,11 @@
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
-                "due_label": "due Wed Sep 9",
-                "due_state": "upcoming",
+                "due_label": "due today",
+                "due_state": "today",
                 "name": "LT 1.1 - CER # 1",
                 "due_weekday": "Wed",
-                "days_until_due": 1
+                "days_until_due": 0
               }
             ],
             "recent": [],
@@ -1533,8 +1533,8 @@
                 "status": "pending",
                 "status_label": "pending",
                 "counts_toward_grade": false,
-                "due_label": "due Wed Sep 9",
-                "due_state": "upcoming",
+                "due_label": "due today",
+                "due_state": "today",
                 "name": "LT 1.1 - CER # 1",
                 "due_weekday": "Wed"
               }
@@ -1555,8 +1555,8 @@
             "percent": "73.3",
             "mark": "C",
             "urgency": "critical",
-            "snap": "C 73.3% \u00b7 Assessment avg 73.3%",
-            "story": "Posted grade is C from three assessments.",
+            "snap": "Assessment category at 73.3%",
+            "story": "Current grade is C 73.3% from three scored assessments.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -1778,8 +1778,8 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "A 100.0%",
-            "story": "",
+            "snap": "A 100%",
+            "story": "Two items awaiting score.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -1811,7 +1811,7 @@
                 "due_state": "pending",
                 "name": "Exit Ticket",
                 "due_weekday": "Fri",
-                "days_past_due": 11,
+                "days_past_due": 12,
                 "stale": true,
                 "turned_in": true
               },
@@ -1841,7 +1841,7 @@
                 "due_state": "pending",
                 "name": "Unit 0 Warm Ups",
                 "due_weekday": "Tue",
-                "days_past_due": 7,
+                "days_past_due": 8,
                 "turned_in": true
               }
             ],
@@ -2041,7 +2041,7 @@
             "percent": "56.2",
             "mark": "F",
             "urgency": "critical",
-            "snap": "F 56.2% \u00b7 Writing avg 75.0%",
+            "snap": "Current grade F 56.2%",
             "story": "Grade slipped 18.8 points in the last 7 days.",
             "do_tonight": "",
             "missing_count": 0,
@@ -2074,7 +2074,7 @@
                 "due_state": "pending",
                 "name": "LT4: Team Marketing Ad",
                 "due_weekday": "Thu",
-                "days_past_due": 5
+                "days_past_due": 6
               },
               {
                 "number": "3",
@@ -2102,42 +2102,13 @@
                 "due_state": "pending",
                 "name": "LT4: Team Marketing Presentation",
                 "due_weekday": "Thu",
-                "days_past_due": 5
+                "days_past_due": 6
               }
             ],
             "stale_awaiting_count": 0,
             "newly_missing": [],
             "upcoming": [],
-            "recent": [
-              {
-                "number": "1",
-                "description": "LT3: AI Character Reference Letter",
-                "category": "Writing",
-                "score_raw": "3.75 / 5",
-                "points_earned": 3.75,
-                "points_possible": 5.0,
-                "percentage": 75.0,
-                "correct_raw": "7.5 / 10",
-                "correct_earned": 7.5,
-                "correct_possible": 10.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/21/2026",
-                "date_completed": "08/25/2026",
-                "due_date": "08/25/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Writing",
-                "counts_toward_grade": true,
-                "due_label": "3.75/5",
-                "due_state": "completed",
-                "name": "LT3: AI Character Reference Letter",
-                "due_weekday": "Tue",
-                "turned_in": true
-              }
-            ],
+            "recent": [],
             "assignments": [
               {
                 "number": "1",
@@ -2284,7 +2255,7 @@
             "counted_insight": null
           }
         ],
-        "generated_at": "2026-09-08T23:07:36.448231+00:00"
+        "generated_at": "2026-09-09T09:08:07.690153+00:00"
       }
     },
     {
@@ -3023,65 +2994,65 @@
         "tardies": 0,
         "excused": 0,
         "unexcused": 0,
-        "days_enrolled": 18,
-        "days_present": 18,
+        "days_enrolled": 19,
+        "days_present": 19,
         "year": "2026-2027",
         "source": "Attendance.aspx#AttendanceSummaryArea",
-        "raw": "Year Days Enrolled: 18 Days Present: 18 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
+        "raw": "Year Days Enrolled: 19 Days Present: 19 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
         "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology while Engineering Geo shows no grade posted yet; most classes have no work posted yet.",
         "focus_tonight": "",
         "wins": [
-          "Bus of Gaming at A 100% with no missing work",
-          "Mkt Adv GrphDes at A 95% with scored work at 100% and 85%"
+          "A 100% in Bus of Gaming",
+          "A 95% in Mkt Adv GrphDes"
         ],
         "classes": [
           {
             "class_name": "Engineering Geo",
             "urgency": "ok",
-            "snap": "No grade posted yet",
-            "story": "Phantom zero with Algebra Boot Camp assignments averaging 72.9%.",
+            "snap": "Algebra Boot Camp scored work averages 72.9%",
+            "story": "Phantom zero with no posted grade yet.",
             "do_tonight": ""
           },
           {
             "class_name": "Tech of Biology",
             "urgency": "ok",
-            "snap": "DNA Replication Exit Ticket awaiting score \u00b7 was due Fri Aug 28; LT 1a Assessment awaiting score \u00b7 was due Wed Sep 2",
-            "story": "Posted grade at A 100% while two items await scores.",
+            "snap": "Awaiting scores on DNA Replication Exit Ticket and LT 1a Assessment",
+            "story": "Posted grade at 100% with two pending items.",
             "do_tonight": ""
           },
           {
             "class_name": "Bus of Gaming",
             "urgency": "strong",
-            "snap": "Summatives at 100%",
+            "snap": "Summatives 100%",
             "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "TM & MS Assignment 10/10; Marketing Mix Assignment 10/10",
+            "snap": "TM & MS Assignment \u00b7 10/10",
             "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "PE Course 1",
             "urgency": "strong",
-            "snap": "Mini Golf Course Design awaiting score \u00b7 was due Fri Aug 28",
+            "snap": "Weight Room Rules Quiz \u00b7 10/10",
             "story": "",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-09-08T23:07:46.730884+00:00",
+        "generated_at": "2026-09-09T09:08:24.335509+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
-          "history_span_days": 113
+          "history_span_days": 114
         }
       },
       "trend_summary": [],
-      "history_span_days": 113,
+      "history_span_days": 114,
       "class_trends": {
         "Bus of Gaming": {
           "pct_history": [
@@ -3153,7 +3124,7 @@
           "delta_7d": 0.0,
           "delta_14d": 0.0,
           "delta_span": 0.0,
-          "span_window": "15d",
+          "span_window": "16d",
           "trend_label": "stable"
         },
         "Mkt Adv GrphDes": {
@@ -3246,7 +3217,7 @@
           "delta_7d": 0.0,
           "delta_14d": 0.0,
           "delta_span": 0.0,
-          "span_window": "20d",
+          "span_window": "21d",
           "trend_label": "stable"
         },
         "Engineering Geo": {
@@ -3323,7 +3294,7 @@
           "delta_7d": 0.0,
           "delta_14d": 0.0,
           "delta_span": 0.0,
-          "span_window": "14d",
+          "span_window": "15d",
           "trend_label": "stable"
         },
         "Tech of Biology": {
@@ -3408,7 +3379,7 @@
           "delta_7d": 0.0,
           "delta_14d": 0.0,
           "delta_span": 0.0,
-          "span_window": "18d",
+          "span_window": "19d",
           "trend_label": "stable"
         }
       },
@@ -3417,8 +3388,8 @@
         "tonight_label": "",
         "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology while Engineering Geo shows no grade posted yet; most classes have no work posted yet.",
         "wins": [
-          "Bus of Gaming at A 100% with no missing work",
-          "Mkt Adv GrphDes at A 95% with scored work at 100% and 85%"
+          "A 100% in Bus of Gaming",
+          "A 95% in Mkt Adv GrphDes"
         ],
         "classes": [
           {
@@ -3429,7 +3400,7 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "Summatives at 100%",
+            "snap": "Summatives 100%",
             "story": "",
             "do_tonight": "",
             "missing_count": 0,
@@ -3539,7 +3510,7 @@
             "delta_7d": 0.0,
             "delta_14d": 0.0,
             "delta_span": 0.0,
-            "span_window": "15d",
+            "span_window": "16d",
             "phantom_zero": false,
             "counted_insight": null
           },
@@ -3551,7 +3522,7 @@
             "percent": "95.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "TM & MS Assignment 10/10; Marketing Mix Assignment 10/10",
+            "snap": "TM & MS Assignment \u00b7 10/10",
             "story": "",
             "do_tonight": "",
             "missing_count": 0,
@@ -3878,7 +3849,7 @@
             "delta_7d": 0.0,
             "delta_14d": 0.0,
             "delta_span": 0.0,
-            "span_window": "20d",
+            "span_window": "21d",
             "phantom_zero": false,
             "counted_insight": null
           },
@@ -3890,8 +3861,8 @@
             "percent": "0.0",
             "mark": "",
             "urgency": "ok",
-            "snap": "No grade posted yet",
-            "story": "Phantom zero with Algebra Boot Camp assignments averaging 72.9%.",
+            "snap": "Algebra Boot Camp scored work averages 72.9%",
+            "story": "Phantom zero with no posted grade yet.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -4143,7 +4114,7 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "Mini Golf Course Design awaiting score \u00b7 was due Fri Aug 28",
+            "snap": "Weight Room Rules Quiz \u00b7 10/10",
             "story": "",
             "do_tonight": "",
             "missing_count": 0,
@@ -4176,7 +4147,7 @@
                 "due_state": "pending",
                 "name": "Mini Golf Course Design",
                 "due_weekday": "Fri",
-                "days_past_due": 11,
+                "days_past_due": 12,
                 "stale": true
               }
             ],
@@ -4391,7 +4362,7 @@
             "delta_7d": 0.0,
             "delta_14d": 0.0,
             "delta_span": 0.0,
-            "span_window": "14d",
+            "span_window": "15d",
             "phantom_zero": false,
             "counted_insight": null
           },
@@ -4431,8 +4402,8 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "ok",
-            "snap": "DNA Replication Exit Ticket awaiting score \u00b7 was due Fri Aug 28; LT 1a Assessment awaiting score \u00b7 was due Wed Sep 2",
-            "story": "Posted grade at A 100% while two items await scores.",
+            "snap": "Awaiting scores on DNA Replication Exit Ticket and LT 1a Assessment",
+            "story": "Posted grade at 100% with two pending items.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -4464,7 +4435,7 @@
                 "due_state": "pending",
                 "name": "DNA Replication Exit Ticket",
                 "due_weekday": "Fri",
-                "days_past_due": 11,
+                "days_past_due": 12,
                 "stale": true
               },
               {
@@ -4493,42 +4464,13 @@
                 "due_state": "pending",
                 "name": "LT 1a Assessment",
                 "due_weekday": "Wed",
-                "days_past_due": 6
+                "days_past_due": 7
               }
             ],
             "stale_awaiting_count": 1,
             "newly_missing": [],
             "upcoming": [],
-            "recent": [
-              {
-                "number": "4",
-                "description": "DNA Structure Exit Ticket",
-                "category": "Practice Assignments",
-                "score_raw": "3 / 3",
-                "points_earned": 3.0,
-                "points_possible": 3.0,
-                "percentage": 100.0,
-                "correct_raw": "3 / 3",
-                "correct_earned": 3.0,
-                "correct_possible": 3.0,
-                "comment": "",
-                "documents": "",
-                "date_assigned": "08/24/2026",
-                "date_completed": "08/25/2026",
-                "due_date": "08/25/2026",
-                "grading_complete": true,
-                "extra_credit": false,
-                "aeries_missing": false,
-                "status": "counts",
-                "status_label": "counts in Practice Assignments",
-                "counts_toward_grade": true,
-                "due_label": "3/3",
-                "due_state": "completed",
-                "name": "DNA Structure Exit Ticket",
-                "due_weekday": "Tue",
-                "turned_in": true
-              }
-            ],
+            "recent": [],
             "assignments": [
               {
                 "number": "1",
@@ -4778,7 +4720,7 @@
             "delta_7d": 0.0,
             "delta_14d": 0.0,
             "delta_span": 0.0,
-            "span_window": "18d",
+            "span_window": "19d",
             "phantom_zero": false,
             "counted_insight": null
           },
@@ -4839,7 +4781,7 @@
             "counted_insight": null
           }
         ],
-        "generated_at": "2026-09-08T23:07:46.730884+00:00"
+        "generated_at": "2026-09-09T09:08:24.335509+00:00"
       }
     }
   ],
