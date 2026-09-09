@@ -1,5 +1,6 @@
 """Calendar, sanity, view-model, and timeout helpers."""
 
+import json
 import sys
 import unittest
 from datetime import date, datetime
@@ -173,6 +174,75 @@ class PreferredTermsTests(unittest.TestCase):
         }
         terms = scraper.preferred_gradebook_terms(today=date(2026, 9, 2), calendar=cal)
         self.assertIn("q2", terms)
+
+
+class YearProgressTests(unittest.TestCase):
+    """Shared header bar math uses official 6–12 quarter ends, not term_cutovers."""
+
+    YEAR_2026 = {
+        "id": "2026-27",
+        "first_day": "2026-08-13",
+        "last_day": "2027-05-28",
+        "quarters": {
+            "q1_end": "2026-10-09",
+            "q2_end": "2026-12-18",
+            "q3_end": "2027-03-12",
+            "q4_end": "2027-05-28",
+        },
+    }
+
+    def test_committed_calendar_has_official_quarter_ends(self):
+        cal = json.loads((ROOT / "school_calendar.json").read_text())
+        year = next(y for y in cal["years"] if y["id"] == "2026-27")
+        self.assertEqual(year["first_day"], "2026-08-13")
+        self.assertEqual(year["last_day"], "2027-05-28")
+        self.assertEqual(year["quarters"]["q1_end"], "2026-10-09")
+        self.assertEqual(year["quarters"]["q2_end"], "2026-12-18")
+        self.assertEqual(year["quarters"]["q3_end"], "2027-03-12")
+        self.assertEqual(year["quarters"]["q4_end"], "2027-05-28")
+
+    def test_mock_v3_september_ninth_counts(self):
+        facts = scraper.year_progress_facts(today=date(2026, 9, 9), year=self.YEAR_2026)
+        self.assertTrue(facts["in_session"])
+        self.assertEqual(facts["day_of_year"], 28)
+        self.assertEqual(facts["quarter"], "Q1")
+        self.assertEqual(facts["quarter_days_left"], 30)
+        self.assertEqual(facts["year_days_left"], 261)
+        self.assertEqual([t["label"] for t in facts["ticks"]], ["Q1", "Q2", "Q3", "Q4"])
+        self.assertEqual(facts["ticks"][0]["pct"], 0.0)
+
+    def test_quarter_end_day_is_still_that_quarter(self):
+        facts = scraper.year_progress_facts(today=date(2026, 10, 9), year=self.YEAR_2026)
+        self.assertEqual(facts["quarter"], "Q1")
+        self.assertEqual(facts["quarter_days_left"], 0)
+        next_day = scraper.year_progress_facts(today=date(2026, 10, 10), year=self.YEAR_2026)
+        self.assertEqual(next_day["quarter"], "Q2")
+
+    def test_summer_is_out_of_session(self):
+        facts = scraper.year_progress_facts(today=date(2027, 6, 15), year=self.YEAR_2026)
+        self.assertFalse(facts["in_session"])
+        self.assertIsNone(
+            scraper.school_session_window(
+                today=date(2027, 6, 15),
+                calendar={"years": [self.YEAR_2026]},
+            )
+        )
+
+    def test_payload_embeds_quarters(self):
+        payload = scraper.school_session_payload(
+            calendar={"years": [self.YEAR_2026], "source_url": "https://example.test"},
+            today=date(2026, 9, 9),
+            paused=False,
+        )
+        self.assertTrue(payload["active"])
+        self.assertEqual(payload["year_id"], "2026-27")
+        self.assertEqual(payload["quarters"]["q1_end"], "2026-10-09")
+
+    def test_remote_first_last_refresh_keeps_quarters(self):
+        existing = dict(self.YEAR_2026)
+        remote = {"id": "2026-27", "first_day": "2026-08-13", "last_day": "2027-05-28"}
+        merged = scraper._merge_calendar_year(existing, remote)
+        self.assertEqual(merged["quarters"]["q3_end"], "2027-03-12")
 
 
 class AttendanceYearTests(unittest.TestCase):
