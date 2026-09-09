@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-09-09T09:23:07.646563+00:00",
+  "last_updated": "2026-09-09T23:08:07.301814+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -2848,6 +2848,31 @@
               "counts_toward_grade": false,
               "due_label": "awaiting score \u00b7 was due Fri Aug 28",
               "due_state": "pending"
+            },
+            {
+              "number": "4",
+              "description": "September",
+              "category": "Affective",
+              "score_raw": "12 / 12",
+              "points_earned": 12.0,
+              "points_possible": 12.0,
+              "percentage": 100.0,
+              "correct_raw": "12 / 12",
+              "correct_earned": 12.0,
+              "correct_possible": 12.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "09/01/2026",
+              "date_completed": "09/10/2026",
+              "due_date": "09/30/2026",
+              "grading_complete": true,
+              "extra_credit": false,
+              "aeries_missing": false,
+              "status": "counts",
+              "status_label": "counts in Affective",
+              "counts_toward_grade": true,
+              "due_label": "due Wed Sep 30",
+              "due_state": "upcoming"
             }
           ]
         },
@@ -3036,28 +3061,14 @@
         "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology while Engineering Geo shows no grade posted yet; most classes have no work posted yet.",
         "focus_tonight": "",
         "wins": [
-          "A 100% in Bus of Gaming",
-          "A 95% in Mkt Adv GrphDes"
+          "Bus of Gaming at A 100% with no missing work.",
+          "Mkt Adv GrphDes at A 95% with scored work averaging 100% in Assignments."
         ],
         "classes": [
           {
-            "class_name": "Engineering Geo",
-            "urgency": "ok",
-            "snap": "Algebra Boot Camp scored work averages 72.9%",
-            "story": "Phantom zero with no posted grade yet.",
-            "do_tonight": ""
-          },
-          {
-            "class_name": "Tech of Biology",
-            "urgency": "ok",
-            "snap": "Awaiting scores on DNA Replication Exit Ticket and LT 1a Assessment",
-            "story": "Posted grade at 100% with two pending items.",
-            "do_tonight": ""
-          },
-          {
             "class_name": "Bus of Gaming",
             "urgency": "strong",
-            "snap": "Summatives 100%",
+            "snap": "Summatives \u00b7 100%",
             "story": "",
             "do_tonight": ""
           },
@@ -3069,14 +3080,28 @@
             "do_tonight": ""
           },
           {
+            "class_name": "Engineering Geo",
+            "urgency": "ok",
+            "snap": "Algebra Boot Camp assignments scored",
+            "story": "Portal shows phantom zero with no posted grade.",
+            "do_tonight": ""
+          },
+          {
             "class_name": "PE Course 1",
             "urgency": "strong",
             "snap": "Weight Room Rules Quiz \u00b7 10/10",
             "story": "",
             "do_tonight": ""
+          },
+          {
+            "class_name": "Tech of Biology",
+            "urgency": "ok",
+            "snap": "LT 1a Assessment awaiting score",
+            "story": "",
+            "do_tonight": ""
           }
         ],
-        "generated_at": "2026-09-09T09:08:24.335509+00:00",
+        "generated_at": "2026-09-09T23:08:20.337111+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -3436,8 +3461,8 @@
         "tonight_label": "",
         "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology while Engineering Geo shows no grade posted yet; most classes have no work posted yet.",
         "wins": [
-          "A 100% in Bus of Gaming",
-          "A 95% in Mkt Adv GrphDes"
+          "Bus of Gaming at A 100% with no missing work.",
+          "Mkt Adv GrphDes at A 95% with scored work averaging 100% in Assignments."
         ],
         "classes": [
           {
@@ -3448,7 +3473,7 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "Summatives 100%",
+            "snap": "Summatives \u00b7 100%",
             "story": "",
             "do_tonight": "",
             "missing_count": 0,
@@ -3917,8 +3942,8 @@
             "percent": "0.0",
             "mark": "",
             "urgency": "ok",
-            "snap": "Algebra Boot Camp scored work averages 72.9%",
-            "story": "Phantom zero with no posted grade yet.",
+            "snap": "Algebra Boot Camp assignments scored",
+            "story": "Portal shows phantom zero with no posted grade.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -4351,6 +4376,34 @@
                 "due_state": "pending",
                 "name": "Mini Golf Course Design",
                 "due_weekday": "Fri"
+              },
+              {
+                "number": "4",
+                "description": "September",
+                "category": "Affective",
+                "score_raw": "12 / 12",
+                "points_earned": 12.0,
+                "points_possible": 12.0,
+                "percentage": 100.0,
+                "correct_raw": "12 / 12",
+                "correct_earned": 12.0,
+                "correct_possible": 12.0,
+                "comment": "",
+                "documents": "",
+                "date_assigned": "09/01/2026",
+                "date_completed": "09/10/2026",
+                "due_date": "09/30/2026",
+                "grading_complete": true,
+                "extra_credit": false,
+                "aeries_missing": false,
+                "status": "counts",
+                "status_label": "counts in Affective",
+                "counts_toward_grade": true,
+                "due_label": "due Wed Sep 30",
+                "due_state": "upcoming",
+                "name": "September",
+                "due_weekday": "Wed",
+                "turned_in": true
               }
             ],
             "pct_history": [
@@ -4462,8 +4515,8 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "ok",
-            "snap": "Awaiting scores on DNA Replication Exit Ticket and LT 1a Assessment",
-            "story": "Posted grade at 100% with two pending items.",
+            "snap": "LT 1a Assessment awaiting score",
+            "story": "",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -4845,7 +4898,7 @@
             "counted_insight": null
           }
         ],
-        "generated_at": "2026-09-09T09:08:24.335509+00:00"
+        "generated_at": "2026-09-09T23:08:20.337111+00:00"
       }
     }
   ],
