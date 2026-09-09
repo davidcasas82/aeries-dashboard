@@ -4,7 +4,7 @@ import os
 import re
 import sys
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -84,10 +84,24 @@ HISTORY_MISSING_NAMES_CAP = 8
 PCT_HISTORY_UI_POINTS = 30
 TREND_DELTA_THRESHOLD = 2.0  # percentage points over 7d for improve/slip labels
 
+# Official TUSD 6–12 quarter end dates (not on the public first/last calendar page)
+_TUSD_6_12_QUARTERS_2026_27 = {
+    "q1_end": "2026-10-09",
+    "q2_end": "2026-12-18",
+    "q3_end": "2027-03-12",
+    "q4_end": "2027-05-28",
+}
+_QUARTER_END_KEYS = ("q1_end", "q2_end", "q3_end", "q4_end")
+
 # Fallback if school_calendar.json missing / unreadable
 _DEFAULT_SCHOOL_YEARS = [
     {"id": "2025-26", "first_day": "2025-08-13", "last_day": "2026-05-29"},
-    {"id": "2026-27", "first_day": "2026-08-13", "last_day": "2027-05-28"},
+    {
+        "id": "2026-27",
+        "first_day": "2026-08-13",
+        "last_day": "2027-05-28",
+        "quarters": dict(_TUSD_6_12_QUARTERS_2026_27),
+    },
     {"id": "2027-28", "first_day": "2027-08-12", "last_day": "2028-05-26"},
 ]
 
@@ -211,28 +225,57 @@ def fetch_tusd_school_years(timeout=20):
         return []
 
 
+def _year_fingerprint(year):
+    q = (year or {}).get("quarters") or {}
+    return (
+        (year or {}).get("id"),
+        (year or {}).get("first_day"),
+        (year or {}).get("last_day"),
+        tuple(q.get(k) for k in _QUARTER_END_KEYS),
+    )
+
+
+def _merge_calendar_year(existing, incoming):
+    """Remote/file first+last win; keep curated quarter ends the public page omits."""
+    merged = dict(existing or {})
+    incoming = incoming or {}
+    for key, val in incoming.items():
+        if key == "quarters" and not val:
+            continue
+        if val is not None and val != "":
+            merged[key] = val
+    if (existing or {}).get("quarters") and not incoming.get("quarters"):
+        merged["quarters"] = existing["quarters"]
+    return merged
+
+
 def load_school_calendar(refresh=True):
     """Load school years from school_calendar.json, optionally refresh from TUSD."""
     data = {
         "district": "Tustin Unified School District",
         "source_url": TUSD_CALENDAR_URL,
-        "years": list(_DEFAULT_SCHOOL_YEARS),
+        "years": [dict(y) for y in _DEFAULT_SCHOOL_YEARS],
     }
+    default_by_id = {y["id"]: y for y in _DEFAULT_SCHOOL_YEARS}
     if CALENDAR_FILE.exists():
         try:
             file_data = json.loads(CALENDAR_FILE.read_text())
             if file_data.get("years"):
                 data.update(file_data)
+                data["years"] = [
+                    _merge_calendar_year(default_by_id.get(y.get("id")), y)
+                    for y in (data.get("years") or [])
+                ]
         except (json.JSONDecodeError, OSError):
             pass
 
     if refresh and env_truthy("SKIP_CALENDAR_REFRESH") is not True:
         remote_years = fetch_tusd_school_years()
         if remote_years:
-            # Merge by id (remote wins)
+            # Merge by id (remote first/last win; curated quarters stay)
             by_id = {y["id"]: y for y in data.get("years") or []}
             for y in remote_years:
-                by_id[y["id"]] = y
+                by_id[y["id"]] = _merge_calendar_year(by_id.get(y["id"]), y)
             data["years"] = sorted(by_id.values(), key=lambda y: y.get("first_day") or "")
             data["source_url"] = TUSD_CALENDAR_URL
             # Only rewrite the committed file when year dates actually change.
@@ -243,11 +286,10 @@ def load_school_calendar(refresh=True):
                     prev_years = (json.loads(CALENDAR_FILE.read_text()) or {}).get("years") or []
                 except (json.JSONDecodeError, OSError):
                     prev_years = []
-            years_changed = [
-                (y.get("id"), y.get("first_day"), y.get("last_day")) for y in data.get("years") or []
-            ] != [
-                (y.get("id"), y.get("first_day"), y.get("last_day")) for y in prev_years
-            ]
+            years_changed = (
+                [_year_fingerprint(y) for y in data.get("years") or []]
+                != [_year_fingerprint(y) for y in prev_years]
+            )
             if years_changed and os.getenv("GITHUB_ACTIONS") != "true":
                 data["updated_at"] = datetime.now(timezone.utc).date().isoformat()
                 try:
@@ -283,6 +325,142 @@ def next_first_day(today=None, calendar=None):
         if first and first >= today:
             candidates.append(first)
     return min(candidates) if candidates else None
+
+
+def year_quarters(year):
+    """Official 6–12 quarter end dates for a school-year dict, or None if incomplete."""
+    if not year:
+        return None
+    raw = year.get("quarters") or {}
+    ends = {}
+    for key in _QUARTER_END_KEYS:
+        parsed = _parse_iso_date_str(raw.get(key))
+        if not parsed and key == "q4_end":
+            parsed = _parse_iso_date_str(year.get("last_day"))
+        if not parsed:
+            return None
+        ends[key] = parsed
+    return ends
+
+
+def current_quarter_end(today, quarters):
+    """Return (label, end_date) for the quarter containing today (inclusive ends)."""
+    if not quarters:
+        return None, None
+    for i, key in enumerate(_QUARTER_END_KEYS, start=1):
+        end = quarters[key]
+        if today <= end:
+            return f"Q{i}", end
+    return "Q4", quarters["q4_end"]
+
+
+def year_progress_facts(today=None, year=None, calendar=None):
+    """Calendar-day year/quarter progress from school_calendar first/last + quarter ends.
+
+    Days-left is (end - today).days — today exclusive, end inclusive.
+    Day N of year is (today - first_day).days + 1.
+    """
+    today = today or pacific_today()
+    if isinstance(today, datetime):
+        today = today.date()
+    if year is None:
+        calendar = calendar or load_school_calendar(refresh=False)
+        year = school_session_window(today=today, calendar=calendar)
+    if not year:
+        return {"in_session": False}
+    first = _parse_iso_date_str(year.get("first_day"))
+    last = _parse_iso_date_str(year.get("last_day"))
+    if not first or not last:
+        return {"in_session": False}
+    in_session = first <= today <= last
+    span = (last - first).days
+    elapsed = (today - first).days
+    if span <= 0:
+        progress_pct = 0.0
+    else:
+        progress_pct = max(0.0, min(100.0, (elapsed / span) * 100.0))
+
+    quarters = year_quarters(year)
+    q_label, q_end = current_quarter_end(today, quarters)
+    ticks = []
+    if quarters and span > 0:
+        starts = (
+            ("Q1", first),
+            ("Q2", quarters["q1_end"] + timedelta(days=1)),
+            ("Q3", quarters["q2_end"] + timedelta(days=1)),
+            ("Q4", quarters["q3_end"] + timedelta(days=1)),
+        )
+        for label, start in starts:
+            ticks.append({
+                "label": label,
+                "date": start.isoformat(),
+                "pct": max(0.0, min(100.0, ((start - first).days / span) * 100.0)),
+            })
+
+    return {
+        "in_session": in_session,
+        "year_id": year.get("id"),
+        "first_day": first.isoformat(),
+        "last_day": last.isoformat(),
+        "day_of_year": elapsed + 1,
+        "year_days_left": (last - today).days,
+        "progress_pct": progress_pct,
+        "quarter": q_label,
+        "quarter_end": q_end.isoformat() if q_end else None,
+        "quarter_days_left": (q_end - today).days if q_end else None,
+        "quarters": {k: v.isoformat() for k, v in quarters.items()} if quarters else None,
+        "ticks": ticks,
+    }
+
+
+def _nearest_school_year(today, calendar):
+    """Active year, else upcoming, else most recently completed."""
+    active = school_session_window(today=today, calendar=calendar)
+    if active:
+        return active
+    upcoming = None
+    completed = []
+    for y in calendar.get("years") or []:
+        first = _parse_iso_date_str(y.get("first_day"))
+        last = _parse_iso_date_str(y.get("last_day"))
+        if first and first > today:
+            if upcoming is None or first < _parse_iso_date_str(upcoming.get("first_day")):
+                upcoming = y
+        elif last and last < today:
+            completed.append((last, y))
+    if upcoming:
+        return upcoming
+    if completed:
+        completed.sort(key=lambda t: t[0], reverse=True)
+        return completed[0][1]
+    return None
+
+
+def school_session_payload(calendar=None, today=None, paused=None, reason=None, extra=None):
+    """Embed TUSD session + official 6–12 quarter ends for the dashboard header."""
+    calendar = calendar or load_school_calendar(refresh=False)
+    today = today or pacific_today()
+    if isinstance(today, datetime):
+        today = today.date()
+    if paused is None:
+        paused = is_calendar_summer_break(today=today, calendar=calendar)
+    year = _nearest_school_year(today, calendar)
+    nxt = next_first_day(today=today, calendar=calendar)
+    payload = {
+        "active": not paused,
+        "reason": reason or ("TUSD school calendar" if paused else "in session"),
+        "year_id": (year or {}).get("id"),
+        "first_day": (year or {}).get("first_day"),
+        "last_day": (year or {}).get("last_day"),
+        "next_first_day": nxt.isoformat() if nxt else None,
+        "calendar_source": calendar.get("source_url") or TUSD_CALENDAR_URL,
+    }
+    quarters = year_quarters(year) if year else None
+    if quarters:
+        payload["quarters"] = {k: v.isoformat() for k, v in quarters.items()}
+    if extra:
+        payload.update(extra)
+    return payload
 
 
 def _school_year_aeries_label(year_dict):
@@ -793,16 +971,14 @@ def refresh_attendance_only():
 
     data["students"] = students
     data["last_updated"] = datetime.now(timezone.utc).isoformat()
-    nxt = next_first_day(calendar=cal)
     paused = is_calendar_summer_break(calendar=cal)
     data["summer_break"] = paused
-    data["school_session"] = {
-        "active": not paused,
-        "reason": "TUSD school calendar" if paused else "in session",
-        "next_first_day": nxt.isoformat() if nxt else None,
-        "attendance_year": prefer_year,
-        "calendar_source": cal.get("source_url"),
-    }
+    data["school_session"] = school_session_payload(
+        calendar=cal,
+        paused=paused,
+        reason="TUSD school calendar" if paused else "in session",
+        extra={"attendance_year": prefer_year},
+    )
     OUTPUT_FILE.write_text(json.dumps(data, indent=2))
     print(f"\nAttendance written to {OUTPUT_FILE}")
 
@@ -4188,13 +4364,12 @@ def scrape_all():
         }
         data["last_updated"] = datetime.now(timezone.utc).isoformat()
         data["summer_break"] = True
-        data["school_session"] = {
-            "active": False,
-            "reason": reason,
-            "next_first_day": nxt.isoformat() if nxt else None,
-            "attendance_year": prefer_year,
-            "calendar_source": cal.get("source_url"),
-        }
+        data["school_session"] = school_session_payload(
+            calendar=cal,
+            paused=True,
+            reason=reason,
+            extra={"attendance_year": prefer_year},
+        )
         OUTPUT_FILE.write_text(json.dumps(data, indent=2))
         print(f"Data preserved (no new grade scrape). Written to {OUTPUT_FILE}")
         return
@@ -4202,20 +4377,13 @@ def scrape_all():
     session = login()
     history = load_grade_history()
     cal = load_school_calendar(refresh=False)
-    session_year = school_session_window(calendar=cal)
     data = {
         "last_updated": datetime.now(timezone.utc).isoformat(),
         "district": "Tustin USD",
         "portal_url": BASE_URL,
         "students": [],
         "summer_break": False,
-        "school_session": {
-            "active": True,
-            "year_id": (session_year or {}).get("id"),
-            "first_day": (session_year or {}).get("first_day"),
-            "last_day": (session_year or {}).get("last_day"),
-            "calendar_source": cal.get("source_url"),
-        },
+        "school_session": school_session_payload(calendar=cal, paused=False),
     }
 
     failed = 0

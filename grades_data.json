@@ -4908,6 +4908,14 @@
     "year_id": "2026-27",
     "first_day": "2026-08-13",
     "last_day": "2027-05-28",
+    "next_first_day": null,
+    "reason": "in session",
+    "quarters": {
+      "q1_end": "2026-10-09",
+      "q2_end": "2026-12-18",
+      "q3_end": "2027-03-12",
+      "q4_end": "2027-05-28"
+    },
     "calendar_source": "https://www.tustin.k12.ca.us/about-us/calendars-school-year"
   }
 }
