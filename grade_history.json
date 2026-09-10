@@ -5667,7 +5667,7 @@
         },
         {
           "date": "2026-09-10",
-          "captured_at": "2026-09-10T09:23:21.727813+00:00",
+          "captured_at": "2026-09-10T23:08:17.585560+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -5695,8 +5695,8 @@
             },
             "Rapid Prototype": {
               "period": 3,
-              "pct": null,
-              "mark": "",
+              "pct": 85.0,
+              "mark": "B",
               "missing_count": 0,
               "missing_names": [],
               "aeries_trend": null
@@ -11085,7 +11085,7 @@
         },
         {
           "date": "2026-09-10",
-          "captured_at": "2026-09-10T09:23:24.622481+00:00",
+          "captured_at": "2026-09-10T23:08:30.460355+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,

@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-09-10T09:23:18.613331+00:00",
+  "last_updated": "2026-09-10T23:08:06.921093+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -54,15 +54,15 @@
           "period": 3,
           "course_name": "Rapid Prototype",
           "teacher": "Ireland, M",
-          "percent": "0.0",
-          "mark": "",
-          "mark_and_score": " (0.0%)",
+          "percent": "85.0",
+          "mark": "B",
+          "mark_and_score": "B (85.0%)",
           "missing_count": 0,
           "missing_assignments": "<span class=\"NonMissingAssignment\">0</span>",
           "trend": "",
           "room": "3-140",
           "school_name": "Legacy Magnet Academy",
-          "phantom_zero": true
+          "phantom_zero": false
         },
         {
           "period": 4,
@@ -309,26 +309,26 @@
               "number": "2",
               "description": "LT 1.1 - Poster of Myself in Adobe Illustrator",
               "category": "Assessments",
-              "score_raw": "/ 10",
-              "points_earned": null,
+              "score_raw": "8.5 / 10",
+              "points_earned": 8.5,
               "points_possible": 10.0,
-              "percentage": 0.0,
-              "correct_raw": "0 / 10",
-              "correct_earned": 0.0,
+              "percentage": 85.0,
+              "correct_raw": "8.5 / 10",
+              "correct_earned": 8.5,
               "correct_possible": 10.0,
               "comment": "",
               "documents": "",
               "date_assigned": "08/24/2026",
-              "date_completed": "",
+              "date_completed": "08/28/2026",
               "due_date": "08/28/2026",
-              "grading_complete": false,
+              "grading_complete": true,
               "extra_credit": false,
               "aeries_missing": false,
-              "status": "pending",
-              "status_label": "pending",
-              "counts_toward_grade": false,
-              "due_label": "awaiting score \u00b7 was due Fri Aug 28",
-              "due_state": "pending"
+              "status": "counts",
+              "status_label": "counts in Assessments",
+              "counts_toward_grade": true,
+              "due_label": "8.5/10",
+              "due_state": "completed"
             }
           ]
         },
@@ -626,36 +626,36 @@
         "headline": "Daniel needs attention in Alg ll Bus Mang at C 73.3% and Int Eng&Marktg at F 56.2%, while holding A's in Bus of Gaming and Physics & Eng.",
         "focus_tonight": "Table Tennis Psychomotor (PE Course 2); Table Tennis Cognitive (PE Course 2); Table Tennis Affective (PE Course 2)",
         "wins": [
-          "Bus of Gaming at A 100.0% with no missing work",
-          "Physics & Eng at A 100.0% with no missing work"
+          "Bus of Gaming A 100%",
+          "Physics & Eng A 100%"
         ],
         "classes": [
           {
             "class_name": "Alg ll Bus Mang",
             "urgency": "critical",
-            "snap": "Current grade C 73.3%",
-            "story": "Assessment category averages 73.3% across three scored items.",
+            "snap": "Assessment avg 73.3%",
+            "story": "Three scored assessments posted.",
             "do_tonight": ""
           },
           {
             "class_name": "Int Eng&Marktg",
             "urgency": "critical",
-            "snap": "Current grade F 56.2%",
-            "story": "Two pending project scores from early September still awaiting teacher entry.",
+            "snap": "Writing avg 75%",
+            "story": "Two pending projects awaiting score.",
             "do_tonight": ""
           },
           {
             "class_name": "PE Course 2",
             "urgency": "ok",
             "snap": "August Fitness awaiting score \u00b7 was due Fri Sep 4",
-            "story": "Three Table Tennis assignments due tomorrow.",
+            "story": "",
             "do_tonight": "Table Tennis Psychomotor"
           },
           {
             "class_name": "Rapid Prototype",
             "urgency": "ok",
-            "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator awaiting score \u00b7 was due Fri Aug 28",
-            "story": "One Classwork item scored at 33.3%.",
+            "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator 8.5/10",
+            "story": "",
             "do_tonight": ""
           },
           {
@@ -668,19 +668,19 @@
           {
             "class_name": "Bus of Gaming",
             "urgency": "strong",
-            "snap": "Current grade A 100.0%",
-            "story": "Summatives category at 100%.",
+            "snap": "Summatives avg 100%",
+            "story": "",
             "do_tonight": ""
           },
           {
             "class_name": "Physics & Eng",
             "urgency": "strong",
-            "snap": "Current grade A 100.0%",
-            "story": "Two turned-in items still awaiting scores.",
+            "snap": "Unit 0.2 Notes 1/3",
+            "story": "Two turned-in items awaiting score.",
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-09-10T09:09:35.096156+00:00",
+        "generated_at": "2026-09-10T23:08:17.574781+00:00",
         "analytics_snapshot": {
           "dominant_theme": "low_grades in 2 classes",
           "total_recoverable_pts": 0,
@@ -788,7 +788,12 @@
           "trend_label": "insufficient_history"
         },
         "Rapid Prototype": {
-          "pct_history": [],
+          "pct_history": [
+            {
+              "date": "2026-09-10",
+              "pct": 85.0
+            }
+          ],
           "delta_7d": null,
           "delta_14d": null,
           "delta_span": null,
@@ -987,8 +992,8 @@
         "tonight_label": "Table Tennis Psychomotor (PE Course 2); Table Tennis Cognitive (PE Course 2); Table Tennis Affective (PE Course 2)",
         "headline": "Daniel needs attention in Alg ll Bus Mang at C 73.3% and Int Eng&Marktg at F 56.2%, while holding A's in Bus of Gaming and Physics & Eng.",
         "wins": [
-          "Bus of Gaming at A 100.0% with no missing work",
-          "Physics & Eng at A 100.0% with no missing work"
+          "Bus of Gaming A 100%",
+          "Physics & Eng A 100%"
         ],
         "classes": [
           {
@@ -999,8 +1004,8 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "Current grade A 100.0%",
-            "story": "Summatives category at 100%.",
+            "snap": "Summatives avg 100%",
+            "story": "",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -1130,7 +1135,7 @@
             "mark": "",
             "urgency": "ok",
             "snap": "August Fitness awaiting score \u00b7 was due Fri Sep 4",
-            "story": "Three Table Tennis assignments due tomorrow.",
+            "story": "",
             "do_tonight": "Table Tennis Psychomotor",
             "missing_count": 0,
             "missing": [],
@@ -1405,50 +1410,49 @@
             "course_name": "Rapid Prototype",
             "teacher": "Ireland, M",
             "room": "3-140",
-            "percent": "0.0",
-            "mark": "",
+            "percent": "85.0",
+            "mark": "B",
             "urgency": "ok",
-            "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator awaiting score \u00b7 was due Fri Aug 28",
-            "story": "One Classwork item scored at 33.3%.",
+            "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator 8.5/10",
+            "story": "",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
-            "awaiting_count": 1,
-            "awaiting": [
+            "awaiting_count": 0,
+            "awaiting": [],
+            "stale_awaiting_count": 0,
+            "newly_missing": [],
+            "upcoming": [],
+            "recent": [
               {
                 "number": "2",
                 "description": "LT 1.1 - Poster of Myself in Adobe Illustrator",
                 "category": "Assessments",
-                "score_raw": "/ 10",
-                "points_earned": null,
+                "score_raw": "8.5 / 10",
+                "points_earned": 8.5,
                 "points_possible": 10.0,
-                "percentage": 0.0,
-                "correct_raw": "0 / 10",
-                "correct_earned": 0.0,
+                "percentage": 85.0,
+                "correct_raw": "8.5 / 10",
+                "correct_earned": 8.5,
                 "correct_possible": 10.0,
                 "comment": "",
                 "documents": "",
                 "date_assigned": "08/24/2026",
-                "date_completed": "",
+                "date_completed": "08/28/2026",
                 "due_date": "08/28/2026",
-                "grading_complete": false,
+                "grading_complete": true,
                 "extra_credit": false,
                 "aeries_missing": false,
-                "status": "pending",
-                "status_label": "pending",
-                "counts_toward_grade": false,
-                "due_label": "awaiting score \u00b7 was due Fri Aug 28",
-                "due_state": "pending",
+                "status": "counts",
+                "status_label": "counts in Assessments",
+                "counts_toward_grade": true,
+                "due_label": "8.5/10",
+                "due_state": "completed",
                 "name": "LT 1.1 - Poster of Myself in Adobe Illustrator",
                 "due_weekday": "Fri",
-                "days_past_due": 13,
-                "stale": true
+                "turned_in": true
               }
             ],
-            "stale_awaiting_count": 1,
-            "newly_missing": [],
-            "upcoming": [],
-            "recent": [],
             "assignments": [
               {
                 "number": "1",
@@ -1482,36 +1486,42 @@
                 "number": "2",
                 "description": "LT 1.1 - Poster of Myself in Adobe Illustrator",
                 "category": "Assessments",
-                "score_raw": "/ 10",
-                "points_earned": null,
+                "score_raw": "8.5 / 10",
+                "points_earned": 8.5,
                 "points_possible": 10.0,
-                "percentage": 0.0,
-                "correct_raw": "0 / 10",
-                "correct_earned": 0.0,
+                "percentage": 85.0,
+                "correct_raw": "8.5 / 10",
+                "correct_earned": 8.5,
                 "correct_possible": 10.0,
                 "comment": "",
                 "documents": "",
                 "date_assigned": "08/24/2026",
-                "date_completed": "",
+                "date_completed": "08/28/2026",
                 "due_date": "08/28/2026",
-                "grading_complete": false,
+                "grading_complete": true,
                 "extra_credit": false,
                 "aeries_missing": false,
-                "status": "pending",
-                "status_label": "pending",
-                "counts_toward_grade": false,
-                "due_label": "awaiting score \u00b7 was due Fri Aug 28",
-                "due_state": "pending",
+                "status": "counts",
+                "status_label": "counts in Assessments",
+                "counts_toward_grade": true,
+                "due_label": "8.5/10",
+                "due_state": "completed",
                 "name": "LT 1.1 - Poster of Myself in Adobe Illustrator",
-                "due_weekday": "Fri"
+                "due_weekday": "Fri",
+                "turned_in": true
               }
             ],
-            "pct_history": [],
+            "pct_history": [
+              {
+                "date": "2026-09-10",
+                "pct": 85.0
+              }
+            ],
             "delta_7d": null,
             "delta_14d": null,
             "delta_span": null,
             "span_window": null,
-            "phantom_zero": true,
+            "phantom_zero": false,
             "counted_insight": null
           },
           {
@@ -1607,8 +1617,8 @@
             "percent": "73.3",
             "mark": "C",
             "urgency": "critical",
-            "snap": "Current grade C 73.3%",
-            "story": "Assessment category averages 73.3% across three scored items.",
+            "snap": "Assessment avg 73.3%",
+            "story": "Three scored assessments posted.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -1838,8 +1848,8 @@
             "percent": "100.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "Current grade A 100.0%",
-            "story": "Two turned-in items still awaiting scores.",
+            "snap": "Unit 0.2 Notes 1/3",
+            "story": "Two turned-in items awaiting score.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -2109,8 +2119,8 @@
             "percent": "56.2",
             "mark": "F",
             "urgency": "critical",
-            "snap": "Current grade F 56.2%",
-            "story": "Two pending project scores from early September still awaiting teacher entry.",
+            "snap": "Writing avg 75%",
+            "story": "Two pending projects awaiting score.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -2331,7 +2341,7 @@
             "counted_insight": null
           }
         ],
-        "generated_at": "2026-09-10T09:09:35.096156+00:00"
+        "generated_at": "2026-09-10T23:08:17.574781+00:00"
       }
     },
     {
@@ -2628,6 +2638,31 @@
               "counts_toward_grade": true,
               "due_label": "10/10",
               "due_state": "completed"
+            },
+            {
+              "number": "6",
+              "description": "SWOT Analysis Assignment",
+              "category": "Daily Assignments",
+              "score_raw": "/ 1",
+              "points_earned": null,
+              "points_possible": 1.0,
+              "percentage": 0.0,
+              "correct_raw": "0 / 1",
+              "correct_earned": 0.0,
+              "correct_possible": 1.0,
+              "comment": "",
+              "documents": "",
+              "date_assigned": "09/10/2026",
+              "date_completed": "",
+              "due_date": "09/11/2026",
+              "grading_complete": false,
+              "extra_credit": false,
+              "aeries_missing": false,
+              "status": "pending",
+              "status_label": "pending",
+              "counts_toward_grade": false,
+              "due_label": "due Fri Sep 11",
+              "due_state": "upcoming"
             }
           ]
         },
@@ -3102,25 +3137,25 @@
         "raw": "Year Days Enrolled: 20 Days Present: 20 (100.0%) Days Excused: 0 Days Unexcused: 0 Periods Tardy: 0 Days With Truancies: 0 Days Suspended: 0 Days In School Suspension: 0"
       },
       "ai_summary": {
-        "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology while Engineering Geo shows no grade posted yet.",
-        "focus_tonight": "",
+        "headline": "SWOT Analysis Assignment due tomorrow in Mkt Adv GrphDes while Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology.",
+        "focus_tonight": "SWOT Analysis Assignment (Mkt Adv GrphDes)",
         "wins": [
           "Bus of Gaming at A 100% with no missing work",
-          "Mkt Adv GrphDes at A 95% with no missing work"
+          "PE Course 1 at A 100% with no missing work"
         ],
         "classes": [
           {
             "class_name": "Engineering Geo",
             "urgency": "ok",
-            "snap": "No class grade posted yet",
-            "story": "Scored work in Algebra Boot Camp averages 72.9% across 7 assignments.",
+            "snap": "No grade posted yet",
+            "story": "Phantom zero in Aeries with scored work averaging 72.9% in Algebra Boot Camp.",
             "do_tonight": ""
           },
           {
             "class_name": "Tech of Biology",
             "urgency": "ok",
             "snap": "A 100%",
-            "story": "Two assignments awaiting scores.",
+            "story": "Two pending grades awaiting score.",
             "do_tonight": ""
           },
           {
@@ -3133,9 +3168,9 @@
           {
             "class_name": "Mkt Adv GrphDes",
             "urgency": "strong",
-            "snap": "A 95%",
+            "snap": "SWOT Analysis Assignment \u00b7 due Fri Sep 11",
             "story": "",
-            "do_tonight": ""
+            "do_tonight": "SWOT Analysis Assignment"
           },
           {
             "class_name": "PE Course 1",
@@ -3145,7 +3180,7 @@
             "do_tonight": ""
           }
         ],
-        "generated_at": "2026-09-10T09:09:59.902801+00:00",
+        "generated_at": "2026-09-10T23:08:30.453080+00:00",
         "analytics_snapshot": {
           "dominant_theme": "mixed or stable performance",
           "total_recoverable_pts": 0,
@@ -3517,12 +3552,19 @@
         }
       },
       "view": {
-        "tonight": [],
-        "tonight_label": "",
-        "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology while Engineering Geo shows no grade posted yet.",
+        "tonight": [
+          {
+            "name": "SWOT Analysis Assignment",
+            "class_name": "Mkt Adv GrphDes",
+            "reason": "due_tomorrow",
+            "due_date": "09/11/2026"
+          }
+        ],
+        "tonight_label": "SWOT Analysis Assignment (Mkt Adv GrphDes)",
+        "headline": "SWOT Analysis Assignment due tomorrow in Mkt Adv GrphDes while Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology.",
         "wins": [
           "Bus of Gaming at A 100% with no missing work",
-          "Mkt Adv GrphDes at A 95% with no missing work"
+          "PE Course 1 at A 100% with no missing work"
         ],
         "classes": [
           {
@@ -3663,16 +3705,45 @@
             "percent": "95.0",
             "mark": "A",
             "urgency": "strong",
-            "snap": "A 95%",
+            "snap": "SWOT Analysis Assignment \u00b7 due Fri Sep 11",
             "story": "",
-            "do_tonight": "",
+            "do_tonight": "SWOT Analysis Assignment",
             "missing_count": 0,
             "missing": [],
             "awaiting_count": 0,
             "awaiting": [],
             "stale_awaiting_count": 0,
             "newly_missing": [],
-            "upcoming": [],
+            "upcoming": [
+              {
+                "number": "6",
+                "description": "SWOT Analysis Assignment",
+                "category": "Daily Assignments",
+                "score_raw": "/ 1",
+                "points_earned": null,
+                "points_possible": 1.0,
+                "percentage": 0.0,
+                "correct_raw": "0 / 1",
+                "correct_earned": 0.0,
+                "correct_possible": 1.0,
+                "comment": "",
+                "documents": "",
+                "date_assigned": "09/10/2026",
+                "date_completed": "",
+                "due_date": "09/11/2026",
+                "grading_complete": false,
+                "extra_credit": false,
+                "aeries_missing": false,
+                "status": "pending",
+                "status_label": "pending",
+                "counts_toward_grade": false,
+                "due_label": "due Fri Sep 11",
+                "due_state": "upcoming",
+                "name": "SWOT Analysis Assignment",
+                "due_weekday": "Fri",
+                "days_until_due": 1
+              }
+            ],
             "recent": [
               {
                 "number": "5",
@@ -3871,6 +3942,33 @@
                 "name": "TM & MS Assignment",
                 "due_weekday": "Thu",
                 "turned_in": true
+              },
+              {
+                "number": "6",
+                "description": "SWOT Analysis Assignment",
+                "category": "Daily Assignments",
+                "score_raw": "/ 1",
+                "points_earned": null,
+                "points_possible": 1.0,
+                "percentage": 0.0,
+                "correct_raw": "0 / 1",
+                "correct_earned": 0.0,
+                "correct_possible": 1.0,
+                "comment": "",
+                "documents": "",
+                "date_assigned": "09/10/2026",
+                "date_completed": "",
+                "due_date": "09/11/2026",
+                "grading_complete": false,
+                "extra_credit": false,
+                "aeries_missing": false,
+                "status": "pending",
+                "status_label": "pending",
+                "counts_toward_grade": false,
+                "due_label": "due Fri Sep 11",
+                "due_state": "upcoming",
+                "name": "SWOT Analysis Assignment",
+                "due_weekday": "Fri"
               }
             ],
             "pct_history": [
@@ -3982,8 +4080,8 @@
             "percent": "0.0",
             "mark": "",
             "urgency": "ok",
-            "snap": "No class grade posted yet",
-            "story": "Scored work in Algebra Boot Camp averages 72.9% across 7 assignments.",
+            "snap": "No grade posted yet",
+            "story": "Phantom zero in Aeries with scored work averaging 72.9% in Algebra Boot Camp.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -4532,7 +4630,7 @@
             "mark": "A",
             "urgency": "ok",
             "snap": "A 100%",
-            "story": "Two assignments awaiting scores.",
+            "story": "Two pending grades awaiting score.",
             "do_tonight": "",
             "missing_count": 0,
             "missing": [],
@@ -4918,7 +5016,7 @@
             "counted_insight": null
           }
         ],
-        "generated_at": "2026-09-10T09:09:59.902801+00:00"
+        "generated_at": "2026-09-10T23:08:30.453080+00:00"
       }
     }
   ],
