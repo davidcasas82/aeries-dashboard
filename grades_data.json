@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-09-09T23:08:07.301814+00:00",
+  "last_updated": "2026-09-10T03:08:09.602334+00:00",
   "district": "Tustin USD",
   "portal_url": "https://tustinusd.aeries.net",
   "students": [
@@ -4905,17 +4905,17 @@
   "summer_break": false,
   "school_session": {
     "active": true,
+    "reason": "in session",
     "year_id": "2026-27",
     "first_day": "2026-08-13",
     "last_day": "2027-05-28",
-    "next_first_day": null,
-    "reason": "in session",
+    "next_first_day": "2027-08-12",
+    "calendar_source": "https://www.tustin.k12.ca.us/about-us/calendars-school-year",
     "quarters": {
       "q1_end": "2026-10-09",
       "q2_end": "2026-12-18",
       "q3_end": "2027-03-12",
       "q4_end": "2027-05-28"
-    },
-    "calendar_source": "https://www.tustin.k12.ca.us/about-us/calendars-school-year"
+    }
   }
 }
