@@ -5749,7 +5749,7 @@
         },
         {
           "date": "2026-09-11",
-          "captured_at": "2026-09-11T09:22:51.739287+00:00",
+          "captured_at": "2026-09-11T23:08:15.190421+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -5817,8 +5817,8 @@
             },
             "Int Eng&Marktg": {
               "period": 8,
-              "pct": 56.2,
-              "mark": "F",
+              "pct": 83.7,
+              "mark": "B",
               "missing_count": 0,
               "missing_names": [],
               "aeries_trend": null
@@ -11249,7 +11249,7 @@
         },
         {
           "date": "2026-09-11",
-          "captured_at": "2026-09-11T09:22:57.475651+00:00",
+          "captured_at": "2026-09-11T23:08:26.204769+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -11261,7 +11261,7 @@
             },
             "Mkt Adv GrphDes": {
               "period": 1,
-              "pct": 95.0,
+              "pct": 94.0,
               "mark": "A",
               "missing_count": 0,
               "missing_names": [],
