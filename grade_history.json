@@ -5667,7 +5667,7 @@
         },
         {
           "date": "2026-09-10",
-          "captured_at": "2026-09-10T23:08:17.585560+00:00",
+          "captured_at": "2026-09-11T03:08:12.672936+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -11085,7 +11085,7 @@
         },
         {
           "date": "2026-09-10",
-          "captured_at": "2026-09-10T23:08:30.460355+00:00",
+          "captured_at": "2026-09-11T03:08:17.772724+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -11161,8 +11161,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology while Engineering Geo shows no grade posted yet.",
-            "focus_tonight": ""
+            "headline": "SWOT Analysis Assignment due tomorrow in Mkt Adv GrphDes while Leah holds strong A's in Bus of Gaming, Mkt Adv GrphDes, PE Course 1, and Tech of Biology.",
+            "focus_tonight": "SWOT Analysis Assignment (Mkt Adv GrphDes)"
           }
         }
       ]
