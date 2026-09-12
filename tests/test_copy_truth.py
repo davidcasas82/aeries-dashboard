@@ -82,6 +82,23 @@ class DueLabelTests(unittest.TestCase):
         self.assertEqual(entry["due_label"], "5/5")
         self.assertEqual(entry["due_state"], "completed")
 
+    def test_format_assignment_entry_carries_teacher_comment_and_documents(self):
+        a = _asgn(
+            description="Section 3.2 Practice",
+            due_date="08/19/2026",
+            comment="  No work shown  ",
+            documents="3.2 Rubric.pdf",
+        )
+        entry = scraper.format_assignment_entry(a, TODAY, "missing")
+        self.assertEqual(entry["teacher_comment"], "No work shown")
+        self.assertEqual(entry["documents"], "3.2 Rubric.pdf")
+
+    def test_format_assignment_entry_omits_empty_comment_and_documents(self):
+        a = _asgn(due_date="08/19/2026", comment="", documents="   ")
+        entry = scraper.format_assignment_entry(a, TODAY, "missing")
+        self.assertNotIn("teacher_comment", entry)
+        self.assertNotIn("documents", entry)
+
 
 class PhantomZeroTests(unittest.TestCase):
     def test_scored_work_does_not_make_placeholder_zero_real(self):
