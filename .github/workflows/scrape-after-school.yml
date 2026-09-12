@@ -8,7 +8,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   scrape:
@@ -27,9 +27,6 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
-      - name: Pull latest main
-        run: git pull --rebase origin main
-
       - name: Run scraper
         env:
           AERIES_EMAIL: ${{ secrets.AERIES_EMAIL }}
@@ -41,17 +38,11 @@ jobs:
           STUDENT_2_NAME: ${{ secrets.STUDENT_2_NAME }}
           STUDENT_2_SCHOOL_CODE: ${{ secrets.STUDENT_2_SCHOOL_CODE }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          FAMILY_PIN: ${{ secrets.FAMILY_PIN }}
+          FAMILY_DATA_URL: https://family-data.davidcasas.workers.dev
           PYTHONUNBUFFERED: "1"
           # Optional override only. Leave unset to auto-pause from TUSD school calendar
           # (school_calendar.json / live calendars-school-year page).
           # true = force pause Aeries + Grok; false = force scrape even in summer
           SUMMER_BREAK: ${{ vars.SUMMER_BREAK }}
         run: python scraper.py
-
-      - name: Commit updated data
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add grades_data.json grade_history.json
-          git diff --cached --quiet || git commit -m "Update grades data"
-          git push

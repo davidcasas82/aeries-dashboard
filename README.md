@@ -1,29 +1,34 @@
 # Aeries family grade dashboard
 
-A static parent dashboard for Tustin USD Aeries grades. A GitHub Action logs into the parent portal a few times a day, writes `grades_data.json`, and GitHub Pages serves [the same URL](https://davidcasas82.github.io/aeries-dashboard/).
+A static parent dashboard for Tustin USD Aeries grades, live at [the same URL](https://davidcasas82.github.io/aeries-dashboard/). A GitHub Action logs into the parent portal, then POSTs `grades_data.json` / history to `family-data`. The page unlocks with the household PIN.
 
 Python precomputes facts (missing work, tonight’s list, urgency, trends). Grok only writes the briefing from those facts.
 
 ## Local preview
 
 ```bash
+# In family-data
+npm run dev
+
+# In this repo
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python3 -m http.server 8765
 ```
 
-Open http://localhost:8765/ — browsers cannot load `grades_data.json` from a `file://` page.
+Open http://localhost:8765/ and use the local family-data PIN (`.dev.vars`). Browsers cannot load the dashboard from a `file://` page.
 
 ## Scrape (needs a `.env`)
 
-Copy `.env.example` to `.env` and fill in the Aeries login plus each student’s SN.
+Copy `.env.example` to `.env` and fill in the Aeries login plus each student’s SN. To publish to the Worker, also set `FAMILY_DATA_URL` and `FAMILY_PIN`.
 
 ```bash
 python scraper.py                 # full scrape + briefing
 python scraper.py --grok-only     # rewrite briefings from existing JSON
 python scraper.py --attendance-only
 python scraper.py --rebuild-view  # dashboard view payload only
+python scraper.py --publish-only  # POST existing local JSON to family-data
 python scraper.py --probe-gradebook
 python scraper.py --probe-attendance
 ```
@@ -38,16 +43,18 @@ python -m unittest discover -s tests -v
 
 ## Schedule
 
+Cloudflare cron on `family-data` dispatches these workflows (UTC, same minutes as the old `aeries-cf-dispatch` worker):
+
 - Overnight ~2:07am PT
-- After school ~4:07 / 4:12pm PT
+- After school ~4:07pm PT
 - Evening ~8:07pm PT
 
-Actions logs print `student 1`, not names or student numbers. The Pages site is still public — treat the URL as a household bookmark, not a secret.
+Actions logs print `student 1`, not names or student numbers. The Pages site is public; grades themselves are behind the PIN.
 
 ## Data files
 
 | File | Role |
 |------|------|
-| `grades_data.json` | Latest scrape the page reads |
-| `grade_history.json` | Daily snapshots for trends |
+| `grades_data.json` | Local scrape cache (gitignored). The page reads `/v1/grades/latest`. |
+| `grade_history.json` | Local history cache (gitignored). The Worker stores per-day snapshots. |
 | `school_calendar.json` | First/last day + official 6–12 quarter ends + term cutovers |
