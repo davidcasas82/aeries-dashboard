@@ -3,8 +3,10 @@
 Static parent dashboard for TUSD Aeries grades, live at
 https://davidcasas82.github.io/aeries-dashboard/ (GitHub Pages, publishes from
 `main`). The scrape workflows (`scrape.yml`, `scrape-after-school.yml`) have no
-cron on purpose (removed Sep 4, 2026); do not re-add schedules. Never log
-student names or student numbers.
+cron on purpose; `family-data` `scheduled()` dispatches them. Do not re-add
+Actions schedules. Do not commit `grades_data.json` or `grade_history.json`.
+Never log student names or student numbers. After a scrape change, confirm
+the Action POSTs to `family-data` instead of committing JSON.
 
 ## How to land work here
 
