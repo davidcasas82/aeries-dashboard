@@ -5749,7 +5749,7 @@
         },
         {
           "date": "2026-09-11",
-          "captured_at": "2026-09-11T23:08:15.190421+00:00",
+          "captured_at": "2026-09-12T03:07:32.623520+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -5825,7 +5825,7 @@
             }
           },
           "previous_briefing": {
-            "headline": "Daniel needs attention in Alg ll Bus Mang at C 73.3% and Int Eng&Marktg at F 56.2%, with wins in Bus of Gaming at A 100% and Physics & Eng at A 100%.",
+            "headline": "Daniel needs attention in Alg ll Bus Mang at C 73.3%, with a win in Bus of Gaming at A 100%.",
             "focus_tonight": "Table Tennis Psychomotor (PE Course 2); Table Tennis Cognitive (PE Course 2); Table Tennis Affective (PE Course 2)"
           }
         }
@@ -11249,7 +11249,7 @@
         },
         {
           "date": "2026-09-11",
-          "captured_at": "2026-09-11T23:08:26.204769+00:00",
+          "captured_at": "2026-09-12T03:07:37.399152+00:00",
           "classes": {
             "Bus of Gaming": {
               "period": 0,
@@ -11325,8 +11325,8 @@
             }
           },
           "previous_briefing": {
-            "headline": "SWOT Analysis Assignment due today in Mkt Adv GrphDes; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE Course 1.",
-            "focus_tonight": "SWOT Analysis Assignment (Mkt Adv GrphDes)"
+            "headline": "Amoeba Sisters: Video Guide due today in Tech of Biology; Leah holds A's in Bus of Gaming, Mkt Adv GrphDes, and PE Course 1.",
+            "focus_tonight": "Amoeba Sisters: Video Guide (Tech of Biology)"
           }
         }
       ]
