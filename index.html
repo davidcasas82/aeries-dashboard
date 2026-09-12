@@ -1497,9 +1497,119 @@
                 --fs-headline: 40px;
             }
         }
+
+        #lockScreen {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background: var(--bg);
+        }
+
+        #lockScreen[hidden] { display: none; }
+
+        .lock-card {
+            width: min(420px, 100%);
+            padding: 28px 24px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-card);
+        }
+
+        .lock-card h1 {
+            font-size: var(--fs-title);
+            font-weight: 650;
+            letter-spacing: -0.3px;
+            margin-bottom: 8px;
+        }
+
+        .lock-card p {
+            color: var(--text-2);
+            font-size: var(--fs-meta);
+            line-height: 1.45;
+            margin-bottom: 18px;
+        }
+
+        .lock-card label[for="pinInput"] {
+            display: block;
+            font-size: var(--fs-label);
+            font-weight: 650;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-3);
+            margin-bottom: 8px;
+        }
+
+        .lock-card input[type="password"] {
+            width: 100%;
+            min-height: var(--touch-min);
+            padding: 12px 14px;
+            border: 1px solid var(--border-strong);
+            border-radius: 12px;
+            background: var(--surface);
+            color: var(--text);
+            font-size: var(--fs-body);
+        }
+
+        .lock-remember {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 14px 0 18px;
+            color: var(--text-2);
+            font-size: var(--fs-small);
+        }
+
+        .lock-card button[type="submit"] {
+            width: 100%;
+            min-height: var(--touch-min);
+            border: none;
+            border-radius: 12px;
+            background: var(--teal);
+            color: #fff;
+            font-size: var(--fs-body);
+            font-weight: 650;
+            cursor: pointer;
+        }
+
+        .lock-error {
+            margin-top: 12px;
+            color: var(--red);
+            font-size: var(--fs-small);
+        }
+
+        .settings-lock {
+            width: 100%;
+            min-height: 48px;
+            border: 1px solid var(--border-strong);
+            border-radius: 12px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: var(--fs-small);
+            font-weight: 650;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
+    <div id="lockScreen">
+        <form class="lock-card" id="lockForm">
+            <h1>Grade Dashboard</h1>
+            <p>Family grades stay behind the household PIN now. Type it to open the board.</p>
+            <label for="pinInput">Family PIN</label>
+            <input id="pinInput" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required>
+            <label class="lock-remember">
+                <input type="checkbox" id="keepUnlocked" checked>
+                Keep me unlocked on this computer
+            </label>
+            <button type="submit" id="unlockBtn">Open grades</button>
+            <p class="lock-error" id="lockError" hidden></p>
+        </form>
+    </div>
+
     <header class="top-bar">
         <div class="top-bar-row">
             <div class="top-bar-left">
@@ -1548,13 +1658,62 @@
                 </p>
                 <p class="settings-hint">Type and layout scale up automatically on larger screens for desk and car use.</p>
             </div>
+            <div class="settings-section">
+                <h3>Lock</h3>
+                <button type="button" class="settings-lock" id="lockBtn">Lock dashboard</button>
+            </div>
         </div>
     </div>
 
     <script>
         const REFRESH_MS = 30 * 60 * 1000;
+        const TOKEN_KEY = 'ad.token';
+        const KEEP_KEY = 'ad.keep';
+        const PRODUCTION_API = 'https://family-data.davidcasas.workers.dev';
         let refreshTimer = null;
         let listenersBound = false;
+        let lockBound = false;
+
+        function apiBase() {
+            if (typeof window.FAMILY_DATA_URL === 'string' && window.FAMILY_DATA_URL.trim()) {
+                return window.FAMILY_DATA_URL.replace(/\/+$/, '');
+            }
+            const host = location.hostname;
+            if (host === 'localhost' || host === '127.0.0.1') return 'http://127.0.0.1:8787';
+            return PRODUCTION_API;
+        }
+
+        function getToken() {
+            return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
+        }
+
+        function setSession(token, keepUnlocked) {
+            clearSession();
+            const store = keepUnlocked ? localStorage : sessionStorage;
+            store.setItem(TOKEN_KEY, token);
+            localStorage.setItem(KEEP_KEY, keepUnlocked ? '1' : '0');
+        }
+
+        function clearSession() {
+            sessionStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(TOKEN_KEY);
+        }
+
+        async function unlockWithPin(pin, keepUnlocked) {
+            const res = await fetch(apiBase() + '/auth/unlock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ pin, keepUnlocked }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                const err = new Error(data.error || 'That PIN did not work.');
+                err.status = res.status;
+                throw err;
+            }
+            setSession(data.token, keepUnlocked);
+            return data;
+        }
 
         function esc(value) {
             return String(value ?? '')
@@ -1584,14 +1743,12 @@
         let lastPaintedStamp = null;
 
         async function loadData() {
-            // file:// cannot fetch grades_data.json in Chrome/Safari — need a local server
             if (location.protocol === 'file:') {
                 document.getElementById('dashboards').innerHTML = `
                     <div class="empty-state">
                         <strong>Open via a local server</strong>
                         <p style="max-width:28em;margin:0 auto;line-height:1.5">
-                            Browsers block loading <code>grades_data.json</code> from a
-                            <code>file://</code> link. In Terminal:
+                            Run family-data with <code>npm run dev</code>, then:
                         </p>
                         <pre style="text-align:left;display:inline-block;margin:14px auto 0;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;font-size:12.5px;line-height:1.5;color:var(--text);box-shadow:var(--shadow-sm)">python3 -m http.server 8765</pre>
                         <p style="margin-top:14px">Then open
@@ -1600,15 +1757,26 @@
                     </div>`;
                 return null;
             }
+            const token = getToken();
+            if (!token) return null;
             try {
-                const resp = await fetch('grades_data.json?t=' + Date.now(), { cache: 'no-store' });
-                if (!resp.ok) throw new Error('No data');
-                return await resp.json();
+                const resp = await fetch(apiBase() + '/v1/grades/latest', {
+                    cache: 'no-store',
+                    headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
+                });
+                const payload = await resp.json().catch(() => ({}));
+                if (resp.status === 401) {
+                    clearSession();
+                    showLock('Your session expired. Type your PIN again.');
+                    return null;
+                }
+                if (!resp.ok) throw new Error(payload.error || 'No data');
+                return payload.latest || payload;
             } catch (e) {
                 document.getElementById('dashboards').innerHTML = `
                     <div class="empty-state">
                         <strong>Grades didn’t load</strong>
-                        <p>Try again in a few minutes. If it keeps happening, check that <code>grades_data.json</code> sits next to this page.</p>
+                        <p>Try again in a few minutes. If it keeps happening, the scrape may still be running.</p>
                     </div>`;
                 return null;
             }
@@ -3508,6 +3676,13 @@
                 if (e.target === overlay) close();
             });
             overlay.closeSettings = close;
+            const lockBtn = document.getElementById('lockBtn');
+            if (lockBtn) {
+                lockBtn.addEventListener('click', () => {
+                    close();
+                    lockDashboard();
+                });
+            }
         }
 
         function applySummerBreakFromData(active) {
@@ -3699,7 +3874,67 @@
             scheduleRefresh();
         }
 
+        function showLock(message) {
+            const screen = document.getElementById('lockScreen');
+            const error = document.getElementById('lockError');
+            screen.hidden = false;
+            if (message) {
+                error.hidden = false;
+                error.textContent = message;
+            } else {
+                error.hidden = true;
+                error.textContent = '';
+            }
+            const pin = document.getElementById('pinInput');
+            if (pin) pin.focus();
+        }
+
+        function hideLock() {
+            document.getElementById('lockScreen').hidden = true;
+            const error = document.getElementById('lockError');
+            error.hidden = true;
+            error.textContent = '';
+        }
+
+        function lockDashboard() {
+            clearSession();
+            currentData = null;
+            showLock();
+        }
+
+        function setupLock() {
+            if (lockBound) return;
+            lockBound = true;
+            document.getElementById('lockForm').addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const btn = document.getElementById('unlockBtn');
+                const error = document.getElementById('lockError');
+                btn.disabled = true;
+                error.hidden = true;
+                try {
+                    await unlockWithPin(
+                        document.getElementById('pinInput').value,
+                        document.getElementById('keepUnlocked').checked
+                    );
+                    hideLock();
+                    document.getElementById('pinInput').value = '';
+                    await init();
+                } catch (err) {
+                    error.hidden = false;
+                    error.textContent = err.message || 'That PIN did not work.';
+                } finally {
+                    btn.disabled = false;
+                }
+            });
+        }
+
         async function init() {
+            setupLock();
+            if (!getToken()) {
+                showLock();
+                return null;
+            }
+            hideLock();
             const data = await loadData();
             if (!data) return null;
             activeStudentIndex = 0;
@@ -3712,7 +3947,7 @@
                 setupClassCards();
                 window.addEventListener('resize', syncTopBarHeight, { passive: true });
                 document.addEventListener('visibilitychange', () => {
-                    if (document.visibilityState === 'visible') refreshDashboard();
+                    if (document.visibilityState === 'visible' && getToken()) refreshDashboard();
                 });
                 listenersBound = true;
             }

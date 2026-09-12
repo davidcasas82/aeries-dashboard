@@ -79,6 +79,8 @@ for i in range(1, 10):
 
 OUTPUT_FILE = Path(__file__).parent / "grades_data.json"
 HISTORY_FILE = Path(__file__).parent / "grade_history.json"
+FAMILY_DATA_URL = os.getenv("FAMILY_DATA_URL", "").rstrip("/")
+FAMILY_PIN = os.getenv("FAMILY_PIN", "")
 HISTORY_MAX_DAYS = 120
 HISTORY_MISSING_NAMES_CAP = 8
 PCT_HISTORY_UI_POINTS = 30
@@ -979,7 +981,7 @@ def refresh_attendance_only():
         reason="TUSD school calendar" if paused else "in session",
         extra={"attendance_year": prefer_year},
     )
-    OUTPUT_FILE.write_text(json.dumps(data, indent=2))
+    persist_grades(data)
     print(f"\nAttendance written to {OUTPUT_FILE}")
 
 
@@ -2482,17 +2484,99 @@ def parse_trend_html(trend_html):
 # ── Grade history (multi-day memory across scrapes) ──────────────────────────
 
 
-def load_grade_history():
-    if not HISTORY_FILE.exists():
-        return {"students": {}}
+def family_data_configured():
+    return bool(FAMILY_DATA_URL and FAMILY_PIN)
+
+
+def family_unlock():
+    response = requests.post(
+        f"{FAMILY_DATA_URL}/auth/unlock",
+        json={"pin": FAMILY_PIN, "keepUnlocked": False},
+        timeout=30,
+    )
+    response.raise_for_status()
+    token = response.json().get("token")
+    if not token:
+        raise ScrapeError("family-data unlock did not return a token")
+    return token
+
+
+def family_request(method, path, token, payload=None):
+    response = requests.request(
+        method,
+        f"{FAMILY_DATA_URL}{path}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+        json=payload,
+        timeout=60,
+    )
+    response.raise_for_status()
+    if not response.content:
+        return {}
+    return response.json()
+
+
+def publish_family_data(latest=None, history=None):
+    if not family_data_configured():
+        return
+    if latest is None and OUTPUT_FILE.exists():
+        latest = json.loads(OUTPUT_FILE.read_text())
+    if history is None and HISTORY_FILE.exists():
+        history = json.loads(HISTORY_FILE.read_text())
+    if latest is None:
+        print("family-data: skip publish (no latest payload)")
+        return
+    token = family_unlock()
+    body = {"latest": latest}
+    if history is not None:
+        body["history"] = history
+    family_request("POST", "/v1/grades", token, body)
+    print("family-data: published latest" + (" and history" if history is not None else ""))
+
+
+def persist_grades(data, history=None):
+    if history is not None:
+        save_grade_history(history)
+    OUTPUT_FILE.write_text(json.dumps(data, indent=2))
     try:
-        data = json.loads(HISTORY_FILE.read_text())
-        if not isinstance(data, dict):
-            return {"students": {}}
-        data.setdefault("students", {})
+        publish_family_data(latest=data, history=history)
+    except Exception as exc:
+        raise ScrapeError(f"family-data publish failed: {exc}") from exc
+
+
+def publish_existing():
+    if not OUTPUT_FILE.exists():
+        raise ScrapeError(f"{OUTPUT_FILE} not found — nothing to publish")
+    data = json.loads(OUTPUT_FILE.read_text())
+    persist_grades(data, load_grade_history())
+
+
+def load_grade_history():
+    data = {"students": {}}
+    if HISTORY_FILE.exists():
+        try:
+            loaded = json.loads(HISTORY_FILE.read_text())
+            if isinstance(loaded, dict):
+                loaded.setdefault("students", {})
+                data = loaded
+        except (json.JSONDecodeError, OSError):
+            data = {"students": {}}
+    if data.get("students"):
         return data
-    except (json.JSONDecodeError, OSError):
-        return {"students": {}}
+    if not family_data_configured():
+        return data
+    try:
+        token = family_unlock()
+        remote = family_request("GET", "/v1/grades/history", token)
+        remote_hist = remote.get("history") or {"students": {}}
+        if remote_hist.get("students"):
+            print("family-data: loaded history from Worker")
+            return remote_hist
+    except Exception as exc:
+        print(f"family-data: history fetch skipped ({exc})")
+    return data
 
 
 def save_grade_history(history):
@@ -4289,7 +4373,7 @@ def regenerate_grok_summaries():
         print("Summer break mode is active (SUMMER_BREAK) — skipping Grok API calls.")
         data["summer_break"] = True
         data["last_updated"] = datetime.now(timezone.utc).isoformat()
-        OUTPUT_FILE.write_text(json.dumps(data, indent=2))
+        persist_grades(data)
         return
 
     students = data.get("students", [])
@@ -4313,7 +4397,7 @@ def regenerate_grok_summaries():
 
     data["last_updated"] = datetime.now(timezone.utc).isoformat()
     data["summer_break"] = False
-    OUTPUT_FILE.write_text(json.dumps(data, indent=2))
+    persist_grades(data)
     print(f"\nBriefings written to {OUTPUT_FILE}")
     print(f"Last updated: {data['last_updated']}")
 
@@ -4370,7 +4454,7 @@ def scrape_all():
             reason=reason,
             extra={"attendance_year": prefer_year},
         )
-        OUTPUT_FILE.write_text(json.dumps(data, indent=2))
+        persist_grades(data)
         print(f"Data preserved (no new grade scrape). Written to {OUTPUT_FILE}")
         return
 
@@ -4510,8 +4594,7 @@ def scrape_all():
 
     data["summer_break"] = False
 
-    save_grade_history(history)
-    OUTPUT_FILE.write_text(json.dumps(data, indent=2))
+    persist_grades(data, history)
     print(f"\nData written to {OUTPUT_FILE}")
     print(f"History written to {HISTORY_FILE}")
     print(f"Last updated: {data['last_updated']}")
@@ -4575,7 +4658,7 @@ def rebuild_views_only():
         history_context, _ = _prepare_student_for_briefing(student, history)
         attach_student_view(student, history_context=history_context)
     data["last_updated"] = datetime.now(timezone.utc).isoformat()
-    OUTPUT_FILE.write_text(json.dumps(data, indent=2))
+    persist_grades(data, history)
     print(f"Views written to {OUTPUT_FILE}")
 
 
@@ -4606,10 +4689,17 @@ if __name__ == "__main__":
         action="store_true",
         help="Rebuild dashboard view JSON from existing grades_data.json (no Aeries)",
     )
+    parser.add_argument(
+        "--publish-only",
+        action="store_true",
+        help="POST existing grades_data.json and grade_history.json to family-data",
+    )
     args = parser.parse_args()
 
     try:
-        if args.probe_attendance:
+        if args.publish_only:
+            publish_existing()
+        elif args.probe_attendance:
             probe_attendance()
         elif args.probe_gradebook:
             probe_gradebook()
