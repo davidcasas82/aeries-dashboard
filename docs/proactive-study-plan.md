@@ -78,16 +78,78 @@ message. Use the Gmail address that will do the ingestion.
 
 If an invitation arrives, accept it within 120 days from the same address.
 
-### 0B. Ten-minute checks with each kid logged in on a family device
+### 0B. Fifteen-minute checks with each kid logged in on a family device
 
-1. Open `script.google.com`. Does it load? Create a blank project, open
-   Services (+), and see if "Google Classroom API" can be added. If yes, the
-   Apps Script route works and Phase 2 uses it.
-2. In Drive, find the `Classroom` folder. Try sharing it (viewer) to the
-   parent Gmail. If sharing outside the domain is blocked, Drive says so.
-3. Write down, per class: Google Classroom, Canvas, paper, or other. For any
-   Canvas class, have the kid generate a pairing code (Account > Settings >
-   Pair with Observer) and pair the Canvas Parent app.
+Use a laptop or Chromebook signed into the kid's `mytusd.org` account
+(confirm the account chip in Chrome). Results go in the table at the end.
+
+**Check 1: Apps Script (best-case route)**
+
+1. Open `https://script.google.com`. A "turned off for your organization" or
+   access-blocked page means this route is closed; record "blocked".
+2. **New project**. In the left sidebar click **+** next to **Services**,
+   pick **Google Classroom API**, **Add**. If it is missing, record
+   "no Classroom service".
+3. Replace `Code.gs` with:
+
+```javascript
+function testClassroom() {
+  const res = Classroom.Courses.list({ courseStates: ['ACTIVE'] });
+  const courses = res.courses || [];
+  Logger.log(courses.length + ' active courses');
+  courses.forEach(c => Logger.log('- ' + c.name));
+  if (courses.length) {
+    const work = Classroom.Courses.CourseWork.list(courses[0].id, { pageSize: 3 });
+    const titles = (work.courseWork || []).map(w => w.title);
+    Logger.log('Sample coursework in "' + courses[0].name + '": ' + JSON.stringify(titles));
+  }
+}
+```
+
+4. Save, select `testClassroom`, **Run**. On the permission prompt choose
+   the school account and **Allow** (if "not verified" appears: **Advanced**,
+   then "Go to Untitled project (unsafe)"; it is the kid's own script).
+   "Access blocked" / `admin_policy_enforced` means the district blocks the
+   Classroom scope; record "scope blocked".
+5. Execution log shows a course count, class names, and three assignment
+   titles: record "works" and keep the project for the real export script.
+
+**Check 2: Drive `Classroom` folder share**
+
+1. `https://drive.google.com`, **My Drive**, look for a **Classroom** folder
+   (exists only if a teacher has used "make a copy for each student").
+   None: record "no folder".
+2. Right-click it, **Share**, enter the parent Gmail as **Viewer**, **Send**.
+   "Sharing outside the organization is not allowed": record "blocked".
+   Otherwise open the share notification in the parent Gmail and confirm the
+   subfolders are visible: record "works".
+
+**Check 3: Platform per class**
+
+1. `https://classroom.google.com` home shows one card per enrolled class.
+   List them and compare with the kid's Aeries period list in the dashboard.
+2. Open each card's **Classwork** tab. A class with no dated posts counts as
+   "not Classroom" for our purposes.
+3. Ask the kid, per remaining class: Canvas, paper, or other.
+4. For any Canvas class: kid logs into Canvas, **Account** (left nav),
+   **Settings**, right side **Pair with Observer**, copy the six-character
+   code (single use, seven days). Parent installs **Canvas Parent**, **Find
+   my school** (Tustin Unified), **Create account**, enter the code. Web
+   alternative: the Canvas login page, "Parent of a Canvas User? Click Here
+   For an Account". Missing or greyed-out pairing button: record "pairing
+   disabled" and ask the school. Otherwise open one class and confirm
+   assignment descriptions are visible: record "paired".
+
+**Results table**
+
+| Kid | Apps Script | Drive share | Classes in Classroom | Classes in Canvas | Paper / other |
+|-----|-------------|-------------|----------------------|-------------------|---------------|
+| 1 | works / scope blocked / blocked | works / blocked / no folder | | | |
+| 2 | | | | | |
+
+Route selection for Session F: Apps Script export if Check 1 works; Canvas
+observer for any Canvas classes; Drive reading if Check 2 works; bookmarklet
+only as the fallback. Session B (Snap & Tutor) does not depend on any of it.
 
 ### 0C. Snap habit
 
