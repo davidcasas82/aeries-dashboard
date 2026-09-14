@@ -3350,6 +3350,12 @@ def format_assignment_entry(assignment, today, kind):
     if assignment.get("status"):
         entry["status"] = assignment.get("status")
         entry["status_label"] = assignment.get("status_label")
+    teacher_comment = (assignment.get("comment") or "").strip()
+    if teacher_comment:
+        entry["teacher_comment"] = teacher_comment
+    documents = (assignment.get("documents") or "").strip()
+    if documents:
+        entry["documents"] = documents
     return entry
 
 
@@ -4227,6 +4233,7 @@ DATA SCOPE
 - category_breakdown.*.assignment_avg_pct is the unweighted mean of scored assignment percentages in that bucket — not the class grade and not Aeries' weighted category %. Do not write a class as "at 72%" because seven assignments average 72. You may say scored work averages 73% while no class grade is posted when phantom_zero is true and posted_vs_counted.rebuild_pct is present.
 - If counted_insight is present, you may name which categories count, are 0% weight, or are empty. If rebuild_pct differs from current_grade_pct and the posted grade is real, still use the posted grade.
 - Portal can lag (turned in but not graded, Canvas/paper work). Prefer "portal still shows …" over "never did …".
+- teacher_comment is the teacher's own note on that assignment in Aeries. You may quote or paraphrase it as the WHY for that item (e.g. "teacher noted: no work shown"). documents lists attachment names the teacher posted. Never invent a comment when the field is absent.
 - Do not invent causes, effort, psychology, or teacher fairness.
 - Do not invent week-scale stories unless history.delta_7d / trend_label is present.
 
