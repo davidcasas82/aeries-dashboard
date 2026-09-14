@@ -1,14 +1,15 @@
-# Plan: Proactive study pipeline (Snap & Tutor, Classroom, study engine)
+# Plan: Proactive study pipeline (Classroom context first, tutoring later)
 
-**Goal:** Stop learning about grades after the fact. Connect what an assignment
-actually asks for (the worksheet, the instructions, the rubric) to how the kid
-is scoring, so the dashboard can say what to study, hand the kid a guide, and
-run a tutoring session on tonight's homework.
+**Goal:** Stop learning about grades after the fact. Bring what an assignment
+actually asks for (instructions, attachments, rubric, teacher notes) next to
+how the kid is scoring, so the dashboard can say what to focus on and hand
+the kid a study guide. Tutoring on tonight's homework is a separate track
+that plugs into the same data later.
 
 **Repos:** `aeries-dashboard` (this repo: scraper, study engine, page) and
-`family-data` (Cloudflare Worker + D1: storage, Grok proxy, voice tokens).
-The Worker repo is private; Worker changes happen in a local Cursor session
-using the endpoint spec below.
+`family-data` (Cloudflare Worker + D1: storage, later Grok proxy). The Worker
+repo is private to this agent; Worker changes happen in a local Cursor
+session using the endpoint spec below.
 
 **Status:** Planning. Ship in the session order at the bottom.
 
@@ -19,12 +20,12 @@ using the endpoint spec below.
 1. Python precomputes facts; Grok writes from facts only. Every claim has an
    evidence object.
 2. Never log or store student names or numbers beyond the existing
-   `student_key`. Photos of homework never appear in logs.
+   `student_key`.
 3. Summer/calendar pause still applies. Study generation is a no-op with no
    school in session.
 4. Ship in slices; the dashboard stays usable after each one.
-5. The kid is a user, not a subject. Study and tutor views are written for
-   them; the parent coach view is written for the parent.
+5. One normalized Classroom shape, whatever the route. Ingestion routes are
+   swappable; everything downstream is built once.
 
 ---
 
@@ -35,12 +36,12 @@ using the endpoint spec below.
 | Log into Google Classroom as a parent | Nothing. Google blocks guardians from Stream, Classwork, People, Grades. | Dead end |
 | Guardian email summaries | Missing work, upcoming work, class activity. No grades, no content. Teacher or TUSD admin must invite; off by default per class. Edu Standard/Plus adds read-only Classwork preview links (details + attachments). | Worth asking; never received one so far, TUSD uses ParentSquare + Aeries |
 | Classroom API from the kid's account | Blocked for under-18 Workspace users unless a TUSD admin allowlists the OAuth app. | Dead end without admin |
-| Google Apps Script under the kid's `mytusd.org` account | First-party service, sometimes left on for students. Can read courses, coursework (description, materials, due dates, points), rubrics, submissions, announcements on a nightly trigger. | Test in 10 minutes; best case |
-| Kid shares their Drive `Classroom/` folder | Copies of assignment docs and their own work. Needs external sharing allowed. | Test in 10 minutes |
+| Google Apps Script under the kid's `mytusd.org` account | First-party service, sometimes left on for students. Can read courses, coursework (description, materials, due dates, points), rubrics, submissions, announcements on a nightly trigger. | Test in Phase 0; best case |
+| Kid shares their Drive `Classroom/` folder | Copies of assignment docs and their own work. Needs external sharing allowed. | Test in Phase 0 |
 | Bookmarklet on the Classwork page | Whatever is on screen. Works regardless of admin policy; brittle; one click per kid. | Fallback |
 | Canvas (if any class uses it) | Real parent Observer role via pairing code, parent app, API with descriptions and rubrics. | Ask the kids which classes use it |
-| **Photo of the homework** | The actual page: problems, instructions, rubric, teacher notes. Already what the family does with the Grok app. | **Primary content route** |
-| Aeries gradebook | Already scraped: per-assignment `comment` (teacher note) and `documents` (attachment names). Comment is on the page; neither is in the Grok input yet. | Use now |
+| Aeries gradebook | Already scraped: per-assignment `comment` (teacher note) and `documents` (attachment names). Both now go to Grok. | Done |
+| Photo of the homework | The actual page. Already what the family does with the Grok app. | Separate tutoring track (Track T) |
 
 ---
 
@@ -49,16 +50,16 @@ using the endpoint spec below.
 ```mermaid
 flowchart LR
   aeries[Aeries portal] -->|scraper.py| facts[Facts: scores, categories, teacher comments]
-  snap[Kid snaps homework photo] -->|POST /v1/study/snaps| worker[(family-data Worker + D1)]
-  worker -->|Grok vision| extract[Extracted assignment: problems, concepts, instructions, rubric hints]
-  extract --> worker
-  tutor[Voice or text tutoring session] -->|session recap| worker
-  digest[Classroom guardian summaries, if invited] -->|Gmail label + IMAP in Action| classroomMeta[Missing, upcoming, activity]
-  facts --> engine[Study engine in scraper: concept mastery, weak spots, weekly plan]
-  worker --> engine
-  classroomMeta --> engine
-  engine -->|Grok writes guides from facts| worker
-  worker --> page[index.html: Coach panel, Study tab, Tutor]
+  appsScript[Apps Script nightly export] -->|POST /v1/docs/classroom| worker[(family-data Worker + D1)]
+  bookmarklet[Bookmarklet or Drive share] -->|same shape| worker
+  digest[Guardian summary emails, if invited] -->|IMAP in Action| normalize[classroom.py: normalize + match to Aeries]
+  canvas[Canvas observer API, if any class] --> normalize
+  worker -->|GET /v1/docs/classroom| normalize
+  facts --> normalize
+  normalize --> engine[Study engine: concept mastery, weak spots, weekly plan]
+  engine -->|Grok writes from facts| publish[POST /v1/grades]
+  publish --> worker
+  worker --> page[index.html: assignment context, Coach panel, Study tab]
 ```
 
 ---
@@ -147,212 +148,221 @@ function testClassroom() {
 | 1 | works / scope blocked / blocked | works / blocked / no folder | | | |
 | 2 | | | | | |
 
-Route selection for Session F: Apps Script export if Check 1 works; Canvas
+Route selection for Phase 1C: Apps Script export if Check 1 works; Canvas
 observer for any Canvas classes; Drive reading if Check 2 works; bookmarklet
-only as the fallback. Session B (Snap & Tutor) does not depend on any of it.
-
-### 0C. Snap habit
-
-Nothing to set up. The kids already photograph homework for Grok; Phase 1
-gives that photo a home.
+only as the fallback; guardian digest whenever an invitation arrives.
 
 ---
 
-## Phase 1: Snap & Tutor (primary route)
+## Phase 1: Classroom context (primary)
 
-The kid's existing habit, moved into the dashboard and grounded in their data.
+### 1A. One normalized shape (route-independent, build first)
 
-### 1A. Snap flow (page + Worker)
-
-1. Unlocked dashboard, kid picks their name, a class, and an assignment (or
-   "not in Aeries yet") and taps **Snap homework**.
-2. `<input type="file" accept="image/*" capture="environment">`; the page
-   downsizes to at most 1600px on the long edge, JPEG ~0.8, and POSTs to
-   `POST /v1/study/snaps`.
-3. Worker sends the image to Grok (image understanding, `detail: high`) with
-   an extraction prompt and stores the result. Extraction shape:
+Every route produces this per student, stored by the Worker under
+`docs(app='classroom', key=<student_key>)` or produced directly by the
+scraper (digest, Canvas). Missing fields are simply absent.
 
 ```json
 {
-  "snap_id": "snp_…",
-  "student_key": "…",
-  "class_name": "Integrated Math 1",
-  "assignment_ref": {"aeries_number": 14, "title": "Section 3.2 Practice"},
-  "captured_at": "2026-09-14T02:10:00Z",
-  "extraction": {
-    "title_guess": "Section 3.2 Practice: Solving Two-Step Equations",
-    "subject": "math",
-    "instructions": "Solve each equation. Show your work.",
-    "problems": [
-      {"n": 1, "text": "3x + 4 = 19", "type": "two_step_equation"},
-      {"n": 2, "text": "…", "type": "…"}
-    ],
-    "concepts": ["two-step equations", "inverse operations", "checking solutions"],
-    "rubric_hints": ["show work", "box the answer"],
-    "difficulty": "on_level",
-    "confidence": 0.86
-  }
+  "source": "classroom_apps_script | classroom_digest | classroom_bookmarklet | classroom_drive | canvas",
+  "captured_at": "2026-09-15T05:10:00Z",
+  "courses": [
+    {
+      "id": "1234567890",
+      "name": "Integrated Math 1 - P3",
+      "section": "Period 3",
+      "teacher": "Ms. Example",
+      "link": "https://classroom.google.com/c/…",
+      "items": [
+        {
+          "id": "…",
+          "type": "assignment | quiz | question | material | announcement",
+          "title": "Section 3.2 Practice",
+          "description": "Solve each equation. Show your work. Box your answers.",
+          "link": "https://classroom.google.com/c/…/a/…/details",
+          "topic": "Unit 3: Linear Equations",
+          "assigned_at": "2026-09-12T15:02:00Z",
+          "updated_at": "2026-09-12T15:02:00Z",
+          "due": "2026-09-16T06:59:00Z",
+          "max_points": 10,
+          "materials": [
+            {"kind": "drive | link | youtube | form", "title": "3.2 Worksheet", "url": "…", "text_excerpt": "first ~2000 chars of a Google Doc when readable"}
+          ],
+          "rubric": {
+            "criteria": [
+              {"title": "Work shown", "description": "…", "levels": [{"title": "Full", "points": 4, "description": "…"}]}
+            ]
+          },
+          "submission": {
+            "state": "NEW | CREATED | TURNED_IN | RETURNED | RECLAIMED_BY_STUDENT",
+            "late": false,
+            "turned_in_at": null,
+            "assigned_grade": null
+          }
+        }
+      ]
+    }
+  ]
 }
 ```
 
-The image itself is not kept in D1. Store it in an R2 bucket (`family-study`)
-with a 90-day lifecycle rule if we want to re-run extraction later; otherwise
-drop it after extraction. Extraction text is what the engine uses.
+### 1B. `classroom.py` in this repo (route-independent, build first)
 
-### 1B. Tutor session
+- **Course mapping** to Aeries classes: teacher last name match first, then
+  normalized course name tokens; unmatched courses are kept and shown under
+  "Other Classroom classes" rather than dropped. A manual override map lives
+  in `classroom_map.json` (course id to Aeries period) for the stubborn ones.
+- **Item matching** to Aeries assignments: normalized title similarity
+  (token set overlap, threshold ~0.6) plus due date within 3 days. Produces
+  three sets per class: `matched`, `classroom_only` (posted in Classroom,
+  not yet in Aeries: the earliest possible warning), `aeries_only`.
+- **Signals**:
+  - `turned_in_aeries_missing`: Classroom says TURNED_IN, Aeries still flags
+    missing (grading lag; the story is "portal still shows", not "never
+    did").
+  - `not_started_due_soon`: NEW/CREATED, due within 2 days.
+  - `late_turn_in`: `late: true`.
+  - `posted_this_week`: new items since last capture.
+- **Analytics merge**: each Aeries assignment entry gains
+  `classroom: {link, instructions_excerpt, materials_count, rubric_summary,
+  submission_state}` when matched; each class gains
+  `classroom: {course_link, classroom_only[], recent_announcements[],
+  signals[]}`. Tonight/upcoming can include `classroom_only` items labeled
+  `source: classroom`.
+- **Grok prompt additions**: may say what an assignment asks for using
+  `instructions_excerpt` and `rubric_summary`; may explain a missing item
+  with `submission_state`; never invent instructions when the field is
+  absent.
+- **Tests** with fixtures: a redacted normalized JSON per route, matching
+  edge cases (renamed titles, shifted due dates, two sections of one
+  course), signal derivation.
+- Runs inside the existing `scrape.yml` steps. No new cron.
 
-- **Voice (default, matches what the family does today):** the page requests
-  an ephemeral token from `POST /v1/study/tutor/token`; the Worker builds the
-  session instructions (below) and mints an xAI ephemeral token so the API key
-  never reaches the browser. The page opens
-  `wss://api.x.ai/v1/realtime?model=grok-voice-latest`, streams mic audio,
-  plays replies, and keeps the transcript.
-- **Text (quiet room, cheaper):** same instructions through
-  `POST /v1/study/tutor/chat`, a Worker proxy to chat completions. Browser
-  `SpeechRecognition` / `speechSynthesis` are optional, free add-ons here.
-- **End of session:** page POSTs `POST /v1/study/sessions` with a recap the
-  model produced from the transcript: `concepts_practiced`,
-  `struggled_with`, `got_independently`, `minutes`, `parent_note`.
+### 1C. Ingestion routes (pick by Phase 0 results)
 
-Session instructions are assembled by the Worker from:
+**Apps Script export (preferred).** `tools/classroom_export.gs` in this
+repo, pasted once into the kid's project from Check 1. Nightly time trigger
+(~9pm PT so the overnight scrape picks it up). Reads `Courses.list`,
+`CourseWork.list`, `CourseWorkMaterials.list`, `Announcements.list`,
+`StudentSubmissions.list` (`userId: 'me'`), `Rubrics.list` where available;
+exports plain text of attached Google Docs via the Drive service (first
+~2000 chars); skips PDFs and Forms. POSTs the normalized JSON to
+`POST /v1/docs/classroom/<student_key>` with a per-student write token kept
+in Script Properties. Never includes the kid's name or number; the Worker
+knows them by token.
 
-1. The Socratic tutor rules (fixed text, kept in the Worker):
-   never give the final answer first; ask what they tried; one step at a
-   time; check understanding before moving on; after two stalls, work a
-   similar example, not the actual problem; praise specifics; stay on the
-   page; age-appropriate; end with a one-line recap for the parent.
-2. The snap extraction (problems, concepts, instructions, rubric hints).
-3. Aeries context for that class from the latest `grades_latest` payload:
-   course, teacher comment on this assignment, category, points, recent
-   scores on the same concepts, current weak spots from the study engine.
-4. Nothing else. No names beyond first name from the student picker, no
-   student number.
+**Guardian digest (if invited).** `classroom_digest.py` reads labeled
+summaries over IMAP with a Gmail app password (`GMAIL_ADDRESS`,
+`GMAIL_APP_PASSWORD` secrets), parses missing / upcoming / activity with
+links (and preview URLs on Edu Plus), and emits the same shape with
+`type` and `title`, `due`, `link` only. Fixtures from real (redacted) emails
+before writing the parser.
 
-### 1C. Cost and guardrails
+**Canvas observer (per Canvas class).** Observer API token from the parent
+account (if the institution allows tokens), `GET /api/v1/users/self/observees`,
+then courses, assignments (description, rubric), submissions. Emits the
+same shape with `source: canvas`.
 
-| Mode | xAI list price (Sept 2026) | 30 min/night, 2 kids, 20 nights |
-|------|---------------------------|--------------------------------|
-| Voice Agent (speech to speech) | ~$0.08 / min | ~$96 / month |
-| Text chat + browser speech | tokens only | a few dollars / month |
-| Image extraction | one vision call per snap | cents |
+**Bookmarklet / Drive share (fallbacks).** Bookmarklet serializes the
+Classwork page into the shape and POSTs to the same endpoint. Drive share
+gives document text only; used to fill `materials[].text_excerpt`.
 
-Default the button to text with browser speech; make voice a deliberate
-choice with a per-day minute cap enforced in the Worker
-(`STUDY_VOICE_MINUTES_PER_DAY`, start at 45). Rate-limit snaps per PIN
-token. Reject images over 4 MB after downsizing.
+### 1D. Page
 
-### 1D. Where it lives
+- Assignment row expands to show Classroom instructions excerpt, attachment
+  names with links, rubric criteria, submission state, and a link to open it
+  in Classroom.
+- Class panel gets a "Posted in Classroom, not in Aeries yet" list and a
+  "Turned in, awaiting Aeries" chip where the signal fires.
+- Masthead chip when `not_started_due_soon` fires for any class.
 
-- `family-data`: new `study` routes below, `XAI_API_KEY` secret, optional R2
-  binding, D1 rows in the existing `docs (app, key, payload, version,
-  updated_at)` table with `app = 'study'`.
-- `aeries-dashboard/index.html`: Snap button in the class panel and on each
-  assignment row; Tutor panel (voice/text toggle, transcript, End session).
-- `aeries-dashboard/scraper.py`: reads snaps and session recaps when building
-  analytics (Phase 3).
+### 1E. Worker (local session, small)
+
+| Route | Auth | Body | Returns | D1 |
+|-------|------|------|---------|----|
+| `POST /v1/docs/classroom/<student_key>` | `X-Student-Token` (per-student secret) | normalized JSON | `{ok, version}` | `docs(app='classroom', key=<student_key>)` |
+| `GET /v1/docs/classroom/<student_key>` | existing PIN unlock token | | latest payload | |
+
+Vars: `CLASSROOM_TOKENS` (JSON map token to student_key). Size limit 1 MB.
+Reject payloads containing a `name` field at the top level as a guard.
 
 ---
 
-## Phase 2: Other content routes (as Phase 0 allows)
+## Phase 2: Study engine (Python in scraper, precomputed)
 
-- **Aeries now:** put `comment` (teacher note) and `documents` (attachment
-  names) into the Grok analytics entries and the study engine. Comment is
-  already rendered on the page.
-- **Classroom digest (if invited):** `classroom_digest.py` reads labeled
-  guardian summaries over IMAP with a Gmail app password (`GMAIL_ADDRESS`,
-  `GMAIL_APP_PASSWORD` secrets), parses missing / upcoming / activity with
-  links and preview URLs, matches items to Aeries assignments by normalized
-  title + due date, and stores `students[].classroom`. Runs inside the
-  existing `scrape.yml` steps. No new cron.
-- **Apps Script (if allowed):** nightly trigger under the kid's account:
-  courses, courseWork, rubrics, studentSubmissions, announcements, plain
-  text of attached Docs; POST to `POST /v1/docs/classroom/<student_key>` with
-  a per-student write token.
-- **Drive share / bookmarklet:** same endpoint, less data.
-- **Canvas:** observer pairing, then the Canvas API from the Action with the
-  observer token; assignments, descriptions, rubrics, submissions.
-
-Every item carries `source`, `captured_at`, and the original link.
-
----
-
-## Phase 3: Study engine (Python in scraper, precomputed)
-
-Inputs: Aeries assignments and scores, teacher comments, snap extractions,
-tutor session recaps, Classroom or Canvas content when present.
+Inputs: Aeries assignments and scores, teacher comments, Classroom or
+Canvas items (instructions, materials text, rubrics), later tutor recaps.
 
 - **Concept tagging** per assignment, cached in `docs` by content hash. From
-  extracted or fetched content when available, otherwise from title +
+  instructions and material text when available, otherwise from title +
   course + category and flagged `inferred: true`.
 - **Mastery table** per class: concept, assignments touching it, points
-  earned / possible, tutor sessions where it was `struggled_with` or
-  `got_independently`, trend.
+  earned / possible, trend.
 - **Weak spots:** low or falling concepts; missing work concentrated in one
-  concept; assessment vs practice gap (insights-plan Phase 2);
-  `struggled_with` repeating across sessions.
-- **Upcoming prep:** for each upcoming assignment or assessment, the
-  concepts it likely needs, how the kid did on them, a rubric checklist when
-  one was seen.
-- **Outputs** under `students[].study`:
-  `plan_week` (3 to 5 targeted items with evidence), `guides[]` (concept
-  explainer plus 5 to 10 practice problems with answers, kid-readable),
-  `materials[]` (curated links by concept from a table in this repo, not web
-  search), `parent_notes` (what to ask, what to check), `tutor_starters[]`
-  (a suggested first prompt per weak concept so the kid can start a session
-  without a photo).
+  concept; assessment vs practice gap (insights-plan Phase 2).
+- **Upcoming prep:** for each upcoming assignment or assessment, what it
+  asks for (from Classroom), the concepts it needs, how the kid did on them,
+  the rubric as a checklist.
+- **Outputs** under `students[].study`: `plan_week` (3 to 5 targeted items
+  with evidence), `guides[]` (concept explainer plus 5 to 10 practice
+  problems with answers, kid-readable), `materials[]` (teacher-posted
+  materials first, then a curated link table in this repo), `parent_notes`.
 - Grok writes the guide text from these facts only; label anything
   inferred; never invent teacher expectations.
-- Published with the rest of the payload to `/v1/grades`; the page reads it
-  from `latest`.
+- Published with the rest of the payload to `/v1/grades`.
 
 ---
 
-## Phase 4: Page
+## Phase 3: Coach panel and Study tab
 
 - **Parent Coach panel** between the masthead and Classes in
   `renderStudent`: this week's focus with evidence, weak spots, upcoming
-  work readiness, last tutor session recap.
+  work readiness.
 - **Kid Study tab** per student, same PIN: plain-language weekly plan, one
   guide per weak concept, practice set with reveal answers, rubric checklist
-  for upcoming work, Snap and Tutor buttons. Kid mode hides percentages by
-  default with a toggle.
-- Class panel rows show teacher comment (already), attachments, Classroom or
-  Canvas link, and a snap thumbnail or "snapped" chip when a photo exists.
+  for upcoming work. Kid mode hides percentages by default with a toggle.
 
 ---
 
-## Phase 5: Hardening
+## Phase 4: Hardening
 
-- Fixtures: redacted extraction JSON, digest emails, Classroom exports. Unit
-  tests for matching, mastery math, plan selection.
-- Privacy: no names or numbers in logs or R2 keys; per-student write tokens;
-  PIN unchanged; snaps and sessions readable only behind the PIN token.
-- Summer pause covers study generation and tutor token minting.
-- Worker: rate limits per PIN token on snaps, chat, and voice minutes.
+- Fixtures: redacted normalized Classroom JSON per route, digest emails.
+  Unit tests for mapping, matching, signals, mastery math, plan selection.
+- Privacy: no names or numbers in logs, payloads, or D1 keys beyond
+  `student_key`; per-student write tokens; PIN unchanged.
+- Summer pause covers study generation.
 
 ---
 
-## family-data endpoint spec (build in a local session)
+## Track T: Snap & Tutor (separate development, after Phase 1)
 
-All routes require the existing `Authorization: Bearer <unlock token>`.
-Rows live in `docs` with `app = 'study'`.
+The family's current habit (photo of the homework into Grok voice), moved
+into the dashboard and grounded in the kid's data. Independent of the
+Classroom routes; plugs into the study engine when built.
 
-| Route | Body | Returns | D1 key |
-|-------|------|---------|--------|
-| `POST /v1/study/snaps` | `{student_key, class_name, assignment_ref?, image_b64}` | `{snap_id, extraction}` | `snap:<student_key>:<snap_id>` |
-| `GET /v1/study/snaps?student_key=&since=` | | `{snaps: [...]}` without images | |
-| `POST /v1/study/tutor/token` | `{student_key, snap_id? , concept?, mode: "voice"}` | `{client_secret, expires_at, instructions_hash}` | counts toward daily voice minutes |
-| `POST /v1/study/tutor/chat` | `{student_key, snap_id?, concept?, messages[]}` | `{reply}` | |
-| `POST /v1/study/sessions` | `{student_key, snap_id?, recap}` | `{session_id}` | `session:<student_key>:<session_id>` |
-| `GET /v1/study/sessions?student_key=&since=` | | `{sessions: [...]}` | |
-| `POST /v1/docs/classroom/<student_key>` | Apps Script / bookmarklet export | `{ok, version}` | `classroom:<student_key>` |
-
-Secrets on the Worker: `XAI_API_KEY`. Vars: `STUDY_VOICE_MINUTES_PER_DAY`,
-`STUDY_SNAPS_PER_DAY`. Optional binding: R2 `STUDY_IMAGES`.
-
-The scraper reads `GET /v1/study/snaps` and `GET /v1/study/sessions` for the
-last 30 days when building analytics, using the same unlock token it already
-uses to publish.
+- **Snap:** kid taps Snap homework, the page downsizes the photo and POSTs
+  to `POST /v1/study/snaps`; the Worker runs Grok image understanding and
+  stores an extraction (title guess, instructions, problems, concepts,
+  rubric hints, confidence). Image kept in R2 for 90 days or dropped.
+- **Tutor:** text by default (Worker proxy `POST /v1/study/tutor/chat`,
+  browser speech optional); voice on demand through xAI's realtime Voice
+  Agent API with an ephemeral token from `POST /v1/study/tutor/token`, so
+  the API key never reaches the browser. Fixed Socratic rules: never the
+  final answer first; ask what they tried; one step at a time; after two
+  stalls, a similar example, not the actual problem; end with a one-line
+  recap for the parent.
+- **Grounding:** snap extraction + Aeries context (course, teacher comment,
+  recent scores on the same concepts, weak spots) + Classroom instructions
+  and rubric when Phase 1 has them.
+- **Recap:** `POST /v1/study/sessions` with `concepts_practiced`,
+  `struggled_with`, `got_independently`, `minutes`, `parent_note`; feeds the
+  mastery table.
+- **Cost:** voice ~$0.08/min (about $96/month at 30 min/night for two
+  kids); text is a few dollars/month. Daily voice cap in the Worker
+  (`STUDY_VOICE_MINUTES_PER_DAY`), snap cap (`STUDY_SNAPS_PER_DAY`).
+- **Worker routes:** `POST/GET /v1/study/snaps`, `POST /v1/study/tutor/token`,
+  `POST /v1/study/tutor/chat`, `POST/GET /v1/study/sessions`; secret
+  `XAI_API_KEY`; optional R2 binding `STUDY_IMAGES`.
 
 ---
 
@@ -360,24 +370,27 @@ uses to publish.
 
 | Session | Ship |
 |---------|------|
-| **A** (this repo) | This plan; teacher comments into Grok analytics; Phase 0 drafts |
-| **B** (local, family-data) | `study` routes: snaps with extraction, tutor token + chat proxy, sessions |
-| **C** (this repo) | Snap button, Tutor panel (text first, then voice), session recap |
-| **D** (this repo) | Study engine: concept tagging, mastery, weak spots, weekly plan, guides |
-| **E** (this repo) | Coach panel and Study tab |
-| **F** (either) | Classroom digest, Apps Script export, or Canvas observer, whichever Phase 0 unlocked |
+| **A** (this repo, done) | This plan; teacher comments into Grok analytics; Phase 0 instructions |
+| **B** (this repo, no dependency on Phase 0) | `classroom.py`: normalized shape, course mapping, item matching, signals, analytics merge, Grok prompt additions, fixtures + tests; `tools/classroom_export.gs` ready to paste |
+| **C** (local, family-data) | `POST/GET /v1/docs/classroom/<student_key>` with per-student tokens |
+| **D** (this repo) | Assignment row context, class panel Classroom lists, masthead chip |
+| **E** (this repo, after Phase 0 results) | Whichever route: Apps Script trigger live, or digest parser, or Canvas observer, or bookmarklet |
+| **F** (this repo) | Study engine |
+| **G** (this repo) | Coach panel and Study tab |
+| **T1, T2** (family-data, then this repo) | Snap & Tutor when wanted |
 
 ---
 
 ## Open decisions (defaults chosen; change them here)
 
-1. Tutor default mode: text with browser speech; voice on demand with a
-   daily cap.
-2. Keep homework images: yes in R2 for 90 days, so extraction can be re-run
-   when the prompt improves. Set to no if storage of homework photos feels
-   wrong.
+1. Matching threshold and due-date window: 0.6 token overlap, 3 days.
+   Tune against real data in Session E.
+2. Unmatched Classroom courses are shown, not hidden.
 3. Kid mode hides percentages by default.
-4. Materials come from a curated link table, not live web search.
-5. Classroom digest transport: IMAP app password in the Action. Alternatives:
-   Gmail API OAuth; forwarding to a Cloudflare Email Worker (needs a custom
-   domain on Cloudflare).
+4. Materials: teacher-posted first, then a curated link table; no live web
+   search.
+5. Digest transport: IMAP app password in the Action. Alternatives: Gmail
+   API OAuth; forwarding to a Cloudflare Email Worker (needs a custom domain
+   on Cloudflare).
+6. Track T image retention: R2 for 90 days by default; set to none if
+   storing homework photos feels wrong.
