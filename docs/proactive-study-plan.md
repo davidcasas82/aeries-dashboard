@@ -267,6 +267,18 @@ same shape with `source: canvas`.
 Classwork page into the shape and POSTs to the same endpoint. Drive share
 gives document text only; used to fill `materials[].text_excerpt`.
 
+Drive share finding (Sept 2026, verified): the kid's `Classroom/` folder
+holds one subfolder per class and, inside, Drive *shortcuts* to the files,
+not the files. Sharing the folder shares titles and dates only; shortcut
+targets stay private and read back empty. Fix: an Apps Script using only
+`DriveApp` walks the folder, follows `getTargetId()`, and adds the parent as
+viewer on each target (nightly trigger); or the kid shares individual
+targets by hand for big assignments. Titles carry "LT x.y" learning-target
+codes, a usable concept signal. What Drive gives: assignments with an
+attached file, dates, LT codes, instructions inside per-student copies, the
+kid's own homework photos. What it lacks: attachment-free assignments, due
+dates, submission state, teacher rubrics.
+
 ### 1D. Page
 
 - Assignment row expands to show Classroom instructions excerpt, attachment
