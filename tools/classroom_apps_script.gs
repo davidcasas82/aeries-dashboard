@@ -22,7 +22,8 @@ function testClassroom() {
 }
 
 function shareClassroomWithParent() {
-  let shared = 0, already = 0, failed = 0;
+  let shared = 0, already = 0, skipped = 0, failed = 0;
+  const me = Session.getActiveUser().getEmail();
   const roots = DriveApp.getFoldersByName('Classroom');
   while (roots.hasNext()) {
     const classFolders = roots.next().getFolders();
@@ -37,17 +38,20 @@ function shareClassroomWithParent() {
           const target = f.getMimeType() === 'application/vnd.google-apps.shortcut'
             ? DriveApp.getFileById(f.getTargetId())
             : f;
+          // Only the student's own files. Group docs and teacher materials carry
+          // other people's work and must never be shared outside the domain.
+          if (target.getOwner().getEmail() !== me) { skipped++; continue; }
           const people = target.getViewers().concat(target.getEditors()).map(u => u.getEmail());
           if (people.indexOf(PARENT_EMAIL) >= 0) { already++; continue; }
           target.addViewer(PARENT_EMAIL);
           shared++;
         } catch (e) {
-          // Teacher-owned materials the student can only view land here; expected.
           failed++;
           Logger.log('Could not share one file in "' + folder.getName() + '": ' + e.message);
         }
       }
     }
   }
-  Logger.log('Shared ' + shared + ' new, ' + already + ' already shared, ' + failed + ' could not be shared.');
+  Logger.log('Shared ' + shared + ' new, ' + already + ' already shared, '
+    + skipped + ' not owned by student (skipped), ' + failed + ' could not be shared.');
 }
