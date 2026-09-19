@@ -422,9 +422,9 @@ Classroom routes; plugs into the study engine when built.
 | Session | Ship |
 |---------|------|
 | **A** (this repo, done) | This plan; teacher comments into Grok analytics; Phase 0 instructions |
-| **B** (this repo, no dependency on Phase 0) | `classroom.py`: normalized shape, course mapping, item matching, signals, analytics merge, Grok prompt additions, fixtures + tests; `tools/classroom_export.gs` ready to paste |
-| **C** (local, family-data) | `POST/GET /v1/docs/classroom/<student_key>` with per-student tokens |
-| **D** (this repo) | Assignment row context, class panel Classroom lists, masthead chip |
+| **B** (this repo, done) | `classroom.py`: normalized shape, course mapping, item matching, signals, analytics merge, Grok prompt additions, fixtures + tests; `tools/classroom_apps_script.gs` v2 ready to paste |
+| **C** (local, family-data) | Not needed for the Apps Script + Drive route: the export rides inside the student payload the scraper already POSTs. Revisit only if payload size becomes a problem. |
+| **D** (this repo, done) | Assignment row context (state, link, "What it asks"), class panel Classroom block, tonight tag |
 | **E** (this repo, after Phase 0 results) | Whichever route: Apps Script trigger live, or digest parser, or Canvas observer, or bookmarklet |
 | **F** (this repo) | Study engine |
 | **G** (this repo) | Coach panel and Study tab |
@@ -472,10 +472,35 @@ B5 GitHub repo Settings, Secrets and variables, Actions, New repository
 secret, name `GOOGLE_SERVICE_ACCOUNT_JSON`, paste the whole JSON file,
 Add secret. Delete the downloaded file.
 
-**C. Agent builds** `exportClassroom` script v2 and `classroom.py`.
+**C. Agent builds** `exportClassroom` script v2 and `classroom.py`. Done
+(Sept 19, 2026): `tools/classroom_apps_script.gs` v2 + `tools/appsscript.json`,
+`classroom.py`, scraper hooks, dashboard Classroom block, tests in
+`tests/test_classroom.py`. Both scrape workflows pass
+`GOOGLE_SERVICE_ACCOUNT_JSON`. Service account:
+`classroom-reader@family-classroom.iam.gserviceaccount.com`.
 
-**D. Kid pastes script v2** over `Code.gs`, runs `exportClassroom` once,
-edits the trigger to point at `exportClassroom`.
+**D. Kid pastes script v2** (each kid, ~5 minutes, school account at
+`script.google.com`):
+
+D1 Open the project. Open `appsscript.json`, replace everything with
+`tools/appsscript.json` from this repo, Save. (Adds four read-only lines:
+class materials, announcements, topics, and Docs. Nothing that edits or
+sends.)
+D2 Open `Code.gs`, replace everything with `tools/classroom_apps_script.gs`.
+Edit the top: `STUDENT_SLOT = 1` for the first student on the dashboard,
+`2` for the second; `SHARE_WITH` first entry = parent Gmail (the second
+entry, the service account, is already right). Save.
+D3 Select `exportClassroom` in the function dropdown, Run, Review
+permissions, Allow. The log ends with `Exported N courses, M items ...`.
+D4 Triggers (clock icon): open the existing trigger, change the function
+from `shareClassroomWithParent` to `exportClassroom`, Save.
+D5 Parent: in Drive, a `Family dashboard/classroom_export.json` from each
+kid appears under Shared with me. Next scrape run logs `Classroom export
+for student 1: ...` and `Classroom: N courses (K mapped to Aeries) ...`.
+
+If a Classroom course does not map to an Aeries class (log shows fewer
+mapped than expected), add `classroom_map.json` at the repo root:
+`{"<classroom course id>": <aeries period>}`. Course ids are in the export.
 
 ---
 
