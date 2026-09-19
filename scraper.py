@@ -3363,6 +3363,8 @@ def format_assignment_entry(assignment, today, kind):
     cr = assignment.get("classroom")
     if isinstance(cr, dict):
         compact = {}
+        if cr.get("state") in ("TURNED_IN", "RETURNED"):
+            entry["turned_in_classroom"] = True
         if cr.get("state_label"):
             compact["state_label"] = cr["state_label"]
         if cr.get("late"):
@@ -3682,7 +3684,14 @@ def build_tonight_plan(class_analytics, limit=3):
 
     def add(course, assignment, reason):
         name = (assignment.get("name") or "").strip()
-        if not name or not course or assignment.get("turned_in"):
+        # Handed in per Aeries or per Classroom is never a to-do; the Classroom
+        # panel flags "turned in but Aeries still shows missing" for the parent.
+        if (
+            not name
+            or not course
+            or assignment.get("turned_in")
+            or assignment.get("turned_in_classroom")
+        ):
             return
         key = (_norm_course_name(course), name.lower())
         if key in seen:
@@ -4305,7 +4314,7 @@ DATA SCOPE
 - If counted_insight is present, you may name which categories count, are 0% weight, or are empty. If rebuild_pct differs from current_grade_pct and the posted grade is real, still use the posted grade.
 - Portal can lag (turned in but not graded, Canvas/paper work). Prefer "portal still shows …" over "never did …".
 - teacher_comment is the teacher's own note on that assignment in Aeries. You may quote or paraphrase it as the WHY for that item (e.g. "teacher noted: no work shown"). documents lists attachment names the teacher posted. Never invent a comment when the field is absent.
-- classroom fields come from the student's own Google Classroom export, not Aeries. An assignment's classroom.state_label says whether it was turned in on Classroom; classroom.instructions is what the teacher asked for (you may name the skill or topic from it in a few words). A class's classroom.classroom_only_upcoming lists work posted in Classroom that Aeries has no row for yet — say "posted in Classroom" for these, never "missing". classroom.turned_in_on_classroom_but_aeries_missing means the student handed it in on Classroom and Aeries has not caught up: say exactly that, do not blame the student. Items with source "classroom" in upcoming/tonight are Classroom-only.
+- classroom fields come from the student's own Google Classroom export, not Aeries. An assignment's classroom.state_label says whether it was turned in on Classroom; classroom.instructions is what the teacher asked for (you may name the skill or topic from it in a few words). A class's classroom.classroom_only_upcoming lists work posted in Classroom that Aeries has no row for yet — say "posted in Classroom" for these, never "missing". classroom.turned_in_on_classroom_but_aeries_missing means the student handed it in on Classroom and Aeries has not caught up: say exactly that, do not blame the student, and it is not a to-do (turned_in_classroom true is treated like turned_in). Items with source "classroom" in upcoming/tonight are Classroom-only.
 - Do not invent causes, effort, psychology, or teacher fairness.
 - Do not invent week-scale stories unless history.delta_7d / trend_label is present.
 
