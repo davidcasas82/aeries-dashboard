@@ -5,6 +5,10 @@
 //                              and adds the parent as viewer on each real file.
 // Set PARENT_EMAIL before running. Run shareClassroomWithParent on a nightly
 // time-driven trigger so new assignments become readable without a click.
+// Pair with tools/appsscript.json: its explicit oauthScopes keep the
+// permission prompt to read-only Classroom (own classes and coursework),
+// Drive (needed to add a viewer), and the account email. Without it, the
+// Classroom advanced service requests roster and class-management scopes.
 
 const PARENT_EMAIL = 'parent@example.com';
 const SCHOOL_YEAR_START = new Date('2026-08-01');
