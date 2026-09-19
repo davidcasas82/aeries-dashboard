@@ -420,6 +420,53 @@ Classroom routes; plugs into the study engine when built.
 
 ---
 
+## Setup runbook (parent-side steps, in order)
+
+**A. Kid's Apps Script project** (`script.google.com`, school account)
+
+A1 Nightly trigger: clock icon (Triggers), **+ Add Trigger**, function
+`shareClassroomWithParent` (later `exportClassroom`), deployment Head, event
+source Time-driven, Day timer, 9pm to 10pm, Save, Allow.
+
+A2 Classroom API test: gear icon, tick **Show "appsscript.json" manifest
+file in editor**, back to Editor, open `appsscript.json`, replace with:
+
+```json
+{
+  "timeZone": "America/Los_Angeles",
+  "dependencies": {
+    "enabledAdvancedServices": [
+      {"userSymbol": "Classroom", "version": "v1", "serviceId": "classroom"}
+    ]
+  },
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8"
+}
+```
+
+Save, open `Code.gs`, select `testClassroom`, Run, Allow. Log shows course
+names = works; "Access blocked" / `admin_policy_enforced` = blocked;
+"Classroom is not defined" after saving = advanced services disabled.
+
+**B. Parent's Google Cloud service account** (`console.cloud.google.com`,
+parent Gmail, no billing)
+
+B1 Project dropdown, New Project, name `family-classroom`, Create, select it.
+B2 Menu, APIs & Services, Library, search "Google Drive API", Enable.
+B3 Menu, IAM & Admin, Service Accounts, + Create Service Account, name
+`classroom-reader`, Create and Continue, Continue, Done. Copy its email.
+B4 Click the account, Keys tab, Add Key, Create new key, JSON, Create.
+B5 GitHub repo Settings, Secrets and variables, Actions, New repository
+secret, name `GOOGLE_SERVICE_ACCOUNT_JSON`, paste the whole JSON file,
+Add secret. Delete the downloaded file.
+
+**C. Agent builds** `exportClassroom` script v2 and `classroom.py`.
+
+**D. Kid pastes script v2** over `Code.gs`, runs `exportClassroom` once,
+edits the trigger to point at `exportClassroom`.
+
+---
+
 ## Open decisions (defaults chosen; change them here)
 
 1. Matching threshold and due-date window: 0.6 token overlap, 3 days.
