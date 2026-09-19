@@ -160,6 +160,17 @@ only as the fallback; guardian digest whenever an invitation arrives.
 | Drive share | Works. `shareClassroomWithParent` shared 10 student-owned files, skipped 9 teacher/group-owned, 0 failures. Documents read back with full content, including teacher directions and templates inside per-student copies. |
 | Platform per class | 9 Classroom class folders this year (periods 0 to 8). Canvas not reported. |
 
+**Results (kid 2, Sept 19, 2026)**
+
+| Check | Result |
+|-------|--------|
+| Apps Script | Works, including the Classroom API with the same minimal scopes. |
+| Drive share | Works. 7 student-owned files shared, 15 teacher/group-owned skipped, 1 could not be shared. Documents read back with content. Several assignments overlap with kid 1 (shared elective), useful for course mapping. |
+
+Both students: same `Code.gs` and `appsscript.json`; nightly
+`shareClassroomWithParent` trigger. Part D will switch both to
+`exportClassroom` with `STUDENT_SLOT` 1 and 2.
+
 Chosen route: **Apps Script with Classroom API + Drive**. The script runs
 under the student's account, writes one `classroom_export.json` (courses,
 coursework with description, due date, points, materials, and the student's
