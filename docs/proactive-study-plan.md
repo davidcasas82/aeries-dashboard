@@ -156,15 +156,16 @@ only as the fallback; guardian digest whenever an invitation arrives.
 
 | Check | Result |
 |-------|--------|
-| Apps Script | Editor opens; `DriveApp` works. Services dialog did not open; Classroom API to be tested via `appsscript.json` manifest (`enabledAdvancedServices`). |
+| Apps Script | Works, including the Classroom API. Services dialog did not open; enabled via `appsscript.json` (`enabledAdvancedServices`) with explicit `oauthScopes` limited to `classroom.courses.readonly`, `classroom.coursework.me.readonly`, `drive`, `userinfo.email`. `testClassroom` listed courses and coursework. |
 | Drive share | Works. `shareClassroomWithParent` shared 10 student-owned files, skipped 9 teacher/group-owned, 0 failures. Documents read back with full content, including teacher directions and templates inside per-student copies. |
 | Platform per class | 9 Classroom class folders this year (periods 0 to 8). Canvas not reported. |
 
-Chosen route: **Apps Script + Drive**. The script runs under the student's
-account, writes one `classroom_export.json` (titles and dates for every
-file it can see, full text for files the student owns, due dates and
-submission state if the Classroom service turns out to be allowed), and
-shares it with the parent and a Google service account. The scraper reads
+Chosen route: **Apps Script with Classroom API + Drive**. The script runs
+under the student's account, writes one `classroom_export.json` (courses,
+coursework with description, due date, points, materials, and the student's
+own submission state from the Classroom API; plus full text of the Docs the
+student owns from Drive), and shares it with the parent and a Google
+service account. The scraper reads
 that file from GitHub Actions with the service account key and normalizes
 it into the shape in 1A. No calls from the student account to outside URLs.
 
