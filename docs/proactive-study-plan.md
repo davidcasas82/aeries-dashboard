@@ -152,6 +152,22 @@ Route selection for Phase 1C: Apps Script export if Check 1 works; Canvas
 observer for any Canvas classes; Drive reading if Check 2 works; bookmarklet
 only as the fallback; guardian digest whenever an invitation arrives.
 
+**Results so far (kid 1, Sept 19, 2026)**
+
+| Check | Result |
+|-------|--------|
+| Apps Script | Editor opens; `DriveApp` works. Services dialog did not open; Classroom API to be tested via `appsscript.json` manifest (`enabledAdvancedServices`). |
+| Drive share | Works. `shareClassroomWithParent` shared 10 student-owned files, skipped 9 teacher/group-owned, 0 failures. Documents read back with full content, including teacher directions and templates inside per-student copies. |
+| Platform per class | 9 Classroom class folders this year (periods 0 to 8). Canvas not reported. |
+
+Chosen route: **Apps Script + Drive**. The script runs under the student's
+account, writes one `classroom_export.json` (titles and dates for every
+file it can see, full text for files the student owns, due dates and
+submission state if the Classroom service turns out to be allowed), and
+shares it with the parent and a Google service account. The scraper reads
+that file from GitHub Actions with the service account key and normalizes
+it into the shape in 1A. No calls from the student account to outside URLs.
+
 ---
 
 ## Phase 1: Classroom context (primary)
@@ -240,16 +256,27 @@ scraper (digest, Canvas). Missing fields are simply absent.
 
 ### 1C. Ingestion routes (pick by Phase 0 results)
 
-**Apps Script export (preferred).** `tools/classroom_export.gs` in this
+**Apps Script export (chosen).** `tools/classroom_apps_script.gs` in this
 repo, pasted once into the kid's project from Check 1. Nightly time trigger
-(~9pm PT so the overnight scrape picks it up). Reads `Courses.list`,
-`CourseWork.list`, `CourseWorkMaterials.list`, `Announcements.list`,
-`StudentSubmissions.list` (`userId: 'me'`), `Rubrics.list` where available;
-exports plain text of attached Google Docs via the Drive service (first
-~2000 chars); skips PDFs and Forms. POSTs the normalized JSON to
-`POST /v1/docs/classroom/<student_key>` with a per-student write token kept
-in Script Properties. Never includes the kid's name or number; the Worker
-knows them by token.
+(~9pm PT so the overnight scrape picks it up). Walks the Drive `Classroom/`
+folder: for every file records class folder, title, created/modified dates,
+mime type, owner-is-student; for student-owned Docs exports plain text
+(first ~4000 chars) via `DocumentApp`; skips PDFs, images, Forms. If the
+Classroom advanced service is allowed, also reads `Courses.list`,
+`CourseWork.list`, `StudentSubmissions.list` (`userId: 'me'`) for due dates,
+points, and submission state, and `Rubrics.list` where available. Writes
+`classroom_export.json` into the student's Drive and shares it (viewer)
+with the parent and the service account; shares student-owned files the
+same way so the scraper can re-read them if needed. No `UrlFetchApp` to
+outside URLs from the student account. Never includes the kid's name or
+number in the JSON; the scraper maps file to `student_key` by which
+service-account share it arrived through.
+
+Scraper side: `classroom.py` authenticates with `GOOGLE_SERVICE_ACCOUNT_JSON`
+(GitHub secret), finds `classroom_export.json` shared with the service
+account, and normalizes it into the 1A shape with `source:
+classroom_apps_script` (or `classroom_drive` when the Classroom service is
+unavailable).
 
 **Guardian digest (if invited).** `classroom_digest.py` reads labeled
 summaries over IMAP with a Gmail app password (`GMAIL_ADDRESS`,
