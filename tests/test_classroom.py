@@ -247,13 +247,29 @@ class ScraperIntegrationTests(unittest.TestCase):
         self.assertEqual(quiz["days_until_due"], 1)
         missing = alg["missing_assignments"][0]
         self.assertEqual(missing["classroom"]["state_label"], "Turned in on Classroom")
+        self.assertTrue(missing["turned_in_classroom"])
         self.assertIn("Classroom", analytics["data_scope"])
-        # Aeries-confirmed missing still outranks a Classroom-only item due tomorrow
+        # Handed in on Classroom is not a to-do even though Aeries still flags it missing,
+        # so the Classroom-only review due tomorrow is what is left for tonight.
+        items = analytics["tonight_plan"]["items"]
+        self.assertEqual([i["name"] for i in items], ["Unit 3 Quiz Review"])
+        self.assertEqual(items[0]["source"], "classroom")
+        self.assertEqual(items[0]["reason"], "due_tomorrow")
+
+    def test_aeries_missing_without_classroom_turn_in_stays_a_todo(self):
+        student = student_with_aeries()
+        export = load_export()
+        practice = next(i for i in export["courses"][0]["items"] if i["id"] == "w-32")
+        practice["submission"]["state"] = "CREATED"
+        practice["submission"]["turned_in_at"] = ""
+        scraper.attach_classroom_export(student, export, today=TODAY)
+        p1, p2 = self._patched()
+        with p1, p2:
+            analytics = scraper.build_class_analytics(student)
         names = [i["name"] for i in analytics["tonight_plan"]["items"]]
         self.assertEqual(names[0], "3.2 Practice")
-        quiz_item = next(i for i in analytics["tonight_plan"]["items"] if i["name"] == "Unit 3 Quiz Review")
-        self.assertEqual(quiz_item["source"], "classroom")
-        self.assertEqual(quiz_item["reason"], "due_tomorrow")
+        alg = next(c for c in analytics["classes"] if c["period"] == 5)
+        self.assertEqual(alg["classroom"]["turned_in_on_classroom_but_aeries_missing"], [])
 
     def test_view_exposes_classroom_block_per_class(self):
         p1, p2 = self._patched()
