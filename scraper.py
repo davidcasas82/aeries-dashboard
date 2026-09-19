@@ -12,6 +12,8 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
+import classroom
+
 load_dotenv()
 
 BASE_URL = "https://tustinusd.aeries.net"
@@ -3356,6 +3358,21 @@ def format_assignment_entry(assignment, today, kind):
     documents = (assignment.get("documents") or "").strip()
     if documents:
         entry["documents"] = documents
+    if assignment.get("source") == "classroom":
+        entry["source"] = "classroom"
+    cr = assignment.get("classroom")
+    if isinstance(cr, dict):
+        compact = {}
+        if cr.get("state_label"):
+            compact["state_label"] = cr["state_label"]
+        if cr.get("late"):
+            compact["late"] = True
+        if cr.get("turned_in_on"):
+            compact["turned_in_on"] = cr["turned_in_on"]
+        if cr.get("instructions"):
+            compact["instructions"] = cr["instructions"][:300]
+        if compact:
+            entry["classroom"] = compact
     return entry
 
 
@@ -3483,6 +3500,43 @@ def analyze_class(class_meta, assignments, today):
     }
 
 
+def attach_classroom_export(student_data, export, today=None):
+    """Fold one student's Classroom export into their scraped data (no-op without an export)."""
+    if not export:
+        return None
+    today = today or pacific_today_dt()
+    try:
+        return classroom.attach_classroom(student_data, export, today, assignments_for_class)
+    except Exception as e:  # noqa: BLE001 - Classroom must never break the Aeries scrape
+        print(f"  Classroom: could not attach export ({type(e).__name__})")
+        return None
+
+
+def attach_classroom_to_analysis(analyzed, student_data, class_meta, assignments, today):
+    """Add Classroom facts to one class's analytics and let due-soon Classroom-only work
+    into the tonight plan, tagged source=classroom so nobody mistakes it for Aeries."""
+    context = classroom.class_context(student_data, class_meta, today, assignments=assignments)
+    if not context:
+        return analyzed
+    analyzed["classroom"] = classroom.grok_context(context)
+    extra = []
+    for pseudo in classroom.pseudo_assignments(context):
+        due = parse_due_date(pseudo.get("due_date"))
+        if not due:
+            continue
+        days = (due - today).days
+        if 0 <= days <= 14:
+            extra.append(format_assignment_entry(pseudo, today, "upcoming"))
+    if extra:
+        merged = list(analyzed.get("upcoming") or []) + extra
+        merged.sort(key=lambda e: parse_due_date(e.get("due_date")) or datetime.max)
+        analyzed["upcoming"] = merged[:10]
+        due_today = [e for e in extra if e.get("days_until_due") == 0]
+        if due_today and analyzed.get("suggested_urgency") in ("ok", "strong"):
+            analyzed["suggested_urgency"], analyzed["issue_type"] = "watch", "due_today"
+    return analyzed
+
+
 def build_class_analytics(student_data, history_context=None):
     """Pre-compute per-class facts for Grok interpretation."""
     today = pacific_today_dt()
@@ -3498,6 +3552,7 @@ def build_class_analytics(student_data, history_context=None):
         if not class_has_real_grade(class_meta, assignments) and not assignments:
             continue
         analyzed = analyze_class(class_meta, assignments, today)
+        attach_classroom_to_analysis(analyzed, student_data, class_meta, assignments, today)
         # Fold multi-day history onto each class for Grok
         h = hist_classes.get(analyzed["course_name"]) or {}
         if h:
@@ -3599,6 +3654,13 @@ def build_class_analytics(student_data, history_context=None):
             "work done offline or not yet graded."
         ),
     }
+    if student_data.get("classroom"):
+        result["data_scope"] += (
+            " Plus a nightly Google Classroom export (classroom fields): what each "
+            "assignment asks, Classroom turn-in state, and work posted in Classroom "
+            "that has not reached Aeries yet."
+        )
+        result["classroom_captured_at"] = (student_data["classroom"].get("captured_at") or "")
     if history_context:
         result["history_meta"] = {
             "history_span_days": history_context.get("history_span_days", 0),
@@ -3626,12 +3688,15 @@ def build_tonight_plan(class_analytics, limit=3):
         if key in seen:
             return
         seen.add(key)
-        items.append({
+        item = {
             "name": name,
             "class_name": course,
             "reason": reason,
             "due_date": assignment.get("due_date") or "",
-        })
+        }
+        if assignment.get("source") == "classroom":
+            item["source"] = "classroom"
+        items.append(item)
 
     def add_upcoming(days, reason):
         for c in class_analytics or []:
@@ -3692,6 +3757,8 @@ def _view_assignment(assignment, today, kind):
     """Assignment dict the dashboard can render without re-deriving rules."""
     entry = dict(assignment or {})
     formatted = format_assignment_entry(assignment, today, kind)
+    # The dashboard gets the full Classroom stamp (link, state); Grok gets the compact one.
+    formatted.pop("classroom", None)
     entry.update(formatted)
     entry["description"] = (
         assignment.get("description")
@@ -3834,6 +3901,9 @@ def build_student_view(student_data, history_context=None):
             "span_window": trend.get("span_window"),
             "phantom_zero": analyzed.get("phantom_zero"),
             "counted_insight": class_meta.get("counted_insight"),
+            "classroom": classroom.class_context(
+                student_data, class_meta, today, assignments=assignments
+            ),
         })
 
     return {
@@ -3843,6 +3913,7 @@ def build_student_view(student_data, history_context=None):
         "wins": list(ai.get("wins") or [])[:2],
         "classes": classes_out,
         "generated_at": ai.get("generated_at"),
+        "classroom_captured_at": ((student_data.get("classroom") or {}).get("captured_at") or ""),
     }
 
 
@@ -4234,6 +4305,7 @@ DATA SCOPE
 - If counted_insight is present, you may name which categories count, are 0% weight, or are empty. If rebuild_pct differs from current_grade_pct and the posted grade is real, still use the posted grade.
 - Portal can lag (turned in but not graded, Canvas/paper work). Prefer "portal still shows …" over "never did …".
 - teacher_comment is the teacher's own note on that assignment in Aeries. You may quote or paraphrase it as the WHY for that item (e.g. "teacher noted: no work shown"). documents lists attachment names the teacher posted. Never invent a comment when the field is absent.
+- classroom fields come from the student's own Google Classroom export, not Aeries. An assignment's classroom.state_label says whether it was turned in on Classroom; classroom.instructions is what the teacher asked for (you may name the skill or topic from it in a few words). A class's classroom.classroom_only_upcoming lists work posted in Classroom that Aeries has no row for yet — say "posted in Classroom" for these, never "missing". classroom.turned_in_on_classroom_but_aeries_missing means the student handed it in on Classroom and Aeries has not caught up: say exactly that, do not blame the student. Items with source "classroom" in upcoming/tonight are Classroom-only.
 - Do not invent causes, effort, psychology, or teacher fairness.
 - Do not invent week-scale stories unless history.delta_7d / trend_label is present.
 
@@ -4477,6 +4549,11 @@ def scrape_all():
         "school_session": school_session_payload(calendar=cal, paused=False),
     }
 
+    print("Checking for Google Classroom exports...")
+    classroom_exports = classroom.fetch_classroom_exports()
+    if not classroom_exports:
+        print("  Classroom: no exports (service account unset or nothing shared yet)")
+
     failed = 0
     for i, student in enumerate(STUDENTS, start=1):
         label = student_log_label(i)
@@ -4536,6 +4613,12 @@ def scrape_all():
                 if prior:
                     data["students"].append(prior)
                 continue
+
+            export = classroom_exports.get(i)
+            if export:
+                attach_classroom_export(student_data, export)
+            elif prior.get("classroom"):
+                print("  Classroom: no fresh export this run; context will be missing until the next one")
 
             # Carry prior briefing so history_context can reference last focus
             if prior.get("ai_summary"):
