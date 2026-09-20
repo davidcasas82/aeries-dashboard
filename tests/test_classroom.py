@@ -309,6 +309,181 @@ class ClassContextTests(unittest.TestCase):
         self.assertEqual(g["classroom_only_upcoming"][0]["title"], "Unit 3 Quiz Review")
 
 
+FIXTURE_V2 = Path(__file__).parent / "fixtures" / "classroom_export_v2_sample.json"
+
+
+def load_export_v2():
+    return json.loads(FIXTURE_V2.read_text())
+
+
+def geometry_student():
+    return {
+        "name": "Kid",
+        "sn": "2",
+        "classes": [
+            {"period": 2, "course_name": "Engineering Geo", "teacher": "Stadel, A", "percent": "91", "mark": "A-"},
+        ],
+        "assignments_by_class": [
+            {
+                "class_name": "2- Engineering Geo- Fall",
+                "period": 2,
+                "assignments": [
+                    {
+                        "number": 4,
+                        "description": "1.1 Definitions",
+                        "due_date": "09/09/2026",
+                        "points_earned": 9.0,
+                        "points_possible": 10,
+                        "percentage": 90.0,
+                        "grading_complete": True,
+                    }
+                ],
+            }
+        ],
+        "class_trends": {},
+        "ai_summary": {},
+    }
+
+
+class ExportV2ShapeTests(unittest.TestCase):
+    """Script v3 over-fetches; classroom.py must keep the extra fields, not drop them."""
+
+    def setUp(self):
+        self.student = geometry_student()
+        self.block = classroom.attach_classroom(
+            self.student, load_export_v2(), TODAY, scraper.assignments_for_class, overrides={}
+        )
+        self.geo = self.block["courses"][0]
+        self.items = {i["id"]: i for i in self.geo["items"]}
+
+    def test_block_carries_script_version_drive_index_and_text_stats(self):
+        self.assertEqual(self.block["export_version"], 2)
+        self.assertEqual(self.block["script_version"], "3.0")
+        self.assertEqual(self.block["doc_text"], {
+            "total": 3, "with_text": 2, "reused": 1, "failed": 0, "skipped_time_budget": 1,
+        })
+        folders = self.block["drive_folders"]
+        self.assertEqual([f["name"] for f in folders], ["2 • Geometry • Stadel", "Old Class 2025"])
+        self.assertTrue(folders[0]["current_year"])
+        self.assertFalse(folders[1]["current_year"])
+        kid_file = folders[0]["files"][0]
+        self.assertEqual(kid_file["id"], "d-kid-11")
+        self.assertEqual(kid_file["title"], "CYU 1.1")
+        self.assertTrue(kid_file["owned_by_student"])
+        self.assertEqual(kid_file["modified_at"], "2026-08-29T03:00:00.000Z")
+        self.assertEqual(self.block["notes"], ["rubrics: not exposed by the Classroom service"])
+
+    def test_course_carries_teachers_topics_and_description(self):
+        self.assertEqual(self.geo["aeries_period"], 2)
+        self.assertEqual(self.geo["teachers"], [
+            {"name": "A. Stadel", "is_owner": True},
+            {"name": "Co Teacher", "is_owner": False},
+        ])
+        self.assertEqual(self.geo["topics"], [{"id": "tp-1", "name": "Unit 1: Foundations"}])
+        self.assertEqual(self.geo["room"], "B204")
+        self.assertEqual(self.geo["description_heading"], "Engineering Geometry, Period 2")
+        self.assertIn("Late work accepted", self.geo["description"])
+
+    def test_item_keeps_rubric_category_state_and_material_ids(self):
+        cyu = self.items["w-cyu13"]
+        self.assertEqual(cyu["work_type"], "ASSIGNMENT")
+        self.assertEqual(cyu["state"], "PUBLISHED")
+        self.assertEqual(cyu["grade_category"], {"name": "Practice", "weight": 200000, "default_denominator": 10})
+        rubric = cyu["rubric"]
+        self.assertEqual([c["title"] for c in rubric["criteria"]], ["Angle pairs named", "Work shown"])
+        self.assertEqual([c["max_points"] for c in rubric["criteria"]], [6, 4])
+        self.assertEqual(rubric["max_points"], 10)
+        self.assertEqual(rubric["criteria"][0]["levels"][1], {"title": "Partial", "description": "Some missing", "points": 3})
+        self.assertNotIn("id", rubric)
+        doc = cyu["materials"][0]
+        self.assertEqual(doc["id"], "d-cyu13")
+        self.assertEqual(doc["share_mode"], "VIEW")
+        self.assertEqual(doc["modified_at"], "2026-09-09T20:00:00.000Z")
+        self.assertNotIn("owned_by_student", doc)  # false is omitted, true is kept
+        self.assertEqual(cyu["materials"][1]["kind"], "youtube")
+        self.assertIn("alternate interior", cyu["instructions"])
+        # Skipped-for-time note survives so the scraper can fetch the text itself later.
+        syllabus = self.items["m-syll"]["materials"][0]
+        self.assertEqual(syllabus["note"], "text skipped: time budget")
+        self.assertNotIn("text_excerpt", syllabus)
+
+    def test_submission_keeps_history_draft_grade_answer_and_owned_attachment(self):
+        done = self.items["w-cyu11"]["submission"]
+        self.assertEqual(done["state"], "RETURNED")
+        self.assertEqual(done["turned_in_on"], "2026-08-28")
+        self.assertEqual(done["assigned_grade"], 9)
+        self.assertEqual(done["draft_grade"], 9)
+        self.assertEqual(done["updated_on"], "2026-09-05")
+        kinds = [(h["kind"], h.get("state", h.get("points_earned"))) for h in done["history"]]
+        self.assertEqual(kinds, [("state", "CREATED"), ("state", "TURNED_IN"), ("grade", 9), ("state", "RETURNED")])
+        self.assertEqual(done["history"][2]["max_points"], 10)
+        self.assertEqual(done["history"][2]["on"], "2026-09-05")
+        att = done["attachments"][0]
+        self.assertEqual(att["id"], "d-kid-11")
+        self.assertTrue(att["owned_by_student"])
+        self.assertEqual(att["title"], "CYU 1.1")
+        self.assertIn("A point has no dimension", att["text_excerpt"])
+        question = self.items["q-1"]
+        self.assertEqual(question["type"], "question")
+        self.assertEqual(question["choices"], ["Alternate interior", "Same-side interior", "Linear pair"])
+        self.assertEqual(question["submission"]["answer"], "Alternate interior")
+        self.assertEqual(question["submission"]["history"][0]["state"], "TURNED_IN")
+
+    def test_aeries_row_stamp_gains_rubric_and_category(self):
+        # 1.1 matched the Aeries "1.1 Definitions" row; the new fields ride along
+        # only when present, so the stamp of a v1 export is unchanged.
+        row = self.student["assignments_by_class"][0]["assignments"][0]
+        self.assertEqual(row["classroom"]["id"], "w-cyu11")
+        self.assertEqual(row["classroom"]["grade_category"], "Practice")
+        self.assertNotIn("rubric", row["classroom"])
+        cyu = self.items["w-cyu13"]
+        stamp = classroom._assignment_link_payload(cyu)
+        self.assertEqual(stamp["rubric"], [
+            {"title": "Angle pairs named", "max_points": 6},
+            {"title": "Work shown", "max_points": 4},
+        ])
+
+    def test_class_context_and_grok_see_rubric_and_teachers(self):
+        geo_meta = self.student["classes"][0]
+        rows = scraper.assignments_for_class(self.student, geo_meta)
+        ctx = classroom.class_context(self.student, geo_meta, TODAY, assignments=rows)
+        self.assertEqual(ctx["teachers"], ["A. Stadel", "Co Teacher"])
+        upcoming = next(e for e in ctx["classroom_only"] if e["id"] == "w-cyu13")
+        self.assertEqual(upcoming["days_until_due"], 1)
+        self.assertEqual(upcoming["grade_category"], "Practice")
+        self.assertEqual([c["title"] for c in upcoming["rubric"]], ["Angle pairs named", "Work shown"])
+        g = classroom.grok_context(ctx)
+        first = g["classroom_only_upcoming"][0]
+        self.assertEqual(first["rubric_criteria"], ["Angle pairs named", "Work shown"])
+        self.assertNotIn("http", json.dumps(g))
+
+    def test_no_student_name_anywhere_in_v2_payload(self):
+        dumped = json.dumps(self.student)
+        self.assertNotIn("Firstname", dumped)
+        self.assertNotIn("Lastname", dumped)
+
+    def test_v1_export_has_no_v2_keys(self):
+        student = student_with_aeries()
+        block = attach(student)
+        alg = next(c for c in block["courses"] if c["id"] == "c-alg")
+        for key in ("teachers", "topics", "room", "description"):
+            self.assertNotIn(key, alg)
+        practice = next(i for i in alg["items"] if i["id"] == "w-32")
+        for key in ("rubric", "grade_category", "work_type", "state", "choices"):
+            self.assertNotIn(key, practice)
+        for key in ("history", "draft_grade", "answer"):
+            self.assertNotIn(key, practice["submission"])
+        for key in ("drive_folders", "doc_text"):
+            self.assertNotIn(key, block)
+
+    def test_compact_rubric_edge_cases(self):
+        self.assertIsNone(classroom.compact_rubric(None))
+        self.assertIsNone(classroom.compact_rubric({"criteria": []}))
+        r = classroom.compact_rubric({"criteria": [{"title": "Only title", "levels": []}]})
+        self.assertEqual(r, {"criteria": [{"title": "Only title", "description": "", "max_points": None, "levels": []}],
+                             "max_points": None})
+
+
 class ScraperIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.student = student_with_aeries()

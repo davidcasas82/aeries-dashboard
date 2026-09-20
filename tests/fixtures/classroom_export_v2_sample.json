@@ -1,0 +1,303 @@
+{
+  "export_version": 2,
+  "script_version": "3.0",
+  "student_slot": 2,
+  "captured_at": "2026-09-14T05:12:00.000Z",
+  "time_zone": "America/Los_Angeles",
+  "source": "classroom_apps_script",
+  "recent_days": 400,
+  "courses": [
+    {
+      "id": "c-geo",
+      "name": "2 • Geometry • Stadel",
+      "section": "2",
+      "description_heading": "Engineering Geometry, Period 2",
+      "description": "Bring your notebook and a pencil every day. Late work accepted for one week at 80%.",
+      "room": "B204",
+      "link": "https://classroom.google.com/c/c-geo",
+      "state": "ACTIVE",
+      "owner_id": "t-1",
+      "created_at": "2026-08-10T15:00:00.000Z",
+      "updated_at": "2026-09-12T15:00:00.000Z",
+      "calendar_id": "cal-1",
+      "teachers": [
+        {"id": "t-1", "name": "A. Stadel", "is_owner": true},
+        {"id": "t-2", "name": "Co Teacher", "is_owner": false}
+      ],
+      "topics": [
+        {"id": "tp-1", "name": "Unit 1: Foundations", "updated_at": "2026-08-20T15:00:00.000Z"}
+      ],
+      "items": [
+        {
+          "id": "w-cyu13",
+          "type": "assignment",
+          "work_type": "ASSIGNMENT",
+          "title": "Submit CYU • 1.3 • Transversal & Parallel Lines",
+          "description": "Upload a photo of your CYU 1.3 work. Every angle pair must be named.",
+          "link": "https://classroom.google.com/c/c-geo/a/w-cyu13/details",
+          "topic": "Unit 1: Foundations",
+          "topic_id": "tp-1",
+          "state": "PUBLISHED",
+          "assignee_mode": "ALL_STUDENTS",
+          "assigned_at": "2026-09-10T15:00:00.000Z",
+          "updated_at": "2026-09-10T15:00:00.000Z",
+          "scheduled_at": "",
+          "due": "2026-09-16T06:59:00.000Z",
+          "due_raw": {"date": {"year": 2026, "month": 9, "day": 16}, "time": {"hours": 6, "minutes": 59}},
+          "max_points": 10,
+          "grade_category": {"id": "gc-1", "name": "Practice", "weight": 200000, "default_denominator": 10},
+          "submission_modification_mode": "MODIFIABLE_UNTIL_TURNED_IN",
+          "choices": [],
+          "materials": [
+            {
+              "kind": "drive",
+              "id": "d-cyu13",
+              "title": "CYU 1.3 Transversals",
+              "url": "https://docs.google.com/document/d/d-cyu13",
+              "mime": "application/vnd.google-apps.document",
+              "share_mode": "VIEW",
+              "modified_at": "2026-09-09T20:00:00.000Z",
+              "owned_by_student": false,
+              "text_excerpt": "Check Your Understanding 1.3. Name each angle pair: alternate interior, corresponding, same-side interior."
+            },
+            {
+              "kind": "youtube",
+              "title": "Parallel lines and transversals",
+              "url": "https://www.youtube.com/watch?v=abc"
+            }
+          ],
+          "rubric": {
+            "id": "r-1",
+            "source_spreadsheet_id": "",
+            "created_at": "2026-09-10T15:00:00.000Z",
+            "updated_at": "2026-09-10T15:00:00.000Z",
+            "criteria": [
+              {
+                "id": "cr-1",
+                "title": "Angle pairs named",
+                "description": "All eight angles labeled with the correct pair name.",
+                "levels": [
+                  {"id": "l-1", "title": "Complete", "description": "All named correctly", "points": 6},
+                  {"id": "l-2", "title": "Partial", "description": "Some missing", "points": 3},
+                  {"id": "l-3", "title": "Missing", "description": "", "points": 0}
+                ]
+              },
+              {
+                "id": "cr-2",
+                "title": "Work shown",
+                "description": "",
+                "levels": [
+                  {"id": "l-4", "title": "Yes", "description": "", "points": 4},
+                  {"id": "l-5", "title": "No", "description": "", "points": 0}
+                ]
+              }
+            ]
+          },
+          "submission": {
+            "id": "s-1",
+            "state": "CREATED",
+            "late": false,
+            "turned_in_at": "",
+            "assigned_grade": null,
+            "draft_grade": null,
+            "course_work_type": "ASSIGNMENT",
+            "link": "https://classroom.google.com/c/c-geo/a/w-cyu13/submissions/s-1",
+            "created_at": "2026-09-10T15:00:00.000Z",
+            "updated_at": "2026-09-10T15:00:00.000Z",
+            "answer": null,
+            "history": [
+              {"kind": "state", "state": "CREATED", "at": "2026-09-10T15:00:00.000Z"}
+            ],
+            "attachments": []
+          }
+        },
+        {
+          "id": "w-cyu11",
+          "type": "assignment",
+          "work_type": "ASSIGNMENT",
+          "title": "Submit CYU • 1.1 • Geometry Definitions",
+          "description": "",
+          "link": "https://classroom.google.com/c/c-geo/a/w-cyu11/details",
+          "topic": "Unit 1: Foundations",
+          "topic_id": "tp-1",
+          "state": "PUBLISHED",
+          "assignee_mode": "ALL_STUDENTS",
+          "assigned_at": "2026-08-26T15:00:00.000Z",
+          "updated_at": "2026-09-05T15:00:00.000Z",
+          "scheduled_at": "",
+          "due": "2026-08-29",
+          "due_raw": {"date": {"year": 2026, "month": 8, "day": 29}, "time": null},
+          "max_points": 10,
+          "grade_category": {"id": "gc-1", "name": "Practice", "weight": 200000, "default_denominator": 10},
+          "submission_modification_mode": "MODIFIABLE_UNTIL_TURNED_IN",
+          "choices": [],
+          "materials": [],
+          "submission": {
+            "id": "s-2",
+            "state": "RETURNED",
+            "late": false,
+            "turned_in_at": "2026-08-29T03:10:00.000Z",
+            "assigned_grade": 9,
+            "draft_grade": 9,
+            "course_work_type": "ASSIGNMENT",
+            "link": "",
+            "created_at": "2026-08-26T15:00:00.000Z",
+            "updated_at": "2026-09-05T15:00:00.000Z",
+            "answer": null,
+            "history": [
+              {"kind": "state", "state": "CREATED", "at": "2026-08-26T15:00:00.000Z"},
+              {"kind": "state", "state": "TURNED_IN", "at": "2026-08-29T03:10:00.000Z"},
+              {"kind": "grade", "points_earned": 9, "max_points": 10, "change": "ASSIGNED_GRADE_POINTS_EARNED_CHANGE", "at": "2026-09-05T15:00:00.000Z"},
+              {"kind": "state", "state": "RETURNED", "at": "2026-09-05T15:00:00.000Z"}
+            ],
+            "attachments": [
+              {
+                "kind": "drive",
+                "id": "d-kid-11",
+                "title": "Firstname Lastname - CYU 1.1",
+                "url": "https://docs.google.com/document/d/d-kid-11",
+                "mime": "application/vnd.google-apps.document",
+                "share_mode": "",
+                "modified_at": "2026-08-29T03:00:00.000Z",
+                "owned_by_student": true,
+                "text_excerpt": "1. A point has no dimension. 2. A line extends forever in both directions."
+              }
+            ]
+          }
+        },
+        {
+          "id": "q-1",
+          "type": "question",
+          "work_type": "MULTIPLE_CHOICE_QUESTION",
+          "title": "Exit ticket: which pair is congruent?",
+          "description": "",
+          "link": "https://classroom.google.com/c/c-geo/a/q-1/details",
+          "topic": "Unit 1: Foundations",
+          "topic_id": "tp-1",
+          "state": "PUBLISHED",
+          "assignee_mode": "ALL_STUDENTS",
+          "assigned_at": "2026-09-11T15:00:00.000Z",
+          "updated_at": "2026-09-11T15:00:00.000Z",
+          "scheduled_at": "",
+          "due": "2026-09-12T06:59:00.000Z",
+          "due_raw": {"date": {"year": 2026, "month": 9, "day": 12}, "time": {"hours": 6, "minutes": 59}},
+          "max_points": 1,
+          "grade_category": null,
+          "submission_modification_mode": "MODIFIABLE_UNTIL_TURNED_IN",
+          "choices": ["Alternate interior", "Same-side interior", "Linear pair"],
+          "materials": [],
+          "submission": {
+            "id": "s-3",
+            "state": "TURNED_IN",
+            "late": false,
+            "turned_in_at": "2026-09-11T22:00:00.000Z",
+            "assigned_grade": null,
+            "draft_grade": null,
+            "course_work_type": "MULTIPLE_CHOICE_QUESTION",
+            "link": "",
+            "created_at": "2026-09-11T15:00:00.000Z",
+            "updated_at": "2026-09-11T22:00:00.000Z",
+            "answer": "Alternate interior",
+            "history": [
+              {"kind": "state", "state": "TURNED_IN", "at": "2026-09-11T22:00:00.000Z"}
+            ],
+            "attachments": []
+          }
+        },
+        {
+          "id": "m-syll",
+          "type": "material",
+          "title": "Syllabus",
+          "description": "",
+          "link": "https://classroom.google.com/c/c-geo/m/m-syll",
+          "topic": "",
+          "topic_id": "",
+          "state": "PUBLISHED",
+          "assignee_mode": "ALL_STUDENTS",
+          "assigned_at": "2026-08-12T15:00:00.000Z",
+          "updated_at": "2026-08-12T15:00:00.000Z",
+          "scheduled_at": "",
+          "materials": [
+            {
+              "kind": "drive",
+              "id": "d-syll",
+              "title": "Geometry Syllabus 26-27",
+              "url": "https://docs.google.com/document/d/d-syll",
+              "mime": "application/vnd.google-apps.document",
+              "share_mode": "VIEW",
+              "modified_at": "2026-08-12T15:00:00.000Z",
+              "owned_by_student": false,
+              "note": "text skipped: time budget"
+            }
+          ]
+        },
+        {
+          "id": "a-9",
+          "type": "announcement",
+          "title": "",
+          "description": "Unit 1 test Thursday. CYU 1.1 through 1.4 are the study guide.",
+          "link": "https://classroom.google.com/c/c-geo/p/a-9",
+          "state": "PUBLISHED",
+          "assignee_mode": "ALL_STUDENTS",
+          "assigned_at": "2026-09-13T15:00:00.000Z",
+          "updated_at": "2026-09-13T15:00:00.000Z",
+          "scheduled_at": "",
+          "materials": []
+        }
+      ]
+    }
+  ],
+  "drive_folders": [
+    {
+      "id": "f-geo",
+      "name": "2 • Geometry • Stadel",
+      "url": "https://drive.google.com/drive/folders/f-geo",
+      "created_at": "2026-08-12T15:00:00.000Z",
+      "current_year": true,
+      "files": [
+        {
+          "id": "d-kid-11",
+          "shortcut_id": "sc-1",
+          "title": "Firstname Lastname - CYU 1.1",
+          "mime": "application/vnd.google-apps.document",
+          "url": "https://docs.google.com/document/d/d-kid-11",
+          "size": null,
+          "created_at": "2026-08-26T15:00:00.000Z",
+          "modified_at": "2026-08-29T03:00:00.000Z",
+          "owned_by_student": true,
+          "readable": true
+        },
+        {
+          "id": "",
+          "shortcut_id": "sc-2",
+          "title": "Group poster",
+          "mime": "",
+          "url": "",
+          "size": null,
+          "created_at": "2026-09-01T15:00:00.000Z",
+          "modified_at": "",
+          "owned_by_student": false,
+          "readable": false
+        }
+      ]
+    },
+    {
+      "id": "f-old",
+      "name": "Old Class 2025",
+      "url": "https://drive.google.com/drive/folders/f-old",
+      "created_at": "2025-08-12T15:00:00.000Z",
+      "current_year": false,
+      "files": []
+    }
+  ],
+  "doc_text": {
+    "total": 3,
+    "with_text": 2,
+    "reused": 1,
+    "failed": 0,
+    "skipped_time_budget": 1,
+    "first_error": ""
+  },
+  "notes": ["rubrics: not exposed by the Classroom service"],
+  "elapsed_ms": 48210
+}

@@ -11,7 +11,8 @@ that plugs into the same data later.
 repo is private to this agent; Worker changes happen in a local Cursor
 session using the endpoint spec below.
 
-**Status:** Planning. Ship in the session order at the bottom.
+**Status:** Phase 1 (Classroom context) live on both kids; kid script frozen
+at v3. Next: study engine (Session F). Ship in the session order at the bottom.
 
 ---
 
@@ -26,6 +27,15 @@ session using the endpoint spec below.
 4. Ship in slices; the dashboard stays usable after each one.
 5. One normalized Classroom shape, whatever the route. Ingestion routes are
    swappable; everything downstream is built once.
+6. **The kid's Apps Script is frozen (v3, Sept 2026).** It is a dump only:
+   it reads everything the student can see about their own work and writes
+   it unprocessed to `classroom_export.json`. Matching to Aeries, Doc text
+   cleanup, briefings, the study engine, and tutoring all live in this repo
+   (`classroom.py`, `scraper.py`, `index.html`) or in `family-data`. A kid
+   re-pastes the script only if (a) Google changes the Classroom API itself,
+   or (b) a data surface the script does not export is wanted. Product
+   iterations never require a re-paste. Before asking a kid to paste, check
+   the export first: the field is probably already there.
 
 ---
 
@@ -425,7 +435,7 @@ Classroom routes; plugs into the study engine when built.
 | **B** (this repo, done) | `classroom.py`: normalized shape, course mapping, item matching, signals, analytics merge, Grok prompt additions, fixtures + tests; `tools/classroom_apps_script.gs` v2 ready to paste |
 | **C** (local, family-data) | Not needed for the Apps Script + Drive route: the export rides inside the student payload the scraper already POSTs. Revisit only if payload size becomes a problem. |
 | **D** (this repo, done) | Assignment row context (state, link, "What it asks"), class panel Classroom block, tonight tag |
-| **E** (this repo, after Phase 0 results) | Whichever route: Apps Script trigger live, or digest parser, or Canvas observer, or bookmarklet |
+| **E** (this repo, done) | Apps Script route live on both kids; script v3 frozen (principle 6), `classroom.py` passes the full v2 export shape through |
 | **F** (this repo) | Study engine |
 | **G** (this repo) | Coach panel and Study tab |
 | **T1, T2** (family-data, then this repo) | Snap & Tutor when wanted |
@@ -479,13 +489,13 @@ Add secret. Delete the downloaded file.
 `GOOGLE_SERVICE_ACCOUNT_JSON`. Service account:
 `classroom-reader@family-classroom.iam.gserviceaccount.com`.
 
-**D. Kid pastes script v2** (each kid, ~5 minutes, school account at
-`script.google.com`):
+**D. Kid pastes the script** (each kid, ~5 minutes, school account at
+`script.google.com`; same steps for every version, v3 is the last one):
 
 D1 Open the project. Open `appsscript.json`, replace everything with
-`tools/appsscript.json` from this repo, Save. (Adds four read-only lines:
-class materials, announcements, topics, and Docs. Nothing that edits or
-sends.)
+`tools/appsscript.json` from this repo, Save. (Read-only lines only:
+courses, coursework, class materials, announcements, topics, rosters
+(teacher names), Drive, email. Nothing that edits or sends.)
 D2 Open `Code.gs`, replace everything with `tools/classroom_apps_script.gs`.
 Edit the top: `STUDENT_SLOT = 1` for the first student on the dashboard,
 `2` for the second; `SHARE_WITH` first entry = parent Gmail (the second
@@ -515,6 +525,38 @@ through: `DocumentApp` does not accept `documents.readonly`. Script v2.1
 exports Doc/Slides text through the Drive advanced service under the existing
 Drive permission instead (no Docs scope at all). Kids re-paste both files
 once (Part D again, same edits at the top).
+
+**E. Script v3, the last paste (Sept 20, 2026).** Both files again (Part D,
+same two edits at the top, trigger unchanged). After this the script is
+frozen under principle 6. What v3 exports beyond v2.1, all read-only, all
+soft-failing into `notes`:
+
+| Surface | Fields | Scope |
+|---------|--------|-------|
+| Course | `description_heading`, `description`, `room`, `state`, `owner_id`, `calendar_id`, `topics[]` | `courses.readonly` (had) |
+| Teachers | `teachers[] {id, name, is_owner}` via `Courses.Teachers.list` only. `Students.list` is never called. | `rosters.readonly` (new, "View your Google Classroom class rosters") |
+| Coursework | `work_type`, `state`, `assignee_mode`, `scheduled_at`, `due_raw`, `grade_category {name, weight}`, `submission_modification_mode`, `choices[]` | `coursework.me.readonly` (had) |
+| Rubrics | `rubric {criteria[] {title, description, levels[] {title, description, points}}}` per coursework item via `CourseWork.Rubrics.list`; one note and off for the run if the account cannot read them | `coursework.me.readonly` (had) |
+| Submissions | `id`, `draft_grade`, `answer` (short answer / multiple choice), `history[]` (state and grade changes with timestamps), `created_at`, `updated_at`, attachments with file ids | `coursework.me.readonly` (had) |
+| Materials, announcements | full pagination, `state`, `assignee_mode`, `scheduled_at`; every attachment carries `id`, `mime`, `share_mode`, `modified_at`, `owned_by_student` | had |
+| Doc/Slides text | `text_excerpt` up to 6000 chars via Drive export; reused from the previous night's file when `modified_at` is unchanged; 4-minute time budget, the rest is marked `text skipped: time budget` | `drive` (had) |
+| Drive index | every `Classroom/<class>/` folder (all years, `current_year` flag) with folder id and per file `id`, `shortcut_id`, `mime`, `url`, `size`, dates, `owned_by_student`, `readable` | `drive` (had) |
+| Sharing | export file and every student-owned file (this year's Drive class folders plus files attached to the student's submissions) shared as viewer with all of `SHARE_WITH` (parent and service account), so `classroom.py` can read Doc text itself through the service account when the in-script export fails | `drive` (had) |
+| Window | `RECENT_DAYS = 400` (whole school year); the dashboard windows it down | |
+
+`classroom.py` keeps every one of these fields (compacted, never dropped):
+`compact_rubric`, `_compact_history`, `_compact_teachers`,
+`compact_drive_folders`, plus `script_version` and `doc_text` stats on the
+block. Fixture: `tests/fixtures/classroom_export_v2_sample.json`, tests in
+`ExportV2ShapeTests`. v1 exports (script v2.x) still load; the v2 keys are
+simply absent.
+
+If the rosters line in `appsscript.json` is unwanted, delete it: teachers
+soft-fail into one note and everything else still exports. Next work that
+does not need a paste: Doc text fetch by the service account for files
+marked `text skipped` or `not readable` (ids and sharing are already
+there), rubric checklist on the assignment row, grade-category weights in
+the study engine, submission history for late-pattern signals.
 
 ---
 

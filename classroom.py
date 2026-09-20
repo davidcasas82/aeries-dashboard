@@ -516,20 +516,125 @@ def match_items_to_assignments(items, assignments, today=None):
 # --------------------------------------------------------------------------- normalize + attach
 
 
+MATERIALS_PER_ITEM = 12
+RUBRIC_CRITERIA_LIMIT = 12
+RUBRIC_TEXT_LIMIT = 300
+HISTORY_LIMIT = 12
+DRIVE_FILES_PER_FOLDER = 80
+# Attachment fields the script exports that we keep verbatim (v2 export shape).
+_MATERIAL_PASSTHROUGH = ("id", "mime", "share_mode", "modified_at", "owned_by_student")
+
+
 def _compact_materials(materials, names):
     out = []
     for m in materials or []:
         title = strip_student_name(m.get("title"), names)
         entry = {"kind": m.get("kind") or "link", "title": title, "url": m.get("url") or ""}
-        if m.get("mime"):
-            entry["mime"] = m["mime"]
+        for key in _MATERIAL_PASSTHROUGH:
+            if m.get(key) not in (None, "", False):
+                entry[key] = m[key]
         if m.get("note"):
             entry["note"] = _clip(m["note"], 120)
         text = (m.get("text_excerpt") or "").strip()
         if text:
             entry["text_excerpt"] = _clip(text, MATERIAL_TEXT_LIMIT)
         out.append(entry)
-    return out[:8]
+    return out[:MATERIALS_PER_ITEM]
+
+
+def compact_rubric(raw):
+    """Criteria and levels only; ids and spreadsheet references are dropped."""
+    if not isinstance(raw, dict):
+        return None
+    criteria = []
+    for c in (raw.get("criteria") or [])[:RUBRIC_CRITERIA_LIMIT]:
+        levels = [
+            {
+                "title": (lv.get("title") or "").strip(),
+                "description": _clip(lv.get("description"), RUBRIC_TEXT_LIMIT),
+                "points": lv.get("points"),
+            }
+            for lv in c.get("levels") or []
+        ]
+        points = [lv["points"] for lv in levels if isinstance(lv.get("points"), (int, float))]
+        criteria.append({
+            "title": (c.get("title") or "").strip(),
+            "description": _clip(c.get("description"), RUBRIC_TEXT_LIMIT),
+            "max_points": max(points) if points else None,
+            "levels": levels,
+        })
+    if not criteria:
+        return None
+    totals = [c["max_points"] for c in criteria if c["max_points"] is not None]
+    return {"criteria": criteria, "max_points": sum(totals) if totals else None}
+
+
+def _compact_history(history):
+    out = []
+    for h in history or []:
+        if not isinstance(h, dict):
+            continue
+        entry = {"kind": h.get("kind") or "", "on": _iso_day(h.get("at")), "at": h.get("at") or ""}
+        if h.get("kind") == "grade":
+            entry["points_earned"] = h.get("points_earned")
+            entry["max_points"] = h.get("max_points")
+            entry["change"] = h.get("change") or ""
+        else:
+            entry["state"] = (h.get("state") or "").upper()
+        out.append(entry)
+    return out[-HISTORY_LIMIT:]
+
+
+def _compact_grade_category(raw):
+    if not isinstance(raw, dict) or not (raw.get("name") or "").strip():
+        return None
+    return {
+        "name": raw["name"].strip(),
+        "weight": raw.get("weight"),
+        "default_denominator": raw.get("default_denominator"),
+    }
+
+
+def _compact_teachers(raw):
+    out = []
+    for t in raw or []:
+        if not isinstance(t, dict):
+            continue
+        name = (t.get("name") or "").strip()
+        if not name:
+            continue
+        out.append({"name": name, "is_owner": bool(t.get("is_owner"))})
+    return out
+
+
+def compact_drive_folders(raw, names):
+    """The Drive Classroom/ index: enough to find and re-read a file later, no student names."""
+    out = []
+    for folder in raw or []:
+        if not isinstance(folder, dict):
+            continue
+        files = []
+        for f in (folder.get("files") or [])[:DRIVE_FILES_PER_FOLDER]:
+            if not isinstance(f, dict):
+                continue
+            entry = {
+                "id": f.get("id") or "",
+                "title": strip_student_name(f.get("title"), names),
+                "mime": f.get("mime") or "",
+                "url": f.get("url") or "",
+                "modified_at": f.get("modified_at") or "",
+                "owned_by_student": bool(f.get("owned_by_student")),
+            }
+            files.append(entry)
+        out.append({
+            "id": folder.get("id") or "",
+            "name": strip_student_name(folder.get("name"), names),
+            "url": folder.get("url") or "",
+            "created_at": folder.get("created_at") or "",
+            "current_year": folder.get("current_year"),
+            "files": files,
+        })
+    return out
 
 
 def _drive_text_stats(courses):
@@ -584,6 +689,21 @@ def normalize_item(raw, names, today):
         "materials": _compact_materials(raw.get("materials"), names),
         "aeries_match": None,
     }
+    # v2 export fields: kept as-is when present, absent otherwise, so v1 exports
+    # and fixtures keep working.
+    for key in ("work_type", "state", "assignee_mode", "submission_modification_mode"):
+        if raw.get(key):
+            item[key] = raw[key]
+    if raw.get("scheduled_at"):
+        item["scheduled_on"] = _iso_day(raw["scheduled_at"])
+    category = _compact_grade_category(raw.get("grade_category"))
+    if category:
+        item["grade_category"] = category
+    if raw.get("choices"):
+        item["choices"] = [str(c) for c in raw["choices"]][:12]
+    rubric = compact_rubric(raw.get("rubric"))
+    if rubric:
+        item["rubric"] = rubric
     if due_date and today is not None:
         item["days_until_due"] = (due_date - today.date()).days
     if sub:
@@ -595,6 +715,14 @@ def normalize_item(raw, names, today):
             "assigned_grade": sub.get("assigned_grade"),
             "attachments": _compact_materials(sub.get("attachments"), names),
         }
+        if sub.get("draft_grade") is not None:
+            item["submission"]["draft_grade"] = sub["draft_grade"]
+        if sub.get("answer") not in (None, ""):
+            item["submission"]["answer"] = _clip(str(sub["answer"]), EXCERPT_LIMIT)
+        if sub.get("history"):
+            item["submission"]["history"] = _compact_history(sub["history"])
+        if sub.get("updated_at"):
+            item["submission"]["updated_on"] = _iso_day(sub["updated_at"])
     return item
 
 
@@ -619,6 +747,11 @@ def _assignment_link_payload(item):
             {"kind": m.get("kind"), "title": m.get("title"), "url": m.get("url")}
             for m in item.get("materials") or []
         ][:5],
+        "grade_category": (item.get("grade_category") or {}).get("name") or "",
+        "rubric": [
+            {"title": c.get("title"), "max_points": c.get("max_points")}
+            for c in (item.get("rubric") or {}).get("criteria") or []
+        ][:8],
     }
     return {k: v for k, v in payload.items() if v not in ("", None, [], False) or k in ("state", "late")}
 
@@ -657,6 +790,23 @@ def attach_classroom(student_data, export, today, assignments_for_class, overrid
             "aeries_course_name": (cm.get("course_name") or "").strip() if cm else "",
             "items": items,
         }
+        # v2 export fields, passed through when the script sent them.
+        if raw.get("room"):
+            course["room"] = str(raw["room"]).strip()
+        if raw.get("description_heading"):
+            course["description_heading"] = _clip(raw["description_heading"], 200)
+        if raw.get("description"):
+            course["description"] = _clip(raw["description"], EXCERPT_LIMIT)
+        teachers = _compact_teachers(raw.get("teachers"))
+        if teachers:
+            course["teachers"] = teachers
+        topics = [
+            {"id": str(t.get("id") or ""), "name": (t.get("name") or "").strip()}
+            for t in raw.get("topics") or []
+            if isinstance(t, dict) and (t.get("name") or "").strip()
+        ]
+        if topics:
+            course["topics"] = topics[:40]
         if cm:
             assignments = assignments_for_class(student_data, cm)
             for i, j in match_items_to_assignments(items, assignments, today).items():
@@ -673,20 +823,42 @@ def attach_classroom(student_data, export, today, assignments_for_class, overrid
     block = {
         "source": export.get("source") or "classroom_apps_script",
         "export_version": export.get("export_version"),
+        "script_version": export.get("script_version") or "",
         "captured_at": export.get("captured_at") or "",
         "courses": courses_out,
         "unmatched_courses": unmatched,
-        "notes": list(export.get("notes") or [])[:10],
+        "notes": [_clip(n, 200) for n in export.get("notes") or []][:10],
     }
+    drive_folders = compact_drive_folders(export.get("drive_folders"), names)
+    if drive_folders:
+        block["drive_folders"] = drive_folders
+    doc_text = export.get("doc_text")
+    if isinstance(doc_text, dict):
+        block["doc_text"] = {
+            k: doc_text.get(k)
+            for k in ("total", "with_text", "reused", "failed", "skipped_time_budget")
+            if doc_text.get(k) is not None
+        }
     student_data["classroom"] = block
     print(
         f"  Classroom: {len(courses_out)} courses ({len(courses_out) - len(unmatched)} mapped to Aeries), "
         f"{matched_items} items matched to gradebook rows"
+        + (f", script v{block['script_version']}" if block["script_version"] else "")
     )
     if unmatched:
         print(f"  Classroom: unmapped courses: {', '.join(unmatched)}")
     total, with_text, unreadable = _drive_text_stats(courses_out)
     print(f"  Classroom: {total} Drive files on items, {with_text} with text, {unreadable} flagged unreadable")
+    if block.get("doc_text"):
+        dt = block["doc_text"]
+        print(
+            f"  Classroom: script read text for {dt.get('with_text', 0)} of {dt.get('total', 0)} files "
+            f"({dt.get('reused', 0)} reused, {dt.get('skipped_time_budget', 0)} skipped for time, "
+            f"{dt.get('failed', 0)} failed)"
+        )
+    if drive_folders:
+        n_files = sum(len(f.get("files") or []) for f in drive_folders)
+        print(f"  Classroom: Drive index has {len(drive_folders)} class folders, {n_files} files")
     for note in block["notes"][:3]:
         print(f"  Classroom: export note: {_clip(note, 160)}")
     return block
@@ -796,6 +968,13 @@ def class_context(student_data, class_meta, today, assignments=None):
             "max_points": item.get("max_points"),
             "instructions": _clip(item.get("instructions"), EXCERPT_LIMIT),
         }
+        if item.get("rubric"):
+            entry["rubric"] = [
+                {"title": c.get("title"), "max_points": c.get("max_points")}
+                for c in item["rubric"].get("criteria") or []
+            ][:8]
+        if item.get("grade_category"):
+            entry["grade_category"] = item["grade_category"].get("name") or ""
         classroom_only.append(entry)
         if days is not None and 0 <= days <= 2 and (sub.get("state") or "") in NOT_STARTED_STATES:
             not_started_due_soon.append({"title": item.get("title"), "days_until_due": days})
@@ -804,6 +983,7 @@ def class_context(student_data, class_meta, today, assignments=None):
     return {
         "course_name": course.get("name") or "",
         "link": course.get("link") or "",
+        "teachers": [t.get("name") for t in course.get("teachers") or []],
         "captured_at": block.get("captured_at") or "",
         "classroom_only": classroom_only[:12],
         "turned_in_aeries_missing": turned_in_aeries_missing,
@@ -826,6 +1006,7 @@ def grok_context(context):
                 "days_until_due": e.get("days_until_due"),
                 "state_label": e.get("state_label"),
                 "instructions": _clip(e.get("instructions"), 300),
+                **({"rubric_criteria": [c.get("title") for c in e["rubric"]][:6]} if e.get("rubric") else {}),
             }
             for e in context.get("classroom_only") or []
         ][:6],
