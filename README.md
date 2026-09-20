@@ -2,7 +2,7 @@
 
 A static parent dashboard for Tustin USD Aeries grades, live at [the same URL](https://davidcasas82.github.io/aeries-dashboard/). A GitHub Action logs into the parent portal, then POSTs `grades_data.json` / history to `family-data`. The page unlocks with the household PIN.
 
-Python precomputes facts (missing work, tonight’s list, urgency, trends). Grok only writes the briefing from those facts.
+Python precomputes facts (missing work, tonight’s list, urgency, trends). The 4–6 sentence parent memo at the top of the page is computed from those facts at scrape time (`briefing.py`, no model); Grok only writes the per-class lines.
 
 ## Local preview
 
