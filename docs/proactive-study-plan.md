@@ -502,6 +502,20 @@ If a Classroom course does not map to an Aeries class (log shows fewer
 mapped than expected), add `classroom_map.json` at the repo root:
 `{"<classroom course id>": <aeries period>}`. Course ids are in the export.
 
+**First real run (Sept 20, 2026):** both exports found (11 and 10 courses).
+Kid 1 mapped 8/11 (unmapped: counseling, a 2025 course, and "Intro to
+Spanish" which the rescue pass now maps to Span 1). Kid 2 mapped 6/10;
+"Period 8" (World History) and "26-27 Marketing, Advertising & Graphic
+Design" (Mkt Adv GrphDes) were missed and now map (period-only match counts,
+abbreviation matching). Item matching was too strict for real titles
+("LT 1.4" vs "A2- LT 1.4 Practice (HW)", "Aug. 24-28:" prefixes, Aeries due
+dates batch-entered weeks later); it now compares codes and words separately
+and gives agreeing codes 30 days of due-date slack. Zero Doc text came
+through: `DocumentApp` does not accept `documents.readonly`. Script v2.1
+exports Doc/Slides text through the Drive advanced service under the existing
+Drive permission instead (no Docs scope at all). Kids re-paste both files
+once (Part D again, same edits at the top).
+
 ---
 
 ## Open decisions (defaults chosen; change them here)
