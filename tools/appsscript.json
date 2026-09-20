@@ -6,6 +6,11 @@
         "userSymbol": "Classroom",
         "version": "v1",
         "serviceId": "classroom"
+      },
+      {
+        "userSymbol": "Drive",
+        "version": "v3",
+        "serviceId": "drive"
       }
     ]
   },
@@ -15,7 +20,6 @@
     "https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly",
     "https://www.googleapis.com/auth/classroom.announcements.readonly",
     "https://www.googleapis.com/auth/classroom.topics.readonly",
-    "https://www.googleapis.com/auth/documents.readonly",
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/userinfo.email"
   ],
