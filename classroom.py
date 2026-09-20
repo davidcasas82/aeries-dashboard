@@ -42,7 +42,16 @@ UPCOMING_WINDOW_DAYS = 14
 RECENT_WINDOW_DAYS = 7
 
 _STOP_TOKENS = {"the", "of", "and", "a", "an", "to", "for", "in", "on", "with", "&", "-"}
-_TITLE_NOISE = {"hw", "homework", "assignment", "worksheet", "ws", "pg", "pgs", "p", "pp", "due"}
+_TITLE_NOISE = {
+    "hw", "homework", "assignment", "worksheet", "ws", "pg", "pgs", "p", "pp", "due",
+    "submit", "submission", "form", "practice", "packet", "page", "pages",
+}
+# Words that only carry a number ("LT 1.4", "Unit 2") are compared as codes, not words.
+_CODE_WORDS = {"lt", "unit", "lesson", "ch", "chapter", "section", "sec", "mc", "cyu"}
+
+COURSE_MATCH_THRESHOLD = 2.5
+COURSE_RESCUE_THRESHOLD = 0.75
+ITEM_MATCH_THRESHOLD = 0.6
 
 
 # --------------------------------------------------------------------------- fetch
@@ -283,39 +292,71 @@ def score_course_match(course, class_meta):
     if len(last) >= 3 and re.search(rf"\b{re.escape(last)}\b", text_l):
         score += 3
 
+    # A period is unique inside one student's schedule, so a period match alone
+    # ("Period 8" with nothing else in the name) is enough to map.
     period = _as_int(class_meta.get("period"))
     cp = classroom_period(course)
     if period is not None and cp is not None:
-        score += 2 if cp == period else -2
+        score += COURSE_MATCH_THRESHOLD if cp == period else -COURSE_MATCH_THRESHOLD
 
     a_toks = [t for t in _tokens(class_meta.get("course_name")) if not t.isdigit() or len(t) > 1]
-    c_toks = set(_tokens(text))
+    c_toks = [t for t in _tokens(text)]
     if a_toks:
         hits = 0
         for t in a_toks:
-            if t in c_toks:
-                hits += 1
-                continue
-            if len(t) >= 3 and any(
-                (c.startswith(t) or t.startswith(c)) and min(len(c), len(t)) >= 3 for c in c_toks
-            ):
-                hits += 0.7
+            hits += _token_hit(t, c_toks)
         score += 2.5 * hits / len(a_toks)
     return round(score, 2)
 
 
+def _is_abbreviation(short, long):
+    """'mkt' → 'marketing', 'grphdes' → 'graphicdesign': same first letter, in-order subsequence."""
+    if len(short) < 3 or len(short) >= len(long) or short[0] != long[0]:
+        return False
+    pos = 0
+    for ch in short:
+        pos = long.find(ch, pos)
+        if pos < 0:
+            return False
+        pos += 1
+    return True
+
+
+def _token_hit(aeries_token, classroom_tokens):
+    """1 for an exact token, 0.85 for an Aeries abbreviation of one or two Classroom words, 0.7 for a prefix."""
+    t = aeries_token
+    if t in classroom_tokens:
+        return 1.0
+    if len(t) < 3:
+        return 0.0
+    for idx, c in enumerate(classroom_tokens):
+        if (c.startswith(t) or t.startswith(c)) and min(len(c), len(t)) >= 3:
+            return 0.7
+        if _is_abbreviation(t, c):
+            return 0.85
+        if idx + 1 < len(classroom_tokens) and _is_abbreviation(t, c + classroom_tokens[idx + 1]):
+            return 0.85
+    return 0.0
+
+
 def map_courses_to_classes(courses, classes, overrides=None):
-    """Return {course_id: class_meta} using overrides (course_id -> period) then scoring."""
+    """Return {course_id: class_meta} using overrides (course_id -> period) then scoring.
+
+    Pass 1 takes confident matches (teacher name, period, or a clear name match).
+    Pass 2 rescues a leftover course that is the only weak candidate for the only
+    leftover Aeries class it resembles ("Intro to Spanish" → "Span 1 (IVC)").
+    """
     overrides = overrides or {}
     by_period = {}
-    for c in classes or []:
+    real_classes = [c for c in classes or [] if (c.get("course_name") or "").strip()]
+    for c in real_classes:
         p = _as_int(c.get("period"))
-        if p is not None and (c.get("course_name") or "").strip():
+        if p is not None:
             by_period.setdefault(p, c)
 
     mapping = {}
     taken = set()
-    candidates = []
+    scores = {}
     for course in courses or []:
         cid = str(course.get("id") or "")
         forced = overrides.get(cid)
@@ -323,14 +364,30 @@ def map_courses_to_classes(courses, classes, overrides=None):
             mapping[cid] = by_period[_as_int(forced)]
             taken.add(id(mapping[cid]))
             continue
-        for cm in classes or []:
-            if not (cm.get("course_name") or "").strip():
-                continue
-            s = score_course_match(course, cm)
-            if s >= 2.5:
-                candidates.append((s, cid, cm))
-    for s, cid, cm in sorted(candidates, key=lambda x: -x[0]):
+        for cm in real_classes:
+            scores[(cid, id(cm))] = (score_course_match(course, cm), cid, cm)
+
+    confident = [v for v in scores.values() if v[0] >= COURSE_MATCH_THRESHOLD]
+    for s, cid, cm in sorted(confident, key=lambda x: -x[0]):
         if cid in mapping or id(cm) in taken:
+            continue
+        mapping[cid] = cm
+        taken.add(id(cm))
+
+    leftovers = [
+        v for v in scores.values()
+        if v[1] not in mapping and id(v[2]) not in taken and v[0] >= COURSE_RESCUE_THRESHOLD
+    ]
+    by_course = {}
+    by_class = {}
+    for s, cid, cm in leftovers:
+        by_course.setdefault(cid, []).append((s, cm))
+        by_class.setdefault(id(cm), []).append((s, cid))
+    for cid, cands in by_course.items():
+        if len(cands) != 1:
+            continue
+        s, cm = cands[0]
+        if len(by_class.get(id(cm)) or []) != 1 or id(cm) in taken:
             continue
         mapping[cid] = cm
         taken.add(id(cm))
@@ -350,18 +407,81 @@ def load_course_overrides(path=None):
 # --------------------------------------------------------------------------- item matching
 
 
+_DATE_PREFIX_RE = re.compile(
+    r"^\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s*"
+    r"\d{1,2}(?:\s*[-–]\s*\d{1,2})?(?:\s*[-–]\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s*\d{1,2})?"
+    r"\s*[:\-–]\s*",
+    re.I,
+)
+_DECIMAL_CODE_RE = re.compile(r"(?<![\w.])(\d+\.\d+[a-z]?)(?![\w.])")
+_KEYWORD_CODE_RE = re.compile(
+    r"\b(" + "|".join(sorted(_CODE_WORDS)) + r")\s*[-:]?\s*#?\s*(\d+(?:\.\d+)?[a-z]?)\b", re.I
+)
+_HASH_CODE_RE = re.compile(r"#\s*(\d+)")
+
+
+def clean_title(title):
+    """Drop 'Aug. 24-28:'-style prefixes teachers put on Classroom titles."""
+    return _DATE_PREFIX_RE.sub("", title or "").strip()
+
+
+def title_codes(title):
+    """Identifiers inside a title: '1.4', 'lt1.4', 'unit2', '#1'. These beat words."""
+    text = (title or "").lower()
+    codes = set(_DECIMAL_CODE_RE.findall(text))
+    for word, num in _KEYWORD_CODE_RE.findall(text):
+        codes.add(f"{word}{num}")
+    for num in _HASH_CODE_RE.findall(text):
+        codes.add(f"#{num}")
+    return codes
+
+
+def _title_words(title):
+    words = [
+        t for t in _tokens(clean_title(title), drop_noise=True)
+        if not t.isdigit() and t not in _CODE_WORDS
+        # "1a", "lt2", "a2": short code-like tokens, not words
+        and not re.fullmatch(r"\d+[a-z]|[a-z]{1,3}\d+[a-z]?", t)
+    ]
+    return set(words)
+
+
 def title_similarity(a, b):
-    ta, tb = set(_tokens(a, drop_noise=True)), set(_tokens(b, drop_noise=True))
-    if not ta or not tb:
-        ta, tb = set(_tokens(a)), set(_tokens(b))
-    if not ta or not tb:
-        return 0.0
-    inter = ta & tb
-    if not inter:
-        return 0.0
-    if ta <= tb or tb <= ta:
-        return max(0.75, 2 * len(inter) / (len(ta) + len(tb)))
-    return 2 * len(inter) / (len(ta) + len(tb))
+    """0..1 similarity of two assignment titles.
+
+    Words are compared as sets; codes ('LT 1.4', '#2') must agree when both
+    titles have them, and agreeing codes lift a partial word match.
+    """
+    ca, cb = title_codes(a), title_codes(b)
+    codes_agree = bool(ca & cb)
+    codes_clash = bool(ca and cb and not codes_agree)
+
+    wa, wb = _title_words(a), _title_words(b)
+    if wa and wb:
+        inter = wa & wb
+        sim = 2 * len(inter) / (len(wa) + len(wb)) if inter else 0.0
+        if inter and (wa <= wb or wb <= wa):
+            sim = max(sim, 0.75)
+    elif not wa and not wb:
+        sim = 0.85 if codes_agree else 0.0
+    else:
+        # One side is only a code ("LT 1.8"); the other has words too.
+        sim = 0.85 if codes_agree else 0.0
+
+    if codes_clash:
+        sim *= 0.5
+    elif codes_agree and wa and wb:
+        sim = min(0.95, sim + 0.15)
+    return round(sim, 3)
+
+
+def _allowed_gap_days(sim, codes_agree):
+    """Aeries due dates are often batch-entered weeks after Classroom's, so codes buy slack."""
+    if codes_agree:
+        return 30
+    if sim >= 0.8:
+        return 7
+    return 3
 
 
 def match_items_to_assignments(items, assignments, today=None):
@@ -373,17 +493,18 @@ def match_items_to_assignments(items, assignments, today=None):
         i_due = due_to_pacific_date(item.get("due"))
         for j, a in enumerate(assignments or []):
             sim = title_similarity(item.get("title"), a.get("description"))
-            if sim < 0.6:
+            if sim < ITEM_MATCH_THRESHOLD:
                 continue
+            codes_agree = bool(title_codes(item.get("title")) & title_codes(a.get("description")))
             a_due = _aeries_date(a.get("due_date"))
             gap = abs((i_due - a_due).days) if (i_due and a_due) else None
-            if gap is not None and gap > 3 and sim < 0.9:
+            if gap is not None and gap > _allowed_gap_days(sim, codes_agree) and sim < 0.9:
                 continue
             if gap is None and sim < 0.75:
                 continue
-            pairs.append((sim, -(gap or 0), i, j))
+            pairs.append((sim, gap if gap is not None else 99, i, j))
     used_i, used_j, out = set(), set(), {}
-    for sim, _neg_gap, i, j in sorted(pairs, key=lambda p: (-p[0], p[1])):
+    for sim, gap, i, j in sorted(pairs, key=lambda p: (-p[0], p[1])):
         if i in used_i or j in used_j:
             continue
         used_i.add(i)
@@ -400,11 +521,33 @@ def _compact_materials(materials, names):
     for m in materials or []:
         title = strip_student_name(m.get("title"), names)
         entry = {"kind": m.get("kind") or "link", "title": title, "url": m.get("url") or ""}
+        if m.get("mime"):
+            entry["mime"] = m["mime"]
+        if m.get("note"):
+            entry["note"] = _clip(m["note"], 120)
         text = (m.get("text_excerpt") or "").strip()
         if text:
             entry["text_excerpt"] = _clip(text, MATERIAL_TEXT_LIMIT)
         out.append(entry)
     return out[:8]
+
+
+def _drive_text_stats(courses):
+    """(drive files, with text, flagged unreadable) across every item and submission."""
+    total = with_text = unreadable = 0
+    for course in courses or []:
+        for item in course.get("items") or []:
+            mats = list(item.get("materials") or [])
+            mats += list(((item.get("submission") or {}).get("attachments")) or [])
+            for m in mats:
+                if m.get("kind") != "drive":
+                    continue
+                total += 1
+                if m.get("text_excerpt"):
+                    with_text += 1
+                if m.get("note"):
+                    unreadable += 1
+    return total, with_text, unreadable
 
 
 def instructions_for(item):
@@ -540,6 +683,12 @@ def attach_classroom(student_data, export, today, assignments_for_class, overrid
         f"  Classroom: {len(courses_out)} courses ({len(courses_out) - len(unmatched)} mapped to Aeries), "
         f"{matched_items} items matched to gradebook rows"
     )
+    if unmatched:
+        print(f"  Classroom: unmapped courses: {', '.join(unmatched)}")
+    total, with_text, unreadable = _drive_text_stats(courses_out)
+    print(f"  Classroom: {total} Drive files on items, {with_text} with text, {unreadable} flagged unreadable")
+    for note in block["notes"][:3]:
+        print(f"  Classroom: export note: {_clip(note, 160)}")
     return block
 
 
