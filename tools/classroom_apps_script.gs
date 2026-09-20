@@ -34,7 +34,7 @@ const SHARE_WITH = [
   'parent@example.com',
   'classroom-reader@family-classroom.iam.gserviceaccount.com',
 ];
-const SCRIPT_VERSION = '3.0';
+const SCRIPT_VERSION = '3.1';
 const EXPORT_VERSION = 2;
 const SCHOOL_YEAR_START = new Date('2026-08-01');
 const EXPORT_FOLDER = 'Family dashboard';
@@ -473,8 +473,10 @@ function fileMeta_(id, run) {
   return meta;
 }
 
+// alt=media is required or the Drive service returns only metadata
+// ("Export requires alt=media to download the exported content").
 function exportText_(id, mime) {
-  const res = Drive.Files.export(id, TEXT_EXPORTS[mime]);
+  const res = Drive.Files.export(id, TEXT_EXPORTS[mime], { alt: 'media' });
   if (typeof res === 'string') return res;
   if (res && typeof res.getDataAsString === 'function') return res.getDataAsString();
   if (res && typeof res.getBlob === 'function') return res.getBlob().getDataAsString();
