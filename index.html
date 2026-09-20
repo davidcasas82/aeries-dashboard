@@ -389,6 +389,24 @@
             font-weight: 500;
         }
 
+        /* The computed parent memo: 4–6 plain sentences, first one carries the weight. */
+        .masthead-memo {
+            font-size: var(--fs-body);
+            line-height: 1.45;
+            color: var(--text);
+            max-width: 40em;
+            text-wrap: pretty;
+        }
+
+        .masthead-memo .memo-lead {
+            font-weight: 650;
+            letter-spacing: -0.2px;
+        }
+
+        .masthead-memo .memo-rest {
+            color: var(--text-2);
+        }
+
         .masthead-tonight {
             margin-top: 12px;
             padding: 14px 16px;
@@ -1456,7 +1474,8 @@
                 margin-bottom: 0;
             }
 
-            .masthead:has(.masthead-tonight) .masthead-headline {
+            .masthead:has(.masthead-tonight) .masthead-headline,
+            .masthead:has(.masthead-tonight) .masthead-memo {
                 grid-column: 1;
             }
 
@@ -2869,6 +2888,26 @@
             return hasScheduledClasses(student) && !hasPostedWork(student);
         }
 
+        // Sentences of the computed memo (view.memo). Older payloads that still carry
+        // the one-line model headline fall back to it so the card is never blank.
+        function memoSentences(student) {
+            const memo = student && student.view && student.view.memo;
+            if (memo && Array.isArray(memo.sentences)) {
+                const out = memo.sentences.map(t => String(t || '').trim()).filter(Boolean);
+                if (out.length) return out;
+            }
+            const legacy = student && student.ai_summary && (student.ai_summary.headline || student.ai_summary.status);
+            return legacy ? [String(legacy).trim()] : [];
+        }
+
+        function renderMemo(sentences) {
+            const [lead, ...rest] = sentences;
+            let html = `<p class="masthead-memo"><span class="memo-lead">${esc(lead)}</span>`;
+            if (rest.length) html += ` <span class="memo-rest">${rest.map(esc).join(' ')}</span>`;
+            html += `</p>`;
+            return html;
+        }
+
         function renderMasthead(student, idx, profiles) {
             const s = student.ai_summary;
             const scheduleOnly = isScheduleOnly(student);
@@ -2913,27 +2952,31 @@
                 return html;
             }
 
+            // The memo is written by the scraper from the same facts as the rest of the
+            // page (briefing.py). It is rendered as-is: no rewriting on the client.
+            const memo = memoSentences(student);
+            const memoStamp = (student.view && student.view.memo && student.view.memo.generated_at)
+                || (s && s.generated_at) || '';
+            const dateStr = memoStamp
+                ? new Date(memoStamp).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                : '';
+
             // Schedules posted, no real grades yet
             if (scheduleOnly) {
-                const dateStr = (s && s.generated_at)
-                    ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-                    : '';
                 const n = (student.classes || []).filter(c => (c.course_name || '').trim()).length;
-                let headline = (s && s.headline) ? String(s.headline).trim() : '';
-                if (!headline || /school year is out|no current classes or missing work/i.test(headline)) {
-                    headline = `Schedules are up (${n} classes) — no grades posted yet.`;
-                }
                 let html = `<div class="masthead" id="hero-card-${idx}">`;
                 html += `<div class="masthead-kicker"><h2>Briefing</h2>`;
                 if (dateStr) html += `<span class="masthead-date">${dateStr}</span>`;
                 html += `</div>`;
-                html += `<div class="masthead-headline">${esc(headline)}</div>`;
+                html += memo.length
+                    ? renderMemo(memo)
+                    : `<div class="masthead-headline">Schedules are up (${n} classes) — no grades posted yet.</div>`;
                 html += attendanceHtml;
                 html += `</div>`;
                 return html;
             }
 
-            if (!s) {
+            if (!memo.length && !s) {
                 return `<div class="masthead" id="hero-card-${idx}">
                     <div class="masthead-kicker"><h2>Briefing</h2></div>
                     <div class="masthead-headline muted">No briefing yet</div>
@@ -2942,59 +2985,11 @@
                 </div>`;
             }
 
-            const dateStr = s.generated_at
-                ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-                : '';
-            let headline = (s.headline || s.status || '').trim();
-            // Guard against old bad empty-term headlines once grades exist
-            if (/no classes or missing work listed|mixed or stable performance/i.test(headline) && emptyTerm) {
-                headline = 'School year is out — no current classes or missing work in the portal.';
-            }
-            const headlineNamesStaleTonight = (profiles || []).some(p =>
-                (p.assignments || []).some(a =>
-                    a.description && headline.indexOf(a.description) !== -1
-                    && isPastDueUngraded(a)
-                    && !tonightItems.some(i => i.name === a.description)
-                )
-            );
-            if (headlineNamesStaleTonight) {
-                const first = tonightItems[0];
-                const phrase = first && first.status === 'tomorrow' ? 'is due tomorrow'
-                    : first && first.status === 'overdue' ? 'is still missing'
-                    : 'is due today';
-                if (tonightItems.length === 1) {
-                    headline = `${first.name} ${phrase} in ${first.className}.`;
-                } else if (tonightItems.length > 1) {
-                    headline = `Heads up: ${focus}.`;
-                } else if (s.wins && s.wins[0]) {
-                    headline = s.wins[0];
-                } else {
-                    headline = '';
-                }
-            }
-            const allAssignments = [];
-            for (const p of profiles || []) {
-                allAssignments.push(...(p.assignments || []));
-            }
-            headline = rewriteStaleDueCopy(headline, { assignments: allAssignments, missing: (profiles || []).flatMap(p => p.missing || []) });
-            if ((profiles || []).some(p => isPhantomZero(p.classMeta, p.assignments))) {
-                headline = rewritePhantomZeroCopy(headline);
-            }
-            const awaitingOnly = (profiles || []).some(p => (p.awaitingCount || (p.awaiting || []).length) > 0 && !p.missingCount);
-            const anyMissing = (profiles || []).some(p => p.missingCount > 0);
-            if (awaitingOnly && !anyMissing) {
-                headline = headline
-                    .replace(/\bwith two overdue assignments\b/i, 'with work awaiting a teacher score')
-                    .replace(/\bwith an overdue assignment\b/i, 'with work awaiting a teacher score')
-                    .replace(/\btwo overdue assignments\b/i, 'two assignments awaiting a score')
-                    .replace(/\boverdue assignments\b/i, 'assignments awaiting a score');
-            }
-
             let html = `<div class="masthead" id="hero-card-${idx}">`;
             html += `<div class="masthead-kicker"><h2>Briefing</h2>`;
             if (dateStr) html += `<span class="masthead-date">${dateStr}</span>`;
             html += `</div>`;
-            if (headline) html += `<div class="masthead-headline">${esc(headline)}</div>`;
+            if (memo.length) html += renderMemo(memo);
 
             if (tonightItems.length) {
                 html += renderTonightCard(tonightItems, idx);
@@ -3005,9 +3000,11 @@
                 </div>`;
             }
 
-            const wins = (student.view && student.view.wins && student.view.wins.length)
+            // The memo already names the wins with their scores; the check-lines only
+            // show for payloads that predate it.
+            const wins = memo.length ? [] : ((student.view && student.view.wins && student.view.wins.length)
                 ? student.view.wins
-                : (s.wins || []);
+                : ((s && s.wins) || []));
             if (wins.length) {
                 html += `<div class="masthead-wins">`;
                 wins.slice(0, 2).forEach(win => {
@@ -3017,7 +3014,7 @@
             }
 
             // Legacy schemas
-            if (!s.classes) {
+            if (s && !s.classes) {
                 if (s.whats_happened && s.whats_happened.length) {
                     html += `<div class="masthead-wins" style="margin-top:10px">`;
                     s.whats_happened.slice(0, 3).forEach(item => {

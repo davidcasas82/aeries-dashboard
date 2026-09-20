@@ -12,6 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
+import briefing
 import classroom
 
 load_dotenv()
@@ -2611,6 +2612,17 @@ def snapshot_missing_names(class_analytics_entry):
     return names
 
 
+def _briefing_recap(student_data):
+    """What the family was told last time: the computed memo plus the tonight label."""
+    memo = ((student_data or {}).get("view") or {}).get("memo") or {}
+    ai = (student_data or {}).get("ai_summary") or {}
+    text = (memo.get("text") or "").strip()
+    focus = (ai.get("focus_tonight") or ((student_data or {}).get("view") or {}).get("tonight_label") or "").strip()
+    if not text and not focus:
+        return None
+    return {"memo": text, "focus_tonight": focus}
+
+
 def build_student_snapshot(student_data, class_analytics_list, captured_at=None):
     """Compact daily snapshot for one student."""
     now = captured_at or datetime.now(timezone.utc)
@@ -2644,13 +2656,7 @@ def build_student_snapshot(student_data, class_analytics_list, captured_at=None)
             "missing_names": snapshot_missing_names(c),
             "aeries_trend": trend.get("direction") if isinstance(trend, dict) else None,
         }
-    prev_brief = None
-    ai = student_data.get("ai_summary") or {}
-    if ai.get("headline") or ai.get("focus_tonight"):
-        prev_brief = {
-            "headline": (ai.get("headline") or "").strip(),
-            "focus_tonight": (ai.get("focus_tonight") or "").strip(),
-        }
+    prev_brief = _briefing_recap(student_data)
     snap = {
         "date": date_str,
         "captured_at": now.isoformat() if hasattr(now, "isoformat") else str(now),
@@ -2763,14 +2769,9 @@ def build_history_context(student_sn, student_data, class_analytics_list, histor
         if snap.get("previous_briefing"):
             previous_briefing = snap["previous_briefing"]
             break
-    # Prefer last stored ai_summary if regenerating same day without snapshot field
+    # Prefer last stored briefing if regenerating same day without snapshot field
     if not previous_briefing:
-        ai = student_data.get("ai_summary") or {}
-        if ai.get("headline") or ai.get("focus_tonight"):
-            previous_briefing = {
-                "headline": (ai.get("headline") or "").strip(),
-                "focus_tonight": (ai.get("focus_tonight") or "").strip(),
-            }
+        previous_briefing = _briefing_recap(student_data)
 
     target_7 = today.fromordinal(today.toordinal() - 7)
     target_14 = today.fromordinal(today.toordinal() - 14)
@@ -3915,13 +3916,15 @@ def build_student_view(student_data, history_context=None):
             ),
         })
 
+    class_contexts = {c["course_name"]: c.get("classroom") for c in classes_out if c.get("classroom")}
+    memo = briefing.build_parent_memo(analytics, student_data, today, class_contexts=class_contexts)
     return {
         "tonight": tonight.get("items") or [],
         "tonight_label": (tonight.get("label") or "").strip(),
-        "headline": (ai.get("headline") or "").strip(),
+        "memo": memo,
         "wins": list(ai.get("wins") or [])[:2],
         "classes": classes_out,
-        "generated_at": ai.get("generated_at"),
+        "generated_at": memo.get("generated_at") or ai.get("generated_at"),
         "classroom_captured_at": ((student_data.get("classroom") or {}).get("captured_at") or ""),
     }
 
@@ -3962,22 +3965,10 @@ def count_scheduled_classes(student_data):
 
 def empty_term_summary(student_data):
     """Static briefing when the portal has no meaningful grades (summer or pre-grade week)."""
-    student_name = student_data.get("name", "the student")
     scheduled = count_scheduled_classes(student_data)
-    if scheduled > 0:
-        headline = (
-            f"Schedules are up for {student_name} ({scheduled} classes) — "
-            f"no grades or missing work posted yet."
-        )
-        theme = "schedule_only"
-    else:
-        headline = (
-            f"School year is out — the portal has no current classes or missing work "
-            f"for {student_name}."
-        )
-        theme = "empty_term"
+    theme = "schedule_only" if scheduled > 0 else "empty_term"
+    # The memo (briefing.py, via the view) carries the parent-facing sentence.
     return {
-        "headline": headline,
         "focus_tonight": "",
         "wins": [],
         "classes": [],
@@ -4160,41 +4151,9 @@ def sanitize_briefing_copy(summary, analytics):
     for ca in by_name.values():
         all_entries.extend(iter_analytics_assignments(ca))
 
-    headline = summary.get("headline") or ""
-    headline = rewrite_stale_due_copy(headline, all_entries)
-    if any_phantom:
-        headline = rewrite_phantom_zero_copy(headline)
-    pending_only = any(
-        (ca.get("awaiting_count") or 0) > 0 and not (ca.get("missing_assignments") or [])
-        for ca in by_name.values()
-    )
-    missing_any = any(ca.get("missing_assignments") for ca in by_name.values())
-    if pending_only and not missing_any:
-        headline = re.sub(
-            r"\bwith two overdue assignments\b",
-            "with work awaiting a teacher score",
-            headline,
-            flags=re.I,
-        )
-        headline = re.sub(
-            r"\bwith an overdue assignment\b",
-            "with work awaiting a teacher score",
-            headline,
-            flags=re.I,
-        )
-        headline = re.sub(
-            r"\btwo overdue assignments\b",
-            "two assignments awaiting a score",
-            headline,
-            flags=re.I,
-        )
-        headline = re.sub(
-            r"\boverdue assignments\b",
-            "assignments awaiting a score",
-            headline,
-            flags=re.I,
-        )
-    summary["headline"] = headline
+    # The top-of-page memo is computed in briefing.py; older payloads may still
+    # carry a model headline and it is simply dropped.
+    summary.pop("headline", None)
 
     wins = []
     for win in summary.get("wins") or []:
@@ -4301,7 +4260,7 @@ def generate_ai_summary(student_data, history_context=None):
 
     now_pt = pacific_now()
     today_label = now_pt.strftime("%A, %B %d, %Y")
-    system_prompt = f"""You write the daily briefing a parent reads in 10 seconds on a phone or car screen. One output. {student_name}'s family may all see it. Facts at a glance — not a coaching script.
+    system_prompt = f"""You write the per-class lines a parent reads in 10 seconds on a phone or car screen. One output. {student_name}'s family may all see it. Facts at a glance — not a coaching script. The top-of-page memo is written separately from the same facts; you do not write it.
 
 Today is {today_label} (Pacific). Due dates in PRECOMPUTED_ANALYTICS already use Pacific time. Trust due_label / due_state / days_overdue / days_until_due. Never call something overdue or "yesterday" unless days_overdue >= 1 or due_state is overdue. Due today is not missing.
 
@@ -4319,8 +4278,7 @@ DATA SCOPE
 - Do not invent week-scale stories unless history.delta_7d / trend_label is present.
 
 PARENT SKIM (this is the job)
-- Headline: one sentence — what needs attention, plus one real win if there is one. Not a roster of every class. A WHY clause is welcome when a precomputed flag explains it.
-- If coverage.classes_with_portal_work is much smaller than coverage.scheduled_classes, add a short clause that most classes have no work posted yet (normal early in the term). Do not treat silence as all-clear, and do not panic about empty gradebooks.
+- Do not treat silence as all-clear, and do not panic about empty gradebooks.
 - focus_tonight: copy tonight_plan.label exactly (empty if tonight_plan.items is empty). Due today beats missing beats due tomorrow. pending_grade is submitted/awaiting a teacher score — not tonight, not missing. Anything with turned_in true was handed in (usually in class) and is never a to-do.
 - Most of this work happens in class. Missing means only what the Aeries portal itself flags; a blank score is not missing and not homework.
 - Awaiting score is not missing. Never count pending_grade items (awaiting_count) in any missing total or missing points; only missing_assignments are missing. If a pending_grade item is stale (10+ days), at most say it is worth asking the teacher about.
@@ -4335,7 +4293,6 @@ VOICE
 
 Respond ONLY with valid JSON matching this exact schema:
 {{
-  "headline": "ONE sentence a parent can skim",
   "focus_tonight": "Named assignment(s) + class; empty if nothing due today/tomorrow or Aeries-flagged missing",
   "wins": ["0–2 short genuine positives with evidence"],
   "classes": [
@@ -4357,7 +4314,7 @@ Urgency (match suggested_urgency unless you have a strong reason not to — driv
 
 Rules:
 - Include EVERY class from analytics.classes (not the full 9-period schedule)
-- If analytics.classes is empty: headline says no posted work yet — do not invent status
+- If analytics.classes is empty: classes is an empty list — do not invent status
 - Order classes: critical → watch → ok → strong
 - ok/strong: leave do_tonight empty
 - critical/watch: do_tonight is that class's tonight_plan item; empty if the class is not in tonight_plan
@@ -4395,6 +4352,8 @@ Rules:
         result = resp.json()
         content = result["choices"][0]["message"]["content"]
         summary = json.loads(content)
+        # The memo is computed (briefing.py); a stray one-liner from the model is dropped.
+        summary.pop("headline", None)
         # Strip any legacy parent/student coaching fields if the model still emits them
         for cls in summary.get("classes") or []:
             if isinstance(cls, dict):
@@ -4672,6 +4631,8 @@ def scrape_all():
             snap_source = dict(student_data)
             if prior.get("ai_summary"):
                 snap_source["ai_summary"] = prior["ai_summary"]
+            if prior.get("view"):
+                snap_source["view"] = prior["view"]
             snapshot = build_student_snapshot(snap_source, class_list)
             upsert_student_snapshot(
                 history, student["sn"], student["name"], snapshot

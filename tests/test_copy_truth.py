@@ -258,7 +258,8 @@ class StaleCopyRewriteTests(unittest.TestCase):
             ],
         }
         out = scraper.sanitize_briefing_copy(summary, analytics)
-        self.assertNotIn("at 0%", out["headline"])
+        # The one-sentence model headline is gone; the memo is computed in briefing.py.
+        self.assertNotIn("headline", out)
         self.assertNotIn("due Wed", out["classes"][1]["snap"])
         self.assertIn("5/5", out["classes"][1]["snap"])
         self.assertNotIn("0%", out["classes"][0]["story"])
