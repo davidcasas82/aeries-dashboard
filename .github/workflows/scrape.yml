@@ -56,6 +56,8 @@ jobs:
           STUDENT_2_SCHOOL_CODE: ${{ secrets.STUDENT_2_SCHOOL_CODE }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
           FAMILY_PIN: ${{ secrets.FAMILY_PIN }}
+          # Read-only Drive access to the kids' classroom_export.json (see docs/proactive-study-plan.md)
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           FAMILY_DATA_URL: https://family-data.davidcasas.workers.dev
           PYTHONUNBUFFERED: "1"
           # Optional override only. Leave unset to auto-pause from TUSD school calendar
