@@ -104,6 +104,50 @@ class CourseMappingTests(unittest.TestCase):
         )
         self.assertEqual(mapping["c-club"]["course_name"], "Biology")
 
+    def test_maps_real_schedule_shapes(self):
+        classes = [
+            {"period": 0, "course_name": "Bus of Gaming", "teacher": "Licciardo, D"},
+            {"period": 1, "course_name": "Mkt Adv GrphDes", "teacher": "Chung, L"},
+            {"period": 2, "course_name": "Engineering Geo", "teacher": "Stadel, A"},
+            {"period": 3, "course_name": "COMM 1 (IVC)", "teacher": "ROP, &"},
+            {"period": 4, "course_name": "PE Course 1", "teacher": "Gray-Burrell, T"},
+            {"period": 5, "course_name": "Eng 9 Entre", "teacher": "McCarty Ku, A"},
+            {"period": 6, "course_name": "Tech of Biology", "teacher": "Johnson, D"},
+            {"period": 7, "course_name": "Point Break", "teacher": "Healey, M"},
+            {"period": 8, "course_name": "WrldHis by Dsgn", "teacher": "Healey, M"},
+        ]
+        courses = [
+            {"id": "pe", "name": "Period 4 - Coach Gray's PE Class", "section": "9th Grade - High School"},
+            {"id": "mkt", "name": "26-27 Marketing, Advertising & Graphic Design", "section": ""},
+            {"id": "eng", "name": "Eng 9 Entre - McCarty Ku - 5", "section": "5"},
+            {"id": "p8", "name": "Period 8", "section": "8"},
+            {"id": "geo", "name": "2 • Geometry • Stadel", "section": "2"},
+            {"id": "bio", "name": "Tech of Biology - Johnson - 6", "section": "6"},
+            {"id": "pb", "name": "Healey - 7", "section": "7"},
+            {"id": "bog", "name": "Bus of Gaming - Licciardo - 0", "section": "0"},
+            {"id": "scuba", "name": "SCUBA Leaders 2026-27", "section": ""},
+            {"id": "code", "name": "Coding Quarter 2", "section": ""},
+        ]
+        mapping = classroom.map_courses_to_classes(courses, classes)
+        got = {cid: cm["period"] for cid, cm in mapping.items()}
+        self.assertEqual(
+            got, {"pe": 4, "mkt": 1, "eng": 5, "p8": 8, "geo": 2, "bio": 6, "pb": 7, "bog": 0}
+        )
+
+    def test_rescues_unique_weak_match(self):
+        classes = [
+            {"period": 2, "course_name": "Span 1 (IVC)", "teacher": "ROP, &"},
+            {"period": 4, "course_name": "US Hist Media", "teacher": "Healey, M"},
+        ]
+        courses = [
+            {"id": "sp", "name": "Intro to Spanish", "section": ""},
+            {"id": "p4", "name": "Period 4", "section": "4"},
+            {"id": "lma", "name": "LMA Counseling", "section": ""},
+            {"id": "old", "name": "2025 Marketing, Advertising & Graphic Design", "section": ""},
+        ]
+        mapping = classroom.map_courses_to_classes(courses, classes)
+        self.assertEqual({cid: cm["period"] for cid, cm in mapping.items()}, {"sp": 2, "p4": 4})
+
     def test_one_aeries_class_per_course(self):
         classes = [
             {"period": 1, "course_name": "Spanish 2", "teacher": "Ruiz"},
@@ -144,6 +188,47 @@ class TextAndDateTests(unittest.TestCase):
     def test_title_similarity(self):
         self.assertGreaterEqual(classroom.title_similarity("Section 3.2 Practice", "3.2 Practice"), 0.75)
         self.assertLess(classroom.title_similarity("DBQ Outline", "Unit 3 Quiz Review"), 0.6)
+
+    def test_title_similarity_on_real_teacher_titles(self):
+        sim = classroom.title_similarity
+        # Date prefixes and "LT x.y -" prefixes are noise; the words match.
+        self.assertGreaterEqual(
+            sim("Aug. 24-28: Adobe Illustrator - Poster About Myself",
+                "LT 1.1 - Poster of Myself in Adobe Illustrator"), 0.8)
+        # Codes decide between #1 and #2.
+        self.assertGreaterEqual(
+            sim("Sept. 2-9: Multiview Sketching Practice #1", "Multiview Sketching Practice #1"), 0.9)
+        self.assertLess(
+            sim("Sept. 2-9: Multiview Sketching Practice #1", "Multiview Sketching Practice #2"), 0.6)
+        # A code-only Aeries title matches the Classroom item carrying that code.
+        self.assertGreaterEqual(sim("A2- LT 1.8 packet page 17-19 + pg 16 bottom half", "LT 1.8"), 0.8)
+        self.assertLess(sim("A2- LT 1.8 packet page 17-19 + pg 16 bottom half", "LT 1.7"), 0.6)
+        self.assertGreaterEqual(sim("Submit CYU • 1.1 • Geometry Definitions", "1.1 Definitions"), 0.8)
+        self.assertLess(sim("Submit CYU • 1.3 • Transversal & Parallel Lines",
+                            "1.3a Prove Vertical Angles are Congruent"), 0.6)
+        self.assertGreaterEqual(sim("Mini Golf Course Design Submission Form", "Mini Golf Course Design"), 0.9)
+        self.assertGreaterEqual(sim("Anatomy of a Game", "Anatomy of a Great Game"), 0.75)
+        self.assertGreaterEqual(sim("Unit 2 Socratic Seminar Prep", "LT1 & LT2 Unit 2 Socratic Seminar"), 0.8)
+        self.assertLess(sim("Gym Etiquette and Push, Pull, Legs Quiz", "Weight Room Rules Quiz"), 0.6)
+
+    def test_codes_buy_due_date_slack(self):
+        items = [
+            {"type": "assignment", "title": "Submit CYU • 1.1 • Geometry Definitions", "due": "2026-08-29"},
+            {"type": "assignment", "title": "Submit CYU • 1.3 • Transversal & Parallel Lines", "due": "2026-09-05"},
+        ]
+        rows = [
+            {"description": "1.1 Definitions", "due_date": "09/09/2026"},
+            {"description": "1.3a Prove Vertical Angles are Congruent", "due_date": "09/09/2026"},
+        ]
+        self.assertEqual(classroom.match_items_to_assignments(items, rows), {0: 0})
+
+    def test_closest_due_date_wins_a_tie(self):
+        items = [{"type": "assignment", "title": "Sept. 2-9: Multiview Sketching Practice #1", "due": "2026-09-09"}]
+        rows = [
+            {"description": "Multiview Sketching Practice #2", "due_date": "09/11/2026"},
+            {"description": "Multiview Sketching Practice #1", "due_date": "09/09/2026"},
+        ]
+        self.assertEqual(classroom.match_items_to_assignments(items, rows), {0: 1})
 
 
 class AttachTests(unittest.TestCase):
