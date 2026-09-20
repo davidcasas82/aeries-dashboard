@@ -1197,6 +1197,43 @@
         }
         .rebuild-debug p { margin-top: 4px; line-height: 1.4; }
 
+        /* ── Google Classroom context (from the kid's nightly export) ── */
+        .assn-classroom {
+            font-size: var(--fs-label);
+            color: var(--text-3);
+            margin-top: 2px;
+            line-height: 1.4;
+        }
+        .assn-classroom.turned-in { color: var(--teal); }
+        .assn-classroom.late { color: var(--amber); }
+        .assn-classroom a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+        .assn-instructions {
+            margin-top: 4px;
+            font-size: var(--fs-label);
+            color: var(--text-3);
+        }
+        .assn-instructions summary { cursor: pointer; font-weight: 550; color: var(--text-3); }
+        .assn-instructions p {
+            margin-top: 4px;
+            line-height: 1.45;
+            color: var(--text-2);
+            white-space: pre-line;
+        }
+        .classroom-note {
+            font-size: var(--fs-small);
+            color: var(--text-2);
+            line-height: 1.45;
+        }
+        .classroom-note + .classroom-note { margin-top: 6px; }
+        .classroom-note.catch-up { color: var(--teal); }
+        .classroom-announcement {
+            font-size: var(--fs-label);
+            color: var(--text-3);
+            line-height: 1.45;
+            margin-top: 6px;
+        }
+        .classroom-announcement .when { color: var(--text-3); margin-right: 6px; }
+
         .panel-block .assignment-row:first-of-type { padding-top: 0; }
         .panel-block .list-panel { margin-top: 0; }
 
@@ -2008,8 +2045,14 @@
         }
 
         // Aeries stamps Date Completed when work was handed in — usually in class.
+        function isTurnedInOnClassroom(a) {
+            const state = a && a.classroom && a.classroom.state;
+            return state === 'TURNED_IN' || state === 'RETURNED';
+        }
+
+        // Handed in per Aeries, or per the kid's Classroom export. Either way it is not a to-do.
         function isTurnedIn(a) {
-            return !!(a && String(a.date_completed || '').trim()) || !!(a && a.turned_in);
+            return !!(a && String(a.date_completed || '').trim()) || !!(a && a.turned_in) || isTurnedInOnClassroom(a);
         }
 
         function isDueInDaysUngraded(a, days) {
@@ -2182,6 +2225,8 @@
         }
 
         function inferAssignmentStatus(a, insight) {
+            // Classroom-only rows have no Aeries score to reason about; the stamp shows their state.
+            if (a.classroom_only) return { status: 'pending', label: '' };
             const code = scoreStatusCode(a);
             if (code) return { status: code.toLowerCase(), label: code };
             // Blank score: decide here rather than trusting an older payload's "counts" label.
@@ -2566,6 +2611,8 @@
                 for (const p of profiles || []) {
                     const cn = (p.classMeta && p.classMeta.course_name) || '';
                     if (item.className && normalizeName(cn) !== normalizeName(item.className)) continue;
+                    // Classroom-only work has no Aeries row; it still belongs to this class's panel.
+                    if (item.source === 'classroom' && row.period == null) row.period = p.period;
                     hit = (p.assignments || []).find(a => a.description === item.name);
                     if (!hit) continue;
                     hitProfile = p;
@@ -2596,6 +2643,7 @@
                 const sub = [
                     st.text ? `<span class="status ${st.cls}">${esc(st.text)}</span>` : '',
                     item.className ? esc(item.className) : '',
+                    item.source === 'classroom' ? 'posted in Classroom' : '',
                 ].filter(Boolean).join(' · ');
                 const linkable = item.period != null;
                 const tag = linkable ? 'button' : 'div';
@@ -2833,6 +2881,7 @@
                     period: i.period,
                     status: i.status || tonightStatusFromReason(i.reason),
                     dueDate: i.due_date,
+                    source: i.source || '',
                 }))
                 : null;
             // The live pick from the (already rule-checked) profiles is the source of truth; payload
@@ -3120,9 +3169,91 @@
                         <div class="title">${esc(a.description || '')}</div>
                         ${metaLine}
                         ${comment ? `<div class="assignment-meta">${esc(comment)}</div>` : ''}
+                        ${renderClassroomStamp(a, kind)}
                     </div>
                     <div class="assignment-score">${scoreHtml}</div>
                 </div>`;
+        }
+
+        // What the kid's Classroom says about this row: turn-in state, link, and the
+        // teacher's instructions. Aeries stays the grade of record; this is context.
+        function renderClassroomStamp(a, kind) {
+            const cr = a.classroom;
+            if (!cr || typeof cr !== 'object') return '';
+            const turnedIn = cr.state === 'TURNED_IN' || cr.state === 'RETURNED';
+            const parts = [];
+            let cls = '';
+            if (cr.state_label) {
+                let label = cr.state_label;
+                if (turnedIn && cr.turned_in_on) {
+                    const d = new Date(`${cr.turned_in_on}T12:00:00`);
+                    label += ` ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+                }
+                if (cr.late) label += ' (late)';
+                parts.push(esc(label));
+                cls = cr.late ? 'late' : (turnedIn ? 'turned-in' : '');
+            }
+            if (turnedIn && kind === 'missing') {
+                parts.push('Aeries has not caught up yet');
+            }
+            if (cr.link) {
+                parts.push(`<a href="${esc(cr.link)}" target="_blank" rel="noopener">Open in Classroom</a>`);
+            }
+            let html = parts.length ? `<div class="assn-classroom ${cls}">${parts.join(' · ')}</div>` : '';
+            const text = (cr.instructions || '').trim();
+            if (text) {
+                html += `<details class="assn-instructions">
+                    <summary>What it asks</summary>
+                    <p>${esc(text)}</p>
+                </details>`;
+            }
+            return html;
+        }
+
+        function renderClassroomBlock(profile) {
+            const cr = profile.classroom;
+            if (!cr || typeof cr !== 'object') return '';
+            const only = cr.classroom_only || [];
+            const catchUp = cr.turned_in_aeries_missing || [];
+            const announcements = cr.announcements || [];
+            if (!only.length && !catchUp.length && !announcements.length && !cr.link) return '';
+
+            let inner = '';
+            if (catchUp.length) {
+                const names = catchUp.map(e => esc(e.title || '')).filter(Boolean).join(', ');
+                inner += `<div class="classroom-note catch-up">Turned in on Classroom, Aeries still shows missing: ${names}.</div>`;
+            }
+            if (only.length) {
+                const rows = only.map(e => ({
+                    description: e.title || '',
+                    due_date: e.due_date || '',
+                    category: e.type === 'question' ? 'Classroom question' : 'Classroom',
+                    points_possible: e.max_points,
+                    points_earned: null,
+                    classroom_only: true,
+                    classroom: {
+                        state: e.state,
+                        state_label: e.state_label,
+                        link: e.link,
+                        instructions: e.instructions,
+                    },
+                }));
+                inner += `<div class="classroom-note">Posted in Classroom, not in Aeries yet.</div>
+                    ${renderAssignmentList(rows, 'upcoming', null)}`;
+            }
+            for (const a of announcements.slice(0, 2)) {
+                const when = a.posted_on
+                    ? new Date(`${a.posted_on}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    : '';
+                inner += `<div class="classroom-announcement">${when ? `<span class="when">${esc(when)}</span>` : ''}${esc(a.text || '')}</div>`;
+            }
+            const link = cr.link
+                ? `<span class="label-note"><a href="${esc(cr.link)}" target="_blank" rel="noopener">Open class</a></span>`
+                : '';
+            return `<div class="panel-block">
+                <div class="panel-block-label">Classroom${link}</div>
+                ${inner}
+            </div>`;
         }
 
         function formatPostedGrade(c, assignments) {
@@ -3267,6 +3398,8 @@
                     <div class="panel-story">${esc(storyText)}</div>
                 </div>`;
             }
+
+            blocks += renderClassroomBlock(profile);
 
             blocks += renderCountedInsight(c, profile.assignments);
 
@@ -3545,6 +3678,7 @@
                         : (row.stale_awaiting_count || 0),
                     newlyMissing: row.newly_missing || [],
                     period: row.period,
+                    classroom: row.classroom || null,
                 };
                 const aiClass = normalizeAiClass({
                     snap: row.snap,

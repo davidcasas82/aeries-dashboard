@@ -1,0 +1,159 @@
+{
+  "export_version": 1,
+  "student_slot": 1,
+  "captured_at": "2026-09-14T05:10:00.000Z",
+  "source": "classroom_apps_script",
+  "courses": [
+    {
+      "id": "c-alg",
+      "name": "P5- Alg 2 Byun Period 5",
+      "section": "Period 5",
+      "room": "",
+      "link": "https://classroom.google.com/c/c-alg",
+      "items": [
+        {
+          "id": "w-32",
+          "type": "assignment",
+          "title": "Section 3.2 Practice",
+          "description": "Complete problems 1-20 odd. Show all work for solving systems by substitution.",
+          "link": "https://classroom.google.com/c/c-alg/a/w-32/details",
+          "topic": "Unit 3: Systems",
+          "assigned_at": "2026-09-08T16:00:00.000Z",
+          "updated_at": "2026-09-09T16:00:00.000Z",
+          "due": "2026-09-11T06:59:00.000Z",
+          "max_points": 20,
+          "materials": [
+            {
+              "kind": "drive",
+              "id": "d-rubric",
+              "title": "3.2 Rubric",
+              "url": "https://docs.google.com/document/d/d-rubric",
+              "mime": "application/vnd.google-apps.document",
+              "text_excerpt": "Rubric: 2 pts per problem. Work shown = 1 pt, correct answer = 1 pt."
+            }
+          ],
+          "submission": {
+            "state": "TURNED_IN",
+            "late": false,
+            "turned_in_at": "2026-09-11T02:15:00.000Z",
+            "assigned_grade": null,
+            "link": "",
+            "attachments": [
+              {
+                "kind": "drive",
+                "id": "d-kid",
+                "title": "Firstname Lastname - Section 3.2 Practice",
+                "url": "https://docs.google.com/document/d/d-kid",
+                "mime": "application/vnd.google-apps.document",
+                "text_excerpt": "1) x = 3, y = 4 ..."
+              }
+            ]
+          }
+        },
+        {
+          "id": "w-quiz",
+          "type": "assignment",
+          "title": "Unit 3 Quiz Review",
+          "description": "Finish the review packet before Friday's quiz.",
+          "link": "https://classroom.google.com/c/c-alg/a/w-quiz/details",
+          "topic": "Unit 3: Systems",
+          "assigned_at": "2026-09-13T16:00:00.000Z",
+          "updated_at": "2026-09-13T16:00:00.000Z",
+          "due": "2026-09-16T06:59:00.000Z",
+          "max_points": 10,
+          "materials": [],
+          "submission": {
+            "state": "CREATED",
+            "late": false,
+            "turned_in_at": "",
+            "assigned_grade": null,
+            "link": "",
+            "attachments": []
+          }
+        },
+        {
+          "id": "w-old",
+          "type": "assignment",
+          "title": "Syllabus signature",
+          "description": "",
+          "link": "https://classroom.google.com/c/c-alg/a/w-old/details",
+          "topic": "",
+          "assigned_at": "2026-08-12T16:00:00.000Z",
+          "updated_at": "2026-08-12T16:00:00.000Z",
+          "due": "2026-08-14T06:59:00.000Z",
+          "max_points": null,
+          "materials": [],
+          "submission": {
+            "state": "NEW",
+            "late": false,
+            "turned_in_at": "",
+            "assigned_grade": null,
+            "link": "",
+            "attachments": []
+          }
+        },
+        {
+          "id": "a-1",
+          "type": "announcement",
+          "title": "",
+          "description": "Quiz Friday covers 3.1-3.3. Bring a calculator.",
+          "link": "https://classroom.google.com/c/c-alg/p/a-1",
+          "assigned_at": "2026-09-12T20:00:00.000Z",
+          "updated_at": "2026-09-12T20:00:00.000Z",
+          "materials": []
+        },
+        {
+          "id": "m-1",
+          "type": "material",
+          "title": "Unit 3 notes",
+          "description": "",
+          "link": "https://classroom.google.com/c/c-alg/m/m-1",
+          "topic": "Unit 3: Systems",
+          "assigned_at": "2026-09-08T16:00:00.000Z",
+          "updated_at": "2026-09-08T16:00:00.000Z",
+          "materials": []
+        }
+      ]
+    },
+    {
+      "id": "c-hist",
+      "name": "US Hist Media - Healey - 4 4",
+      "section": "",
+      "room": "",
+      "link": "https://classroom.google.com/c/c-hist",
+      "items": [
+        {
+          "id": "w-dbq",
+          "type": "assignment",
+          "title": "DBQ Outline",
+          "description": "Outline your thesis and three body paragraphs using the documents packet.",
+          "link": "https://classroom.google.com/c/c-hist/a/w-dbq/details",
+          "topic": "Unit 2",
+          "assigned_at": "2026-09-09T16:00:00.000Z",
+          "updated_at": "2026-09-09T16:00:00.000Z",
+          "due": "2026-09-12T06:59:00.000Z",
+          "max_points": 15,
+          "materials": [],
+          "submission": {
+            "state": "TURNED_IN",
+            "late": true,
+            "turned_in_at": "2026-09-12T19:00:00.000Z",
+            "assigned_grade": null,
+            "link": "",
+            "attachments": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "c-club",
+      "name": "Robotics Club",
+      "section": "",
+      "room": "",
+      "link": "https://classroom.google.com/c/c-club",
+      "items": []
+    }
+  ],
+  "drive_folders": [],
+  "notes": []
+}
