@@ -3915,6 +3915,7 @@ def build_student_view(student_data, history_context=None):
             ),
         })
 
+    classroom_block = student_data.get("classroom") or {}
     return {
         "tonight": tonight.get("items") or [],
         "tonight_label": (tonight.get("label") or "").strip(),
@@ -3922,7 +3923,9 @@ def build_student_view(student_data, history_context=None):
         "wins": list(ai.get("wins") or [])[:2],
         "classes": classes_out,
         "generated_at": ai.get("generated_at"),
-        "classroom_captured_at": ((student_data.get("classroom") or {}).get("captured_at") or ""),
+        "classroom_captured_at": (classroom_block.get("captured_at") or ""),
+        "classroom_year": classroom_block.get("school_year") or "",
+        "classroom_unmatched": list(classroom_block.get("unmatched_courses") or []),
     }
 
 

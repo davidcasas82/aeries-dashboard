@@ -1233,6 +1233,165 @@
             margin-top: 6px;
         }
         .classroom-announcement .when { color: var(--text-3); margin-right: 6px; }
+        .classroom-announcement a,
+        .classroom-material a,
+        .classroom-drive a,
+        .classroom-file a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+        .row-topic,
+        .row-classroom {
+            font-size: var(--fs-label);
+            font-weight: 650;
+            color: var(--teal);
+            background: var(--teal-wash);
+            padding: 3px 9px;
+            border-radius: 999px;
+            flex-shrink: 0;
+            white-space: nowrap;
+            max-width: 16em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .row-classroom {
+            color: var(--text-2);
+            background: rgba(40, 40, 35, 0.07);
+        }
+
+        .classroom-teachers {
+            font-size: var(--fs-small);
+            color: var(--text-2);
+            line-height: 1.4;
+            margin-bottom: 6px;
+        }
+        .classroom-topics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 0 0 8px;
+        }
+        .classroom-chip {
+            display: inline-block;
+            font-size: var(--fs-label);
+            font-weight: 650;
+            color: var(--teal);
+            background: var(--teal-wash);
+            padding: 3px 9px;
+            border-radius: 999px;
+        }
+        .classroom-subhead {
+            font-size: var(--fs-label);
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-3);
+            margin: 10px 0 4px;
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .classroom-material,
+        .classroom-file {
+            font-size: var(--fs-small);
+            color: var(--text-2);
+            line-height: 1.4;
+            padding: 3px 0;
+        }
+        .classroom-material .when,
+        .classroom-own {
+            color: var(--text-3);
+            margin-left: 8px;
+            font-size: var(--fs-label);
+            font-weight: 550;
+        }
+        .classroom-drive {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .classroom-drive li {
+            font-size: var(--fs-small);
+            color: var(--text-2);
+            line-height: 1.4;
+            padding: 3px 0;
+        }
+        .classroom-rubric {
+            margin-top: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .classroom-criterion {
+            border-top: 1px solid var(--border);
+            padding-top: 6px;
+        }
+        .classroom-criterion-title {
+            font-size: var(--fs-small);
+            font-weight: 650;
+            color: var(--text);
+        }
+        .classroom-criterion-title .pts {
+            color: var(--text-3);
+            font-weight: 550;
+            margin-left: 6px;
+        }
+        .classroom-levels {
+            font-size: var(--fs-label);
+            color: var(--text-3);
+            line-height: 1.4;
+            margin-top: 2px;
+        }
+        .classroom-history {
+            list-style: none;
+            margin: 8px 0 0;
+            padding: 0;
+        }
+        .classroom-history li {
+            font-size: var(--fs-label);
+            color: var(--text-2);
+            line-height: 1.4;
+            padding: 2px 0;
+        }
+        .classroom-history .when { color: var(--text-3); margin-right: 6px; }
+        .classroom-answer,
+        .classroom-grade-note {
+            font-size: var(--fs-small);
+            color: var(--text-2);
+            margin-top: 6px;
+        }
+        .classroom-excerpt {
+            margin-top: 4px;
+            font-size: var(--fs-label);
+            color: var(--text-2);
+            line-height: 1.45;
+            white-space: pre-line;
+        }
+        .classroom-unmatched {
+            margin-top: 16px;
+            padding: 14px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-card);
+        }
+        .classroom-unmatched h2 {
+            font-size: var(--fs-small);
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-3);
+            margin-bottom: 6px;
+        }
+        .classroom-unmatched .count {
+            text-transform: none;
+            letter-spacing: 0;
+            font-weight: 650;
+        }
+        .classroom-unmatched p {
+            font-size: var(--fs-small);
+            color: var(--text-2);
+            line-height: 1.45;
+        }
 
         .panel-block .assignment-row:first-of-type { padding-top: 0; }
         .panel-block .list-panel { margin-top: 0; }
@@ -3175,8 +3334,147 @@
                 </div>`;
         }
 
-        // What the kid's Classroom says about this row: turn-in state, link, and the
-        // teacher's instructions. Aeries stays the grade of record; this is context.
+        // What the kid's Classroom says about this row: turn-in state, topic,
+        // rubric, materials, Doc excerpts, and submission history. Aeries stays
+        // the grade of record; this is context. The tonight briefing memo is
+        // owned by a separate change — do not rewrite it here.
+        function classroomWeightPct(weight) {
+            if (weight == null || weight === '') return '';
+            const w = Number(weight);
+            if (!Number.isFinite(w)) return '';
+            const pct = w > 100 ? Math.round(w / 10000) : Math.round(w);
+            return `${pct}%`;
+        }
+
+        function formatClassroomDay(iso) {
+            if (!iso) return '';
+            const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
+            if (Number.isNaN(d.getTime())) return '';
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        function formatClassroomYear(id) {
+            const m = String(id || '').match(/^(20\d{2})-(\d{2})$/);
+            return m ? `${m[1]}–${m[2]}` : String(id || '');
+        }
+
+        function classroomKindLabel(kind) {
+            const k = String(kind || '').toLowerCase();
+            if (k === 'drive') return 'Doc';
+            if (k === 'youtube') return 'Video';
+            if (k === 'form') return 'Form';
+            if (k === 'link') return 'Link';
+            return kind || 'File';
+        }
+
+        function classroomHistoryLabel(h) {
+            if (!h || typeof h !== 'object') return '';
+            if (h.kind === 'grade') {
+                const pts = h.points_earned != null
+                    ? `${h.points_earned}${h.max_points != null ? '/' + h.max_points : ''}`
+                    : 'Graded';
+                return `Graded ${pts}`;
+            }
+            const labels = {
+                TURNED_IN: 'Turned in',
+                RETURNED: 'Returned',
+                CREATED: 'Assigned',
+                NEW: 'Assigned',
+                RECLAIMED_BY_STUDENT: 'Unsubmitted',
+            };
+            const state = (h.state || '').toUpperCase();
+            return labels[state] || (state || h.kind || '').replace(/_/g, ' ').toLowerCase();
+        }
+
+        function renderClassroomMaterials(items, heading) {
+            if (!items || !items.length) return '';
+            let html = heading ? `<div class="classroom-subhead">${esc(heading)}</div>` : '';
+            for (const m of items) {
+                const kind = classroomKindLabel(m.kind);
+                const title = (m.title || kind || 'File').trim();
+                const name = m.url
+                    ? `<a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(title)}</a>`
+                    : esc(title);
+                const own = m.owned_by_student ? '<span class="classroom-own">their copy</span>' : '';
+                html += `<div class="classroom-file">${esc(kind)} · ${name}${own}</div>`;
+                if (m.text_excerpt) {
+                    html += `<details class="assn-instructions">
+                        <summary>Doc excerpt</summary>
+                        <p>${esc(m.text_excerpt)}</p>
+                    </details>`;
+                } else if (m.note) {
+                    html += `<div class="classroom-note">${esc(m.note)}</div>`;
+                }
+            }
+            return html;
+        }
+
+        function renderClassroomRubric(criteria) {
+            if (!criteria || !criteria.length) return '';
+            const rows = criteria.map(c => {
+                const pts = c.max_points != null ? `<span class="pts">${esc(String(c.max_points))} pts</span>` : '';
+                const levels = (c.levels || []).map(lv => {
+                    const bit = [lv.title, lv.points != null ? `${lv.points} pts` : '', lv.description]
+                        .filter(Boolean).join(' · ');
+                    return esc(bit);
+                }).filter(Boolean);
+                return `<div class="classroom-criterion">
+                    <div class="classroom-criterion-title">${esc(c.title || 'Criterion')}${pts}</div>
+                    ${c.description ? `<div class="classroom-levels">${esc(c.description)}</div>` : ''}
+                    ${levels.length ? `<div class="classroom-levels">${levels.join(' · ')}</div>` : ''}
+                </div>`;
+            }).join('');
+            return `<div class="classroom-subhead">Rubric</div><div class="classroom-rubric">${rows}</div>`;
+        }
+
+        function renderClassroomHistory(history) {
+            if (!history || !history.length) return '';
+            const rows = history.map(h => {
+                const when = formatClassroomDay(h.on || (h.at || '').slice(0, 10));
+                const label = classroomHistoryLabel(h);
+                if (!label) return '';
+                return `<li>${when ? `<span class="when">${when}</span>` : ''}${esc(label)}</li>`;
+            }).filter(Boolean).join('');
+            if (!rows) return '';
+            return `<div class="classroom-subhead">Submission</div><ul class="classroom-history">${rows}</ul>`;
+        }
+
+        function renderClassroomAssignmentBody(cr) {
+            const instructions = (cr.instructions || '').trim();
+            const rubric = cr.rubric || [];
+            const materials = cr.materials || [];
+            const attachments = cr.attachments || [];
+            const history = cr.history || [];
+            const answer = (cr.answer || '').trim();
+            const hasGrade = cr.assigned_grade != null || cr.draft_grade != null;
+            const hasDetail = instructions || rubric.length || materials.length
+                || attachments.length || history.length || answer || hasGrade;
+            if (!hasDetail) return '';
+            const onlyAsk = instructions && !rubric.length && !materials.length
+                && !attachments.length && !history.length && !answer && !hasGrade;
+            let inner = '';
+            if (instructions) inner += `<p class="classroom-excerpt">${esc(instructions)}</p>`;
+            if (answer) inner += `<div class="classroom-answer">Answer: ${esc(answer)}</div>`;
+            if (hasGrade) {
+                const bits = [];
+                if (cr.assigned_grade != null) {
+                    bits.push(`Classroom grade ${cr.assigned_grade}${cr.max_points != null ? ' / ' + cr.max_points : ''}`);
+                }
+                if (cr.draft_grade != null && cr.draft_grade !== cr.assigned_grade) {
+                    bits.push(`draft ${cr.draft_grade}`);
+                }
+                if (bits.length) inner += `<div class="classroom-grade-note">${esc(bits.join(' · '))}</div>`;
+            }
+            inner += renderClassroomRubric(rubric);
+            inner += renderClassroomMaterials(materials, 'Materials');
+            inner += renderClassroomMaterials(attachments, 'Turned in');
+            inner += renderClassroomHistory(history);
+            return `<details class="assn-instructions assn-classroom-more">
+                <summary>${onlyAsk ? 'What it asks' : 'Classroom details'}</summary>
+                ${inner}
+            </details>`;
+        }
+
         function renderClassroomStamp(a, kind) {
             const cr = a.classroom;
             if (!cr || typeof cr !== 'object') return '';
@@ -3196,18 +3494,32 @@
             if (turnedIn && kind === 'missing') {
                 parts.push('Aeries has not caught up yet');
             }
+            if (cr.topic) parts.push(esc(cr.topic));
+            if (cr.grade_category) {
+                const w = classroomWeightPct(cr.grade_category_weight);
+                parts.push(esc(w ? `${cr.grade_category} · ${w}` : cr.grade_category));
+            }
             if (cr.link) {
                 parts.push(`<a href="${esc(cr.link)}" target="_blank" rel="noopener">Open in Classroom</a>`);
             }
             let html = parts.length ? `<div class="assn-classroom ${cls}">${parts.join(' · ')}</div>` : '';
-            const text = (cr.instructions || '').trim();
-            if (text) {
-                html += `<details class="assn-instructions">
-                    <summary>What it asks</summary>
-                    <p>${esc(text)}</p>
-                </details>`;
-            }
+            html += renderClassroomAssignmentBody(cr);
             return html;
+        }
+
+        function classroomOnlyStamp(e) {
+            return {
+                state: e.state,
+                state_label: e.state_label,
+                link: e.link,
+                instructions: e.instructions,
+                topic: e.topic,
+                grade_category: e.grade_category,
+                grade_category_weight: e.grade_category_weight,
+                rubric: e.rubric,
+                materials: e.materials,
+                max_points: e.max_points,
+            };
         }
 
         function renderClassroomBlock(profile) {
@@ -3216,9 +3528,29 @@
             const only = cr.classroom_only || [];
             const catchUp = cr.turned_in_aeries_missing || [];
             const announcements = cr.announcements || [];
-            if (!only.length && !catchUp.length && !announcements.length && !cr.link) return '';
+            const topics = cr.topics || [];
+            const teachers = cr.teachers || [];
+            const posted = cr.materials || [];
+            const drive = cr.drive;
+            const hasBody = only.length || catchUp.length || announcements.length || cr.link
+                || teachers.length || topics.length || posted.length || drive
+                || cr.description;
+            if (!hasBody) return '';
 
             let inner = '';
+            if (teachers.length) {
+                inner += `<div class="classroom-teachers">${esc(teachers.join(' · '))}</div>`;
+            }
+            if (topics.length) {
+                inner += `<div class="classroom-topics">${topics.map(t => `<span class="classroom-chip">${esc(t)}</span>`).join('')}</div>`;
+            }
+            if (cr.description) {
+                const heading = cr.description_heading || 'Class note';
+                inner += `<details class="assn-instructions">
+                    <summary>${esc(heading)}</summary>
+                    <p>${esc(cr.description)}</p>
+                </details>`;
+            }
             if (catchUp.length) {
                 const names = catchUp.map(e => esc(e.title || '')).filter(Boolean).join(', ');
                 inner += `<div class="classroom-note catch-up">Turned in on Classroom, Aeries still shows missing: ${names}.</div>`;
@@ -3227,32 +3559,75 @@
                 const rows = only.map(e => ({
                     description: e.title || '',
                     due_date: e.due_date || '',
-                    category: e.type === 'question' ? 'Classroom question' : 'Classroom',
+                    category: e.grade_category || (e.type === 'question' ? 'Classroom question' : 'Classroom'),
                     points_possible: e.max_points,
                     points_earned: null,
                     classroom_only: true,
-                    classroom: {
-                        state: e.state,
-                        state_label: e.state_label,
-                        link: e.link,
-                        instructions: e.instructions,
-                    },
+                    classroom: classroomOnlyStamp(e),
                 }));
                 inner += `<div class="classroom-note">Posted in Classroom, not in Aeries yet.</div>
                     ${renderAssignmentList(rows, 'upcoming', null)}`;
             }
-            for (const a of announcements.slice(0, 2)) {
-                const when = a.posted_on
-                    ? new Date(`${a.posted_on}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                    : '';
-                inner += `<div class="classroom-announcement">${when ? `<span class="when">${esc(when)}</span>` : ''}${esc(a.text || '')}</div>`;
+            if (announcements.length) {
+                inner += `<div class="classroom-subhead">Announcements</div>`;
+                for (const a of announcements.slice(0, 5)) {
+                    const when = formatClassroomDay(a.posted_on);
+                    const open = a.link
+                        ? ` <a href="${esc(a.link)}" target="_blank" rel="noopener">Open</a>`
+                        : '';
+                    inner += `<div class="classroom-announcement">${when ? `<span class="when">${esc(when)}</span>` : ''}${esc(a.text || '')}${open}</div>`;
+                }
             }
+            if (posted.length) {
+                inner += `<div class="classroom-subhead">Posted materials</div>`;
+                for (const m of posted) {
+                    const title = m.link
+                        ? `<a href="${esc(m.link)}" target="_blank" rel="noopener">${esc(m.title || 'Material')}</a>`
+                        : esc(m.title || 'Material');
+                    const when = formatClassroomDay(m.posted_on);
+                    inner += `<div class="classroom-material">${title}${when ? `<span class="when">${esc(when)}</span>` : ''}</div>`;
+                    if (m.excerpt) {
+                        inner += `<details class="assn-instructions"><summary>Doc excerpt</summary><p>${esc(m.excerpt)}</p></details>`;
+                    }
+                    inner += renderClassroomMaterials(m.materials || [], '');
+                }
+            }
+            if (drive && ((drive.files || []).length || drive.url)) {
+                const open = drive.url
+                    ? `<span class="label-note"><a href="${esc(drive.url)}" target="_blank" rel="noopener">Open Drive</a></span>`
+                    : '';
+                inner += `<div class="classroom-subhead">Class Drive${open}</div>`;
+                if ((drive.files || []).length) {
+                    inner += `<ul class="classroom-drive">`;
+                    for (const f of drive.files) {
+                        const name = f.url
+                            ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title)}</a>`
+                            : esc(f.title);
+                        const own = f.owned_by_student ? '<span class="classroom-own">their copy</span>' : '';
+                        inner += `<li>${name}${own}</li>`;
+                    }
+                    inner += `</ul>`;
+                }
+            }
+            const year = cr.school_year
+                ? `<span class="label-note">${esc(formatClassroomYear(cr.school_year))}</span>`
+                : '';
             const link = cr.link
                 ? `<span class="label-note"><a href="${esc(cr.link)}" target="_blank" rel="noopener">Open class</a></span>`
                 : '';
-            return `<div class="panel-block">
-                <div class="panel-block-label">Classroom${link}</div>
+            return `<div class="panel-block classroom-block">
+                <div class="panel-block-label">Classroom${year}${link}</div>
                 ${inner}
+            </div>`;
+        }
+
+        function renderUnmatchedClassroom(student) {
+            const names = (student.view && student.view.classroom_unmatched) || [];
+            if (!names.length) return '';
+            const year = (student.view && student.view.classroom_year) || '';
+            return `<div class="classroom-unmatched">
+                <h2>Also in Classroom${year ? ` <span class="count">${esc(formatClassroomYear(year))}</span>` : ''}</h2>
+                <p>Not on this year’s Aeries schedule: ${names.map(n => esc(n)).join(', ')}.</p>
             </div>`;
         }
 
@@ -3506,6 +3881,14 @@
                 const awaitingBadge = awaitingN > 0
                     ? `<span class="row-awaiting${p.staleAwaitingCount > 0 ? ' stale' : ''}">${awaitingN} awaiting score</span>`
                     : '';
+                const cr = p.classroom;
+                const topicChip = (cr && cr.current_topic)
+                    ? `<span class="row-topic">${esc(cr.current_topic)}</span>`
+                    : '';
+                const postedN = cr && (cr.classroom_only || []).length;
+                const postedChip = postedN
+                    ? `<span class="row-classroom">${postedN} in Classroom</span>`
+                    : '';
 
                 const t = findClassTrend(student, c.course_name);
                 const hist = t?.pct_history || [];
@@ -3529,6 +3912,8 @@
                                     <span class="row-name">${esc(c.course_name)}</span>
                                     ${missingBadge}
                                     ${awaitingBadge}
+                                    ${topicChip}
+                                    ${postedChip}
                                 </span>
                                 ${snap ? `<span class="row-meta ${urgency === 'critical' || urgency === 'watch' ? urgency : ''}">${esc(snap)}</span>` : ''}
                             </span>
@@ -3713,7 +4098,8 @@
                 : (isSummerMode() ? renderEmptyTermCard() : '');
             return `
                 ${renderMasthead(student, idx, profiles)}
-                ${feed}`;
+                ${feed}
+                ${renderUnmatchedClassroom(student)}`;
         }
 
         function updateTopBarTitle() {

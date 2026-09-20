@@ -14,6 +14,7 @@ import json
 import os
 import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import requests
@@ -37,9 +38,14 @@ STATE_LABELS = {
 INSTRUCTIONS_LIMIT = 1200
 EXCERPT_LIMIT = 600
 MATERIAL_TEXT_LIMIT = 1500
+STAMP_TEXT_LIMIT = 400
 ANNOUNCEMENT_LIMIT = 240
 UPCOMING_WINDOW_DAYS = 14
 RECENT_WINDOW_DAYS = 7
+# Kid dump may roll 400 days; product is this school year. Syllabus often
+# lands a couple of weeks before the first instructional day.
+SCHOOL_YEAR_PRE_DAYS = 21
+CALENDAR_FILE = Path(__file__).resolve().parent / "school_calendar.json"
 
 _STOP_TOKENS = {"the", "of", "and", "a", "an", "to", "for", "in", "on", "with", "&", "-"}
 _TITLE_NOISE = {
@@ -252,6 +258,97 @@ def _aeries_date(mmddyyyy):
 
 def _to_aeries_date(d):
     return d.strftime("%m/%d/%Y") if d else ""
+
+
+def _parse_iso_date_only(s):
+    if not s:
+        return None
+    try:
+        return datetime.strptime(str(s)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return _iso_to_pacific_date(s)
+
+
+def load_school_calendar(path=None):
+    path = Path(path) if path else Path(os.getenv("SCHOOL_CALENDAR_FILE") or CALENDAR_FILE)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def school_year_for(today, calendar=None):
+    """Active school-year dict, else upcoming, else most recently completed."""
+    if hasattr(today, "date"):
+        today = today.date()
+    calendar = calendar if calendar is not None else load_school_calendar()
+    years = calendar.get("years") or []
+    active = None
+    upcoming = None
+    completed = []
+    for y in years:
+        first = _parse_iso_date_only(y.get("first_day"))
+        last = _parse_iso_date_only(y.get("last_day"))
+        if first and last and first <= today <= last:
+            active = y
+            break
+        if first and first > today:
+            if upcoming is None or first < _parse_iso_date_only(upcoming.get("first_day")):
+                upcoming = y
+        elif last and last < today:
+            completed.append((last, y))
+    if active:
+        return active
+    if upcoming:
+        return upcoming
+    if completed:
+        completed.sort(key=lambda t: t[0], reverse=True)
+        return completed[0][1]
+    return None
+
+
+def school_year_bounds(today, calendar=None):
+    """Product window: (year_id, start, end) or None if the calendar is empty.
+
+    ``start`` is first instructional day minus ``SCHOOL_YEAR_PRE_DAYS``.
+    """
+    year = school_year_for(today, calendar=calendar)
+    if not year:
+        return None
+    first = _parse_iso_date_only(year.get("first_day"))
+    last = _parse_iso_date_only(year.get("last_day"))
+    if not first or not last:
+        return None
+    return (year.get("id") or "", first - timedelta(days=SCHOOL_YEAR_PRE_DAYS), last)
+
+
+def item_in_school_year(item, start, end):
+    """True when any of due / assigned / updated / scheduled falls in the window.
+
+    Undated items stay; dropping them would hide materials teachers never dated.
+    """
+    dates = []
+    for key in ("due", "assigned_on", "updated_on", "scheduled_on"):
+        d = _parse_iso_date_only(item.get(key))
+        if d:
+            dates.append(d)
+    if not dates:
+        return True
+    return any(start <= d <= end for d in dates)
+
+
+def drive_folder_in_year(folder, start, end):
+    """Prefer the script's ``current_year`` flag; fall back to created_at."""
+    flag = folder.get("current_year")
+    if flag is True:
+        return True
+    if flag is False:
+        return False
+    created = _iso_to_pacific_date(folder.get("created_at"))
+    if created:
+        return start <= created <= end
+    return False
 
 
 # --------------------------------------------------------------------------- course mapping
@@ -730,6 +827,52 @@ def _turned_in(item):
     return ((item.get("submission") or {}).get("state") or "") in TURNED_IN_STATES
 
 
+def _stamp_material(m):
+    """Assignment-row material: title, link, and a short Doc/Slides excerpt when we have one."""
+    if not isinstance(m, dict):
+        return None
+    entry = {
+        "kind": m.get("kind") or "link",
+        "title": m.get("title") or "",
+        "url": m.get("url") or "",
+    }
+    if m.get("mime"):
+        entry["mime"] = m["mime"]
+    if m.get("text_excerpt"):
+        entry["text_excerpt"] = _clip(m["text_excerpt"], STAMP_TEXT_LIMIT)
+    if m.get("note"):
+        entry["note"] = _clip(m["note"], 120)
+    if m.get("owned_by_student"):
+        entry["owned_by_student"] = True
+    if not entry["title"] and not entry["url"] and not entry.get("text_excerpt"):
+        return None
+    return entry
+
+
+def _stamp_rubric(rubric):
+    """Criteria with levels so the parent UI can show how the teacher scores it."""
+    if not isinstance(rubric, dict):
+        return []
+    out = []
+    for c in (rubric.get("criteria") or [])[:8]:
+        entry = {
+            "title": c.get("title") or "",
+            "max_points": c.get("max_points"),
+        }
+        if c.get("description"):
+            entry["description"] = c["description"]
+        levels = []
+        for lv in c.get("levels") or []:
+            level = {"title": lv.get("title") or "", "points": lv.get("points")}
+            if lv.get("description"):
+                level["description"] = lv["description"]
+            levels.append(level)
+        if levels:
+            entry["levels"] = levels
+        out.append(entry)
+    return out
+
+
 def _assignment_link_payload(item):
     sub = item.get("submission") or {}
     payload = {
@@ -743,16 +886,25 @@ def _assignment_link_payload(item):
         "topic": item.get("topic") or "",
         "max_points": item.get("max_points"),
         "instructions": item.get("instructions") or "",
-        "materials": [
-            {"kind": m.get("kind"), "title": m.get("title"), "url": m.get("url")}
-            for m in item.get("materials") or []
-        ][:5],
+        "materials": [m for m in (_stamp_material(x) for x in (item.get("materials") or [])[:8]) if m],
         "grade_category": (item.get("grade_category") or {}).get("name") or "",
-        "rubric": [
-            {"title": c.get("title"), "max_points": c.get("max_points")}
-            for c in (item.get("rubric") or {}).get("criteria") or []
-        ][:8],
+        "rubric": _stamp_rubric(item.get("rubric")),
     }
+    weight = (item.get("grade_category") or {}).get("weight")
+    if weight is not None:
+        payload["grade_category_weight"] = weight
+    if sub.get("assigned_grade") is not None:
+        payload["assigned_grade"] = sub["assigned_grade"]
+    if sub.get("draft_grade") is not None:
+        payload["draft_grade"] = sub["draft_grade"]
+    if sub.get("answer"):
+        payload["answer"] = sub["answer"]
+    history = sub.get("history") or []
+    if history:
+        payload["history"] = history[-8:]
+    attachments = [m for m in (_stamp_material(x) for x in (sub.get("attachments") or [])[:6]) if m]
+    if attachments:
+        payload["attachments"] = attachments
     return {k: v for k, v in payload.items() if v not in ("", None, [], False) or k in ("state", "late")}
 
 
@@ -767,6 +919,9 @@ def attach_classroom(student_data, export, today, assignments_for_class, overrid
     classes = student_data.get("classes") or []
     courses_raw = export.get("courses") or []
     mapping = map_courses_to_classes(courses_raw, classes, overrides=overrides or load_course_overrides())
+    bounds = school_year_bounds(today)
+    year_id, year_start, year_end = bounds if bounds else ("", None, None)
+    dropped_items = 0
 
     # Clear stale stamps from a previous run before re-matching.
     for group in student_data.get("assignments_by_class") or []:
@@ -780,6 +935,10 @@ def attach_classroom(student_data, export, today, assignments_for_class, overrid
         cid = str(raw.get("id") or "")
         cm = mapping.get(cid)
         items = [normalize_item(it, names, today) for it in raw.get("items") or []]
+        if year_start and year_end:
+            kept = [it for it in items if item_in_school_year(it, year_start, year_end)]
+            dropped_items += len(items) - len(kept)
+            items = kept
         items.sort(key=lambda it: (it.get("due") or "9999", it.get("updated_on") or ""), reverse=False)
         course = {
             "id": cid,
@@ -829,7 +988,17 @@ def attach_classroom(student_data, export, today, assignments_for_class, overrid
         "unmatched_courses": unmatched,
         "notes": [_clip(n, 200) for n in export.get("notes") or []][:10],
     }
+    if year_id:
+        block["school_year"] = year_id
+        block["school_year_start"] = year_start.isoformat()
+        block["school_year_end"] = year_end.isoformat()
     drive_folders = compact_drive_folders(export.get("drive_folders"), names)
+    if year_start and year_end:
+        before = len(drive_folders)
+        drive_folders = [f for f in drive_folders if drive_folder_in_year(f, year_start, year_end)]
+        dropped_folders = before - len(drive_folders)
+    else:
+        dropped_folders = 0
     if drive_folders:
         block["drive_folders"] = drive_folders
     doc_text = export.get("doc_text")
@@ -844,7 +1013,13 @@ def attach_classroom(student_data, export, today, assignments_for_class, overrid
         f"  Classroom: {len(courses_out)} courses ({len(courses_out) - len(unmatched)} mapped to Aeries), "
         f"{matched_items} items matched to gradebook rows"
         + (f", script v{block['script_version']}" if block["script_version"] else "")
+        + (f", year {year_id}" if year_id else "")
     )
+    if dropped_items or dropped_folders:
+        print(
+            f"  Classroom: dropped {dropped_items} items and {dropped_folders} Drive folders "
+            f"outside the {year_id or 'current'} school year"
+        )
     if unmatched:
         print(f"  Classroom: unmapped courses: {', '.join(unmatched)}")
     total, with_text, unreadable = _drive_text_stats(courses_out)
@@ -898,10 +1073,18 @@ def class_context(student_data, class_meta, today, assignments=None):
     late_count = 0
     announcements = []
     materials = []
+    current_topic = ""
+    for item in sorted(
+        course.get("items") or [],
+        key=lambda it: it.get("updated_on") or it.get("assigned_on") or "",
+        reverse=True,
+    ):
+        if item.get("topic") and not current_topic:
+            current_topic = item["topic"]
     for item in course.get("items") or []:
         kind = item.get("type")
         if kind == "announcement":
-            if len(announcements) < 3 and item.get("description"):
+            if len(announcements) < 5 and item.get("description"):
                 announcements.append({
                     "text": _clip(item["description"], ANNOUNCEMENT_LIMIT),
                     "posted_on": item.get("updated_on") or item.get("assigned_on") or "",
@@ -909,13 +1092,24 @@ def class_context(student_data, class_meta, today, assignments=None):
                 })
             continue
         if kind == "material":
-            if len(materials) < 5:
-                materials.append({
+            if len(materials) < 8:
+                excerpt = ""
+                for m in item.get("materials") or []:
+                    if m.get("text_excerpt"):
+                        excerpt = _clip(m["text_excerpt"], STAMP_TEXT_LIMIT)
+                        break
+                entry = {
                     "title": item.get("title") or "",
                     "topic": item.get("topic") or "",
                     "link": item.get("link") or "",
                     "posted_on": item.get("updated_on") or item.get("assigned_on") or "",
-                })
+                    "materials": [
+                        m for m in (_stamp_material(x) for x in (item.get("materials") or [])[:4]) if m
+                    ],
+                }
+                if excerpt:
+                    entry["excerpt"] = excerpt
+                materials.append(entry)
             continue
 
         sub = item.get("submission") or {}
@@ -969,28 +1163,83 @@ def class_context(student_data, class_meta, today, assignments=None):
             "instructions": _clip(item.get("instructions"), EXCERPT_LIMIT),
         }
         if item.get("rubric"):
-            entry["rubric"] = [
-                {"title": c.get("title"), "max_points": c.get("max_points")}
-                for c in item["rubric"].get("criteria") or []
-            ][:8]
+            entry["rubric"] = _stamp_rubric(item["rubric"])
         if item.get("grade_category"):
             entry["grade_category"] = item["grade_category"].get("name") or ""
+            if item["grade_category"].get("weight") is not None:
+                entry["grade_category_weight"] = item["grade_category"]["weight"]
+        stamped_mats = [m for m in (_stamp_material(x) for x in (item.get("materials") or [])[:8]) if m]
+        if stamped_mats:
+            entry["materials"] = stamped_mats
         classroom_only.append(entry)
         if days is not None and 0 <= days <= 2 and (sub.get("state") or "") in NOT_STARTED_STATES:
             not_started_due_soon.append({"title": item.get("title"), "days_until_due": days})
 
     classroom_only.sort(key=lambda e: (e.get("due") or "9999", e.get("title") or ""))
-    return {
+    topics = [t.get("name") for t in course.get("topics") or [] if t.get("name")]
+    drive = _drive_for_course(block, course)
+    out = {
         "course_name": course.get("name") or "",
         "link": course.get("link") or "",
         "teachers": [t.get("name") for t in course.get("teachers") or []],
         "captured_at": block.get("captured_at") or "",
+        "school_year": block.get("school_year") or "",
         "classroom_only": classroom_only[:12],
         "turned_in_aeries_missing": turned_in_aeries_missing,
         "not_started_due_soon": not_started_due_soon,
         "late_turn_ins": late_count,
         "announcements": announcements,
         "materials": materials,
+    }
+    if course.get("room"):
+        out["room"] = course["room"]
+    if course.get("description"):
+        out["description"] = course["description"]
+    if course.get("description_heading"):
+        out["description_heading"] = course["description_heading"]
+    if topics:
+        out["topics"] = topics
+    if current_topic:
+        out["current_topic"] = current_topic
+    if drive:
+        out["drive"] = drive
+    return out
+
+
+def _drive_for_course(block, course):
+    """Current-year Drive class folder that matches this Classroom course."""
+    folders = (block or {}).get("drive_folders") or []
+    if not folders:
+        return None
+    name_n = _norm(course.get("name"))
+    match = None
+    for folder in folders:
+        if name_n and _norm(folder.get("name")) == name_n:
+            match = folder
+            break
+    if match is None:
+        current = [f for f in folders if f.get("current_year")]
+        match = current[0] if len(current) == 1 else None
+    if match is None:
+        return None
+    files = []
+    for f in (match.get("files") or [])[:12]:
+        title = (f.get("title") or "").strip()
+        if not title:
+            continue
+        entry = {
+            "title": title,
+            "url": f.get("url") or "",
+            "mime": f.get("mime") or "",
+            "owned_by_student": bool(f.get("owned_by_student")),
+        }
+        if f.get("modified_at"):
+            entry["modified_on"] = _iso_day(f["modified_at"])
+        files.append(entry)
+    return {
+        "name": match.get("name") or "",
+        "url": match.get("url") or "",
+        "files": files,
     }
 
 

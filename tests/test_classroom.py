@@ -363,9 +363,9 @@ class ExportV2ShapeTests(unittest.TestCase):
             "total": 3, "with_text": 2, "reused": 1, "failed": 0, "skipped_time_budget": 1,
         })
         folders = self.block["drive_folders"]
-        self.assertEqual([f["name"] for f in folders], ["2 • Geometry • Stadel", "Old Class 2025"])
+        self.assertEqual([f["name"] for f in folders], ["2 • Geometry • Stadel"])
         self.assertTrue(folders[0]["current_year"])
-        self.assertFalse(folders[1]["current_year"])
+        self.assertEqual(self.block["school_year"], "2026-27")
         kid_file = folders[0]["files"][0]
         self.assertEqual(kid_file["id"], "d-kid-11")
         self.assertEqual(kid_file["title"], "CYU 1.1")
@@ -438,20 +438,29 @@ class ExportV2ShapeTests(unittest.TestCase):
         self.assertNotIn("rubric", row["classroom"])
         cyu = self.items["w-cyu13"]
         stamp = classroom._assignment_link_payload(cyu)
-        self.assertEqual(stamp["rubric"], [
-            {"title": "Angle pairs named", "max_points": 6},
-            {"title": "Work shown", "max_points": 4},
-        ])
+        self.assertEqual([c["title"] for c in stamp["rubric"]], ["Angle pairs named", "Work shown"])
+        self.assertEqual(stamp["rubric"][0]["max_points"], 6)
+        self.assertEqual(stamp["rubric"][0]["levels"][1]["title"], "Partial")
+        self.assertIn("alternate interior", stamp["materials"][0]["text_excerpt"])
+        self.assertEqual(stamp["grade_category_weight"], 200000)
 
     def test_class_context_and_grok_see_rubric_and_teachers(self):
         geo_meta = self.student["classes"][0]
         rows = scraper.assignments_for_class(self.student, geo_meta)
         ctx = classroom.class_context(self.student, geo_meta, TODAY, assignments=rows)
         self.assertEqual(ctx["teachers"], ["A. Stadel", "Co Teacher"])
+        self.assertEqual(ctx["topics"], ["Unit 1: Foundations"])
+        self.assertEqual(ctx["current_topic"], "Unit 1: Foundations")
+        self.assertEqual(ctx["school_year"], "2026-27")
+        self.assertEqual(ctx["drive"]["name"], "2 • Geometry • Stadel")
+        self.assertEqual(ctx["drive"]["files"][0]["title"], "CYU 1.1")
+        self.assertTrue(ctx["drive"]["files"][0]["owned_by_student"])
+        self.assertEqual(ctx["materials"][0]["title"], "Syllabus")
         upcoming = next(e for e in ctx["classroom_only"] if e["id"] == "w-cyu13")
         self.assertEqual(upcoming["days_until_due"], 1)
         self.assertEqual(upcoming["grade_category"], "Practice")
         self.assertEqual([c["title"] for c in upcoming["rubric"]], ["Angle pairs named", "Work shown"])
+        self.assertEqual(upcoming["materials"][0]["kind"], "drive")
         g = classroom.grok_context(ctx)
         first = g["classroom_only_upcoming"][0]
         self.assertEqual(first["rubric_criteria"], ["Angle pairs named", "Work shown"])
@@ -482,6 +491,51 @@ class ExportV2ShapeTests(unittest.TestCase):
         r = classroom.compact_rubric({"criteria": [{"title": "Only title", "levels": []}]})
         self.assertEqual(r, {"criteria": [{"title": "Only title", "description": "", "max_points": None, "levels": []}],
                              "max_points": None})
+
+
+class SchoolYearWindowTests(unittest.TestCase):
+    def test_bounds_include_pre_first_day_window(self):
+        year_id, start, end = classroom.school_year_bounds(TODAY)
+        self.assertEqual(year_id, "2026-27")
+        self.assertEqual(start.isoformat(), "2026-07-23")
+        self.assertEqual(end.isoformat(), "2027-05-28")
+
+    def test_old_year_items_and_folders_drop_from_product(self):
+        export = load_export_v2()
+        export["courses"][0]["items"].append({
+            "id": "w-old-year",
+            "type": "assignment",
+            "title": "Last year final",
+            "due": "2025-05-20",
+            "assigned_at": "2025-05-01T15:00:00.000Z",
+            "updated_at": "2025-05-20T15:00:00.000Z",
+            "materials": [],
+            "submission": {"state": "RETURNED", "late": False},
+        })
+        student = geometry_student()
+        block = classroom.attach_classroom(
+            student, export, TODAY, scraper.assignments_for_class, overrides={}
+        )
+        ids = [i["id"] for i in block["courses"][0]["items"]]
+        self.assertNotIn("w-old-year", ids)
+        self.assertIn("w-cyu13", ids)
+        self.assertIn("m-syll", ids)
+        self.assertEqual([f["name"] for f in block["drive_folders"]], ["2 • Geometry • Stadel"])
+        self.assertEqual(block["school_year"], "2026-27")
+
+    def test_undated_item_stays(self):
+        self.assertTrue(classroom.item_in_school_year(
+            {"title": "No dates"}, date(2026, 7, 23), date(2027, 5, 28)
+        ))
+
+    def test_drive_folder_flag_beats_created_at(self):
+        start, end = date(2026, 7, 23), date(2027, 5, 28)
+        self.assertTrue(classroom.drive_folder_in_year(
+            {"current_year": True, "created_at": "2025-08-12T15:00:00.000Z"}, start, end
+        ))
+        self.assertFalse(classroom.drive_folder_in_year(
+            {"current_year": False, "created_at": "2026-08-12T15:00:00.000Z"}, start, end
+        ))
 
 
 class ScraperIntegrationTests(unittest.TestCase):
@@ -541,6 +595,8 @@ class ScraperIntegrationTests(unittest.TestCase):
         bio = next(c for c in view["classes"] if c["period"] == 6)
         self.assertIsNone(bio["classroom"])
         self.assertEqual(view["classroom_captured_at"], "2026-09-14T05:10:00.000Z")
+        self.assertEqual(view["classroom_year"], "2026-27")
+        self.assertEqual(view["classroom_unmatched"], ["Robotics Club"])
 
     def test_no_export_is_a_no_op(self):
         student = student_with_aeries()
