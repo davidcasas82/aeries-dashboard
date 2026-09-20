@@ -551,6 +551,18 @@ block. Fixture: `tests/fixtures/classroom_export_v2_sample.json`, tests in
 `ExportV2ShapeTests`. v1 exports (script v2.x) still load; the v2 keys are
 simply absent.
 
+**v3.2 (Sept 20, 2026), one more paste of `Code.gs` only.** The first v3
+run (10 courses, 98 items) read 0 of 47 Docs: the Drive advanced service
+returns metadata unless `Drive.Files.export` is called with
+`{ alt: 'media' }` as the third argument. With that, the v3 client expects
+JSON and throws on the plain-text 200 with the body inside the message
+(`Response Code: 200. Message: <text>`), so `exportText_` catches that
+pattern and returns the body. No manifest change, no new permission prompt,
+trigger unchanged. This is a script bug, not a product change, so it falls
+under principle 6's exception. `UrlFetchApp` was not used on purpose: with
+explicit `oauthScopes` it would need `script.external_request` and another
+prompt.
+
 If the rosters line in `appsscript.json` is unwanted, delete it: teachers
 soft-fail into one note and everything else still exports. Next work that
 does not need a paste: Doc text fetch by the service account for files
