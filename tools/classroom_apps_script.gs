@@ -26,7 +26,6 @@ const DOC_TEXT_LIMIT = 4000;
 const DESCRIPTION_LIMIT = 4000;
 const RECENT_DAYS = 120;
 const ANNOUNCEMENTS_PER_COURSE = 5;
-const DRIVE_DOC = 'application/vnd.google-apps.document';
 
 function testClassroom() {
   const courses = listAll_(function (token) {
@@ -72,9 +71,12 @@ function exportClassroom() {
 
   const file = writeExport_(payload);
   const shareStats = shareOwnedFiles_(me);
+  const docs = docTextStats_(exported);
   Logger.log('Exported ' + exported.length + ' courses, '
     + exported.reduce(function (n, c) { return n + c.items.length; }, 0) + ' items, '
-    + driveFolders.length + ' Drive class folders. ' + shareStats
+    + driveFolders.length + ' Drive class folders. Doc text: ' + docs.withText + ' of '
+    + docs.total + ' files read' + (docs.failed ? ' (' + docs.failed + ' not readable: ' + docs.firstError + ')' : '')
+    + '. ' + shareStats
     + (notes.length ? ' Notes: ' + notes.join(' | ') : ''));
   return file.getUrl();
 }
@@ -226,13 +228,34 @@ function driveAttachment_(df, courseWorkTitle, withText) {
   if (!df.id) return att;
   try {
     att.mime = DriveApp.getFileById(df.id).getMimeType();
-    if (withText && att.mime === DRIVE_DOC) {
-      att.text_excerpt = clip_(DocumentApp.openById(df.id).getBody().getText(), DOC_TEXT_LIMIT);
-    }
   } catch (e) {
-    att.note = 'not readable';
+    att.note = 'file not accessible: ' + e.message;
+    return att;
+  }
+  if (withText && TEXT_EXPORTS[att.mime]) {
+    try {
+      att.text_excerpt = clip_(exportText_(df.id, att.mime), DOC_TEXT_LIMIT);
+    } catch (e) {
+      att.note = 'text not readable: ' + e.message;
+    }
   }
   return att;
+}
+
+// Google Docs and Slides export to plain text through the Drive API, which the
+// existing Drive permission already covers (no Docs permission needed).
+const TEXT_EXPORTS = {
+  'application/vnd.google-apps.document': 'text/plain',
+  'application/vnd.google-apps.presentation': 'text/plain',
+};
+
+function exportText_(id, mime) {
+  const res = Drive.Files.export(id, TEXT_EXPORTS[mime]);
+  if (typeof res === 'string') return res;
+  if (res && typeof res.getDataAsString === 'function') return res.getDataAsString();
+  if (res && typeof res.getBlob === 'function') return res.getBlob().getDataAsString();
+  if (res && typeof res.getContentText === 'function') return res.getContentText();
+  return String(res || '');
 }
 
 function indexDriveClassroom_(me) {
@@ -320,6 +343,22 @@ function writeExport_(payload) {
     try { file.addViewer(email); } catch (e) { Logger.log('Could not share export with one address: ' + e.message); }
   });
   return file;
+}
+
+function docTextStats_(courses) {
+  const stats = { total: 0, withText: 0, failed: 0, firstError: '' };
+  courses.forEach(function (c) {
+    c.items.forEach(function (item) {
+      const mats = (item.materials || []).concat((item.submission && item.submission.attachments) || []);
+      mats.forEach(function (m) {
+        if (m.kind !== 'drive') return;
+        stats.total++;
+        if (m.text_excerpt) stats.withText++;
+        if (m.note) { stats.failed++; if (!stats.firstError) stats.firstError = m.note; }
+      });
+    });
+  });
+  return stats;
 }
 
 function listAll_(fetchPage, key) {
