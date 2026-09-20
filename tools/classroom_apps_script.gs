@@ -34,7 +34,7 @@ const SHARE_WITH = [
   'parent@example.com',
   'classroom-reader@family-classroom.iam.gserviceaccount.com',
 ];
-const SCRIPT_VERSION = '3.0';
+const SCRIPT_VERSION = '3.2';
 const EXPORT_VERSION = 2;
 const SCHOOL_YEAR_START = new Date('2026-08-01');
 const EXPORT_FOLDER = 'Family dashboard';
@@ -473,13 +473,25 @@ function fileMeta_(id, run) {
   return meta;
 }
 
+// alt=media is required or the Drive service returns only metadata
+// ("Export requires alt=media to download the exported content"). With it,
+// the Drive v3 client expects JSON and throws on the plain-text 200 with the
+// body inside the message: "Response Code: 200. Message: <text>". That is the
+// document, not an error.
 function exportText_(id, mime) {
-  const res = Drive.Files.export(id, TEXT_EXPORTS[mime]);
-  if (typeof res === 'string') return res;
-  if (res && typeof res.getDataAsString === 'function') return res.getDataAsString();
-  if (res && typeof res.getBlob === 'function') return res.getBlob().getDataAsString();
-  if (res && typeof res.getContentText === 'function') return res.getContentText();
-  return String(res || '');
+  try {
+    const res = Drive.Files.export(id, TEXT_EXPORTS[mime], { alt: 'media' });
+    if (typeof res === 'string') return res;
+    if (res && typeof res.getDataAsString === 'function') return res.getDataAsString();
+    if (res && typeof res.getBlob === 'function') return res.getBlob().getDataAsString();
+    if (res && typeof res.getContentText === 'function') return res.getContentText();
+    return String(res || '');
+  } catch (e) {
+    const msg = (e && e.message) || '';
+    const m = msg.match(/^Response Code: 200\. Message: ([\s\S]*)$/);
+    if (m) return m[1];
+    throw e;
+  }
 }
 
 // Text read on the previous night is reused when the file has not changed, so
