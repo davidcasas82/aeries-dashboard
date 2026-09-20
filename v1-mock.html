@@ -1,0 +1,1055 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f2ec">
+  <title>Night check — fixture visual mock</title>
+  <style>
+    :root {
+      --ink: #1d2420;
+      --muted: #617069;
+      --faint: #87938d;
+      --canvas: #f5f2ec;
+      --paper: #fffdfa;
+      --paper-soft: #f7f5f0;
+      --line: #dfe3dc;
+      --forest: #155c4b;
+      --forest-dark: #0d473a;
+      --forest-soft: #e5f2ec;
+      --blue: #2b5f80;
+      --blue-soft: #e8f1f6;
+      --amber: #9a6817;
+      --amber-soft: #f8efd9;
+      --red: #9c483b;
+      --red-soft: #fae9e5;
+      --shadow: 0 14px 36px rgba(35, 47, 40, .08), 0 2px 6px rgba(35, 47, 40, .04);
+      --radius: 20px;
+    }
+
+    * { box-sizing: border-box; }
+    html { color-scheme: light; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 8% -10%, rgba(93, 147, 122, .11), transparent 27rem),
+        var(--canvas);
+      color: var(--ink);
+      font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", Avenir, "Segoe UI", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, a { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, a:focus-visible {
+      outline: 3px solid #2b7c67;
+      outline-offset: 3px;
+    }
+
+    .topline {
+      min-height: 62px;
+      padding: 11px clamp(16px, 3vw, 48px);
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(75, 94, 83, .12);
+      background: rgba(255, 253, 250, .82);
+      backdrop-filter: blur(18px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      letter-spacing: -.03em;
+      white-space: nowrap;
+    }
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      background: var(--forest);
+      color: white;
+      font-size: 14px;
+      box-shadow: 0 3px 10px rgba(21, 92, 75, .2);
+    }
+    .fixture-tag {
+      padding: 5px 9px;
+      border: 1px solid #cbd8d1;
+      border-radius: 999px;
+      color: var(--forest-dark);
+      background: #f1f8f4;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .mock-controls {
+      display: inline-flex;
+      padding: 3px;
+      gap: 2px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--paper-soft);
+    }
+    .mock-controls button {
+      min-height: 34px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 9px;
+      cursor: pointer;
+      color: var(--muted);
+      background: transparent;
+      font-size: 13px;
+      font-weight: 750;
+    }
+    .mock-controls button[aria-pressed="true"] {
+      color: var(--ink);
+      background: var(--paper);
+      box-shadow: 0 1px 4px rgba(35, 47, 40, .12);
+    }
+
+    main {
+      width: min(1280px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: clamp(26px, 4vw, 54px) 0 48px;
+    }
+    .intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 26px;
+    }
+    .eyebrow {
+      margin: 0 0 7px;
+      color: var(--forest);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 {
+      margin-bottom: 7px;
+      max-width: 800px;
+      font-size: clamp(32px, 4.5vw, 56px);
+      line-height: .98;
+      letter-spacing: -.065em;
+    }
+    .lede {
+      max-width: 650px;
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.5;
+    }
+    .verified-count {
+      padding: 12px 15px;
+      border: 1px solid #d8e7df;
+      border-radius: 14px;
+      background: rgba(229, 242, 236, .68);
+      color: var(--forest-dark);
+      font-size: 13px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+    .verified-count strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 18px;
+      letter-spacing: -.03em;
+    }
+
+    .card {
+      border: 1px solid rgba(111, 128, 118, .2);
+      border-radius: var(--radius);
+      background: rgba(255, 253, 250, .93);
+      box-shadow: var(--shadow);
+    }
+    .section-head {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 22px 24px 17px;
+    }
+    .section-head h2 {
+      margin-bottom: 4px;
+      font-size: 21px;
+      letter-spacing: -.035em;
+    }
+    .section-head p {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .tap-note {
+      color: var(--faint);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .standing { margin-bottom: 22px; overflow: hidden; }
+    .grade-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      border-top: 1px solid var(--line);
+    }
+    .grade-card {
+      min-height: 162px;
+      padding: 19px 20px 17px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+      transition: background .16s ease, transform .16s ease;
+    }
+    .grade-card:last-child { border-right: 0; }
+    .grade-card:hover { background: #f7faf7; }
+    .grade-card:active { transform: translateY(1px); }
+    .course-name {
+      display: block;
+      min-height: 38px;
+      color: #42514a;
+      font-size: 14px;
+      font-weight: 750;
+      line-height: 1.25;
+    }
+    .course-mark {
+      display: flex;
+      align-items: baseline;
+      gap: 7px;
+      margin: 12px 0 10px;
+    }
+    .mark {
+      color: var(--ink);
+      font-size: 39px;
+      font-weight: 850;
+      line-height: .9;
+      letter-spacing: -.07em;
+    }
+    .percent {
+      color: var(--muted);
+      font-size: 16px;
+      font-weight: 750;
+    }
+    .trend {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .trend-symbol {
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      font-size: 15px;
+      line-height: 1;
+    }
+    .trend.up .trend-symbol { color: var(--forest); background: var(--forest-soft); }
+    .trend.down .trend-symbol { color: var(--red); background: var(--red-soft); }
+    .trend.flat .trend-symbol { color: var(--blue); background: var(--blue-soft); }
+    .trend.none .trend-symbol { color: var(--faint); background: #eef0ec; }
+
+    .night-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(270px, .4fr);
+      gap: 22px;
+      align-items: start;
+    }
+    .tonight { overflow: hidden; }
+    .tonight-meta {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 27px;
+      padding: 0 24px 15px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3e9a70;
+      box-shadow: 0 0 0 4px #e2f3e9;
+    }
+    .action-list, .weekend-list {
+      display: grid;
+      border-top: 1px solid var(--line);
+    }
+    .action-row {
+      width: 100%;
+      min-height: 97px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 14px;
+      padding: 15px 24px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+      transition: background .16s ease;
+    }
+    .action-row:last-child { border-bottom: 0; }
+    .action-row:hover { background: #fbfcfa; }
+    .action-icon {
+      width: 37px;
+      height: 37px;
+      display: grid;
+      place-items: center;
+      border-radius: 11px;
+      font-size: 17px;
+      font-weight: 900;
+    }
+    .action-icon.today { color: var(--amber); background: var(--amber-soft); }
+    .action-icon.tomorrow { color: var(--blue); background: var(--blue-soft); }
+    .action-icon.missing { color: var(--red); background: var(--red-soft); }
+    .action-icon.weekend { color: var(--forest); background: var(--forest-soft); }
+    .action-copy { min-width: 0; }
+    .action-label {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .action-title {
+      display: block;
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .action-class {
+      display: block;
+      margin-top: 2px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .row-chevron {
+      color: #839088;
+      font-size: 22px;
+      font-weight: 400;
+    }
+    .weekend-block {
+      margin-top: 17px;
+      border: 1px solid #cfe2d8;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #f8fcf9;
+    }
+    .weekend-heading {
+      padding: 15px 18px 13px;
+      background: #eff8f2;
+      color: var(--forest-dark);
+    }
+    .weekend-heading strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 16px;
+      letter-spacing: -.02em;
+    }
+    .weekend-heading span { font-size: 13px; line-height: 1.35; }
+    .weekend-list {
+      border-top-color: #d9ebe0;
+    }
+    .weekend-list .action-row { border-bottom-color: #d9ebe0; }
+    .empty-state {
+      min-height: 168px;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      border-top: 1px solid var(--line);
+      color: var(--forest-dark);
+      text-align: center;
+    }
+    .empty-icon {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 11px;
+      border-radius: 50%;
+      background: var(--forest-soft);
+      font-size: 18px;
+    }
+    .empty-state strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 17px;
+      letter-spacing: -.02em;
+    }
+    .empty-state span { color: var(--muted); font-size: 14px; }
+
+    .reconcile {
+      padding: 23px;
+      background: linear-gradient(145deg, #104b3d, #1d6e5a);
+      color: #f6fbf8;
+      box-shadow: 0 16px 34px rgba(16, 75, 61, .17);
+    }
+    .reconcile .eyebrow { color: #bce4d1; }
+    .reconcile h2 {
+      margin-bottom: 11px;
+      font-size: 22px;
+      line-height: 1.05;
+      letter-spacing: -.04em;
+    }
+    .reconcile p {
+      margin-bottom: 19px;
+      color: #d4e9df;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .evidence-pill {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 13px;
+      border: 1px solid rgba(220, 244, 232, .23);
+      border-radius: 13px;
+      background: rgba(3, 43, 33, .22);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .evidence-check {
+      width: 19px;
+      height: 19px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 19px;
+      border-radius: 50%;
+      background: #bce4d1;
+      color: #0d473a;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .footer-note {
+      margin: 18px 3px 0;
+      color: var(--faint);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 29;
+      background: rgba(17, 28, 23, .33);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+    }
+    .scrim.open { opacity: 1; pointer-events: auto; }
+    .drawer {
+      position: fixed;
+      z-index: 30;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(460px, calc(100vw - 28px));
+      display: flex;
+      flex-direction: column;
+      padding: 25px;
+      border-left: 1px solid var(--line);
+      background: #fffefa;
+      box-shadow: -16px 0 44px rgba(22, 38, 30, .16);
+      transform: translateX(105%);
+      transition: transform .24s cubic-bezier(.2, .8, .2, 1);
+    }
+    .drawer.open { transform: translateX(0); }
+    .drawer-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      justify-content: space-between;
+    }
+    .drawer-kicker {
+      margin-bottom: 6px;
+      color: var(--forest);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .drawer h2 {
+      margin-bottom: 2px;
+      font-size: 28px;
+      line-height: 1.04;
+      letter-spacing: -.05em;
+    }
+    .drawer-class {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .close {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 40px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--paper);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 24px;
+      line-height: 1;
+    }
+    .drawer-body { overflow: auto; padding: 28px 2px 8px; }
+    .detail-block {
+      padding: 17px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: var(--paper-soft);
+      margin-bottom: 13px;
+    }
+    .detail-label {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+    .teacher-words {
+      margin-bottom: 0;
+      color: #33443b;
+      font-size: 16px;
+      line-height: 1.45;
+    }
+    .timeline { display: grid; gap: 0; }
+    .timeline-row {
+      position: relative;
+      padding: 3px 0 17px 25px;
+      border-left: 2px solid #d7e5dc;
+    }
+    .timeline-row:last-child { padding-bottom: 0; border-left-color: transparent; }
+    .timeline-row::before {
+      content: "";
+      position: absolute;
+      left: -6px;
+      top: 5px;
+      width: 10px;
+      height: 10px;
+      border: 2px solid var(--paper);
+      border-radius: 50%;
+      background: var(--forest);
+      box-shadow: 0 0 0 1px #9ccbb7;
+    }
+    .timeline-row.aeries::before { background: var(--blue); box-shadow: 0 0 0 1px #a8cada; }
+    .timeline-source {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 820;
+    }
+    .timeline-status {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.42;
+    }
+    .drawer-cta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      min-height: 52px;
+      margin-top: auto;
+      border-radius: 13px;
+      background: var(--forest);
+      color: white;
+      font-size: 16px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .drawer-cta:hover { background: var(--forest-dark); }
+
+    @media (max-width: 900px) {
+      .grade-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .grade-card:nth-child(3) { border-right: 0; }
+      .grade-card:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
+      .night-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 620px) {
+      .topline { min-height: 105px; align-items: flex-start; flex-direction: column; gap: 9px; }
+      .mock-controls { width: 100%; }
+      .mock-controls button { flex: 1; padding: 0 6px; }
+      main { width: min(100% - 24px, 1280px); padding-top: 26px; }
+      .intro { grid-template-columns: 1fr; gap: 15px; margin-bottom: 18px; }
+      h1 { font-size: 38px; }
+      .lede { font-size: 16px; }
+      .verified-count { width: fit-content; }
+      .section-head { padding: 19px 18px 15px; }
+      .tap-note { display: none; }
+      .grade-grid { grid-template-columns: 1fr; }
+      .grade-card, .grade-card:nth-child(3) {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 15px;
+        padding: 15px 18px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .grade-card:last-child { border-bottom: 0; }
+      .course-name { min-height: 0; font-size: 15px; }
+      .course-mark { margin: 0; gap: 5px; }
+      .mark { font-size: 30px; }
+      .percent { font-size: 14px; }
+      .trend { justify-content: flex-end; }
+      .trend-text { display: none; }
+      .tonight-meta { padding-left: 18px; padding-right: 18px; }
+      .action-row { grid-template-columns: auto minmax(0, 1fr) auto; gap: 11px; padding: 14px 18px; }
+      .action-title { font-size: 16px; }
+      .reconcile { padding: 21px; }
+      .drawer { top: auto; width: 100%; height: min(78vh, 650px); padding: 17px; border: 1px solid var(--line); border-radius: 22px 22px 0 0; transform: translateY(105%); }
+      .drawer.open { transform: translateY(0); }
+      .drawer-body { padding-top: 19px; }
+      .drawer h2 { font-size: 24px; }
+      .drawer-cta { min-height: 49px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topline">
+    <div class="brand">
+      <span class="brand-mark">✓</span>
+      <span>Night check</span>
+      <span class="fixture-tag">Fixture mock</span>
+    </div>
+    <nav class="mock-controls" aria-label="Mock night">
+      <button type="button" data-night="thursday" aria-pressed="true">Thursday night</button>
+      <button type="button" data-night="friday" aria-pressed="false">Friday night</button>
+      <button type="button" data-night="empty" aria-pressed="false">Empty state</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow" id="night-label">Thursday · fixture preview</p>
+        <h1 id="page-title">The whole school picture, before bedtime.</h1>
+        <p class="lede" id="night-subtitle">Marks are easy to scan. Only verified work gets tonight’s attention.</p>
+      </div>
+      <div class="verified-count" aria-live="polite">
+        <strong id="verified-number">3 verified actions</strong>
+        <span id="verified-copy">Thursday night</span>
+      </div>
+    </section>
+
+    <section class="standing card" aria-labelledby="standing-title">
+      <div class="section-head">
+        <div>
+          <h2 id="standing-title">Standing</h2>
+          <p>Every class · mark, percent, seven-day trend</p>
+        </div>
+        <span class="tap-note">Tap a grade for details</span>
+      </div>
+      <div class="grade-grid" id="grade-grid"></div>
+    </section>
+
+    <div class="night-layout">
+      <section class="tonight card" aria-labelledby="tonight-title">
+        <div class="section-head">
+          <div>
+            <h2 id="tonight-title">Tonight</h2>
+            <p id="tonight-description">Three verified things to handle.</p>
+          </div>
+          <span class="tap-note">Tap for evidence</span>
+        </div>
+        <div class="tonight-meta" id="tonight-meta">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span>Verified against Classroom and Aeries</span>
+        </div>
+        <div id="tonight-content"></div>
+      </section>
+
+      <aside class="reconcile card" aria-labelledby="reconcile-title">
+        <p class="eyebrow">Quiet subtraction</p>
+        <h2 id="reconcile-title">Already turned in stays off the list.</h2>
+        <p>Classroom is used to remove false Aeries missing records. A parent does not have to guess which system is right.</p>
+        <div class="evidence-pill">
+          <span class="evidence-check" aria-hidden="true">✓</span>
+          <span id="reconcile-evidence">One Aeries “missing” record is already turned in in Classroom. It is not an action.</span>
+        </div>
+      </aside>
+    </div>
+
+    <p class="footer-note">Visual mock only · fixture class names and synthetic records · no live student data · not the official product.</p>
+  </main>
+
+  <div class="scrim" id="scrim" aria-hidden="true"></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" aria-hidden="true">
+    <div class="drawer-top">
+      <div>
+        <p class="drawer-kicker" id="drawer-kicker">Verified detail</p>
+        <h2 id="drawer-title">Item details</h2>
+        <p class="drawer-class" id="drawer-class"></p>
+      </div>
+      <button class="close" id="close-drawer" type="button" aria-label="Close details">×</button>
+    </div>
+    <div class="drawer-body">
+      <section class="detail-block" aria-labelledby="teacher-words-label">
+        <span class="detail-label" id="teacher-words-label">Teacher wording</span>
+        <p class="teacher-words" id="teacher-words"></p>
+      </section>
+      <section class="detail-block" aria-labelledby="timeline-label">
+        <span class="detail-label" id="timeline-label">Status trail</span>
+        <div class="timeline">
+          <div class="timeline-row">
+            <span class="timeline-source">Classroom</span>
+            <span class="timeline-status" id="classroom-status"></span>
+          </div>
+          <div class="timeline-row aeries">
+            <span class="timeline-source">Aeries</span>
+            <span class="timeline-status" id="aeries-status"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+    <a class="drawer-cta" id="classroom-link" href="https://classroom.google.com/" target="_blank" rel="noreferrer">Open in Classroom <span aria-hidden="true">↗</span></a>
+  </aside>
+
+  <script>
+    const grades = [
+      {
+        id: 'geometry',
+        course: 'Northline Geometry',
+        mark: 'B+',
+        percent: '88%',
+        trend: 'flat',
+        trendSymbol: '→',
+        trendText: 'steady',
+        teacherWords: '“Bring your annotated map to tomorrow’s short check-in.”',
+        classroom: 'Turned in · Sep 18, 4:06 PM PT',
+        aeries: '88% current · synced Sep 18, 6:14 PM PT'
+      },
+      {
+        id: 'algebra',
+        course: 'Harbor Algebra II',
+        mark: 'B−',
+        percent: '81%',
+        trend: 'down',
+        trendSymbol: '↘',
+        trendText: 'down 2 pts',
+        teacherWords: '“CYU 1.1–1.4 are the study guide. Start with the examples you marked.”',
+        classroom: 'Quiz review · not submitted · due Friday, 8:00 PM PT',
+        aeries: '81% current · synced Sep 18, 6:14 PM PT'
+      },
+      {
+        id: 'biology',
+        course: 'Juniper Biology',
+        mark: 'A',
+        percent: '93%',
+        trend: 'up',
+        trendSymbol: '↗',
+        trendText: 'up 3 pts',
+        teacherWords: '“Use the observation notes to explain what changed in the cell model.”',
+        classroom: 'Cell lab write-up · not submitted · due Sep 17, 11:59 PM PT',
+        aeries: 'Missing record · posted Sep 18, 7:10 AM PT'
+      },
+      {
+        id: 'history',
+        course: 'Cedar History',
+        mark: 'B',
+        percent: '86%',
+        trend: 'none',
+        trendSymbol: '•',
+        trendText: 'no baseline',
+        teacherWords: '“Your source card has been received; feedback will appear after the next review.”',
+        classroom: 'Turned in · Sep 18, 5:11 PM PT',
+        aeries: '86% current · first comparable week is not available'
+      },
+      {
+        id: 'english',
+        course: 'Summit English',
+        mark: 'B+',
+        percent: '89%',
+        trend: 'flat',
+        trendSymbol: '→',
+        trendText: 'steady',
+        teacherWords: '“Choose one passage and write the claim before you start the response.”',
+        classroom: 'Reading response · assigned Sep 18, 3:30 PM PT',
+        aeries: '89% current · synced Sep 18, 6:14 PM PT'
+      }
+    ];
+
+    const details = {
+      'map-check': {
+        kicker: 'Due today · verified',
+        title: 'Map reading check',
+        course: 'Northline Geometry',
+        teacherWords: '“Bring your annotated map to the short check-in before 8:00 PM.”',
+        classroom: 'Not submitted · due Thursday, 8:00 PM PT',
+        aeries: 'No row yet · last checked Thursday, 6:14 PM PT'
+      },
+      'quiz-review': {
+        kicker: 'Due tomorrow · verified',
+        title: 'Quiz review',
+        course: 'Harbor Algebra II',
+        teacherWords: '“CYU 1.1–1.4 are the study guide. Start with the examples you marked.”',
+        classroom: 'Not submitted · assigned Sep 14, due Friday, 8:00 PM PT',
+        aeries: 'No row yet · last checked Thursday, 6:14 PM PT'
+      },
+      'cell-lab': {
+        kicker: 'Missing · verified',
+        title: 'Cell lab write-up',
+        course: 'Juniper Biology',
+        teacherWords: '“Use the observation notes to explain what changed in the cell model.”',
+        classroom: 'Not submitted · due Wednesday, 11:59 PM PT',
+        aeries: 'Missing · posted Thursday, 7:10 AM PT'
+      },
+      'lab-reflection': {
+        kicker: 'Saturday · verified',
+        title: 'Lab reflection',
+        course: 'Juniper Biology',
+        teacherWords: '“Use two observations from the lab to support your explanation.”',
+        classroom: 'Not submitted · due Saturday, 6:00 PM PT',
+        aeries: 'No row yet · last checked Friday, 6:14 PM PT'
+      },
+      'reading-draft': {
+        kicker: 'Sunday · verified',
+        title: 'Reading draft',
+        course: 'Summit English',
+        teacherWords: '“Write the claim first, then choose one passage that proves it.”',
+        classroom: 'Not submitted · due Sunday, 7:00 PM PT',
+        aeries: 'No row yet · last checked Friday, 6:14 PM PT'
+      },
+      'practice-set': {
+        kicker: 'Monday · verified',
+        title: 'Practice set 2',
+        course: 'Harbor Algebra II',
+        teacherWords: '“Finish the three example problems before we start Monday’s check-in.”',
+        classroom: 'Not submitted · due Monday, 8:00 AM PT',
+        aeries: 'No row yet · last checked Friday, 6:14 PM PT'
+      }
+    };
+
+    const nights = {
+      thursday: {
+        label: 'Thursday · fixture preview',
+        subtitle: 'Marks are easy to scan. Only verified work gets tonight’s attention.',
+        count: '3 verified actions',
+        countCopy: 'Thursday night',
+        description: 'Three verified things to handle.',
+        reconciliation: 'One Aeries “missing” record is already turned in in Classroom. It is not an action.',
+        actions: [
+          { id: 'map-check', kind: 'today', icon: '•', label: 'Due today', title: 'Map reading check', course: 'Northline Geometry' },
+          { id: 'quiz-review', kind: 'tomorrow', icon: '→', label: 'Due tomorrow', title: 'Quiz review', course: 'Harbor Algebra II' },
+          { id: 'cell-lab', kind: 'missing', icon: '!', label: 'Missing', title: 'Cell lab write-up', course: 'Juniper Biology' }
+        ]
+      },
+      friday: {
+        label: 'Friday · fixture preview',
+        subtitle: 'Friday does not turn Monday work into “due tonight.” The weekend gets its own honest bucket.',
+        count: '3 verified weekend actions',
+        countCopy: 'Friday night',
+        description: 'Nothing is due today. These are not submitted in Classroom.',
+        reconciliation: 'One Aeries “missing” record is already turned in in Classroom. It is not an action.',
+        actions: [],
+        weekend: [
+          { id: 'lab-reflection', kind: 'weekend', icon: 'S', label: 'Saturday', title: 'Lab reflection', course: 'Juniper Biology' },
+          { id: 'reading-draft', kind: 'weekend', icon: 'S', label: 'Sunday', title: 'Reading draft', course: 'Summit English' },
+          { id: 'practice-set', kind: 'weekend', icon: 'M', label: 'Monday', title: 'Practice set 2', course: 'Harbor Algebra II' }
+        ]
+      },
+      empty: {
+        label: 'Weeknight · fixture preview',
+        subtitle: 'The page can be quiet when both systems agree there is nothing to do.',
+        count: '0 verified actions',
+        countCopy: 'empty night',
+        description: 'Nothing is asking for attention.',
+        reconciliation: 'No unreconciled Aeries missing records remain.',
+        actions: []
+      }
+    };
+
+    const els = {
+      buttons: [...document.querySelectorAll('[data-night]')],
+      label: document.getElementById('night-label'),
+      subtitle: document.getElementById('night-subtitle'),
+      number: document.getElementById('verified-number'),
+      countCopy: document.getElementById('verified-copy'),
+      description: document.getElementById('tonight-description'),
+      gradeGrid: document.getElementById('grade-grid'),
+      content: document.getElementById('tonight-content'),
+      reconcile: document.getElementById('reconcile-evidence'),
+      drawer: document.getElementById('drawer'),
+      scrim: document.getElementById('scrim'),
+      close: document.getElementById('close-drawer'),
+      drawerKicker: document.getElementById('drawer-kicker'),
+      drawerTitle: document.getElementById('drawer-title'),
+      drawerClass: document.getElementById('drawer-class'),
+      teacherWords: document.getElementById('teacher-words'),
+      classroomStatus: document.getElementById('classroom-status'),
+      aeriesStatus: document.getElementById('aeries-status')
+    };
+
+    let activeNight = new URLSearchParams(location.search).get('night');
+    if (!nights[activeNight]) activeNight = 'thursday';
+    let lastFocused = null;
+
+    function actionMarkup(action) {
+      return `
+        <button class="action-row" type="button" data-detail="${action.id}" aria-label="Open verified detail for ${action.title}">
+          <span class="action-icon ${action.kind}" aria-hidden="true">${action.icon}</span>
+          <span class="action-copy">
+            <span class="action-label">${action.label}</span>
+            <span class="action-title">${action.title}</span>
+            <span class="action-class">${action.course}</span>
+          </span>
+          <span class="row-chevron" aria-hidden="true">›</span>
+        </button>`;
+    }
+
+    function renderGrades() {
+      els.gradeGrid.innerHTML = grades.map((grade) => `
+        <button class="grade-card" type="button" data-grade="${grade.id}" aria-label="Open detail for ${grade.course}, ${grade.mark}, ${grade.percent}, ${grade.trendText}">
+          <span class="course-name">${grade.course}</span>
+          <span class="course-mark"><span class="mark">${grade.mark}</span><span class="percent">${grade.percent}</span></span>
+          <span class="trend ${grade.trend}"><span class="trend-symbol" aria-hidden="true">${grade.trendSymbol}</span><span class="trend-text">${grade.trendText}</span></span>
+        </button>
+      `).join('');
+      els.gradeGrid.querySelectorAll('[data-grade]').forEach((button) => {
+        button.addEventListener('click', () => openDrawer(grades.find((grade) => grade.id === button.dataset.grade), button));
+      });
+    }
+
+    function renderNight() {
+      const night = nights[activeNight];
+      els.label.textContent = night.label;
+      els.subtitle.textContent = night.subtitle;
+      els.number.textContent = night.count;
+      els.countCopy.textContent = night.countCopy;
+      els.description.textContent = night.description;
+      els.reconcile.textContent = night.reconciliation;
+      els.buttons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.night === activeNight)));
+
+      let html = '';
+      if (night.actions?.length) {
+        html += `<div class="action-list">${night.actions.map(actionMarkup).join('')}</div>`;
+      }
+      if (activeNight === 'friday') {
+        html += `
+          <section class="weekend-block" aria-labelledby="weekend-title">
+            <div class="weekend-heading">
+              <strong id="weekend-title">This weekend — turn in before Monday</strong>
+              <span>Due Saturday, Sunday, or Monday · not submitted in Classroom</span>
+            </div>
+            <div class="weekend-list">${night.weekend.map(actionMarkup).join('')}</div>
+          </section>`;
+      }
+      if (!night.actions?.length && activeNight !== 'friday') {
+        html += `
+          <div class="empty-state">
+            <div>
+              <span class="empty-icon" aria-hidden="true">✓</span>
+              <strong>Nothing verified needs action.</strong>
+              <span>Classroom and Aeries have no unfinished work to surface.</span>
+            </div>
+          </div>`;
+      }
+      els.content.innerHTML = html;
+      els.content.querySelectorAll('[data-detail]').forEach((button) => {
+        button.addEventListener('click', () => openDrawer(details[button.dataset.detail], button));
+      });
+
+      const query = new URLSearchParams(location.search);
+      query.set('night', activeNight);
+      query.delete('drawer');
+      history.replaceState({}, '', `${location.pathname}?${query.toString()}`);
+      document.title = `${night.label.split(' · ')[0]} night — fixture visual mock`;
+    }
+
+    function openDrawer(item, opener) {
+      if (!item) return;
+      lastFocused = opener || document.activeElement;
+      els.drawerKicker.textContent = item.kicker || 'Standing · verified detail';
+      els.drawerTitle.textContent = item.title || item.course;
+      els.drawerClass.textContent = item.course;
+      els.teacherWords.textContent = item.teacherWords;
+      els.classroomStatus.textContent = item.classroom;
+      els.aeriesStatus.textContent = item.aeries;
+      els.drawer.classList.add('open');
+      els.scrim.classList.add('open');
+      els.drawer.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      els.close.focus();
+
+      const detailId = item.id || Object.keys(details).find((key) => details[key] === item);
+      const query = new URLSearchParams(location.search);
+      if (detailId) query.set('drawer', detailId);
+      history.replaceState({}, '', `${location.pathname}?${query.toString()}`);
+    }
+
+    function closeDrawer({ restoreFocus = true } = {}) {
+      if (!els.drawer.classList.contains('open')) return;
+      els.drawer.classList.remove('open');
+      els.scrim.classList.remove('open');
+      els.drawer.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      const query = new URLSearchParams(location.search);
+      query.delete('drawer');
+      history.replaceState({}, '', `${location.pathname}${query.toString() ? `?${query.toString()}` : ''}`);
+      if (restoreFocus && lastFocused?.focus) lastFocused.focus();
+    }
+
+    els.buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        activeNight = button.dataset.night;
+        closeDrawer({ restoreFocus: false });
+        renderNight();
+      });
+    });
+    els.close.addEventListener('click', () => closeDrawer());
+    els.scrim.addEventListener('click', () => closeDrawer());
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeDrawer();
+    });
+
+    const requestedDrawer = new URLSearchParams(location.search).get('drawer');
+    renderGrades();
+    renderNight();
+
+    if (requestedDrawer) {
+      const item = details[requestedDrawer] || grades.find((grade) => grade.id === requestedDrawer);
+      if (item) openDrawer(item, null);
+    }
+  </script>
+</body>
+</html>
