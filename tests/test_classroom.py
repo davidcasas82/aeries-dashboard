@@ -556,3 +556,83 @@ class ScraperIntegrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SizeBudgetTests(unittest.TestCase):
+    """family-data caps `latest` at 900k chars; the scraper must trim Classroom blocks to fit."""
+
+    def _bloated(self):
+        """A v3-shaped export inflated the way a full-year dump is: lots of items, lots of Doc text."""
+        export = load_export_v2()
+        course = export["courses"][0]
+        template = [it for it in course["items"] if it.get("type") == "assignment"][0]
+        for n in range(60):
+            clone = json.loads(json.dumps(template))
+            clone["id"] = f"bulk-{n}"
+            clone["title"] = f"Practice set {n}"
+            clone["due"] = f"2026-0{3 + n % 3}-{1 + n % 27:02d}T06:59:00.000Z"
+            for m in clone.get("materials") or []:
+                m["text_excerpt"] = "lorem ipsum " * 400
+            export["courses"][0]["items"].append(clone)
+        for folder in export.get("drive_folders") or []:
+            folder["files"] = (folder.get("files") or []) * 40
+        return export
+
+    def test_fit_block_trims_least_visible_first_and_keeps_the_view(self):
+        student = geometry_student()
+        block = classroom.attach_classroom(student, self._bloated(), TODAY, scraper.assignments_for_class, overrides={})
+        before = classroom.json_chars(block)
+        instructions_before = {i["id"]: i.get("instructions") for i in block["courses"][0]["items"]}
+        view_before = classroom.class_context(student, student["classes"][0], TODAY,
+                                              scraper.assignments_for_class(student, student["classes"][0]))
+        size, applied = classroom.fit_block(block, TODAY, budget=60_000)
+        self.assertLess(size, before)
+        self.assertLessEqual(size, 60_000)
+        self.assertEqual(applied[0], "drive index to this year")
+        self.assertEqual(applied, [n for n, _ in classroom.TRIM_STEPS[: len(applied)]])
+        self.assertEqual(block["trimmed"], applied)
+        view_after = classroom.class_context(student, student["classes"][0], TODAY,
+                                             scraper.assignments_for_class(student, student["classes"][0]))
+        self.assertEqual(view_before, view_after)
+        # Instructions on items inside the 30-day window are never touched by a trim;
+        # older items get clipped, which the window logic never shows anyway.
+        after = {i["id"]: i.get("instructions") for i in block["courses"][0]["items"]}
+        self.assertTrue(after)
+        current = {k for k in after if not k.startswith("bulk-")}
+        self.assertTrue(current)
+        self.assertEqual({k: after[k] for k in current}, {k: instructions_before[k] for k in current})
+        self.assertIn("long text on older items", applied)
+
+    def test_attach_applies_the_default_budget(self):
+        student = geometry_student()
+        block = classroom.attach_classroom(student, self._bloated(), TODAY, scraper.assignments_for_class, overrides={})
+        self.assertLessEqual(classroom.json_chars(block), classroom.BLOCK_BUDGET_CHARS)
+
+    def test_payload_guard_trims_across_students_then_gives_up_clearly(self):
+        s1 = geometry_student()
+        s2 = geometry_student()
+        s2["sn"] = "3"
+        classroom.attach_classroom(s1, self._bloated(), TODAY, scraper.assignments_for_class, overrides={})
+        classroom.attach_classroom(s2, self._bloated(), TODAY, scraper.assignments_for_class, overrides={})
+        data = {"students": [s1, s2]}
+        with patch.object(scraper, "FAMILY_LATEST_TARGET_CHARS", 40_000), \
+             patch.object(scraper, "FAMILY_LATEST_MAX_CHARS", 60_000):
+            size = scraper.fit_payload_for_family_data(data, today=TODAY)
+        self.assertLessEqual(size, 60_000)
+        self.assertEqual(s1["classroom"]["trimmed"], s2["classroom"]["trimmed"])
+        self.assertIn("all doc text", s1["classroom"]["trimmed"])
+
+        data["students"][0]["assignments_by_class"][0]["assignments"][0]["comment"] = "x" * 60_000
+        with patch.object(scraper, "FAMILY_LATEST_TARGET_CHARS", 40_000), \
+             patch.object(scraper, "FAMILY_LATEST_MAX_CHARS", 60_000):
+            with self.assertRaises(scraper.ScrapeError) as ctx:
+                scraper.fit_payload_for_family_data(data, today=TODAY)
+        self.assertIn("family-data caps it at 60000", str(ctx.exception))
+
+    def test_small_payload_is_untouched(self):
+        student = geometry_student()
+        classroom.attach_classroom(student, load_export_v2(), TODAY, scraper.assignments_for_class, overrides={})
+        snapshot = json.dumps(student, sort_keys=True)
+        scraper.fit_payload_for_family_data({"students": [student]}, today=TODAY)
+        self.assertEqual(json.dumps(student, sort_keys=True), snapshot)
+        self.assertNotIn("trimmed", student["classroom"])

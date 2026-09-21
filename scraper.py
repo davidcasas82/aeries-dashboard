@@ -2538,9 +2538,39 @@ def publish_family_data(latest=None, history=None):
     print("family-data: published latest" + (" and history" if history is not None else ""))
 
 
+# family-data rejects `latest` above MAX_LATEST (900k chars) with a 413. Aim a
+# little under it so UTF-16 length differences cannot tip a run over.
+FAMILY_LATEST_MAX_CHARS = 900_000
+FAMILY_LATEST_TARGET_CHARS = 860_000
+
+
+def fit_payload_for_family_data(data, today=None):
+    """Shrink Classroom blocks, step by step across students, until the payload fits."""
+    size = classroom.json_chars(data)
+    if size <= FAMILY_LATEST_TARGET_CHARS:
+        return size
+    today = today or pacific_today_dt()
+    blocks = [s.get("classroom") for s in data.get("students") or [] if isinstance(s.get("classroom"), dict)]
+    print(f"  Payload: {size // 1000} KB is over the family-data cap; trimming Classroom blocks")
+    for step, (name, fn) in enumerate(classroom.TRIM_STEPS):
+        if size <= FAMILY_LATEST_TARGET_CHARS:
+            break
+        for block in blocks:
+            fn(block, today)
+            block["trimmed"] = list(dict.fromkeys((block.get("trimmed") or []) + [name]))
+        size = classroom.json_chars(data)
+        print(f"  Payload: {size // 1000} KB after '{name}'")
+    if size > FAMILY_LATEST_MAX_CHARS:
+        raise ScrapeError(
+            f"latest payload is {size} chars after every Classroom trim; family-data caps it at {FAMILY_LATEST_MAX_CHARS}"
+        )
+    return size
+
+
 def persist_grades(data, history=None):
     if history is not None:
         save_grade_history(history)
+    fit_payload_for_family_data(data)
     OUTPUT_FILE.write_text(json.dumps(data, indent=2))
     try:
         publish_family_data(latest=data, history=history)

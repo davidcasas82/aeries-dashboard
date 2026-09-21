@@ -861,7 +861,153 @@ def attach_classroom(student_data, export, today, assignments_for_class, overrid
         print(f"  Classroom: Drive index has {len(drive_folders)} class folders, {n_files} files")
     for note in block["notes"][:3]:
         print(f"  Classroom: export note: {_clip(note, 160)}")
+    size, applied = fit_block(block, today)
+    print(f"  Classroom: block is {size // 1000} KB" + (f" after trimming {', '.join(applied)}" if applied else ""))
     return block
+
+
+# --------------------------------------------------------------------------- size budget
+#
+# family-data caps the whole `latest` payload at 900k characters (MAX_LATEST in
+# grades.js). The frozen v3 script over-fetches on purpose, so the scraper has
+# to be the one that keeps a student's block inside a budget. Trims go from
+# least to most visible; none of them touch a field that class_context() or the
+# assignment stamps read, so the dashboard looks the same either way.
+
+BLOCK_BUDGET_CHARS = 230_000
+TEXT_KEEP_WINDOW_DAYS = 30
+DRIVE_FILES_PER_FOLDER_TRIMMED = 25
+TRIMMED_TEXT_LIMIT = 200
+OLD_ITEM_DAYS = 120
+RECENT_ITEM_DAYS = 45
+
+
+def json_chars(obj):
+    """Approximately what JSON.stringify(obj).length will be on the Worker."""
+    return len(json.dumps(obj, ensure_ascii=False, separators=(",", ":")))
+
+
+def _block_items(block):
+    for course in block.get("courses") or []:
+        for item in course.get("items") or []:
+            yield item
+
+
+def _item_attachments(item):
+    yield from item.get("materials") or []
+    yield from (item.get("submission") or {}).get("attachments") or []
+
+
+def _item_anchor_day(item):
+    for key in ("due", "updated_on", "assigned_on"):
+        if item.get(key):
+            try:
+                return datetime.strptime(item[key][:10], "%Y-%m-%d").date()
+            except ValueError:
+                continue
+    return None
+
+
+def _trim_drive_index_to_current_year(block, today):
+    folders = block.get("drive_folders") or []
+    current = [f for f in folders if f.get("current_year")] or folders
+    for f in current:
+        f["files"] = (f.get("files") or [])[:DRIVE_FILES_PER_FOLDER_TRIMMED]
+    if current:
+        block["drive_folders"] = current
+    elif "drive_folders" in block:
+        del block["drive_folders"]
+
+
+def _trim_text_outside_window(block, today):
+    today_d = today.date() if hasattr(today, "date") else today
+    for item in _block_items(block):
+        anchor = _item_anchor_day(item)
+        if anchor is not None and abs((anchor - today_d).days) <= TEXT_KEEP_WINDOW_DAYS:
+            continue
+        for m in _item_attachments(item):
+            m.pop("text_excerpt", None)
+
+
+def _trim_rubric_levels(block, today):
+    for item in _block_items(block):
+        for c in (item.get("rubric") or {}).get("criteria") or []:
+            c.pop("levels", None)
+
+
+def _trim_submission_history(block, today):
+    for item in _block_items(block):
+        sub = item.get("submission")
+        if sub:
+            sub.pop("history", None)
+
+
+def _trim_old_instructions(block, today):
+    """Items outside the 30-day window are never shown; their long text is only for later re-reads."""
+    today_d = today.date() if hasattr(today, "date") else today
+    for item in _block_items(block):
+        anchor = _item_anchor_day(item)
+        if anchor is not None and abs((anchor - today_d).days) <= TEXT_KEEP_WINDOW_DAYS:
+            continue
+        for key in ("instructions", "description"):
+            if item.get(key):
+                item[key] = _clip(item[key], TRIMMED_TEXT_LIMIT)
+
+
+def _trim_all_text(block, today):
+    for item in _block_items(block):
+        for m in _item_attachments(item):
+            m.pop("text_excerpt", None)
+
+
+def _trim_drive_index(block, today):
+    block.pop("drive_folders", None)
+
+
+def _trim_old_unmatched_items(block, today, older_than=OLD_ITEM_DAYS):
+    """Old Classroom items with no Aeries row are the long tail; the window logic never shows them."""
+    today_d = today.date() if hasattr(today, "date") else today
+    for course in block.get("courses") or []:
+        kept = []
+        for item in course.get("items") or []:
+            anchor = _item_anchor_day(item)
+            old = anchor is not None and (today_d - anchor).days > older_than
+            if old and not item.get("aeries_match"):
+                continue
+            kept.append(item)
+        course["items"] = kept
+
+
+def _trim_recent_unmatched_items(block, today):
+    _trim_old_unmatched_items(block, today, older_than=RECENT_ITEM_DAYS)
+
+
+TRIM_STEPS = (
+    ("drive index to this year", _trim_drive_index_to_current_year),
+    ("doc text outside 30 days", _trim_text_outside_window),
+    ("rubric levels", _trim_rubric_levels),
+    ("submission history", _trim_submission_history),
+    ("long text on older items", _trim_old_instructions),
+    ("all doc text", _trim_all_text),
+    ("drive index", _trim_drive_index),
+    ("old unmatched items", _trim_old_unmatched_items),
+    ("unmatched items older than 45 days", _trim_recent_unmatched_items),
+)
+
+
+def fit_block(block, today, budget=BLOCK_BUDGET_CHARS, start_step=0):
+    """Apply trim steps in order until the block fits ``budget``. Returns (size, applied names)."""
+    applied = []
+    size = json_chars(block)
+    for name, fn in TRIM_STEPS[start_step:]:
+        if size <= budget:
+            break
+        fn(block, today)
+        applied.append(name)
+        size = json_chars(block)
+    if applied:
+        block["trimmed"] = list(dict.fromkeys((block.get("trimmed") or []) + applied))
+    return size, applied
 
 
 # --------------------------------------------------------------------------- per-class context
