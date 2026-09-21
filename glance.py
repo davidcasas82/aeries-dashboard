@@ -1,10 +1,11 @@
 """Official v1 glance: standing + Focus / Today + drawer facts.
 
 Two bands under the kid header replace the single Tonight list.
-Focus = unsubmitted assignments due tomorrow or within 2 Pacific days.
-Today = due today or already happened (facts only). Past due, missing,
-and class summaries stay on the class cards. Empty Today is omitted.
-Empty Focus says the 2-day window is clear — not that the backlog is.
+Focus = every unsubmitted assignment due tomorrow or within 2 Pacific days.
+No item cap and no “and N more” truncation. Today = due today or already
+happened (facts only). Past due, missing, and class summaries stay on the
+class cards. Empty Today is omitted. Empty Focus says the 2-day window
+is clear — not that the backlog is.
 
 Nothing here logs student names or numbers.
 """
@@ -16,9 +17,7 @@ from datetime import datetime, timedelta
 
 from classroom import TURNED_IN_STATES, teacher_card_body
 
-TONIGHT_LIMIT = 3
 BAND_LIMIT = 4
-FOCUS_LIMIT = 3
 FOCUS_WINDOW_DAYS = 2
 FOCUS_EMPTY = "Nothing due in the next 2 days."
 FORECAST_MAX_AGE_DAYS = 14
@@ -549,7 +548,7 @@ def in_focus_window(due, today):
 
 
 def collect_bands(view_classes, today, last_checked=""):
-    """Focus = next 2 days. Today = due today. No class summaries."""
+    """Focus = every due-soon assignment. Today = due today. No class summaries."""
     today_d = _as_date(today)
     focus, today_items = [], []
     suppressed = 0
@@ -619,7 +618,7 @@ def collect_bands(view_classes, today, last_checked=""):
             ), key)
 
     focus.sort(key=lambda r: (r.get("due_key") or "", (r.get("title") or "").lower()))
-    return focus[:FOCUS_LIMIT], today_items[:BAND_LIMIT], suppressed
+    return focus, today_items[:BAND_LIMIT], suppressed
 
 
 def collect_tonight(view_classes, today, last_checked=""):

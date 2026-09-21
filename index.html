@@ -4977,7 +4977,7 @@
                 }
             }
             focus.sort((a, b) => (a.due_key || '').localeCompare(b.due_key || '') || (a.title || '').localeCompare(b.title || ''));
-            const focusOut = focus.slice(0, 3);
+            const focusOut = focus;
             const todayOut = todayItems.slice(0, 4);
             const count = focusOut.length + todayOut.length;
             const empty = count === 0;

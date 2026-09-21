@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 import unittest
 from datetime import datetime
@@ -192,7 +193,6 @@ class FixtureGlanceTests(unittest.TestCase):
             "coming_up",
         )
         self.assertGreaterEqual(self.g["suppressed"], 1)
-        self.assertLessEqual(len(items), 3)
         self.assertIsNone(self.g["tonight"]["weekend"])
 
     def test_forecast_uses_newest_teacher_note(self):
@@ -669,6 +669,33 @@ class TonightSplitTests(unittest.TestCase):
         self.assertFalse(any(i.get("kind") == "class" for i in g["tonight"]["items"]))
         self.assertNotIn("lowest", json.dumps(g["tonight"]).lower())
         self.assertNotIn("still to do", json.dumps(g["bands"]).lower())
+
+    def test_focus_lists_every_due_soon_assignment(self):
+        assignments = [
+            {"name": f"Packet {n}", "due_date": "09/15/2026", "points_earned": None}
+            for n in range(1, 6)
+        ] + [
+            {"name": f"Lab {n}", "due_date": "09/16/2026", "points_earned": None}
+            for n in range(1, 3)
+        ]
+        classes = [{
+            "period": 5,
+            "course_name": "Algebra 2",
+            "mark": "B-",
+            "percent": "81",
+            "assignments": assignments,
+            "classroom": {},
+        }]
+        g = glance.build_glance(classes, MONDAY)
+        titles = [i["title"] for i in g["tonight"]["items"]]
+        self.assertEqual(
+            titles,
+            ["Packet 1", "Packet 2", "Packet 3", "Packet 4", "Packet 5", "Lab 1", "Lab 2"],
+        )
+        self.assertEqual(titles, [i["title"] for i in g["bands"]["focus"]["items"]])
+        blob = json.dumps(g["bands"]["focus"])
+        self.assertIsNone(re.search(r"and \d+ more", blob, re.I))
+        self.assertNotIn("lowest", blob.lower())
 
     def test_empty_bands_are_omitted(self):
         student = {
