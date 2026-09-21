@@ -738,11 +738,49 @@ class TonightSplitTests(unittest.TestCase):
         g = glance.build_glance(classes, datetime(2026, 9, 21))
         blob = json.dumps({"bands": g["bands"], "tonight": g["tonight"]}).lower()
         self.assertNotIn("lowest", blob)
-        self.assertNotIn("is the lowest class", blob)
+        self.assertNotIn("is the lowest class", json.dumps(g).lower())
         self.assertFalse(any(i.get("kind") == "class" for i in g["tonight"]["items"]))
         self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing due in the next 2 days.")
         self.assertIsNone(g["bands"]["today"])
         self.assertNotIn("76%", blob)
+        facts = g.get("facts") or []
+        self.assertEqual([i["title"] for i in facts], ["English"])
+        self.assertEqual(facts[0]["label"], "lowest mark")
+        self.assertNotIn("%", facts[0]["label"])
+        self.assertNotIn("is the lowest class", facts[0]["label"].lower())
+
+    def test_fact_lines_combine_look_reasons_without_titles(self):
+        classes = [{
+            "period": 5,
+            "course_name": "Algebra 2",
+            "mark": "C",
+            "percent": "76",
+            "assignments": [
+                {"name": "Old packet", "due_date": "09/10/2026", "points_earned": None},
+                {"name": "Warmup", "due_date": "09/21/2026", "points_earned": None},
+            ],
+            "classroom": {},
+        }, {
+            "period": 8,
+            "course_name": "English",
+            "mark": "B",
+            "percent": "88",
+            "assignments": [
+                {"name": "Essay", "due_date": "09/08/2026", "points_earned": None},
+                {"name": "Draft", "due_date": "09/09/2026", "points_earned": None},
+            ],
+            "classroom": {},
+        }]
+        g = glance.build_glance(classes, datetime(2026, 9, 21))
+        facts = {i["title"]: i["label"] for i in g["facts"]}
+        self.assertEqual(facts["Algebra 2"], "lowest mark · 1 past due · due today")
+        self.assertEqual(facts["English"], "2 past due")
+        self.assertNotIn("Old packet", json.dumps(g["facts"]))
+        self.assertNotIn("Warmup", json.dumps(g["facts"]))
+        self.assertNotIn("is the lowest class", json.dumps(g).lower())
+        self.assertNotIn("76%", json.dumps(g["facts"]))
+        self.assertNotIn("Algebra 2", [i["title"] for i in g["tonight"]["items"]])
+        self.assertEqual([i["title"] for i in g["tonight"]["today"]], ["Warmup"])
 
 
 class TeacherProseCardTests(unittest.TestCase):

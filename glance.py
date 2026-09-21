@@ -3,9 +3,11 @@
 Two bands under the kid header replace the single Tonight list.
 Focus = every unsubmitted assignment due tomorrow or within 2 Pacific days.
 No item cap and no “and N more” truncation. Today = due today or already
-happened (facts only). Past due, missing, and class summaries stay on the
-class cards. Empty Today is omitted. Empty Focus says the 2-day window
-is clear — not that the backlog is.
+happened (facts only). Under the kid name, before Focus: one fact line per
+class that needs a look (lowest mark, past-due count, due today). Never the
+sentence “X is the lowest class, at N%.” Past due, missing, and class
+summaries stay on the class cards. Empty Today is omitted. Empty Focus
+says the 2-day window is clear — not that the backlog is.
 
 Nothing here logs student names or numbers.
 """
@@ -228,6 +230,46 @@ def _standing_id(cls):
     name = ((cls or {}).get("course_name") or "").strip()
     period = (cls or {}).get("period")
     return f"standing-{period if period is not None else name}"
+
+
+def _scored_class(cls):
+    mark, pct = _grade_display(cls)
+    return mark not in ("", "—") or bool(pct)
+
+
+def _pct_value(cls):
+    raw = (cls or {}).get("percent")
+    try:
+        if raw in (None, ""):
+            return None
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _same_class(a, b):
+    if not a or not b:
+        return False
+    if a.get("period") is not None and b.get("period") is not None:
+        return a.get("period") == b.get("period")
+    return (a.get("course_name") or "").lower() == (b.get("course_name") or "").lower()
+
+
+def _lowest_class(view_classes):
+    scored = [
+        c for c in (view_classes or [])
+        if _scored_class(c) and _pct_value(c) is not None
+    ]
+    if len(scored) < 2:
+        return None
+    return min(
+        scored,
+        key=lambda c: (
+            _pct_value(c),
+            str(c.get("period") or ""),
+            c.get("course_name") or "",
+        ),
+    )
 
 
 def _forecast_matches(item, when, title):
@@ -535,7 +577,7 @@ def _band_item(*, band, kind, icon, label, title, cls, item_key="", due=None):
         "course": course,
         "period": period,
         "due_key": due.isoformat() if due else "",
-        "line": "item",
+        "line": "class" if kind == "fact" else "item",
     }
 
 
@@ -619,6 +661,70 @@ def collect_bands(view_classes, today, last_checked=""):
 
     focus.sort(key=lambda r: (r.get("due_key") or "", (r.get("title") or "").lower()))
     return focus, today_items[:BAND_LIMIT], suppressed
+
+
+def collect_facts(view_classes, today):
+    """One line per class that needs a look. Facts already on the page."""
+    today_d = _as_date(today)
+    lowest = _lowest_class(view_classes)
+    forecast = pick_forecast(view_classes, today_d)
+    when = _parse_mmdd((forecast or {}).get("due_date")) if forecast else None
+    forecast_due_today = bool(forecast and when == today_d)
+    rows = []
+    for cls in view_classes or []:
+        course = (cls.get("course_name") or "").strip()
+        if not course:
+            continue
+        past_n = 0
+        due_today = False
+        for item in _class_raw_work(cls):
+            if not _work_name(item):
+                continue
+            if _work_done(item):
+                continue
+            if _work_bucket(item, today_d) == "past_due":
+                past_n += 1
+            if _work_due_key(item) == today_d:
+                due_today = True
+        if (
+            forecast_due_today
+            and forecast.get("course") == course
+            and forecast.get("period") == cls.get("period")
+        ):
+            match = matching_forecast_work(cls, when, forecast.get("title"))
+            if not (match and _work_done(match)):
+                due_today = True
+        reasons = []
+        if lowest is not None and _same_class(cls, lowest):
+            reasons.append("lowest mark")
+        if past_n == 1:
+            reasons.append("1 past due")
+        elif past_n > 1:
+            reasons.append(f"{past_n} past due")
+        if due_today:
+            reasons.append("due today")
+        if not reasons:
+            continue
+        rows.append(_band_item(
+            band="facts", kind="fact", icon="•",
+            label=" · ".join(reasons),
+            title=course, cls=cls, item_key="fact",
+        ))
+
+    def sort_key(row):
+        label = row.get("label") or ""
+        past_m = re.search(r"(\d+) past due", label)
+        past_n = int(past_m.group(1)) if past_m else 0
+        return (
+            0 if past_n else 1,
+            -past_n,
+            0 if "due today" in label else 1,
+            0 if "lowest mark" in label else 1,
+            str(row.get("period") or ""),
+        )
+
+    rows.sort(key=sort_key)
+    return rows
 
 
 def collect_tonight(view_classes, today, last_checked=""):
@@ -926,6 +1032,7 @@ def build_glance(view_classes, today, last_checked_iso=""):
     focus, today_items, suppressed = collect_bands(
         view_classes, today, last_checked=last_checked
     )
+    facts = collect_facts(view_classes, today)
     weekend_night = bool(weekend_dates(today))
     count = len(focus) + len(today_items)
     empty = count == 0
@@ -960,6 +1067,7 @@ def build_glance(view_classes, today, last_checked_iso=""):
             "today": today_items,
             "weekend": None,
         },
+        "facts": facts,
         "suppressed": suppressed,
         "verified_count": count,
     }

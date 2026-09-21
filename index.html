@@ -1794,6 +1794,8 @@
         .glance-trend.down .glance-trend-symbol { color: var(--g-red); background: var(--g-red-soft); }
         .glance-trend.flat .glance-trend-symbol { color: var(--g-blue); background: var(--g-blue-soft); }
         .glance-trend.none .glance-trend-symbol { color: var(--g-faint); background: #eef0ec; }
+        .glance-facts { overflow: hidden; margin-bottom: 14px; }
+        .glance-action-icon.fact { color: var(--g-amber); background: var(--g-amber-soft); }
         .glance-bands {
             display: flex;
             flex-direction: column;
@@ -4650,7 +4652,7 @@
                 course,
                 period,
                 due_key: due ? `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}` : '',
-                line: 'item',
+                line: opts.kind === 'fact' ? 'class' : 'item',
             };
         }
 
@@ -4877,6 +4879,86 @@
             return best;
         }
 
+        function glanceSameProfile(a, b) {
+            if (!a || !b) return false;
+            if (a.period != null && b.period != null) return a.period === b.period;
+            const an = String((a.classMeta || {}).course_name || '').toLowerCase();
+            const bn = String((b.classMeta || {}).course_name || '').toLowerCase();
+            return !!an && an === bn;
+        }
+
+        function glanceLowestProfile(profiles) {
+            const scored = [];
+            for (const p of profiles || []) {
+                const c = p.classMeta || {};
+                if (c.percent === '' || c.percent == null) continue;
+                const n = Number(c.percent);
+                if (Number.isNaN(n)) continue;
+                const g = formatGradeDisplay(c, p.assignments);
+                if (g.letter === '—' && !g.pct) continue;
+                scored.push(p);
+            }
+            if (scored.length < 2) return null;
+            return scored.slice().sort((a, b) => {
+                const pa = Number((a.classMeta || {}).percent);
+                const pb = Number((b.classMeta || {}).percent);
+                if (pa !== pb) return pa - pb;
+                const ia = a.period != null ? Number(a.period) : 99;
+                const ib = b.period != null ? Number(b.period) : 99;
+                if (ia !== ib) return ia - ib;
+                return String((a.classMeta || {}).course_name || '')
+                    .localeCompare(String((b.classMeta || {}).course_name || ''));
+            })[0];
+        }
+
+        function glanceCollectFacts(profiles, forecast) {
+            const lowest = glanceLowestProfile(profiles);
+            const forecastDueToday = !!(forecast && forecast.when && daysFromToday(forecast.when) === 0);
+            const rows = [];
+            for (const p of profiles || []) {
+                const course = ((p.classMeta || {}).course_name || '').trim();
+                if (!course) continue;
+                let pastN = 0;
+                let dueToday = false;
+                for (const item of glanceRawWork(p)) {
+                    if (!glanceWorkName(item)) continue;
+                    if (glanceWorkDone(item)) continue;
+                    if (glanceWorkBucket(item) === 'past_due') pastN += 1;
+                    const due = glanceWorkDue(item);
+                    if (due && glanceSameDay(due, TODAY)) dueToday = true;
+                }
+                if (forecastDueToday && forecast.profile && glanceSameProfile(p, forecast.profile)) {
+                    const match = glanceForecastMatch(p, forecast.when, forecast.title);
+                    if (!(match && glanceWorkDone(match))) dueToday = true;
+                }
+                const reasons = [];
+                if (lowest && glanceSameProfile(p, lowest)) reasons.push('lowest mark');
+                if (pastN === 1) reasons.push('1 past due');
+                else if (pastN > 1) reasons.push(`${pastN} past due`);
+                if (dueToday) reasons.push('due today');
+                if (!reasons.length) continue;
+                rows.push(glanceBandItem(p, {
+                    band: 'facts', kind: 'fact', icon: '•',
+                    label: reasons.join(' · '),
+                    title: course, itemKey: 'fact',
+                }));
+            }
+            rows.sort((a, b) => {
+                const pa = parseInt((/(\d+) past due/.exec(a.label) || ['0', '0'])[1], 10);
+                const pb = parseInt((/(\d+) past due/.exec(b.label) || ['0', '0'])[1], 10);
+                if ((pb > 0) !== (pa > 0)) return pb > 0 ? 1 : -1;
+                if (pb !== pa) return pb - pa;
+                const da = /due today/.test(a.label) ? 0 : 1;
+                const db = /due today/.test(b.label) ? 0 : 1;
+                if (da !== db) return da - db;
+                const la = /lowest mark/.test(a.label) ? 0 : 1;
+                const lb = /lowest mark/.test(b.label) ? 0 : 1;
+                if (la !== lb) return la - lb;
+                return String(a.period ?? '').localeCompare(String(b.period ?? ''));
+            });
+            return rows;
+        }
+
         function buildGlance(student, profiles) {
             const standing = (profiles || []).map(p => {
                 const c = p.classMeta || {};
@@ -4979,6 +5061,7 @@
             focus.sort((a, b) => (a.due_key || '').localeCompare(b.due_key || '') || (a.title || '').localeCompare(b.title || ''));
             const focusOut = focus;
             const todayOut = todayItems.slice(0, 4);
+            const facts = glanceCollectFacts(profiles, forecast);
             const count = focusOut.length + todayOut.length;
             const empty = count === 0;
             const focusEmpty = 'Nothing due in the next 2 days.';
@@ -5003,6 +5086,7 @@
                     today: todayOut,
                     weekend: null,
                 },
+                facts,
                 suppressed,
                 verified_count: count,
             };
@@ -5010,9 +5094,11 @@
 
         function glanceActionMarkup(action) {
             const openId = action.standing_id || action.id;
+            const isClass = action.line === 'class' || action.kind === 'fact';
+            const klass = isClass ? 'glance-action is-class' : 'glance-action';
             const iconKind = action.kind === 'today' && action.band === 'today' ? 'today-done' : action.kind;
-            const course = action.course;
-            return `<button class="glance-action" type="button" data-glance="${esc(openId)}" aria-label="Open ${esc(action.course || action.title)}">
+            const course = isClass ? '' : action.course;
+            return `<button class="${klass}" type="button" data-glance="${esc(openId)}" aria-label="Open ${esc(action.course || action.title)}">
                 <span class="glance-action-icon ${esc(iconKind)}" aria-hidden="true">${esc(action.icon)}</span>
                 <span>
                     <span class="glance-action-label">${esc(action.label)}</span>
@@ -5065,9 +5151,15 @@
                     ${countHtml}
                 </button>`;
             }).join('');
+            const facts = (g.facts && g.facts.length)
+                ? `<section class="glance-facts glance-card" aria-label="Classes to look at">
+                    <div class="glance-action-list">${g.facts.map(glanceActionMarkup).join('')}</div>
+                </section>`
+                : '';
             const bands = renderGlanceBand(g.bands.focus)
                 + renderGlanceBand(g.bands.today);
             return `<div class="glance" id="glance-${idx}">
+                ${facts}
                 ${bands ? `<div class="glance-bands">${bands}</div>` : ''}
                 <section class="glance-standing glance-card">
                     <div class="glance-section-head">
