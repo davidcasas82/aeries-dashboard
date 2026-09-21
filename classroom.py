@@ -1047,7 +1047,7 @@ def class_context(student_data, class_meta, today, assignments=None):
     for item in course.get("items") or []:
         kind = item.get("type")
         if kind == "announcement":
-            if len(announcements) < 3 and item.get("description"):
+            if item.get("description"):
                 announcements.append({
                     "text": _clip(item["description"], ANNOUNCEMENT_LIMIT),
                     "posted_on": item.get("updated_on") or item.get("assigned_on") or "",
@@ -1126,6 +1126,11 @@ def class_context(student_data, class_meta, today, assignments=None):
             not_started_due_soon.append({"title": item.get("title"), "days_until_due": days})
 
     classroom_only.sort(key=lambda e: (e.get("due") or "9999", e.get("title") or ""))
+    announcements.sort(
+        key=lambda a: a.get("posted_on") or "",
+        reverse=True,
+    )
+    announcements = announcements[:3]
     return {
         "course_name": course.get("name") or "",
         "link": course.get("link") or "",
