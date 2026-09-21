@@ -1794,6 +1794,14 @@
         .glance-trend.down .glance-trend-symbol { color: var(--g-red); background: var(--g-red-soft); }
         .glance-trend.flat .glance-trend-symbol { color: var(--g-blue); background: var(--g-blue-soft); }
         .glance-trend.none .glance-trend-symbol { color: var(--g-faint); background: #eef0ec; }
+        .glance-bands {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+        .glance-band { overflow: hidden; }
+        .glance-band .glance-section-head { padding-bottom: 14px; }
         .glance-tonight { margin-bottom: 22px; overflow: hidden; }
         .glance-tonight-meta {
             display: flex;
@@ -1871,6 +1879,8 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        .glance-action.is-class .glance-action-class { display: none; }
+        .glance-action-icon.today-done { color: var(--g-forest); background: var(--g-forest-soft); }
         .glance-chevron { color: #839088; font-size: 22px; font-weight: 400; }
         .glance-weekend {
             margin-top: 0;
@@ -4592,7 +4602,58 @@
             };
         }
 
-        function glanceClassWork(profile) {
+        function glanceIsAssessment(text) {
+            const raw = String(text || '');
+            if (!/\b(?:unit\s+\d+\s+)?(?:quiz|test|exam|assessment|midterm|final)\b/i.test(raw)) return false;
+            return !/\b(?:review|practice|prep|study|packet|homework|hw)\b/i.test(raw);
+        }
+
+        function glanceStandingId(profile) {
+            const c = (profile && profile.classMeta) || {};
+            const period = profile && profile.period != null ? profile.period : c.period;
+            const name = c.course_name || '';
+            return `standing-${period != null ? period : name}`;
+        }
+
+        function glancePctValue(profile) {
+            const n = Number(profile && profile.classMeta && profile.classMeta.percent);
+            return Number.isFinite(n) ? n : null;
+        }
+
+        function glanceScoredProfile(profile) {
+            const c = (profile && profile.classMeta) || {};
+            const g = formatGradeDisplay(c, (profile && profile.assignments) || []);
+            return (g.letter && g.letter !== '—') || !!g.pct;
+        }
+
+        function glanceTodayFactLabel(item, due) {
+            if (item && glanceSubmitted(item)) {
+                const on = glanceWorkTurnedInOn(item);
+                return on ? `Turned in · ${glanceWeekdayDate(on)}` : 'Turned in';
+            }
+            return glanceDueWhenLabel(due, { done: !!(item && glanceWorkDone(item)) });
+        }
+
+        function glanceBandItem(profile, opts) {
+            const course = (profile.classMeta && profile.classMeta.course_name) || '';
+            const period = profile.period;
+            const title = opts.title || '';
+            const key = String(opts.itemKey || title).toLowerCase();
+            return {
+                id: `${opts.band}-${period}-${key}`.replace(/\s+/g, '-').slice(0, 80),
+                standing_id: glanceStandingId(profile),
+                band: opts.band,
+                kind: opts.kind,
+                icon: opts.icon,
+                label: opts.label,
+                title,
+                course,
+                period,
+                line: opts.kind === 'class' ? 'class' : 'item',
+            };
+        }
+
+        function glanceRawWork(profile) {
             const seen = new Set();
             const raws = [];
             for (const a of (profile && profile.assignments) || []) {
@@ -4613,6 +4674,25 @@
                     classroom: extra,
                 });
             }
+            return raws;
+        }
+
+        function glanceForecastMatch(profile, when, title) {
+            const titleL = String(title || '').trim().toLowerCase();
+            for (const item of glanceRawWork(profile)) {
+                const name = glanceWorkName(item);
+                if (!name) continue;
+                const due = glanceWorkDue(item);
+                if (when && due && !glanceSameDay(due, when)) continue;
+                const nameL = name.toLowerCase().trim();
+                if (titleL && nameL === titleL) return item;
+                if (glanceIsAssessment(name) && glanceIsAssessment(title)) return item;
+            }
+            return null;
+        }
+
+        function glanceClassWork(profile) {
+            const raws = glanceRawWork(profile);
             const rank = { past_due: 0, missing: 1, coming_up: 2, turned_in: 3 };
             raws.sort((a, b) => {
                 const ra = rank[glanceWorkBucket(a)] ?? 9;
@@ -4785,28 +4865,15 @@
                         const tm = titleRe.exec(text);
                         best = {
                             postedKey,
-                            action: {
-                                id: `forecast-${p.period}`,
-                                kind: 'forecast',
-                                icon: 'Q',
-                                label: glanceDueWhenLabel(when),
-                                title: tm ? tm[1] : 'Upcoming assessment',
-                                course: (p.classMeta && p.classMeta.course_name) || '',
-                                period: p.period,
-                                drawer: {
-                                    kicker: `${glanceDueWhenLabel(when)} · teacher, ${glanceMonthDay(posted)}`,
-                                    title: tm ? tm[1] : 'Upcoming assessment',
-                                    course: (p.classMeta && p.classMeta.course_name) || '',
-                                    teacher_words: text,
-                                    classroom: `Teacher note · posted ${glanceMonthDay(posted)}`,
-                                    aeries: 'No row yet · dated from the teacher note',
-                                },
-                            },
+                            when,
+                            profile: p,
+                            title: tm ? tm[1] : 'Upcoming assessment',
+                            label: glanceDueWhenLabel(when),
                         };
                     }
                 }
             }
-            return best && best.action;
+            return best;
         }
 
         function buildGlance(student, profiles) {
@@ -4843,92 +4910,138 @@
                 };
             });
 
-            const weekend = glanceWeekendDates(TODAY);
-            const dueToday = [];
-            const missing = [];
-            const dueTomorrow = [];
-            const weekendItems = [];
+            const dueTodayOpen = [];
+            const classLines = [];
+            const study = [];
+            const todayItems = [];
             const seen = new Set();
             let suppressed = 0;
-            const take = (bucket, kind, item, profile, weekendLabel) => {
-                const name = (item.description || item.name || '').trim();
-                const key = `${normalizeName((profile.classMeta || {}).course_name)}|${name.toLowerCase()}`;
-                if (!name || seen.has(key)) return;
-                if (glanceSubmitted(item)) return;
+            const take = (bucket, row, key) => {
+                if (!key || seen.has(key)) return;
                 seen.add(key);
-                bucket.push(glanceAction(kind, item, profile, weekendLabel));
+                bucket.push(row);
             };
+            const scored = (profiles || []).filter(p => glanceScoredProfile(p) && glancePctValue(p) != null);
+            let lowest = null;
+            if (scored.length >= 2) {
+                lowest = scored.slice().sort((a, b) => {
+                    const d = glancePctValue(a) - glancePctValue(b);
+                    if (d) return d;
+                    return String(a.period ?? '').localeCompare(String(b.period ?? ''));
+                })[0];
+            }
             for (const p of profiles || []) {
-                const work = glanceWork(p);
-                for (const item of work.upcoming) {
-                    if (glanceSubmitted(item)) { suppressed += 1; continue; }
-                    const due = glanceParseDay(item.due_date);
-                    if (!due) continue;
-                    if (glanceSameDay(due, TODAY)) { take(dueToday, 'today', item, p); continue; }
-                    if (weekend) {
-                        const label = Object.keys(weekend).find(k => glanceSameDay(due, weekend[k]));
-                        if (label) { take(weekendItems, 'weekend', item, p, label); continue; }
-                    } else if (daysFromToday(due) === 1) {
-                        take(dueTomorrow, 'tomorrow', item, p);
+                const course = ((p.classMeta || {}).course_name || '').trim();
+                if (!course) continue;
+                let pastN = 0;
+                let missingN = 0;
+                for (const item of glanceRawWork(p)) {
+                    const name = glanceWorkName(item);
+                    if (!name) continue;
+                    const key = `${course.toLowerCase()}|${name.toLowerCase()}`;
+                    const due = glanceWorkDue(item);
+                    const done = glanceWorkDone(item);
+                    const assess = glanceIsAssessment(name);
+                    if (done) {
+                        suppressed += 1;
+                        if (due && glanceSameDay(due, TODAY)) {
+                            take(todayItems, glanceBandItem(p, {
+                                band: 'today', kind: 'today', icon: '✓',
+                                label: glanceTodayFactLabel(item, due),
+                                title: name, itemKey: name,
+                            }), key);
+                        }
+                        continue;
+                    }
+                    const bucket = glanceWorkBucket(item);
+                    if (bucket === 'past_due') pastN += 1;
+                    else if (bucket === 'missing') missingN += 1;
+                    if (due && glanceSameDay(due, TODAY) && assess) {
+                        take(todayItems, glanceBandItem(p, {
+                            band: 'today', kind: 'today', icon: '✓',
+                            label: glanceTodayFactLabel(item, due),
+                            title: name, itemKey: name,
+                        }), key);
+                        continue;
+                    }
+                    if (due && glanceSameDay(due, TODAY)) {
+                        take(dueTodayOpen, glanceBandItem(p, {
+                            band: 'focus', kind: 'today', icon: '•',
+                            label: glanceDueWhenLabel(due),
+                            title: name, itemKey: name,
+                        }), key);
+                        continue;
+                    }
+                    // Upcoming unsubmitted work stays in the class drawer (Coming up).
+                }
+                const reasons = [];
+                if (lowest && p === lowest) {
+                    const g = formatGradeDisplay(p.classMeta || {}, p.assignments || []);
+                    reasons.push(g.pct ? `lowest, ${g.pct}` : 'lowest');
+                }
+                if (pastN) reasons.push(pastN === 1 ? '1 past due' : `${pastN} past due`);
+                if (missingN) reasons.push(missingN === 1 ? '1 missing' : `${missingN} missing`);
+                if (reasons.length) {
+                    take(classLines, glanceBandItem(p, {
+                        band: 'focus', kind: 'class', icon: '•',
+                        label: reasons.join(' · '),
+                        title: course, itemKey: 'class',
+                    }), `${course.toLowerCase()}|class:${course.toLowerCase()}`);
+                }
+            }
+            const forecast = glanceForecast(profiles);
+            if (forecast && forecast.profile && forecast.when) {
+                const course = ((forecast.profile.classMeta || {}).course_name || '').toLowerCase();
+                const title = forecast.title || 'Upcoming assessment';
+                const key = `${course}|${title.toLowerCase()}`;
+                const match = glanceForecastMatch(forecast.profile, forecast.when, title);
+                const days = daysFromToday(forecast.when);
+                if (!seen.has(key) && days != null && days >= 0) {
+                    if (days === 0) {
+                        const label = (match && glanceSubmitted(match))
+                            ? glanceTodayFactLabel(match, forecast.when)
+                            : glanceDueWhenLabel(forecast.when);
+                        take(todayItems, glanceBandItem(forecast.profile, {
+                            band: 'today', kind: 'forecast', icon: '✓',
+                            label, title, itemKey: title,
+                        }), key);
+                    } else if (!(match && glanceWorkDone(match))) {
+                        take(study, glanceBandItem(forecast.profile, {
+                            band: 'focus', kind: 'forecast', icon: 'Q',
+                            label: forecast.label || glanceDueWhenLabel(forecast.when),
+                            title, itemKey: title,
+                        }), key);
                     }
                 }
-                for (const item of work.missing) {
-                    if (glanceSubmitted(item)) { suppressed += 1; continue; }
-                    take(missing, 'missing', item, p);
-                }
             }
-            const items = [];
-            const weekendOut = [];
-            for (const row of dueToday) {
-                items.push(row);
-                if (items.length >= 3) break;
-            }
-            if (weekend) {
-                const order = { Saturday: 0, Sunday: 1, Monday: 2 };
-                weekendItems.sort((a, b) => (order[a.weekend_day] || order[a.label] || 9) - (order[b.weekend_day] || order[b.label] || 9));
-                for (const row of weekendItems) {
-                    if (items.length + weekendOut.length >= 3) break;
-                    weekendOut.push(row);
-                }
-            }
-            if (items.length + weekendOut.length < 3) {
-                for (const row of missing) {
-                    items.push(row);
-                    if (items.length + weekendOut.length >= 3) break;
-                }
-            }
-            if (!weekend && items.length < 3) {
-                for (const row of dueTomorrow) {
-                    items.push(row);
-                    if (items.length >= 3) break;
-                }
-            }
-            if (items.length + weekendOut.length < 3) {
-                const forecast = glanceForecast(profiles);
-                if (forecast && !items.concat(weekendOut).some(i => i.title === forecast.title && i.course === forecast.course)) {
-                    items.push(forecast);
-                }
-            }
-            const count = items.length + weekendOut.length;
+            classLines.sort((a, b) => {
+                const al = (a.label || '').startsWith('lowest') ? 0 : 1;
+                const bl = (b.label || '').startsWith('lowest') ? 0 : 1;
+                if (al !== bl) return al - bl;
+                return (a.title || '').localeCompare(b.title || '');
+            });
+            const focus = dueTodayOpen.concat(classLines, study).slice(0, 4);
+            const todayOut = todayItems.slice(0, 4);
+            const count = focus.length + todayOut.length;
             const empty = count === 0;
             let description = 'Nothing is asking for attention.';
-            if (!empty && weekend && !items.length && weekendOut.length) {
-                description = 'Nothing is due today. These are not submitted in Classroom.';
-            } else if (count === 1) description = 'One verified thing to handle.';
+            if (count === 1) description = 'One verified thing to handle.';
             else if (count > 1) description = `${count} verified things to handle.`;
+            const block = (heading, subtitle, items) => items.length ? { heading, subtitle, items } : null;
             return {
                 standing,
+                bands: {
+                    focus: block('Focus tonight', 'Still to do', focus),
+                    today: block('Today', 'Due today or already happened', todayOut),
+                },
                 tonight: {
                     description,
                     empty,
                     empty_line: 'Nothing verified needs action.',
                     empty_detail: 'Classroom and Aeries have no unfinished work to surface.',
-                    items,
-                    weekend: weekendOut.length ? {
-                        heading: 'This weekend — turn in before Monday',
-                        subtitle: 'Due Saturday, Sunday, or Monday · not submitted in Classroom',
-                        items: weekendOut,
-                    } : null,
+                    items: focus,
+                    today: todayOut,
+                    weekend: null,
                 },
                 suppressed,
                 verified_count: count,
@@ -4936,23 +5049,43 @@
         }
 
         function glanceActionMarkup(action) {
-            return `<button class="glance-action" type="button" data-glance="${esc(action.id)}" aria-label="Open verified detail for ${esc(action.title)}">
-                <span class="glance-action-icon ${esc(action.kind)}" aria-hidden="true">${esc(action.icon)}</span>
+            const openId = action.standing_id || action.id;
+            const klass = action.line === 'class' ? ' glance-action is-class' : ' glance-action';
+            const iconKind = action.kind === 'today' && action.band === 'today' ? 'today-done' : action.kind;
+            const course = action.line === 'class' ? '' : action.course;
+            return `<button class="${klass.trim()}" type="button" data-glance="${esc(openId)}" aria-label="Open ${esc(action.course || action.title)}">
+                <span class="glance-action-icon ${esc(iconKind)}" aria-hidden="true">${esc(action.icon)}</span>
                 <span>
                     <span class="glance-action-label">${esc(action.label)}</span>
                     <span class="glance-action-title">${esc(action.title)}</span>
-                    <span class="glance-action-class">${esc(action.course)}</span>
+                    ${course ? `<span class="glance-action-class">${esc(course)}</span>` : ''}
                 </span>
                 <span class="glance-chevron" aria-hidden="true">›</span>
             </button>`;
         }
 
+        function renderGlanceBand(band) {
+            if (!band || !(band.items || []).length) return '';
+            return `<section class="glance-band glance-card" aria-label="${esc(band.heading)}">
+                <div class="glance-section-head">
+                    <div>
+                        <h2>${esc(band.heading)}</h2>
+                        <p>${esc(band.subtitle || '')}</p>
+                    </div>
+                    <span class="glance-tap-note">Tap a class</span>
+                </div>
+                <div class="glance-action-list">${band.items.map(glanceActionMarkup).join('')}</div>
+            </section>`;
+        }
+
         function renderGlance(student, idx, profiles) {
             const g = buildGlance(student, profiles);
             glanceStore[idx] = g;
-            const tonightItems = (g.tonight.items || []).concat((g.tonight.weekend && g.tonight.weekend.items) || []);
-            studentTonightMap[idx] = tonightItems.map(i => ({ name: i.title, className: i.course, period: i.period, status: i.kind }));
-            studentFocusMap[idx] = tonightItems.map(i => `${i.title} (${i.course})`).join('; ');
+            const bandItems = []
+                .concat((g.bands.focus && g.bands.focus.items) || [])
+                .concat((g.bands.today && g.bands.today.items) || []);
+            studentTonightMap[idx] = bandItems.map(i => ({ name: i.title, className: i.course, period: i.period, status: i.kind }));
+            studentFocusMap[idx] = bandItems.map(i => `${i.title} (${i.course})`).join('; ');
             const grades = (g.standing || []).map(card => {
                 const countHtml = (card.count_line || '')
                     ? `<span class="glance-counts">${(card.count_line || '').split(' · ').map(bit => {
@@ -4967,44 +5100,10 @@
                     ${countHtml}
                 </button>`;
             }).join('');
-            let tonight = '';
-            if (g.tonight.items.length) {
-                tonight += `<div class="glance-action-list">${g.tonight.items.map(glanceActionMarkup).join('')}</div>`;
-            }
-            if (g.tonight.weekend) {
-                const w = g.tonight.weekend;
-                tonight += `<section class="glance-weekend" aria-label="${esc(w.heading)}">
-                    <div class="glance-weekend-heading">
-                        <strong>${esc(w.heading)}</strong>
-                        <span>${esc(w.subtitle)}</span>
-                    </div>
-                    <div class="glance-action-list">${w.items.map(glanceActionMarkup).join('')}</div>
-                </section>`;
-            }
-            if (g.tonight.empty) {
-                tonight = `<div class="glance-empty">
-                    <div>
-                        <span class="glance-empty-icon" aria-hidden="true">✓</span>
-                        <strong>${esc(g.tonight.empty_line)}</strong>
-                        <span>${esc(g.tonight.empty_detail)}</span>
-                    </div>
-                </div>`;
-            }
+            const bands = renderGlanceBand(g.bands.focus)
+                + renderGlanceBand(g.bands.today);
             return `<div class="glance" id="glance-${idx}">
-                <section class="glance-tonight glance-card">
-                    <div class="glance-section-head">
-                        <div>
-                            <h2>Things to focus on tonight</h2>
-                            <p>${esc(g.tonight.description)}</p>
-                        </div>
-                        <span class="glance-tap-note">Tap for evidence</span>
-                    </div>
-                    <div class="glance-tonight-meta">
-                        <span class="glance-live-dot" aria-hidden="true"></span>
-                        <span>Verified against Classroom and Aeries</span>
-                    </div>
-                    ${tonight}
-                </section>
+                ${bands ? `<div class="glance-bands">${bands}</div>` : ''}
                 <section class="glance-standing glance-card">
                     <div class="glance-section-head">
                         <div>
@@ -5021,8 +5120,7 @@
         function glanceItemById(idx, id) {
             const g = glanceStore[idx];
             if (!g) return null;
-            const all = (g.standing || []).concat(g.tonight.items || []).concat((g.tonight.weekend && g.tonight.weekend.items) || []);
-            return all.find(item => item.id === id) || null;
+            return (g.standing || []).find(item => item.id === id) || null;
         }
 
         function openGlanceDrawer(item, opener) {

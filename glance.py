@@ -1,8 +1,10 @@
-"""Official v1 glance: standing + Tonight bullets + drawer facts.
+"""Official v1 glance: standing + Focus / Today + drawer facts.
 
-Shape 1: Tonight IS the briefing. Each slot is one class-level fact.
-Reconcile is suppression (Classroom already-in is not a slot). Weekend
-Pacific rule: Fri/Sat/Sun never label Monday work “due tonight.”
+Two bands under the kid header replace the single Tonight list.
+Focus = still to do. Today = due today or already happened (facts only).
+Upcoming unsubmitted work stays in the class drawer only. Empty bands
+are omitted. Classroom already-in is never Focus. Weekend Pacific rule:
+Fri/Sat/Sun never label Monday work as Focus.
 
 Nothing here logs student names or numbers.
 """
@@ -15,6 +17,7 @@ from datetime import datetime, timedelta
 from classroom import TURNED_IN_STATES, teacher_card_body
 
 TONIGHT_LIMIT = 3
+BAND_LIMIT = 4
 FORECAST_MAX_AGE_DAYS = 14
 TREND_STEADY_PTS = 2.0
 
@@ -29,6 +32,10 @@ _WEEKDAYS = {
 }
 _ASSESS = re.compile(
     r"\b(?:unit\s+\d+\s+)?(?:quiz|test|exam|assessment|midterm|final)\b",
+    re.I,
+)
+_ASSESS_STUDY = re.compile(
+    r"\b(?:review|practice|prep|study|packet|homework|hw)\b",
     re.I,
 )
 _WEEKDAY = re.compile(
@@ -171,8 +178,6 @@ def _assessment_title(text, weekday_word=None):
     if not m:
         return _ASSESS.search(text).group(0) if _ASSESS.search(text) else text[:48]
     title = m.group(1).strip()
-    if weekday_word and weekday_word.lower() not in title.lower():
-        title = f"{title} {weekday_word}".strip()
     return title[:72] or "Upcoming assessment"
 
 
@@ -207,6 +212,67 @@ def resolve_forecast_date(text, posted, today):
     delta = (target - posted_d.weekday()) % 7
     when = posted_d + timedelta(days=delta)
     return when, word.capitalize()
+
+
+def _is_assessment(text):
+    """In-class test/quiz/exam. Review packets stay ordinary work."""
+    raw = text or ""
+    if not _ASSESS.search(raw):
+        return False
+    return not _ASSESS_STUDY.search(raw)
+
+
+def _standing_id(cls):
+    name = ((cls or {}).get("course_name") or "").strip()
+    period = (cls or {}).get("period")
+    return f"standing-{period if period is not None else name}"
+
+
+def _scored_class(cls):
+    mark, pct = _grade_display(cls)
+    return mark not in ("", "—") or bool(pct)
+
+
+def _pct_value(cls):
+    raw = (cls or {}).get("percent")
+    try:
+        if raw in (None, ""):
+            return None
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _forecast_matches(item, when, title):
+    name = _work_name(item)
+    if not name:
+        return False
+    due = _work_due_key(item)
+    if when is not None and due is not None and due != when:
+        return False
+    name_l = name.lower().strip()
+    title_l = (title or "").lower().strip()
+    if title_l and name_l == title_l:
+        return True
+    return _is_assessment(name) and _is_assessment(title)
+
+
+def matching_forecast_work(cls, when, title):
+    for item in _class_raw_work(cls):
+        if _forecast_matches(item, when, title):
+            return item
+    return None
+
+
+def today_fact_label(item, today, due=None):
+    """Facts only. Say turned in only when submission says so. Never a score."""
+    due = due if due is not None else _work_due_key(item)
+    if submitted_in_classroom(item):
+        on = _work_turned_in_on(item)
+        if on:
+            return f"Turned in · {_weekday_date(on)}"
+        return "Turned in"
+    return due_when_label(due, today, done=_work_done(item) if item else False)
 
 
 def pick_forecast(view_classes, today):
@@ -467,85 +533,159 @@ def _class_work(cls):
     return [i for i in upcoming if i] + extra, [i for i in missing if i]
 
 
-def collect_tonight(view_classes, today, last_checked=""):
-    """0–3 verified actions plus optional weekend bucket. Suppressed items omitted."""
+def _band_item(*, band, kind, icon, label, title, cls, item_key=""):
+    course = cls.get("course_name") or ""
+    period = cls.get("period")
+    slug = re.sub(r"\s+", "-", f"{band}-{period}-{item_key or title}".lower())[:80]
+    return {
+        "id": slug,
+        "standing_id": _standing_id(cls),
+        "band": band,
+        "kind": kind,
+        "icon": icon,
+        "label": label,
+        "title": title,
+        "course": course,
+        "period": period,
+        "line": "class" if kind == "class" else "item",
+    }
+
+
+def _lowest_class(view_classes):
+    scored = [
+        c for c in (view_classes or [])
+        if _scored_class(c) and _pct_value(c) is not None
+    ]
+    if len(scored) < 2:
+        return None
+    return min(scored, key=lambda c: (_pct_value(c), str(c.get("period") or ""), c.get("course_name") or ""))
+
+
+def _same_class(a, b):
+    if not a or not b:
+        return False
+    if a.get("period") is not None and b.get("period") is not None:
+        return a.get("period") == b.get("period")
+    return (a.get("course_name") or "").lower() == (b.get("course_name") or "").lower()
+
+
+def collect_bands(view_classes, today, last_checked=""):
+    """Focus and Today. Upcoming work stays in the class drawer."""
     today_d = _as_date(today)
-    weekend = weekend_dates(today_d)
-    due_today, missing, due_tomorrow, weekend_items = [], [], [], []
+    due_today_open, class_lines, study, today_items = [], [], [], []
     suppressed = 0
     seen = set()
+    lowest = _lowest_class(view_classes)
 
-    def take(bucket, kind, item, cls, weekend_label=None):
-        name = (item.get("name") or "").strip()
-        key = ((cls.get("course_name") or "").lower(), name.lower())
-        if not name or key in seen:
-            return
-        if submitted_in_classroom(item):
+    def take(bucket, row, key):
+        if not key or key in seen:
             return
         seen.add(key)
-        bucket.append(_action(kind, item, cls, last_checked, weekend_label=weekend_label, today=today_d))
+        bucket.append(row)
 
     for cls in view_classes or []:
-        upcoming, miss_rows = _class_work(cls)
-        for item in upcoming:
-            if submitted_in_classroom(item):
-                suppressed += 1
+        course = (cls.get("course_name") or "").strip()
+        if not course:
+            continue
+        past_n = 0
+        missing_n = 0
+        for item in _class_raw_work(cls):
+            name = _work_name(item)
+            if not name:
                 continue
-            due = _due_days(item)
-            if due is None:
+            key = (course.lower(), name.lower())
+            due = _work_due_key(item)
+            done = _work_done(item)
+            assess = _is_assessment(name)
+            if done:
+                suppressed += 1
+                if due == today_d:
+                    take(today_items, _band_item(
+                        band="today", kind="today", icon="✓",
+                        label=today_fact_label(item, today_d, due),
+                        title=name, cls=cls, item_key=name,
+                    ), key)
+                continue
+            bucket = _work_bucket(item, today_d)
+            if bucket == "past_due":
+                past_n += 1
+            elif bucket == "missing":
+                missing_n += 1
+            if due == today_d and assess:
+                take(today_items, _band_item(
+                    band="today", kind="today", icon="✓",
+                    label=today_fact_label(item, today_d, due),
+                    title=name, cls=cls, item_key=name,
+                ), key)
                 continue
             if due == today_d:
-                take(due_today, "today", item, cls)
+                take(due_today_open, _band_item(
+                    band="focus", kind="today", icon="•",
+                    label=due_when_label(due, today_d),
+                    title=name, cls=cls, item_key=name,
+                ), key)
                 continue
-            if weekend:
-                label = next((name for name, d in weekend.items() if d == due), None)
-                if label:
-                    take(weekend_items, "weekend", item, cls, weekend_label=label)
-                    continue
-            elif due == today_d + timedelta(days=1):
-                take(due_tomorrow, "tomorrow", item, cls)
-        for item in miss_rows:
-            if submitted_in_classroom(item):
-                suppressed += 1
-                continue
-            take(missing, "missing", item, cls)
+            # Upcoming unsubmitted work stays in the class drawer (Coming up).
+        reasons = []
+        if lowest is not None and _same_class(cls, lowest):
+            _mark, pct = _grade_display(cls)
+            reasons.append(f"lowest, {pct}" if pct else "lowest")
+        if past_n:
+            reasons.append("1 past due" if past_n == 1 else f"{past_n} past due")
+        if missing_n:
+            reasons.append("1 missing" if missing_n == 1 else f"{missing_n} missing")
+        if reasons:
+            take(class_lines, _band_item(
+                band="focus", kind="class", icon="•",
+                label=" · ".join(reasons),
+                title=course, cls=cls, item_key="class",
+            ), (course.lower(), f"class:{course.lower()}"))
 
-    items = []
-    for row in due_today:
-        items.append(row)
-        if len(items) >= TONIGHT_LIMIT:
-            break
-    weekend_out = []
-    if weekend:
-        order = {"Saturday": 0, "Sunday": 1, "Monday": 2}
-        weekend_items.sort(key=lambda i: order.get(i.get("weekend_day") or i.get("label"), 9))
-        for row in weekend_items:
-            if len(items) + len(weekend_out) >= TONIGHT_LIMIT:
-                break
-            weekend_out.append(row)
-    if len(items) + len(weekend_out) < TONIGHT_LIMIT:
-        for row in missing:
-            items.append(row)
-            if len(items) + len(weekend_out) >= TONIGHT_LIMIT:
-                break
-    if not weekend and len(items) < TONIGHT_LIMIT:
-        for row in due_tomorrow:
-            items.append(row)
-            if len(items) >= TONIGHT_LIMIT:
-                break
-    if len(items) + len(weekend_out) < TONIGHT_LIMIT:
-        forecast = pick_forecast(view_classes, today_d)
-        if forecast:
-            key = ((forecast.get("course") or "").lower(), (forecast.get("title") or "").lower())
-            already = {
-                ((i.get("course") or "").lower(), (i.get("title") or "").lower())
-                for i in items + weekend_out
-            }
-            if key not in already:
-                items.append(forecast)
+    forecast = pick_forecast(view_classes, today_d)
+    if forecast:
+        title = forecast.get("title") or "Upcoming assessment"
+        key = ((forecast.get("course") or "").lower(), title.lower())
+        forecast_cls = next(
+            (
+                c for c in (view_classes or [])
+                if (c.get("course_name") or "") == forecast.get("course")
+                and c.get("period") == forecast.get("period")
+            ),
+            None,
+        )
+        when = _parse_mmdd(forecast.get("due_date"))
+        match = matching_forecast_work(forecast_cls, when, title) if forecast_cls else None
+        if forecast_cls and when is not None and when >= today_d and key not in seen:
+            if when == today_d:
+                if match and submitted_in_classroom(match):
+                    label = today_fact_label(match, today_d, when)
+                else:
+                    label = due_when_label(when, today_d)
+                take(today_items, _band_item(
+                    band="today", kind="forecast", icon="✓",
+                    label=label, title=title, cls=forecast_cls, item_key=title,
+                ), key)
+            elif not (match and _work_done(match)):
+                take(study, _band_item(
+                    band="focus", kind="forecast", icon="Q",
+                    label=forecast.get("label") or due_when_label(when, today_d),
+                    title=title, cls=forecast_cls, item_key=title,
+                ), key)
 
-    items = items[: max(0, TONIGHT_LIMIT - len(weekend_out))]
-    return items, weekend_out, suppressed
+    def by_title(row):
+        return (row.get("title") or "").lower()
+
+    class_lines.sort(key=lambda r: (0 if (r.get("label") or "").startswith("lowest") else 1, by_title(r)))
+    focus = (due_today_open + class_lines + study)[:BAND_LIMIT]
+    return focus, today_items[:BAND_LIMIT], suppressed
+
+
+def collect_tonight(view_classes, today, last_checked=""):
+    """Focus lines plus empty weekend bucket. Prefer collect_bands."""
+    focus, _today, suppressed = collect_bands(
+        view_classes, today, last_checked=last_checked
+    )
+    return focus, [], suppressed
 
 
 def _fmt_pts(n):
@@ -694,12 +834,11 @@ def _work_due_key(item):
     return due
 
 
-def class_work_rows(cls, today=None):
-    """Every assignment in this class. Not Tonight’s 0–3. No warehouse fields."""
-    rows = []
-    seen = set()
+def _class_raw_work(cls):
+    """Assignments plus Classroom-only cards. Same set the drawer lists."""
     raws = []
-    for a in cls.get("assignments") or []:
+    seen = set()
+    for a in (cls or {}).get("assignments") or []:
         name = _work_name(a)
         if not name:
             continue
@@ -708,7 +847,7 @@ def class_work_rows(cls, today=None):
             continue
         seen.add(key)
         raws.append(a)
-    cr = cls.get("classroom") or {}
+    cr = (cls or {}).get("classroom") or {}
     for extra in cr.get("classroom_only") or []:
         title = (extra.get("title") or extra.get("name") or "").strip()
         if not title or title.lower() in seen:
@@ -729,12 +868,19 @@ def class_work_rows(cls, today=None):
                 "turned_in_on": extra.get("turned_in_on"),
             },
         })
+    return raws
+
+
+def class_work_rows(cls, today=None):
+    """Every assignment in this class. Not Tonight’s 0–3. No warehouse fields."""
+    raws = _class_raw_work(cls)
     raws.sort(key=lambda a: (
         _BUCKET_RANK.get(_work_bucket(a, today), 9),
         _work_due_key(a) is None,
         -(_work_due_key(a).toordinal() if _work_due_key(a) else 0),
         _work_name(a).lower(),
     ))
+    rows = []
     for item in raws:
         row = _work_row(item, today)
         if row["name"]:
@@ -819,38 +965,50 @@ def _last_checked_label(iso):
     return dt.strftime("%b %-d")
 
 
+def _band_block(heading, subtitle, items):
+    if not items:
+        return None
+    return {"heading": heading, "subtitle": subtitle, "items": items}
+
+
 def build_glance(view_classes, today, last_checked_iso=""):
     last_checked = _last_checked_label(last_checked_iso)
     standing = standing_cards(view_classes, last_checked=last_checked, today=today)
-    items, weekend, suppressed = collect_tonight(view_classes, today, last_checked=last_checked)
+    focus, today_items, suppressed = collect_bands(
+        view_classes, today, last_checked=last_checked
+    )
     weekend_night = bool(weekend_dates(today))
-    count = len(items) + len(weekend)
-    if count == 0:
+    count = len(focus) + len(today_items)
+    empty = count == 0
+    if empty:
         description = "Nothing is asking for attention."
-        empty = True
-    elif weekend_night and not items and weekend:
-        description = "Nothing is due today. These are not submitted in Classroom."
-        empty = False
     elif count == 1:
         description = "One verified thing to handle."
-        empty = False
     else:
         description = f"{count} verified things to handle."
-        empty = False
     return {
         "standing": standing,
+        "bands": {
+            "focus": _band_block(
+                "Focus tonight",
+                "Still to do",
+                focus,
+            ),
+            "today": _band_block(
+                "Today",
+                "Due today or already happened",
+                today_items,
+            ),
+        },
         "tonight": {
             "weekend_night": weekend_night,
             "description": description,
             "empty": empty,
             "empty_line": "Nothing verified needs action.",
             "empty_detail": "Classroom and Aeries have no unfinished work to surface.",
-            "items": items,
-            "weekend": {
-                "heading": "This weekend — turn in before Monday",
-                "subtitle": "Due Saturday, Sunday, or Monday · not submitted in Classroom",
-                "items": weekend,
-            } if weekend else None,
+            "items": focus,
+            "today": today_items,
+            "weekend": None,
         },
         "suppressed": suppressed,
         "verified_count": count,

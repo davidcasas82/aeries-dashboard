@@ -115,18 +115,22 @@ class WeekendRuleTests(unittest.TestCase):
             },
         }
         g = view_for(student, today=FRIDAY)["glance"]
-        tonight_titles = [i["title"] for i in g["tonight"]["items"]]
-        self.assertEqual(tonight_titles, [])
+        focus_titles = [i["title"] for i in g["tonight"]["items"]]
+        today_titles = [i["title"] for i in (g["tonight"].get("today") or [])]
+        self.assertNotIn("Practice set 2", focus_titles + today_titles)
+        self.assertNotIn("Lab reflection", focus_titles + today_titles)
+        self.assertNotIn("Reading draft", focus_titles + today_titles)
         self.assertNotIn("Due tonight", json.dumps(g))
         self.assertNotIn("due tonight", json.dumps(g).lower())
-        weekend = g["tonight"]["weekend"]
-        self.assertEqual(weekend["heading"], "This weekend — turn in before Monday")
-        labels = [(i["weekend_day"], i["label"], i["title"]) for i in weekend["items"]]
-        self.assertEqual(labels, [
-            ("Saturday", "This weekend · due Saturday, Sep 19", "Lab reflection"),
-            ("Sunday", "This weekend · due Sunday, Sep 20", "Reading draft"),
-            ("Monday", "This weekend · due Monday, Sep 21", "Practice set 2"),
-        ])
+        self.assertNotIn("Turn in", json.dumps(g["bands"]))
+        self.assertIsNone(g["tonight"]["weekend"])
+        self.assertNotIn("turn_in", g["bands"])
+        self.assertIsNone(g["bands"]["today"])
+        bio = next(c for c in g["standing"] if c["course"] == "Biology")
+        self.assertEqual(
+            next(w["bucket"] for w in bio["drawer"]["work"] if w["name"] == "Lab reflection"),
+            "coming_up",
+        )
 
     def test_saturday_and_sunday_keep_monday_in_weekend_bucket(self):
         student = {
@@ -144,13 +148,15 @@ class WeekendRuleTests(unittest.TestCase):
         }
         for day in (SATURDAY, SUNDAY):
             g = view_for(student, today=day)["glance"]
-            self.assertEqual(g["tonight"]["items"], [])
-            row = g["tonight"]["weekend"]["items"][0]
-            self.assertEqual(row["weekend_day"], "Monday")
-            self.assertEqual(row["label"], "This weekend · due Monday, Sep 21")
-            self.assertEqual(row["title"], "Practice set 2")
-            self.assertNotIn("due tonight", row["label"].lower())
-            self.assertNotIn("Coming", row["label"])
+            focus_titles = [i["title"] for i in g["tonight"]["items"]]
+            today_titles = [i["title"] for i in (g["tonight"].get("today") or [])]
+            self.assertNotIn("Practice set 2", focus_titles + today_titles)
+            alg = next(c for c in g["standing"] if c["course"] == "Algebra 2")
+            row = next(w for w in alg["drawer"]["work"] if w["name"] == "Practice set 2")
+            self.assertEqual(row["bucket"], "coming_up")
+            self.assertIn("Monday, Sep 21", row["when"])
+            self.assertNotIn("due tonight", row["when"].lower())
+            self.assertIsNone(g["tonight"]["weekend"])
 
 
 class FixtureGlanceTests(unittest.TestCase):
@@ -177,31 +183,29 @@ class FixtureGlanceTests(unittest.TestCase):
     def test_tonight_is_class_level_bullets_and_suppresses_already_in(self):
         items = self.g["tonight"]["items"]
         titles = [i["title"] for i in items]
-        self.assertIn("Unit 3 Quiz Review", titles)
+        self.assertNotIn("Unit 3 Quiz Review", titles)
         self.assertTrue(any(i["kind"] == "forecast" for i in items))
         self.assertNotIn("3.2 Practice", titles)
         self.assertNotIn("Section 3.2 Practice", titles)
+        alg = next(c for c in self.g["standing"] if c["course"] == "Algebra 2")
+        self.assertEqual(
+            next(w["bucket"] for w in alg["drawer"]["work"] if w["name"] == "Unit 3 Quiz Review"),
+            "coming_up",
+        )
         self.assertGreaterEqual(self.g["suppressed"], 1)
-        self.assertLessEqual(len(items), 3)
+        self.assertLessEqual(len(items), 4)
         self.assertIsNone(self.g["tonight"]["weekend"])
 
     def test_forecast_uses_newest_teacher_note(self):
         forecast = next(i for i in self.g["tonight"]["items"] if i["kind"] == "forecast")
         self.assertEqual(forecast["title"], "Quiz Friday")
-        self.assertIn("3.1-3.3", forecast["drawer"]["teacher_words"])
-        self.assertNotIn("link", forecast["drawer"])
         self.assertEqual(forecast["label"], "Due Friday, Sep 18")
         self.assertNotIn("Coming", forecast["label"])
+        self.assertNotIn("link", forecast)
 
     def test_drawer_has_teacher_wording_and_statuses_without_classroom_url(self):
-        quiz = next(i for i in self.g["tonight"]["items"] if i["title"] == "Unit 3 Quiz Review")
-        d = quiz["drawer"]
-        self.assertIn("review packet", d["teacher_words"])
-        self.assertIn("Classroom", d["classroom"] + "x")
-        self.assertTrue(d["classroom"])
-        self.assertTrue(d["aeries"])
-        self.assertNotIn("link", d)
-        self.assertNotIn("work", d)
+        quiz = next(w for w in next(c for c in self.g["standing"] if c["course"] == "Algebra 2")["drawer"]["work"] if w["name"] == "Unit 3 Quiz Review")
+        self.assertEqual(quiz["bucket"], "coming_up")
         blob = json.dumps(self.g)
         self.assertNotIn("classroom.google.com", blob)
         self.assertNotIn("drive.google.com", blob)
@@ -330,10 +334,13 @@ class ClassWorkDrawerTests(unittest.TestCase):
             by_name["Notes check"]["when"],
             "Due Thursday, Sep 10 / turned in Friday, Sep 11",
         )
-        tonight_labels = [i["label"] for i in g["tonight"]["items"]]
-        self.assertTrue(any(l.startswith("Due today · Monday, Sep 14") for l in tonight_labels))
-        self.assertTrue(any("Due tomorrow · Tuesday, Sep 15" == l for l in tonight_labels))
-        self.assertFalse(any(l.lower() in ("due tomorrow", "coming monday", "due tonight") for l in tonight_labels))
+        focus_labels = [i["label"] for i in g["tonight"]["items"]]
+        focus_titles = [i["title"] for i in g["tonight"]["items"]]
+        self.assertTrue(any(l.startswith("Due today · Monday, Sep 14") for l in focus_labels))
+        self.assertNotIn("Quiz review", focus_titles)
+        self.assertFalse(any("Due tomorrow · Tuesday, Sep 15" == l for l in focus_labels))
+        self.assertFalse(any(l.lower() in ("due tomorrow", "coming monday", "due tonight") for l in focus_labels))
+        self.assertEqual(by_name["Quiz review"]["bucket"], "coming_up")
         self.assertEqual(by_name["Notes check"]["status"], "Aeries missing")
         self.assertEqual(by_name["Notes check"]["bucket"], "turned_in")
         self.assertEqual(by_name["Warmup"]["bucket"], "coming_up")
@@ -535,6 +542,120 @@ class ForecastNewestTests(unittest.TestCase):
         self.assertEqual(forecast["label"], "Due today · Monday, Sep 21")
         self.assertNotIn("Coming", forecast["label"])
         self.assertNotIn("tonight", forecast["label"].lower())
+
+
+class TonightSplitTests(unittest.TestCase):
+    def test_due_today_test_note_goes_to_today_not_focus(self):
+        student = {
+            "name": "Student A",
+            "sn": "1",
+            "classes": [
+                {"period": 5, "course_name": "Algebra 2", "teacher": "Byun", "percent": "76", "mark": "C"},
+                {"period": 8, "course_name": "English", "teacher": "Lee", "percent": "72", "mark": "C"},
+            ],
+            "assignments_by_class": [
+                {"class_name": "5- Algebra 2- Fall", "period": 5, "assignments": [
+                    {"description": "LT 1.8", "due_date": "09/09/2026", "points_earned": 8,
+                     "points_possible": 10, "grading_complete": True},
+                ]},
+                {"class_name": "8- English- Fall", "period": 8, "assignments": []},
+            ],
+            "class_trends": {},
+            "ai_summary": {},
+            "classroom": {
+                "courses": [{
+                    "name": "P5- Algebra 2",
+                    "period": 5,
+                    "items": [],
+                }],
+            },
+        }
+        student["classroom"] = {"courses": []}
+        view = view_for(student, today=datetime(2026, 9, 21))
+        view["classes"][0]["classroom"] = {
+            "announcements": [{
+                "text": "On Monday, you'll be working quietly in class after you're done with the test.",
+                "posted_on": "2026-09-19",
+                "link": "https://classroom.google.com/c/x/p/y",
+            }],
+            "classroom_only": [{
+                "title": "A2- LT 2.4 Practice",
+                "due_date": "09/18/2026",
+                "state": "CREATED",
+                "state_label": "Not turned in on Classroom",
+            }],
+        }
+        g = glance.build_glance(view["classes"], datetime(2026, 9, 21))
+        focus_titles = [i["title"] for i in g["tonight"]["items"]]
+        today_rows = g["tonight"]["today"]
+        today_titles = [i["title"] for i in today_rows]
+        self.assertNotIn("test", [t.lower() for t in focus_titles])
+        self.assertIn("test", [t.lower() for t in today_titles])
+        test_row = next(i for i in today_rows if i["title"].lower() == "test")
+        self.assertEqual(test_row["label"], "Due today · Monday, Sep 21")
+        self.assertNotIn("taken", test_row["label"].lower())
+        self.assertNotIn("score", json.dumps(test_row).lower())
+        self.assertTrue(any("past due" in (i.get("label") or "") for i in g["tonight"]["items"]))
+        blob = json.dumps(g)
+        self.assertNotIn("classroom.google.com", blob)
+        self.assertNotIn("Student A", blob)
+
+    def test_submitted_test_says_turned_in_and_stays_off_focus(self):
+        classes = [{
+            "period": 5,
+            "course_name": "Algebra 2",
+            "mark": "C",
+            "percent": "76",
+            "assignments": [{
+                "name": "Chapter test",
+                "due_date": "09/21/2026",
+                "points_earned": None,
+                "points_possible": 50,
+                "classroom": {"state": "TURNED_IN", "state_label": "Turned in",
+                              "turned_in_on": "2026-09-21"},
+            }],
+            "classroom": {
+                "announcements": [{
+                    "text": "Test Monday in class.",
+                    "posted_on": "2026-09-19",
+                }],
+            },
+        }, {
+            "period": 8,
+            "course_name": "English",
+            "mark": "B",
+            "percent": "88",
+            "assignments": [],
+            "classroom": {},
+        }]
+        g = glance.build_glance(classes, datetime(2026, 9, 21))
+        focus_titles = [i["title"].lower() for i in g["tonight"]["items"]]
+        today_rows = g["tonight"]["today"]
+        self.assertFalse(any("test" in t for t in focus_titles))
+        row = next(i for i in today_rows if "test" in i["title"].lower())
+        self.assertTrue(row["label"].startswith("Turned in"))
+        self.assertNotIn("taken", row["label"].lower())
+        self.assertNotIn("50", row["label"])
+
+    def test_empty_bands_are_omitted(self):
+        student = {
+            "name": "Student A",
+            "sn": "1",
+            "classes": [{"period": 1, "course_name": "Study Hall", "teacher": "X", "percent": "95", "mark": "A"}],
+            "assignments_by_class": [
+                {"class_name": "1- Study Hall- Fall", "period": 1, "assignments": [
+                    {"description": "Done", "due_date": "09/10/2026", "points_earned": 5,
+                     "points_possible": 5, "percentage": 100, "grading_complete": True},
+                ]},
+            ],
+            "class_trends": {"Study Hall": {"delta_7d": 1.0}},
+            "ai_summary": {},
+        }
+        g = view_for(student, today=MONDAY)["glance"]
+        self.assertIsNone(g["bands"]["focus"])
+        self.assertNotIn("turn_in", g["bands"])
+        self.assertIsNone(g["bands"]["today"])
+        self.assertTrue(g["tonight"]["empty"])
 
 
 class TeacherProseCardTests(unittest.TestCase):
