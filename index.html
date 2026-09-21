@@ -1768,7 +1768,10 @@
             font-weight: 750;
             line-height: 1.35;
         }
-        .glance-counts .miss { color: var(--red); }
+        .glance-counts .miss,
+        .glance-drawer-kicker .miss { color: var(--red); }
+        .glance-counts span,
+        .glance-drawer-kicker span { white-space: nowrap; }
         .glance-trend {
             display: inline-flex;
             align-items: center;
@@ -4880,7 +4883,16 @@
             const scrim = document.getElementById('glanceScrim');
             if (!drawer || !item) return;
             glanceLastFocus = opener || document.activeElement;
-            document.getElementById('glanceDrawerKicker').textContent = (item.drawer && item.drawer.kicker) || 'Verified detail';
+            const kickerEl = document.getElementById('glanceDrawerKicker');
+            const kicker = (item.drawer && item.drawer.kicker) || 'Verified detail';
+            if (item.drawer && item.drawer.counts) {
+                kickerEl.innerHTML = (kicker || '').split(' · ').map(bit => {
+                    const alert = /\bmissing$/.test(bit) && !bit.startsWith('0 ');
+                    return `<span class="${alert ? 'miss' : ''}">${esc(bit)}</span>`;
+                }).join(' · ');
+            } else {
+                kickerEl.textContent = kicker;
+            }
             document.getElementById('glanceDrawerTitle').textContent = (item.drawer && item.drawer.title) || item.title || item.course;
             document.getElementById('glanceDrawerClass').textContent = (item.drawer && item.drawer.course) || item.course || '';
             const work = item.drawer && Array.isArray(item.drawer.work) ? item.drawer.work : null;
