@@ -200,7 +200,6 @@ def pick_forecast(view_classes, today):
         return None
     _posted, when, cls, note, word = best
     text = (note.get("text") or "").strip()
-    cr = cls.get("classroom") or {}
     title = _assessment_title(text, word)
     posted = _parse_posted(note.get("posted_on"))
     teacher_when = f"teacher, {_month_day(posted)}" if posted else "teacher"
@@ -225,7 +224,6 @@ def pick_forecast(view_classes, today):
                 else "Teacher note"
             ),
             "aeries": "No row yet · dated from the teacher note",
-            "link": note.get("link") or cr.get("link") or "https://classroom.google.com/",
         },
     }
 
@@ -316,15 +314,6 @@ def _teacher_words(item, cls):
     return "No teacher wording in this export."
 
 
-def _item_link(item, cls):
-    cr = (item or {}).get("classroom") or {}
-    return (
-        cr.get("link")
-        or ((cls or {}).get("classroom") or {}).get("link")
-        or "https://classroom.google.com/"
-    )
-
-
 def _action(kind, item, cls, last_checked, *, weekend_label=None):
     name = (item.get("name") or item.get("title") or item.get("description") or "").strip()
     course = cls.get("course_name") or ""
@@ -354,7 +343,6 @@ def _action(kind, item, cls, last_checked, *, weekend_label=None):
             "teacher_words": _teacher_words(item, cls),
             "classroom": _classroom_status(item),
             "aeries": _aeries_status(item, cls, last_checked, missing=missing),
-            "link": _item_link(item, cls),
         },
     }
 
@@ -675,7 +663,6 @@ def standing_cards(view_classes, last_checked="", today=None):
             continue
         mark, pct = _grade_display(cls)
         trend, symbol, text = _trend(cls)
-        cr = cls.get("classroom") or {}
         standing_line = f"{mark} {pct}".strip()
         cards.append({
             "id": f"standing-{cls.get('period') or name}",
@@ -692,7 +679,6 @@ def standing_cards(view_classes, last_checked="", today=None):
                 "title": name,
                 "course": standing_line or name,
                 "work": class_work_rows(cls, today),
-                "link": cr.get("link") or "https://classroom.google.com/",
             },
         })
     return cards

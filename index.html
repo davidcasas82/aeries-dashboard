@@ -1685,7 +1685,7 @@
             font-weight: 700;
             white-space: nowrap;
         }
-        .glance-standing { margin-bottom: 22px; overflow: hidden; }
+        .glance-standing { overflow: hidden; }
         .glance-grade-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
@@ -1746,7 +1746,7 @@
         .glance-trend.down .glance-trend-symbol { color: var(--g-red); background: var(--g-red-soft); }
         .glance-trend.flat .glance-trend-symbol { color: var(--g-blue); background: var(--g-blue-soft); }
         .glance-trend.none .glance-trend-symbol { color: var(--g-faint); background: #eef0ec; }
-        .glance-tonight { overflow: hidden; }
+        .glance-tonight { margin-bottom: 22px; overflow: hidden; }
         .glance-tonight-meta {
             display: flex;
             align-items: center;
@@ -1988,21 +1988,6 @@
             font-size: 14px;
             line-height: 1.42;
         }
-        .glance-drawer-cta {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 9px;
-            min-height: 52px;
-            margin-top: auto;
-            border-radius: 13px;
-            background: #155c4b;
-            color: white;
-            font-size: 16px;
-            font-weight: 800;
-            text-decoration: none;
-        }
-        .glance-drawer-cta:hover { background: #0d473a; }
         .glance-work-list { display: grid; }
         .glance-work {
             display: grid;
@@ -2164,7 +2149,6 @@
             </div>
             <div class="glance-work-list" id="glanceWorkList" hidden></div>
         </div>
-        <a class="glance-drawer-cta" id="glanceClassroomLink" href="https://classroom.google.com/" target="_blank" rel="noreferrer">Open in Classroom <span aria-hidden="true">↗</span></a>
     </aside>
 
     <div class="settings-overlay" id="settingsOverlay">
@@ -3684,9 +3668,7 @@
             if (turnedIn && kind === 'missing') {
                 parts.push('Aeries has not caught up yet');
             }
-            if (cr.link) {
-                parts.push(`<a href="${esc(cr.link)}" target="_blank" rel="noopener">Open in Classroom</a>`);
-            }
+            // Never emit Classroom/Drive URLs. A parent tap can request teacher access.
             let html = parts.length ? `<div class="assn-classroom ${cls}">${parts.join(' · ')}</div>` : '';
             const text = (cr.instructions || '').trim();
             if (text) {
@@ -3735,11 +3717,8 @@
                     : '';
                 inner += `<div class="classroom-announcement">${when ? `<span class="when">${esc(when)}</span>` : ''}${esc(a.text || '')}</div>`;
             }
-            const link = cr.link
-                ? `<span class="label-note"><a href="${esc(cr.link)}" target="_blank" rel="noopener">Open class</a></span>`
-                : '';
             return `<div class="panel-block">
-                <div class="panel-block-label">Classroom${link}</div>
+                <div class="panel-block-label">Classroom</div>
                 ${inner}
             </div>`;
         }
@@ -4305,11 +4284,6 @@
             return 'No teacher wording in this export.';
         }
 
-        function glanceLink(item, profile) {
-            const cr = (item && item.classroom) || {};
-            return cr.link || (profile.classroom && profile.classroom.link) || 'https://classroom.google.com/';
-        }
-
         function glanceWorkName(item) {
             return String((item && (item.name || item.description || item.title)) || '').trim();
         }
@@ -4479,7 +4453,6 @@
                     teacher_words: glanceTeacherWords(item, profile),
                     classroom: glanceClassroomLine(item),
                     aeries: glanceAeriesLine(item, profile, kind === 'missing'),
-                    link: glanceLink(item, profile),
                 },
             };
         }
@@ -4527,7 +4500,6 @@
                                     teacher_words: text,
                                     classroom: `Teacher note · posted ${glanceMonthDay(posted)}`,
                                     aeries: 'No row yet · dated from the teacher note',
-                                    link: note.link || (p.classroom && p.classroom.link) || 'https://classroom.google.com/',
                                 },
                             },
                         };
@@ -4558,7 +4530,6 @@
                         title: c.course_name || '',
                         course: standingLine || c.course_name || '',
                         work: glanceClassWork(p),
-                        link: (p.classroom && p.classroom.link) || 'https://classroom.google.com/',
                     },
                 };
             });
@@ -4703,16 +4674,6 @@
                 </div>`;
             }
             return `<div class="glance" id="glance-${idx}">
-                <section class="glance-standing glance-card">
-                    <div class="glance-section-head">
-                        <div>
-                            <h2>Standing</h2>
-                            <p>Every class · mark, percent, seven-day trend</p>
-                        </div>
-                        <span class="glance-tap-note">Tap a grade for details</span>
-                    </div>
-                    <div class="glance-grade-grid">${grades}</div>
-                </section>
                 <section class="glance-tonight glance-card">
                     <div class="glance-section-head">
                         <div>
@@ -4726,6 +4687,16 @@
                         <span>Verified against Classroom and Aeries</span>
                     </div>
                     ${tonight}
+                </section>
+                <section class="glance-standing glance-card">
+                    <div class="glance-section-head">
+                        <div>
+                            <h2>Standing</h2>
+                            <p>Every class · mark, percent, seven-day trend</p>
+                        </div>
+                        <span class="glance-tap-note">Tap a grade for details</span>
+                    </div>
+                    <div class="glance-grade-grid">${grades}</div>
                 </section>
             </div>`;
         }
@@ -4760,8 +4731,6 @@
                 document.getElementById('glanceClassroomStatus').textContent = (item.drawer && item.drawer.classroom) || '';
                 document.getElementById('glanceAeriesStatus').textContent = (item.drawer && item.drawer.aeries) || '';
             }
-            const link = document.getElementById('glanceClassroomLink');
-            link.href = (item.drawer && item.drawer.link) || 'https://classroom.google.com/';
             drawer.classList.add('open');
             scrim.hidden = false;
             scrim.classList.add('open');

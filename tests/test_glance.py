@@ -182,17 +182,21 @@ class FixtureGlanceTests(unittest.TestCase):
         forecast = next(i for i in self.g["tonight"]["items"] if i["kind"] == "forecast")
         self.assertEqual(forecast["title"], "Quiz Friday")
         self.assertIn("3.1-3.3", forecast["drawer"]["teacher_words"])
-        self.assertTrue(forecast["drawer"]["link"].startswith("https://classroom.google.com/"))
+        self.assertNotIn("link", forecast["drawer"])
 
-    def test_drawer_has_teacher_wording_both_statuses_and_link(self):
+    def test_drawer_has_teacher_wording_and_statuses_without_classroom_url(self):
         quiz = next(i for i in self.g["tonight"]["items"] if i["title"] == "Unit 3 Quiz Review")
         d = quiz["drawer"]
         self.assertIn("review packet", d["teacher_words"])
         self.assertIn("Classroom", d["classroom"] + "x")
         self.assertTrue(d["classroom"])
         self.assertTrue(d["aeries"])
-        self.assertTrue(d["link"].startswith("https://classroom.google.com/"))
+        self.assertNotIn("link", d)
         self.assertNotIn("work", d)
+        blob = json.dumps(self.g)
+        self.assertNotIn("classroom.google.com", blob)
+        self.assertNotIn("drive.google.com", blob)
+        self.assertNotIn("Open in Classroom", blob)
 
     def test_standing_drawer_lists_all_class_work(self):
         alg = next(c for c in self.g["standing"] if c["course"] == "Algebra 2")
