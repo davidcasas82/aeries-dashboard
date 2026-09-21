@@ -5002,9 +5002,20 @@
                 seen.add(key);
                 bucket.push(row);
             };
+            const schoolDaysAfter = (from, n) => {
+                const out = [];
+                let day = addCalendarDays(from, 1);
+                while (out.length < n) {
+                    const wd = day.getDay();
+                    if (wd >= 1 && wd <= 5) out.push(day);
+                    day = addCalendarDays(day, 1);
+                }
+                return out;
+            };
+            const focusDays = schoolDaysAfter(TODAY, 5);
             const inFocusWindow = (due) => {
-                const days = daysFromToday(due);
-                return days != null && days >= 1;
+                if (!due) return false;
+                return focusDays.some(d => glanceSameDay(due, d));
             };
             for (const p of profiles || []) {
                 const course = ((p.classMeta || {}).course_name || '').trim();
@@ -5064,7 +5075,7 @@
             const facts = glanceCollectFacts(profiles, forecast);
             const count = focusOut.length + todayOut.length;
             const empty = count === 0;
-            const focusEmpty = 'Nothing coming up.';
+            const focusEmpty = 'Nothing due in the next 5 school days.';
             let description = empty ? focusEmpty : (count === 1 ? 'One verified thing to handle.' : `${count} verified things to handle.`);
             const block = (heading, subtitle, items, emptyLine) => {
                 if (items.length) return { heading, subtitle, items, empty: false };
@@ -5074,7 +5085,7 @@
             return {
                 standing,
                 bands: {
-                    focus: block('Focus tonight', 'Due after today', focusOut, focusEmpty),
+                    focus: block('Focus tonight', 'Due in the next 5 school days', focusOut, focusEmpty),
                     today: block('Today', 'Due today or already happened', todayOut),
                 },
                 tonight: {

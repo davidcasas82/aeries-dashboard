@@ -1,14 +1,15 @@
 """Official v1 glance: standing + Focus / Today + drawer facts.
 
 Two bands under the kid header replace the single Tonight list.
-Focus = every unsubmitted assignment due after today (Pacific), any
-distance out. No 2-day window, no item cap, no “and N more.” Soonest
-due first. Today = due today or already happened (facts only). Under
-the kid name, before Focus: one fact line per class that needs a look
-(lowest mark, past-due count, due today). Never the sentence “X is the
-lowest class, at N%.” Past due, missing, and old pending stay on the
-class cards. Empty Today is omitted. Empty Focus says nothing is coming
-up — not that the backlog is done.
+Focus = every unsubmitted assignment due on the next 5 school days
+(Mon–Fri, Pacific). Saturday and Sunday are skipped. On Fri/Sat/Sun the
+window is the following week. No item cap. Soonest due first, weekday
+and date on each row. Today = due today or already happened (facts
+only). Under the kid name, before Focus: one fact line per class that
+needs a look (lowest mark, past-due count, due today). Never the
+sentence “X is the lowest class, at N%.” Past due, missing, and old
+pending stay on the class cards. Empty Today is omitted. Empty Focus
+says the 5 school-day window is clear — not that the backlog is done.
 
 Nothing here logs student names or numbers.
 """
@@ -21,7 +22,9 @@ from datetime import datetime, timedelta
 from classroom import TURNED_IN_STATES, teacher_card_body
 
 BAND_LIMIT = 4
-FOCUS_EMPTY = "Nothing coming up."
+FOCUS_SCHOOL_DAYS = 5
+FOCUS_EMPTY = "Nothing due in the next 5 school days."
+FOCUS_SUBTITLE = "Due in the next 5 school days"
 FORECAST_MAX_AGE_DAYS = 14
 TREND_STEADY_PTS = 2.0
 
@@ -581,16 +584,30 @@ def _band_item(*, band, kind, icon, label, title, cls, item_key="", due=None):
     }
 
 
+def school_days_after(today, n=FOCUS_SCHOOL_DAYS):
+    """Next n Mon–Fri dates after today. Skips Saturday and Sunday."""
+    day = _as_date(today) + timedelta(days=1)
+    out = []
+    while len(out) < n:
+        if day.weekday() < 5:
+            out.append(day)
+        day += timedelta(days=1)
+    return out
+
+
 def in_focus_window(due, today):
-    """Due after today, any distance out. Not today. Not past due."""
+    """Due on the next 5 school days. Not today, not weekend, not past due."""
     if due is None:
         return False
-    days = (due - _as_date(today)).days
-    return days >= 1
+    due_d = _as_date(due)
+    today_d = _as_date(today)
+    if due_d <= today_d:
+        return False
+    return due_d in set(school_days_after(today_d))
 
 
 def collect_bands(view_classes, today, last_checked=""):
-    """Focus = every future due assignment. Today = due today. No class summaries."""
+    """Focus = next 5 school days. Today = due today. No class summaries."""
     today_d = _as_date(today)
     focus, today_items = [], []
     suppressed = 0
@@ -1047,7 +1064,7 @@ def build_glance(view_classes, today, last_checked_iso=""):
         "bands": {
             "focus": _band_block(
                 "Focus tonight",
-                "Due after today",
+                FOCUS_SUBTITLE,
                 focus,
                 empty_line=FOCUS_EMPTY,
             ),
