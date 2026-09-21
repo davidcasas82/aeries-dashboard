@@ -226,12 +226,13 @@ class FixtureGlanceTests(unittest.TestCase):
         self.assertEqual(missing["when"], "Due Thursday, Sep 10 / turned in Thursday, Sep 10")
         quiz = next(w for w in alg["drawer"]["work"] if w["name"] == "Unit 3 Quiz Review")
         self.assertEqual(quiz["score"], "awaiting")
-        self.assertEqual(quiz["bucket"], "not_turned_in")
+        self.assertEqual(quiz["bucket"], "coming_up")
         self.assertIn("review packet", quiz["description"])
         self.assertEqual(quiz["when"], "Due tomorrow · Tuesday, Sep 15")
+        self.assertEqual(scored["score_class"], "grade-a")
         names = [w["name"] for w in alg["drawer"]["work"]]
-        self.assertLess(names.index("3.1 Practice"), names.index("Unit 3 Quiz Review"))
-        self.assertLess(names.index("3.2 Practice"), names.index("Unit 3 Quiz Review"))
+        self.assertLess(names.index("Unit 3 Quiz Review"), names.index("3.1 Practice"))
+        self.assertLess(names.index("Unit 3 Quiz Review"), names.index("3.2 Practice"))
         self.assertEqual(alg["count_line"], "1 coming up · 2 turned in")
         self.assertEqual(alg["drawer"]["kicker"], "0 missing · 1 coming up · 2 turned in")
         blob = json.dumps(alg["drawer"]["work"])
@@ -284,15 +285,17 @@ class ClassWorkDrawerTests(unittest.TestCase):
         self.assertEqual(row["score"], "awaiting")
         self.assertEqual(row["description"], "Use the circle template.")
         self.assertFalse(row["missing"])
-        self.assertEqual(row["bucket"], "not_turned_in")
+        self.assertEqual(row["bucket"], "past_due")
         self.assertEqual(row["when"], "4 days late · was due Thursday, Sep 10")
         scored = next(w for w in bio["drawer"]["work"] if w["name"] == "Cell lab")
         self.assertEqual(scored["score"], "28/30")
+        self.assertEqual(scored["score_class"], "grade-a")
         self.assertEqual(scored["bucket"], "turned_in")
         self.assertEqual(scored["when"], "Due Saturday, Sep 12")
         names = [w["name"] for w in bio["drawer"]["work"]]
-        self.assertLess(names.index("Cell lab"), names.index("Microscope sketch"))
-        self.assertEqual(bio["count_line"], "1 coming up · 1 turned in")
+        self.assertLess(names.index("Microscope sketch"), names.index("Cell lab"))
+        self.assertEqual(bio["count_line"], "1 past due · 1 turned in")
+        self.assertNotIn("coming up", bio["count_line"])
 
     def test_due_today_tomorrow_and_turned_in_date(self):
         student = {
@@ -330,7 +333,8 @@ class ClassWorkDrawerTests(unittest.TestCase):
         self.assertFalse(any(l.lower() in ("due tomorrow", "coming monday", "due tonight") for l in tonight_labels))
         self.assertEqual(by_name["Notes check"]["status"], "Aeries missing")
         self.assertEqual(by_name["Notes check"]["bucket"], "turned_in")
-        self.assertEqual(by_name["Warmup"]["bucket"], "not_turned_in")
+        self.assertEqual(by_name["Warmup"]["bucket"], "coming_up")
+        self.assertEqual(by_name["Quiz review"]["bucket"], "coming_up")
         self.assertEqual(alg["count_line"], "2 coming up · 1 turned in")
         tonight = json.dumps(g["tonight"])
         self.assertNotIn("4 days late", tonight)
@@ -377,12 +381,82 @@ class ClassWorkDrawerTests(unittest.TestCase):
         self.assertEqual(by_name["Still out"]["status"], "missing")
         self.assertEqual(by_name["Still out"]["bucket"], "missing")
         names = [w["name"] for w in alg["drawer"]["work"]]
-        self.assertEqual(names[-1], "Still out")
+        self.assertEqual(names[0], "Still out")
         self.assertEqual(alg["count_line"], "1 missing · 2 turned in")
         self.assertEqual(alg["drawer"]["kicker"], "1 missing · 2 turned in")
         tonight_titles = [i["title"] for i in g["tonight"]["items"]]
         self.assertNotIn("Classroom in", tonight_titles)
         self.assertNotIn("Aeries handed in", tonight_titles)
+
+    def test_score_colors_use_earned_over_possible_bands(self):
+        student = {
+            "name": "Student A",
+            "sn": "1",
+            "classes": [{"period": 5, "course_name": "Algebra 2", "teacher": "Byun", "percent": "81", "mark": "B-"}],
+            "assignments_by_class": [
+                {"class_name": "5- Algebra 2- Fall", "period": 5, "assignments": [
+                    {"description": "Perfect ten", "due_date": "09/10/2026", "points_earned": 10,
+                     "points_possible": 10, "grading_complete": True},
+                    {"description": "Half ten", "due_date": "09/10/2026", "points_earned": 5,
+                     "points_possible": 10, "grading_complete": True},
+                    {"description": "Five one", "due_date": "09/10/2026", "points_earned": 5.1,
+                     "points_possible": 10, "grading_complete": True},
+                    {"description": "Four fifths", "due_date": "09/10/2026", "points_earned": 4,
+                     "points_possible": 5, "grading_complete": True},
+                    {"description": "Nine tenths", "due_date": "09/10/2026", "points_earned": 9,
+                     "points_possible": 10, "grading_complete": True},
+                ]},
+            ],
+            "class_trends": {},
+            "ai_summary": {},
+        }
+        g = view_for(student, today=MONDAY)["glance"]
+        alg = next(c for c in g["standing"] if c["course"] == "Algebra 2")
+        by_name = {w["name"]: w for w in alg["drawer"]["work"]}
+        self.assertEqual(by_name["Perfect ten"]["score"], "10/10")
+        self.assertEqual(by_name["Perfect ten"]["score_class"], "grade-a")
+        self.assertEqual(by_name["Half ten"]["score"], "5/10")
+        self.assertEqual(by_name["Half ten"]["score_class"], "grade-f")
+        self.assertEqual(by_name["Five one"]["score"], "5.1/10")
+        self.assertEqual(by_name["Five one"]["score_class"], "grade-f")
+        self.assertEqual(by_name["Four fifths"]["score"], "4/5")
+        self.assertEqual(by_name["Four fifths"]["score_class"], "grade-b")
+        self.assertEqual(by_name["Nine tenths"]["score"], "9/10")
+        self.assertEqual(by_name["Nine tenths"]["score_class"], "grade-a")
+
+    def test_past_due_is_not_coming_up(self):
+        student = {
+            "name": "Student A",
+            "sn": "1",
+            "classes": [{"period": 5, "course_name": "Algebra 2", "teacher": "Byun", "percent": "81", "mark": "B-"}],
+            "assignments_by_class": [
+                {"class_name": "5- Algebra 2- Fall", "period": 5, "assignments": [
+                    {"description": "Still out", "due_date": "09/10/2026", "points_earned": None,
+                     "points_possible": 10, "grading_complete": False, "aeries_missing": True,
+                     "status": "missing"},
+                    {"description": "Late packet", "due_date": "09/10/2026", "points_earned": None,
+                     "points_possible": 10, "grading_complete": False},
+                    {"description": "Due today", "due_date": "09/14/2026", "points_earned": None,
+                     "points_possible": 5, "grading_complete": False},
+                    {"description": "Done notes", "due_date": "09/08/2026", "points_earned": 10,
+                     "points_possible": 10, "grading_complete": True},
+                ]},
+            ],
+            "class_trends": {},
+            "ai_summary": {},
+        }
+        g = view_for(student, today=MONDAY)["glance"]
+        alg = next(c for c in g["standing"] if c["course"] == "Algebra 2")
+        by_name = {w["name"]: w for w in alg["drawer"]["work"]}
+        self.assertEqual(by_name["Late packet"]["bucket"], "past_due")
+        self.assertEqual(by_name["Still out"]["bucket"], "missing")
+        self.assertEqual(by_name["Due today"]["bucket"], "coming_up")
+        self.assertEqual(by_name["Done notes"]["bucket"], "turned_in")
+        names = [w["name"] for w in alg["drawer"]["work"]]
+        self.assertEqual(names, ["Late packet", "Still out", "Due today", "Done notes"])
+        self.assertEqual(alg["count_line"], "1 past due · 1 missing · 1 coming up · 1 turned in")
+        self.assertNotIn("coming up", by_name["Late packet"]["when"].lower())
+        self.assertEqual(alg["drawer"]["kicker"], "1 past due · 1 missing · 1 coming up · 1 turned in")
 
 
 class DueWhenLabelTests(unittest.TestCase):
