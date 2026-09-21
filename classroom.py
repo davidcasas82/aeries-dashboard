@@ -661,12 +661,62 @@ def instructions_for(item):
     desc = (item.get("description") or "").strip()
     if desc:
         parts.append(desc)
+    excerpt = _first_teacher_excerpt(item)
+    if excerpt:
+        parts.append(excerpt)
+    return _clip("\n\n".join(parts), INSTRUCTIONS_LIMIT)
+
+
+def _norm_text(s):
+    return re.sub(r"\s+", " ", (s or "").strip()).casefold()
+
+
+def _first_teacher_excerpt(item):
+    """First Drive excerpt on the assignment. Never student answers or attachments."""
+    sticky = ((item or {}).get("card_excerpt") or "").strip()
+    if sticky:
+        return _clip(sticky, EXCERPT_LIMIT)
     for m in item.get("materials") or []:
+        if not isinstance(m, dict):
+            continue
         text = (m.get("text_excerpt") or "").strip()
         if text:
-            parts.append(text)
-            break
-    return _clip("\n\n".join(parts), INSTRUCTIONS_LIMIT)
+            return _clip(text, EXCERPT_LIMIT)
+    return ""
+
+
+def teacher_card_body(item, title=""):
+    """Teacher sentence for a card. Not topic, rubric, or student answer.
+
+    Uses instructions, then description, then the first Drive excerpt.
+    Empty or a title repeat → "". Aeries ``description`` is the title, not body.
+    """
+    item = item or {}
+    cr = item.get("classroom") if isinstance(item.get("classroom"), dict) else {}
+    title = title or item.get("title") or item.get("name") or ""
+    sources = []
+    if cr:
+        sources.extend((
+            cr.get("instructions"),
+            cr.get("description"),
+            cr.get("excerpt"),
+            _first_teacher_excerpt(cr),
+        ))
+    sources.append(item.get("instructions"))
+    raw_desc = (item.get("description") or "").strip()
+    if raw_desc and _norm_text(raw_desc) != _norm_text(title):
+        sources.append(raw_desc)
+    sources.append(_first_teacher_excerpt(item))
+    for text in sources:
+        text = (text or "").strip()
+        if not text or _norm_text(text) == _norm_text(title):
+            continue
+        first, _sep, rest = text.partition("\n\n")
+        if _norm_text(first) == _norm_text(title) and rest.strip():
+            text = rest.strip()
+        if text and _norm_text(text) != _norm_text(title):
+            return _clip(text, INSTRUCTIONS_LIMIT)
+    return ""
 
 
 def normalize_item(raw, names, today):
@@ -689,6 +739,9 @@ def normalize_item(raw, names, today):
         "materials": _compact_materials(raw.get("materials"), names),
         "aeries_match": None,
     }
+    excerpt = _first_teacher_excerpt(item)
+    if excerpt:
+        item["card_excerpt"] = excerpt
     # v2 export fields: kept as-is when present, absent otherwise, so v1 exports
     # and fixtures keep working.
     for key in ("work_type", "state", "assignee_mode", "submission_modification_mode"):
@@ -732,6 +785,10 @@ def _turned_in(item):
 
 def _assignment_link_payload(item):
     sub = item.get("submission") or {}
+    title = (item.get("title") or "").strip()
+    desc = (item.get("description") or "").strip()
+    excerpt = _first_teacher_excerpt(item)
+    body = teacher_card_body(item, title)
     payload = {
         "id": item.get("id"),
         "link": item.get("link") or "",
@@ -742,9 +799,11 @@ def _assignment_link_payload(item):
         "due": item.get("due") or "",
         "topic": item.get("topic") or "",
         "max_points": item.get("max_points"),
-        "instructions": item.get("instructions") or "",
+        "instructions": body or (item.get("instructions") or ""),
+        "description": desc if desc and _norm_text(desc) != _norm_text(title) else "",
+        "excerpt": excerpt if excerpt and _norm_text(excerpt) != _norm_text(title) else "",
         "materials": [
-            {"kind": m.get("kind"), "title": m.get("title"), "url": m.get("url")}
+            {"kind": m.get("kind"), "title": m.get("title")}
             for m in item.get("materials") or []
         ][:5],
         "grade_category": (item.get("grade_category") or {}).get("name") or "",
@@ -1100,9 +1159,12 @@ def class_context(student_data, class_meta, today, assignments=None):
             in_window = 0 <= (today_d - assigned_d).days <= UPCOMING_WINDOW_DAYS
         if not in_window:
             continue
+        title = item.get("title") or ""
+        desc = (item.get("description") or "").strip()
+        excerpt = _first_teacher_excerpt(item)
         entry = {
             "id": item.get("id"),
-            "title": item.get("title"),
+            "title": title,
             "type": kind,
             "due": item.get("due") or "",
             "due_date": item.get("due_date") or "",
@@ -1112,7 +1174,9 @@ def class_context(student_data, class_meta, today, assignments=None):
             "link": item.get("link") or "",
             "topic": item.get("topic") or "",
             "max_points": item.get("max_points"),
-            "instructions": _clip(item.get("instructions"), EXCERPT_LIMIT),
+            "instructions": teacher_card_body(item, title) or _clip(item.get("instructions"), EXCERPT_LIMIT),
+            "description": desc if desc and _norm_text(desc) != _norm_text(title) else "",
+            "excerpt": excerpt if excerpt and _norm_text(excerpt) != _norm_text(title) else "",
         }
         if item.get("rubric"):
             entry["rubric"] = [
