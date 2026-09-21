@@ -491,6 +491,12 @@ class ExportV2ShapeTests(unittest.TestCase):
             {"title": "Angle pairs named", "max_points": 6},
             {"title": "Work shown", "max_points": 4},
         ])
+        self.assertTrue(stamp.get("description"))
+        self.assertNotEqual(stamp["description"].strip().lower(), cyu["title"].strip().lower())
+        self.assertTrue(stamp.get("excerpt"))
+        self.assertNotIn("http", stamp["excerpt"])
+        self.assertNotIn("url", stamp.get("materials", [{}])[0])
+        self.assertIn("alternate interior", stamp["instructions"])
 
     def test_class_context_and_grok_see_rubric_and_teachers(self):
         geo_meta = self.student["classes"][0]
