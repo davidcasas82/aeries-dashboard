@@ -1,10 +1,10 @@
 """Official v1 glance: standing + Focus / Today + drawer facts.
 
 Two bands under the kid header replace the single Tonight list.
-Focus = still to do. Today = due today or already happened (facts only).
-Upcoming unsubmitted work stays in the class drawer only. Empty bands
-are omitted. Classroom already-in is never Focus. Weekend Pacific rule:
-Fri/Sat/Sun never label Monday work as Focus.
+Focus = unsubmitted assignments due tomorrow or within 2 Pacific days.
+Today = due today or already happened (facts only). Past due, missing,
+and class summaries stay on the class cards. Empty Today is omitted.
+Empty Focus says the 2-day window is clear — not that the backlog is.
 
 Nothing here logs student names or numbers.
 """
@@ -18,6 +18,9 @@ from classroom import TURNED_IN_STATES, teacher_card_body
 
 TONIGHT_LIMIT = 3
 BAND_LIMIT = 4
+FOCUS_LIMIT = 3
+FOCUS_WINDOW_DAYS = 2
+FOCUS_EMPTY = "Nothing due in the next 2 days."
 FORECAST_MAX_AGE_DAYS = 14
 TREND_STEADY_PTS = 2.0
 
@@ -226,21 +229,6 @@ def _standing_id(cls):
     name = ((cls or {}).get("course_name") or "").strip()
     period = (cls or {}).get("period")
     return f"standing-{period if period is not None else name}"
-
-
-def _scored_class(cls):
-    mark, pct = _grade_display(cls)
-    return mark not in ("", "—") or bool(pct)
-
-
-def _pct_value(cls):
-    raw = (cls or {}).get("percent")
-    try:
-        if raw in (None, ""):
-            return None
-        return float(raw)
-    except (TypeError, ValueError):
-        return None
 
 
 def _forecast_matches(item, when, title):
@@ -533,7 +521,7 @@ def _class_work(cls):
     return [i for i in upcoming if i] + extra, [i for i in missing if i]
 
 
-def _band_item(*, band, kind, icon, label, title, cls, item_key=""):
+def _band_item(*, band, kind, icon, label, title, cls, item_key="", due=None):
     course = cls.get("course_name") or ""
     period = cls.get("period")
     slug = re.sub(r"\s+", "-", f"{band}-{period}-{item_key or title}".lower())[:80]
@@ -547,35 +535,25 @@ def _band_item(*, band, kind, icon, label, title, cls, item_key=""):
         "title": title,
         "course": course,
         "period": period,
+        "due_key": due.isoformat() if due else "",
         "line": "class" if kind == "class" else "item",
     }
 
 
-def _lowest_class(view_classes):
-    scored = [
-        c for c in (view_classes or [])
-        if _scored_class(c) and _pct_value(c) is not None
-    ]
-    if len(scored) < 2:
-        return None
-    return min(scored, key=lambda c: (_pct_value(c), str(c.get("period") or ""), c.get("course_name") or ""))
-
-
-def _same_class(a, b):
-    if not a or not b:
+def in_focus_window(due, today):
+    """Tomorrow through +2 Pacific days. Not today. Not past due."""
+    if due is None:
         return False
-    if a.get("period") is not None and b.get("period") is not None:
-        return a.get("period") == b.get("period")
-    return (a.get("course_name") or "").lower() == (b.get("course_name") or "").lower()
+    days = (due - _as_date(today)).days
+    return 1 <= days <= FOCUS_WINDOW_DAYS
 
 
 def collect_bands(view_classes, today, last_checked=""):
-    """Focus and Today. Upcoming work stays in the class drawer."""
+    """Focus = next 2 days. Today = due today. No class summaries."""
     today_d = _as_date(today)
-    due_today_open, class_lines, study, today_items = [], [], [], []
+    focus, today_items = [], []
     suppressed = 0
     seen = set()
-    lowest = _lowest_class(view_classes)
 
     def take(bucket, row, key):
         if not key or key in seen:
@@ -587,17 +565,13 @@ def collect_bands(view_classes, today, last_checked=""):
         course = (cls.get("course_name") or "").strip()
         if not course:
             continue
-        past_n = 0
-        missing_n = 0
         for item in _class_raw_work(cls):
             name = _work_name(item)
             if not name:
                 continue
             key = (course.lower(), name.lower())
             due = _work_due_key(item)
-            done = _work_done(item)
-            assess = _is_assessment(name)
-            if done:
+            if _work_done(item):
                 suppressed += 1
                 if due == today_d:
                     take(today_items, _band_item(
@@ -606,40 +580,19 @@ def collect_bands(view_classes, today, last_checked=""):
                         title=name, cls=cls, item_key=name,
                     ), key)
                 continue
-            bucket = _work_bucket(item, today_d)
-            if bucket == "past_due":
-                past_n += 1
-            elif bucket == "missing":
-                missing_n += 1
-            if due == today_d and assess:
+            if due == today_d:
                 take(today_items, _band_item(
                     band="today", kind="today", icon="✓",
                     label=today_fact_label(item, today_d, due),
                     title=name, cls=cls, item_key=name,
                 ), key)
                 continue
-            if due == today_d:
-                take(due_today_open, _band_item(
-                    band="focus", kind="today", icon="•",
+            if in_focus_window(due, today_d):
+                take(focus, _band_item(
+                    band="focus", kind="tomorrow", icon="→",
                     label=due_when_label(due, today_d),
-                    title=name, cls=cls, item_key=name,
+                    title=name, cls=cls, item_key=name, due=due,
                 ), key)
-                continue
-            # Upcoming unsubmitted work stays in the class drawer (Coming up).
-        reasons = []
-        if lowest is not None and _same_class(cls, lowest):
-            _mark, pct = _grade_display(cls)
-            reasons.append(f"lowest, {pct}" if pct else "lowest")
-        if past_n:
-            reasons.append("1 past due" if past_n == 1 else f"{past_n} past due")
-        if missing_n:
-            reasons.append("1 missing" if missing_n == 1 else f"{missing_n} missing")
-        if reasons:
-            take(class_lines, _band_item(
-                band="focus", kind="class", icon="•",
-                label=" · ".join(reasons),
-                title=course, cls=cls, item_key="class",
-            ), (course.lower(), f"class:{course.lower()}"))
 
     forecast = pick_forecast(view_classes, today_d)
     if forecast:
@@ -655,29 +608,18 @@ def collect_bands(view_classes, today, last_checked=""):
         )
         when = _parse_mmdd(forecast.get("due_date"))
         match = matching_forecast_work(forecast_cls, when, title) if forecast_cls else None
-        if forecast_cls and when is not None and when >= today_d and key not in seen:
-            if when == today_d:
-                if match and submitted_in_classroom(match):
-                    label = today_fact_label(match, today_d, when)
-                else:
-                    label = due_when_label(when, today_d)
-                take(today_items, _band_item(
-                    band="today", kind="forecast", icon="✓",
-                    label=label, title=title, cls=forecast_cls, item_key=title,
-                ), key)
-            elif not (match and _work_done(match)):
-                take(study, _band_item(
-                    band="focus", kind="forecast", icon="Q",
-                    label=forecast.get("label") or due_when_label(when, today_d),
-                    title=title, cls=forecast_cls, item_key=title,
-                ), key)
+        if forecast_cls and when == today_d and key not in seen:
+            if match and submitted_in_classroom(match):
+                label = today_fact_label(match, today_d, when)
+            else:
+                label = due_when_label(when, today_d)
+            take(today_items, _band_item(
+                band="today", kind="forecast", icon="✓",
+                label=label, title=title, cls=forecast_cls, item_key=title,
+            ), key)
 
-    def by_title(row):
-        return (row.get("title") or "").lower()
-
-    class_lines.sort(key=lambda r: (0 if (r.get("label") or "").startswith("lowest") else 1, by_title(r)))
-    focus = (due_today_open + class_lines + study)[:BAND_LIMIT]
-    return focus, today_items[:BAND_LIMIT], suppressed
+    focus.sort(key=lambda r: (r.get("due_key") or "", (r.get("title") or "").lower()))
+    return focus[:FOCUS_LIMIT], today_items[:BAND_LIMIT], suppressed
 
 
 def collect_tonight(view_classes, today, last_checked=""):
@@ -965,10 +907,18 @@ def _last_checked_label(iso):
     return dt.strftime("%b %-d")
 
 
-def _band_block(heading, subtitle, items):
-    if not items:
-        return None
-    return {"heading": heading, "subtitle": subtitle, "items": items}
+def _band_block(heading, subtitle, items, *, empty_line=None):
+    if items:
+        return {"heading": heading, "subtitle": subtitle, "items": items, "empty": False}
+    if empty_line:
+        return {
+            "heading": heading,
+            "subtitle": subtitle,
+            "items": [],
+            "empty": True,
+            "empty_line": empty_line,
+        }
+    return None
 
 
 def build_glance(view_classes, today, last_checked_iso=""):
@@ -981,7 +931,7 @@ def build_glance(view_classes, today, last_checked_iso=""):
     count = len(focus) + len(today_items)
     empty = count == 0
     if empty:
-        description = "Nothing is asking for attention."
+        description = FOCUS_EMPTY
     elif count == 1:
         description = "One verified thing to handle."
     else:
@@ -991,8 +941,9 @@ def build_glance(view_classes, today, last_checked_iso=""):
         "bands": {
             "focus": _band_block(
                 "Focus tonight",
-                "Still to do",
+                "Due in the next 2 days",
                 focus,
+                empty_line=FOCUS_EMPTY,
             ),
             "today": _band_block(
                 "Today",
@@ -1004,8 +955,8 @@ def build_glance(view_classes, today, last_checked_iso=""):
             "weekend_night": weekend_night,
             "description": description,
             "empty": empty,
-            "empty_line": "Nothing verified needs action.",
-            "empty_detail": "Classroom and Aeries have no unfinished work to surface.",
+            "empty_line": FOCUS_EMPTY,
+            "empty_detail": "",
             "items": focus,
             "today": today_items,
             "weekend": None,

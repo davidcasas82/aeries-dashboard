@@ -1802,6 +1802,13 @@
         }
         .glance-band { overflow: hidden; }
         .glance-band .glance-section-head { padding-bottom: 14px; }
+        .glance-band-empty {
+            padding: 4px 24px 20px;
+            color: var(--g-muted);
+            font-size: var(--g-fs-sub);
+            font-weight: 650;
+            line-height: 1.4;
+        }
         .glance-tonight { margin-bottom: 22px; overflow: hidden; }
         .glance-tonight-meta {
             display: flex;
@@ -2213,6 +2220,7 @@
             .glance-trend-text { display: none; }
             .glance-counts { grid-column: 1 / -1; grid-row: 2; margin-top: 2px; padding-top: 0; }
             .glance-tonight-meta { padding-left: 18px; padding-right: 18px; }
+            .glance-band-empty { padding-left: 18px; padding-right: 18px; }
             .glance-action { gap: 11px; padding: 14px 18px; }
             .glance-action-title { font-size: 19px; }
             .glance-drawer {
@@ -4615,17 +4623,6 @@
             return `standing-${period != null ? period : name}`;
         }
 
-        function glancePctValue(profile) {
-            const n = Number(profile && profile.classMeta && profile.classMeta.percent);
-            return Number.isFinite(n) ? n : null;
-        }
-
-        function glanceScoredProfile(profile) {
-            const c = (profile && profile.classMeta) || {};
-            const g = formatGradeDisplay(c, (profile && profile.assignments) || []);
-            return (g.letter && g.letter !== '—') || !!g.pct;
-        }
-
         function glanceTodayFactLabel(item, due) {
             if (item && glanceSubmitted(item)) {
                 const on = glanceWorkTurnedInOn(item);
@@ -4639,6 +4636,7 @@
             const period = profile.period;
             const title = opts.title || '';
             const key = String(opts.itemKey || title).toLowerCase();
+            const due = opts.due;
             return {
                 id: `${opts.band}-${period}-${key}`.replace(/\s+/g, '-').slice(0, 80),
                 standing_id: glanceStandingId(profile),
@@ -4649,6 +4647,7 @@
                 title,
                 course,
                 period,
+                due_key: due ? `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}` : '',
                 line: opts.kind === 'class' ? 'class' : 'item',
             };
         }
@@ -4910,9 +4909,7 @@
                 };
             });
 
-            const dueTodayOpen = [];
-            const classLines = [];
-            const study = [];
+            const focus = [];
             const todayItems = [];
             const seen = new Set();
             let suppressed = 0;
@@ -4921,28 +4918,19 @@
                 seen.add(key);
                 bucket.push(row);
             };
-            const scored = (profiles || []).filter(p => glanceScoredProfile(p) && glancePctValue(p) != null);
-            let lowest = null;
-            if (scored.length >= 2) {
-                lowest = scored.slice().sort((a, b) => {
-                    const d = glancePctValue(a) - glancePctValue(b);
-                    if (d) return d;
-                    return String(a.period ?? '').localeCompare(String(b.period ?? ''));
-                })[0];
-            }
+            const inFocusWindow = (due) => {
+                const days = daysFromToday(due);
+                return days != null && days >= 1 && days <= 2;
+            };
             for (const p of profiles || []) {
                 const course = ((p.classMeta || {}).course_name || '').trim();
                 if (!course) continue;
-                let pastN = 0;
-                let missingN = 0;
                 for (const item of glanceRawWork(p)) {
                     const name = glanceWorkName(item);
                     if (!name) continue;
                     const key = `${course.toLowerCase()}|${name.toLowerCase()}`;
                     const due = glanceWorkDue(item);
-                    const done = glanceWorkDone(item);
-                    const assess = glanceIsAssessment(name);
-                    if (done) {
+                    if (glanceWorkDone(item)) {
                         suppressed += 1;
                         if (due && glanceSameDay(due, TODAY)) {
                             take(todayItems, glanceBandItem(p, {
@@ -4953,10 +4941,7 @@
                         }
                         continue;
                     }
-                    const bucket = glanceWorkBucket(item);
-                    if (bucket === 'past_due') pastN += 1;
-                    else if (bucket === 'missing') missingN += 1;
-                    if (due && glanceSameDay(due, TODAY) && assess) {
+                    if (due && glanceSameDay(due, TODAY)) {
                         take(todayItems, glanceBandItem(p, {
                             band: 'today', kind: 'today', icon: '✓',
                             label: glanceTodayFactLabel(item, due),
@@ -4964,29 +4949,13 @@
                         }), key);
                         continue;
                     }
-                    if (due && glanceSameDay(due, TODAY)) {
-                        take(dueTodayOpen, glanceBandItem(p, {
-                            band: 'focus', kind: 'today', icon: '•',
+                    if (inFocusWindow(due)) {
+                        take(focus, glanceBandItem(p, {
+                            band: 'focus', kind: 'tomorrow', icon: '→',
                             label: glanceDueWhenLabel(due),
-                            title: name, itemKey: name,
+                            title: name, itemKey: name, due,
                         }), key);
-                        continue;
                     }
-                    // Upcoming unsubmitted work stays in the class drawer (Coming up).
-                }
-                const reasons = [];
-                if (lowest && p === lowest) {
-                    const g = formatGradeDisplay(p.classMeta || {}, p.assignments || []);
-                    reasons.push(g.pct ? `lowest, ${g.pct}` : 'lowest');
-                }
-                if (pastN) reasons.push(pastN === 1 ? '1 past due' : `${pastN} past due`);
-                if (missingN) reasons.push(missingN === 1 ? '1 missing' : `${missingN} missing`);
-                if (reasons.length) {
-                    take(classLines, glanceBandItem(p, {
-                        band: 'focus', kind: 'class', icon: '•',
-                        label: reasons.join(' · '),
-                        title: course, itemKey: 'class',
-                    }), `${course.toLowerCase()}|class:${course.toLowerCase()}`);
                 }
             }
             const forecast = glanceForecast(profiles);
@@ -4995,51 +4964,40 @@
                 const title = forecast.title || 'Upcoming assessment';
                 const key = `${course}|${title.toLowerCase()}`;
                 const match = glanceForecastMatch(forecast.profile, forecast.when, title);
-                const days = daysFromToday(forecast.when);
-                if (!seen.has(key) && days != null && days >= 0) {
-                    if (days === 0) {
-                        const label = (match && glanceSubmitted(match))
-                            ? glanceTodayFactLabel(match, forecast.when)
-                            : glanceDueWhenLabel(forecast.when);
-                        take(todayItems, glanceBandItem(forecast.profile, {
-                            band: 'today', kind: 'forecast', icon: '✓',
-                            label, title, itemKey: title,
-                        }), key);
-                    } else if (!(match && glanceWorkDone(match))) {
-                        take(study, glanceBandItem(forecast.profile, {
-                            band: 'focus', kind: 'forecast', icon: 'Q',
-                            label: forecast.label || glanceDueWhenLabel(forecast.when),
-                            title, itemKey: title,
-                        }), key);
-                    }
+                if (!seen.has(key) && daysFromToday(forecast.when) === 0) {
+                    const label = (match && glanceSubmitted(match))
+                        ? glanceTodayFactLabel(match, forecast.when)
+                        : glanceDueWhenLabel(forecast.when);
+                    take(todayItems, glanceBandItem(forecast.profile, {
+                        band: 'today', kind: 'forecast', icon: '✓',
+                        label, title, itemKey: title,
+                    }), key);
                 }
             }
-            classLines.sort((a, b) => {
-                const al = (a.label || '').startsWith('lowest') ? 0 : 1;
-                const bl = (b.label || '').startsWith('lowest') ? 0 : 1;
-                if (al !== bl) return al - bl;
-                return (a.title || '').localeCompare(b.title || '');
-            });
-            const focus = dueTodayOpen.concat(classLines, study).slice(0, 4);
+            focus.sort((a, b) => (a.due_key || '').localeCompare(b.due_key || '') || (a.title || '').localeCompare(b.title || ''));
+            const focusOut = focus.slice(0, 3);
             const todayOut = todayItems.slice(0, 4);
-            const count = focus.length + todayOut.length;
+            const count = focusOut.length + todayOut.length;
             const empty = count === 0;
-            let description = 'Nothing is asking for attention.';
-            if (count === 1) description = 'One verified thing to handle.';
-            else if (count > 1) description = `${count} verified things to handle.`;
-            const block = (heading, subtitle, items) => items.length ? { heading, subtitle, items } : null;
+            const focusEmpty = 'Nothing due in the next 2 days.';
+            let description = empty ? focusEmpty : (count === 1 ? 'One verified thing to handle.' : `${count} verified things to handle.`);
+            const block = (heading, subtitle, items, emptyLine) => {
+                if (items.length) return { heading, subtitle, items, empty: false };
+                if (emptyLine) return { heading, subtitle, items: [], empty: true, empty_line: emptyLine };
+                return null;
+            };
             return {
                 standing,
                 bands: {
-                    focus: block('Focus tonight', 'Still to do', focus),
+                    focus: block('Focus tonight', 'Due in the next 2 days', focusOut, focusEmpty),
                     today: block('Today', 'Due today or already happened', todayOut),
                 },
                 tonight: {
                     description,
                     empty,
-                    empty_line: 'Nothing verified needs action.',
-                    empty_detail: 'Classroom and Aeries have no unfinished work to surface.',
-                    items: focus,
+                    empty_line: focusEmpty,
+                    empty_detail: '',
+                    items: focusOut,
                     today: todayOut,
                     weekend: null,
                 },
@@ -5065,16 +5023,22 @@
         }
 
         function renderGlanceBand(band) {
-            if (!band || !(band.items || []).length) return '';
+            if (!band) return '';
+            const items = band.items || [];
+            if (!items.length && !band.empty_line) return '';
+            const body = items.length
+                ? `<div class="glance-action-list">${items.map(glanceActionMarkup).join('')}</div>`
+                : `<p class="glance-band-empty">${esc(band.empty_line)}</p>`;
+            const tap = items.length ? `<span class="glance-tap-note">Tap a class</span>` : '';
             return `<section class="glance-band glance-card" aria-label="${esc(band.heading)}">
                 <div class="glance-section-head">
                     <div>
                         <h2>${esc(band.heading)}</h2>
                         <p>${esc(band.subtitle || '')}</p>
                     </div>
-                    <span class="glance-tap-note">Tap a class</span>
+                    ${tap}
                 </div>
-                <div class="glance-action-list">${band.items.map(glanceActionMarkup).join('')}</div>
+                ${body}
             </section>`;
         }
 
