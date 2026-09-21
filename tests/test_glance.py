@@ -192,6 +192,32 @@ class FixtureGlanceTests(unittest.TestCase):
         self.assertTrue(d["classroom"])
         self.assertTrue(d["aeries"])
         self.assertTrue(d["link"].startswith("https://classroom.google.com/"))
+        self.assertNotIn("work", d)
+
+    def test_standing_drawer_lists_all_class_work(self):
+        alg = next(c for c in self.g["standing"] if c["course"] == "Algebra 2")
+        self.assertEqual(alg["drawer"]["kicker"], "All the work")
+        names = [w["name"] for w in alg["drawer"]["work"]]
+        self.assertIn("3.2 Practice", names)
+        self.assertIn("3.1 Practice", names)
+        self.assertIn("Unit 3 Quiz Review", names)
+        scored = next(w for w in alg["drawer"]["work"] if w["name"] == "3.1 Practice")
+        self.assertEqual(scored["score"], "18/20")
+        missing = next(w for w in alg["drawer"]["work"] if w["name"] == "3.2 Practice")
+        self.assertTrue(missing["missing"])
+        self.assertTrue(missing["turned_in"])
+        self.assertIn("turned in", missing["status"])
+        quiz = next(w for w in alg["drawer"]["work"] if w["name"] == "Unit 3 Quiz Review")
+        self.assertEqual(quiz["score"], "awaiting")
+        self.assertIn("review packet", quiz["description"])
+        blob = json.dumps(alg["drawer"]["work"])
+        for banned in ("rubric", "drive", "text_excerpt", "materials", "attachments"):
+            self.assertNotIn(banned, blob)
+
+    def test_empty_class_has_no_work_rows(self):
+        pe = next(c for c in self.g["standing"] if c["course"] == "PE Course 1")
+        self.assertEqual(pe["drawer"]["work"], [])
+        self.assertEqual(pe["drawer"]["kicker"], "All the work")
 
     def test_empty_night_copy(self):
         student = {
@@ -211,6 +237,30 @@ class FixtureGlanceTests(unittest.TestCase):
         self.assertTrue(g["tonight"]["empty"])
         self.assertEqual(g["tonight"]["empty_line"], "Nothing verified needs action.")
         self.assertEqual(g["verified_count"], 0)
+
+
+class ClassWorkDrawerTests(unittest.TestCase):
+    def test_awaiting_score_and_description_from_payload(self):
+        student = kid_fixture()
+        student["assignments_by_class"][2]["assignments"].append({
+            "description": "Microscope sketch",
+            "due_date": "09/10/2026",
+            "points_earned": None,
+            "points_possible": 10,
+            "grading_complete": False,
+            "comment": "Use the circle template.",
+        })
+        g = view_for(student, today=MONDAY)["glance"]
+        bio = next(c for c in g["standing"] if c["course"] == "Biology")
+        names = [w["name"] for w in bio["drawer"]["work"]]
+        self.assertIn("Cell lab", names)
+        self.assertIn("Microscope sketch", names)
+        row = next(w for w in bio["drawer"]["work"] if w["name"] == "Microscope sketch")
+        self.assertEqual(row["score"], "awaiting")
+        self.assertEqual(row["description"], "Use the circle template.")
+        self.assertFalse(row["missing"])
+        scored = next(w for w in bio["drawer"]["work"] if w["name"] == "Cell lab")
+        self.assertEqual(scored["score"], "28/30")
 
 
 class ForecastNewestTests(unittest.TestCase):

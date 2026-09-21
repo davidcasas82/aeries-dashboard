@@ -2003,6 +2003,43 @@
             text-decoration: none;
         }
         .glance-drawer-cta:hover { background: #0d473a; }
+        .glance-work-list { display: grid; }
+        .glance-work {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px 14px;
+            align-items: start;
+        }
+        .glance-work-name {
+            color: #1d2420;
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: -.02em;
+            line-height: 1.3;
+        }
+        .glance-work-score {
+            color: #1d2420;
+            font-size: 15px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+        .glance-work-score.awaiting { color: #617069; font-weight: 750; }
+        .glance-work-desc {
+            grid-column: 1 / -1;
+            margin: 0;
+            color: #33443b;
+            font-size: 14px;
+            line-height: 1.42;
+        }
+        .glance-work-status {
+            grid-column: 1 / -1;
+            margin: 0;
+            color: #617069;
+            font-size: 13px;
+            font-weight: 750;
+        }
+        .glance-work-status.missing { color: #9b3b2d; }
 
         @media (max-width: 620px) {
             .glance-section-head { padding: 19px 18px 15px; }
@@ -2104,23 +2141,26 @@
             <button class="glance-close" id="glanceClose" type="button" aria-label="Close details">×</button>
         </div>
         <div class="glance-drawer-body">
-            <section class="glance-detail">
-                <span class="glance-detail-label">Teacher wording</span>
-                <p class="glance-teacher-words" id="glanceTeacherWords"></p>
-            </section>
-            <section class="glance-detail">
-                <span class="glance-detail-label">Status trail</span>
-                <div class="glance-timeline">
-                    <div class="glance-timeline-row">
-                        <span class="glance-timeline-source">Classroom</span>
-                        <span class="glance-timeline-status" id="glanceClassroomStatus"></span>
+            <div id="glanceItemDepth">
+                <section class="glance-detail">
+                    <span class="glance-detail-label">Teacher wording</span>
+                    <p class="glance-teacher-words" id="glanceTeacherWords"></p>
+                </section>
+                <section class="glance-detail">
+                    <span class="glance-detail-label">Status trail</span>
+                    <div class="glance-timeline">
+                        <div class="glance-timeline-row">
+                            <span class="glance-timeline-source">Classroom</span>
+                            <span class="glance-timeline-status" id="glanceClassroomStatus"></span>
+                        </div>
+                        <div class="glance-timeline-row aeries">
+                            <span class="glance-timeline-source">Aeries</span>
+                            <span class="glance-timeline-status" id="glanceAeriesStatus"></span>
+                        </div>
                     </div>
-                    <div class="glance-timeline-row aeries">
-                        <span class="glance-timeline-source">Aeries</span>
-                        <span class="glance-timeline-status" id="glanceAeriesStatus"></span>
-                    </div>
-                </div>
-            </section>
+                </section>
+            </div>
+            <div class="glance-work-list" id="glanceWorkList" hidden></div>
         </div>
         <a class="glance-drawer-cta" id="glanceClassroomLink" href="https://classroom.google.com/" target="_blank" rel="noreferrer">Open in Classroom <span aria-hidden="true">↗</span></a>
     </aside>
@@ -4268,6 +4308,111 @@
             return cr.link || (profile.classroom && profile.classroom.link) || 'https://classroom.google.com/';
         }
 
+        function glanceWorkName(item) {
+            return String((item && (item.name || item.description || item.title)) || '').trim();
+        }
+
+        function glanceWorkDescription(item) {
+            const name = glanceWorkName(item);
+            const comment = String((item && (item.teacher_comment || item.comment)) || '').trim();
+            if (comment && comment !== name) return comment.slice(0, 300);
+            const cr = (item && item.classroom) || {};
+            const desc = String(cr.description || '').trim();
+            if (desc && desc !== name) return desc.slice(0, 300);
+            const instr = String(cr.instructions || '').trim();
+            if (instr) {
+                const first = instr.split('\n\n')[0].trim();
+                if (first && first !== name) return first.slice(0, 300);
+            }
+            return '';
+        }
+
+        function glanceWorkScore(item) {
+            const shown = assignmentScoreDisplay(item);
+            if (shown && shown.text && shown.text !== '—') return shown.text;
+            return 'awaiting';
+        }
+
+        function glanceWorkMissing(item) {
+            return isAeriesFlaggedMissing(item) || (item && item.status === 'missing');
+        }
+
+        function glanceWorkStatus(item) {
+            const missing = glanceWorkMissing(item);
+            const turned = glanceSubmitted(item);
+            if (turned && missing) return 'turned in · Aeries missing';
+            if (missing) return 'missing';
+            if (turned) return 'turned in';
+            return '';
+        }
+
+        function glanceWorkRow(item) {
+            const name = glanceWorkName(item);
+            if (!name) return null;
+            return {
+                name,
+                description: glanceWorkDescription(item),
+                score: glanceWorkScore(item),
+                missing: glanceWorkMissing(item),
+                turned_in: glanceSubmitted(item),
+                status: glanceWorkStatus(item),
+                due_date: (item && (item.due_date || item.due)) || '',
+            };
+        }
+
+        function glanceClassWork(profile) {
+            const seen = new Set();
+            const raws = [];
+            for (const a of (profile && profile.assignments) || []) {
+                const name = glanceWorkName(a);
+                if (!name || seen.has(name.toLowerCase())) continue;
+                seen.add(name.toLowerCase());
+                raws.push(a);
+            }
+            for (const extra of (profile && profile.classroom && profile.classroom.classroom_only) || []) {
+                const title = String(extra.title || extra.name || '').trim();
+                if (!title || seen.has(title.toLowerCase())) continue;
+                seen.add(title.toLowerCase());
+                raws.push({
+                    name: title,
+                    description: title,
+                    due_date: extra.due_date || extra.due || '',
+                    source: 'classroom',
+                    classroom: extra,
+                });
+            }
+            raws.sort((a, b) => {
+                const da = glanceParseDay(a.due_date || a.due || (a.classroom && (a.classroom.due || a.classroom.due_date)));
+                const db = glanceParseDay(b.due_date || b.due || (b.classroom && (b.classroom.due || b.classroom.due_date)));
+                if (!da && !db) return glanceWorkName(a).localeCompare(glanceWorkName(b));
+                if (!da) return 1;
+                if (!db) return -1;
+                return db - da;
+            });
+            return raws.map(glanceWorkRow).filter(Boolean);
+        }
+
+        function renderGlanceWork(rows) {
+            if (!rows || !rows.length) {
+                return `<section class="glance-detail glance-work-empty">
+                    <span class="glance-detail-label">Assignments</span>
+                    <p class="glance-teacher-words">No work posted in this class yet.</p>
+                </section>`;
+            }
+            return rows.map(row => {
+                const score = row.score || 'awaiting';
+                const awaiting = String(score).toLowerCase() === 'awaiting';
+                const desc = (row.description || '').trim();
+                const status = row.status || '';
+                return `<article class="glance-detail glance-work">
+                    <span class="glance-work-name">${esc(row.name)}</span>
+                    <span class="glance-work-score${awaiting ? ' awaiting' : ''}">${esc(score)}</span>
+                    ${desc ? `<p class="glance-work-desc">${esc(desc)}</p>` : ''}
+                    ${status ? `<p class="glance-work-status${row.missing ? ' missing' : ''}">${esc(status)}</p>` : ''}
+                </article>`;
+            }).join('');
+        }
+
         function glanceAction(kind, item, profile, weekendLabel) {
             const name = (item.description || item.name || item.title || '').trim();
             const course = (profile.classMeta && profile.classMeta.course_name) || '';
@@ -4357,18 +4502,10 @@
                 const c = p.classMeta || {};
                 const g = formatGradeDisplay(c, p.assignments);
                 const tr = glanceTrend(student, c.course_name, { delta_7d: p.delta_7d });
-                const notes = glanceNewestNotes((p.classroom || {}).announcements, 1);
-                const catchUp = (p.classroom && p.classroom.turned_in_aeries_missing) || [];
-                let classroomLine = 'No unfinished Classroom work in the current window.';
-                const only = (p.classroom && p.classroom.classroom_only) || [];
-                if (catchUp[0]) {
-                    const when = glanceMonthDay(glanceParseDay(catchUp[0].turned_in_on));
-                    classroomLine = `${catchUp[0].title || 'Work'} turned in${when ? ` ${when}` : ''} · Aeries has not caught up`;
-                } else if (only[0]) {
-                    classroomLine = glanceClassroomLine({ due_date: only[0].due_date, classroom: only[0] });
-                }
+                const standingLine = [g.letter, g.pct].filter(Boolean).join(' ');
                 return {
                     id: `standing-${p.period != null ? p.period : c.course_name}`,
+                    kind: 'standing',
                     course: c.course_name || '',
                     period: p.period,
                     mark: g.letter,
@@ -4377,12 +4514,10 @@
                     trend_symbol: tr.symbol,
                     trend_text: tr.text,
                     drawer: {
-                        kicker: 'Standing · verified detail',
+                        kicker: 'All the work',
                         title: c.course_name || '',
-                        course: c.course_name || '',
-                        teacher_words: notes[0] ? notes[0].text : 'No teacher wording in this export.',
-                        classroom: classroomLine,
-                        aeries: glanceAeriesLine(null, p, false),
+                        course: standingLine || c.course_name || '',
+                        work: glanceClassWork(p),
                         link: (p.classroom && p.classroom.link) || 'https://classroom.google.com/',
                     },
                 };
@@ -4570,9 +4705,21 @@
             document.getElementById('glanceDrawerKicker').textContent = (item.drawer && item.drawer.kicker) || 'Verified detail';
             document.getElementById('glanceDrawerTitle').textContent = (item.drawer && item.drawer.title) || item.title || item.course;
             document.getElementById('glanceDrawerClass').textContent = (item.drawer && item.drawer.course) || item.course || '';
-            document.getElementById('glanceTeacherWords').textContent = (item.drawer && item.drawer.teacher_words) || 'No teacher wording in this export.';
-            document.getElementById('glanceClassroomStatus').textContent = (item.drawer && item.drawer.classroom) || '';
-            document.getElementById('glanceAeriesStatus').textContent = (item.drawer && item.drawer.aeries) || '';
+            const work = item.drawer && Array.isArray(item.drawer.work) ? item.drawer.work : null;
+            const itemDepth = document.getElementById('glanceItemDepth');
+            const workList = document.getElementById('glanceWorkList');
+            if (work) {
+                itemDepth.hidden = true;
+                workList.hidden = false;
+                workList.innerHTML = renderGlanceWork(work);
+            } else {
+                itemDepth.hidden = false;
+                workList.hidden = true;
+                workList.innerHTML = '';
+                document.getElementById('glanceTeacherWords').textContent = (item.drawer && item.drawer.teacher_words) || 'No teacher wording in this export.';
+                document.getElementById('glanceClassroomStatus').textContent = (item.drawer && item.drawer.classroom) || '';
+                document.getElementById('glanceAeriesStatus').textContent = (item.drawer && item.drawer.aeries) || '';
+            }
             const link = document.getElementById('glanceClassroomLink');
             link.href = (item.drawer && item.drawer.link) || 'https://classroom.google.com/';
             drawer.classList.add('open');

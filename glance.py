@@ -474,6 +474,145 @@ def collect_tonight(view_classes, today, last_checked=""):
     return items, weekend_out, suppressed
 
 
+def _fmt_pts(n):
+    if isinstance(n, float) and n == int(n):
+        return str(int(n))
+    return f"{n:g}"
+
+
+def _work_name(item):
+    return (
+        (item or {}).get("name")
+        or (item or {}).get("description")
+        or (item or {}).get("title")
+        or ""
+    ).strip()
+
+
+def _work_description(item):
+    """Assignment wording only. Never Drive/Doc excerpts, rubrics, or history."""
+    name = _work_name(item)
+    comment = (
+        (item or {}).get("teacher_comment")
+        or (item or {}).get("comment")
+        or ""
+    ).strip()
+    if comment and comment != name:
+        return comment[:300]
+    cr = (item or {}).get("classroom") or {}
+    desc = (cr.get("description") or "").strip()
+    if desc and desc != name:
+        return desc[:300]
+    instr = (cr.get("instructions") or "").strip()
+    if instr:
+        first = instr.split("\n\n", 1)[0].strip()
+        if first and first != name:
+            return first[:300]
+    return ""
+
+
+def _work_score(item):
+    earned = (item or {}).get("points_earned")
+    if earned is not None:
+        poss = (item or {}).get("points_possible")
+        if poss is not None:
+            return f"{_fmt_pts(earned)}/{_fmt_pts(poss)}"
+        return _fmt_pts(earned)
+    raw = str((item or {}).get("score_raw") or "").strip()
+    if raw and not raw.replace(".", "", 1).isdigit():
+        return raw
+    return "awaiting"
+
+
+def _work_missing(item):
+    if not item:
+        return False
+    if item.get("aeries_missing"):
+        return True
+    return (item.get("status") or "") == "missing"
+
+
+def _work_turned_in(item):
+    return bool((item or {}).get("turned_in")) or submitted_in_classroom(item)
+
+
+def _work_status(item):
+    missing = _work_missing(item)
+    turned = _work_turned_in(item)
+    if turned and missing:
+        return "turned in · Aeries missing"
+    if missing:
+        return "missing"
+    if turned:
+        return "turned in"
+    return ""
+
+
+def _work_row(item):
+    return {
+        "name": _work_name(item),
+        "description": _work_description(item),
+        "score": _work_score(item),
+        "missing": _work_missing(item),
+        "turned_in": _work_turned_in(item),
+        "status": _work_status(item),
+    }
+
+
+def _work_due_key(item):
+    due = _parse_mmdd((item or {}).get("due_date") or (item or {}).get("due"))
+    if due is None:
+        cr = (item or {}).get("classroom") or {}
+        due = _parse_mmdd(cr.get("due") or cr.get("due_date")) or _parse_posted(cr.get("due"))
+    return due
+
+
+def class_work_rows(cls):
+    """Every assignment in this class. Not Tonight’s 0–3. No warehouse fields."""
+    rows = []
+    seen = set()
+    raws = []
+    for a in cls.get("assignments") or []:
+        name = _work_name(a)
+        if not name:
+            continue
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        raws.append(a)
+    cr = cls.get("classroom") or {}
+    for extra in cr.get("classroom_only") or []:
+        title = (extra.get("title") or extra.get("name") or "").strip()
+        if not title or title.lower() in seen:
+            continue
+        seen.add(title.lower())
+        raws.append({
+            "name": title,
+            "due_date": extra.get("due_date") or extra.get("due") or "",
+            "source": "classroom",
+            "classroom": {
+                "state": extra.get("state"),
+                "state_label": extra.get("state_label"),
+                "instructions": extra.get("instructions"),
+                "description": extra.get("description"),
+                "due": extra.get("due"),
+                "due_date": extra.get("due_date"),
+                "turned_in_on": extra.get("turned_in_on"),
+            },
+        })
+    raws.sort(key=lambda a: (
+        _work_due_key(a) is None,
+        -(_work_due_key(a).toordinal() if _work_due_key(a) else 0),
+        _work_name(a).lower(),
+    ))
+    for item in raws:
+        row = _work_row(item)
+        if row["name"]:
+            rows.append(row)
+    return rows
+
+
 def standing_cards(view_classes, last_checked=""):
     cards = []
     for cls in view_classes or []:
@@ -483,28 +622,10 @@ def standing_cards(view_classes, last_checked=""):
         mark, pct = _grade_display(cls)
         trend, symbol, text = _trend(cls)
         cr = cls.get("classroom") or {}
-        notes = newest_announcements(cr.get("announcements"), limit=1)
-        words = (notes[0]["text"] if notes else "") or "No teacher wording in this export."
-        classroom_line = "No unfinished Classroom work in the current window."
-        only = cr.get("classroom_only") or []
-        if only:
-            top = only[0]
-            classroom_line = _classroom_status({
-                "name": top.get("title"),
-                "due_date": top.get("due_date"),
-                "classroom": top,
-            })
-        catch = cr.get("turned_in_aeries_missing") or []
-        if catch:
-            when = _month_day(_parse_posted(catch[0].get("turned_in_on")))
-            classroom_line = (
-                f"{catch[0].get('title') or 'Work'} turned in"
-                + (f" {when}" if when else "")
-                + " · Aeries has not caught up"
-            )
-        aeries_line = _aeries_status(None, cls, last_checked)
+        standing_line = f"{mark} {pct}".strip()
         cards.append({
             "id": f"standing-{cls.get('period') or name}",
+            "kind": "standing",
             "course": name,
             "period": cls.get("period"),
             "mark": mark,
@@ -513,12 +634,10 @@ def standing_cards(view_classes, last_checked=""):
             "trend_symbol": symbol,
             "trend_text": text,
             "drawer": {
-                "kicker": "Standing · verified detail",
+                "kicker": "All the work",
                 "title": name,
-                "course": name,
-                "teacher_words": words,
-                "classroom": classroom_line,
-                "aeries": aeries_line,
+                "course": standing_line or name,
+                "work": class_work_rows(cls),
                 "link": cr.get("link") or "https://classroom.google.com/",
             },
         })
