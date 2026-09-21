@@ -1866,7 +1866,7 @@
         .glance-scrim {
             position: fixed;
             inset: 0;
-            z-index: 29;
+            z-index: 220;
             background: rgba(17, 28, 23, .33);
             opacity: 0;
             pointer-events: none;
@@ -1875,7 +1875,7 @@
         .glance-scrim.open { opacity: 1; pointer-events: auto; }
         .glance-drawer {
             position: fixed;
-            z-index: 30;
+            z-index: 230;
             top: 0;
             right: 0;
             bottom: 0;
@@ -1896,6 +1896,8 @@
             align-items: flex-start;
             gap: 16px;
             justify-content: space-between;
+            flex-shrink: 0;
+            padding-top: env(safe-area-inset-top, 0px);
         }
         .glance-drawer-kicker {
             margin: 0 0 6px;
