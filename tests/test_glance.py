@@ -299,6 +299,43 @@ class ClassWorkDrawerTests(unittest.TestCase):
         tonight = json.dumps(g["tonight"])
         self.assertNotIn("4 days late", tonight)
 
+    def test_classroom_or_aeries_in_is_not_late(self):
+        """Drawer late uses the same already-in check as Tonight."""
+        student = {
+            "name": "Student A",
+            "sn": "1",
+            "classes": [{"period": 5, "course_name": "Algebra 2", "teacher": "Byun", "percent": "81", "mark": "B-"}],
+            "assignments_by_class": [
+                {"class_name": "5- Algebra 2- Fall", "period": 5, "assignments": [
+                    {"description": "Classroom in", "due_date": "09/10/2026", "points_earned": None,
+                     "points_possible": 10, "grading_complete": False, "aeries_missing": True,
+                     "status": "missing",
+                     "classroom": {"state": "TURNED_IN", "state_label": "Turned in on Classroom",
+                                   "turned_in_on": "2026-09-11"}},
+                    {"description": "Aeries handed in", "due_date": "09/10/2026", "points_earned": None,
+                     "points_possible": 10, "grading_complete": False, "date_completed": "09/11/2026"},
+                    {"description": "Still out", "due_date": "09/10/2026", "points_earned": None,
+                     "points_possible": 10, "grading_complete": False, "aeries_missing": True,
+                     "status": "missing"},
+                ]},
+            ],
+            "class_trends": {},
+            "ai_summary": {},
+        }
+        g = view_for(student, today=MONDAY)["glance"]
+        alg = next(c for c in g["standing"] if c["course"] == "Algebra 2")
+        by_name = {w["name"]: w for w in alg["drawer"]["work"]}
+        self.assertEqual(by_name["Classroom in"]["when"], "due Sep 10")
+        self.assertIn("turned in", by_name["Classroom in"]["status"])
+        self.assertNotIn("late", by_name["Classroom in"]["when"])
+        self.assertEqual(by_name["Aeries handed in"]["when"], "due Sep 10")
+        self.assertIn("turned in", by_name["Aeries handed in"]["status"])
+        self.assertEqual(by_name["Still out"]["when"], "4 days late · due Sep 10")
+        self.assertEqual(by_name["Still out"]["status"], "missing")
+        tonight_titles = [i["title"] for i in g["tonight"]["items"]]
+        self.assertNotIn("Classroom in", tonight_titles)
+        self.assertNotIn("Aeries handed in", tonight_titles)
+
 
 class ForecastNewestTests(unittest.TestCase):
     def test_oldest_announcements_do_not_win(self):

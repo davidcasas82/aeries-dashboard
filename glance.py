@@ -99,9 +99,16 @@ def weekend_dates(today):
 
 
 def submitted_in_classroom(item):
+    """Already in: Classroom TURNED_IN/RETURNED, or Aeries Date Completed.
+
+    Same predicate Tonight uses to suppress a row. Aeries-missing after
+    this is gradebook lag, not late / not-turned-in.
+    """
     if not item:
         return False
     if item.get("turned_in") or item.get("turned_in_classroom"):
+        return True
+    if str(item.get("date_completed") or "").strip():
         return True
     cr = item.get("classroom") or {}
     state = (cr.get("state") or "").upper()
@@ -570,7 +577,11 @@ def _late_label(days):
 
 
 def _work_when(item, today):
-    """Due / upcoming / how late. Empty when the payload has no due date."""
+    """Due / upcoming / how late. Empty when the payload has no due date.
+
+    Late only if the due date passed AND Classroom does not show submitted
+    AND Aeries does not show scored or handed in. Same reconcile as Tonight.
+    """
     due = _work_due_key(item)
     if due is None:
         return ""
@@ -585,7 +596,7 @@ def _work_when(item, today):
         return "due tomorrow"
     if days == 0:
         return "due today"
-    if _work_turned_in(item) or (item or {}).get("points_earned") is not None:
+    if submitted_in_classroom(item) or (item or {}).get("points_earned") is not None:
         return f"due {date}"
     return f"{_late_label(-days)} · due {date}"
 
