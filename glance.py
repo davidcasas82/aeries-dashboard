@@ -299,6 +299,28 @@ def _grade_display(cls):
     return "—", ""
 
 
+def _grade_class(cls, mark=""):
+    """Same A/B/C/D/F bands as the pre-glance dashboard getGradeClass."""
+    if (mark or "").strip() in ("", "—") and not (cls or {}).get("percent"):
+        return "grade-none"
+    raw = (cls or {}).get("percent")
+    try:
+        n = None if raw in (None, "") else float(raw)
+    except (TypeError, ValueError):
+        return "grade-none"
+    if n is None:
+        return "grade-none"
+    if n >= 90:
+        return "grade-a"
+    if n >= 80:
+        return "grade-b"
+    if n >= 70:
+        return "grade-c"
+    if n >= 60:
+        return "grade-d"
+    return "grade-f"
+
+
 def _classroom_status(item, fallback="No Classroom row"):
     cr = (item or {}).get("classroom") or {}
     if not cr and not item:
@@ -584,39 +606,65 @@ def _work_turned_in_on(item):
     return None
 
 
+def _work_done(item):
+    """Classroom in or Aeries scored/completed. Same already-in as Tonight."""
+    return _work_turned_in(item) or (item or {}).get("points_earned") is not None
+
+
+def _work_bucket(item):
+    """Turned in / not turned in / missing. Classroom-in is never missing."""
+    if _work_done(item):
+        return "turned_in"
+    if _work_missing(item):
+        return "missing"
+    return "not_turned_in"
+
+
+def _turned_in_phrase(item):
+    if not _work_turned_in(item):
+        return ""
+    on = _work_turned_in_on(item)
+    if on:
+        return f"turned in {_weekday_date(on)}"
+    return "turned in"
+
+
 def _work_status(item):
+    """Leftover Aeries state only. Turned-in date lives on the due line."""
     missing = _work_missing(item)
-    turned = _work_turned_in(item)
-    when = _work_turned_in_on(item)
-    turned_s = f"turned in {_month_day(when)}" if turned and when else ("turned in" if turned else "")
-    if turned and missing:
-        return f"{turned_s} · Aeries missing" if turned_s else "turned in · Aeries missing"
+    if _work_turned_in(item) and missing:
+        return "Aeries missing"
     if missing:
         return "missing"
-    if turned:
-        return turned_s
     return ""
 
 
 def _work_when(item, today):
-    """Due / upcoming / how late. Empty when the payload has no due date.
+    """Due / late and turned-in on one line: `due … / turned in …`.
 
     Late only if the due date passed AND Classroom does not show submitted
     AND Aeries does not show scored or handed in. Same reconcile as Tonight.
     Always weekday + date.
     """
     due = _work_due_key(item)
-    done = submitted_in_classroom(item) or (item or {}).get("points_earned") is not None
-    return due_when_label(due, today, done=done)
+    scored = _work_done(item)
+    due_s = due_when_label(due, today, done=scored)
+    turned = _turned_in_phrase(item)
+    if due_s and turned:
+        return f"{due_s} / {turned}"
+    return due_s or turned
 
 
 def _work_row(item, today=None):
+    bucket = _work_bucket(item)
     return {
         "name": _work_name(item),
         "description": _work_description(item),
         "score": _work_score(item),
-        "missing": _work_missing(item),
+        "missing": bucket == "missing",
         "turned_in": _work_turned_in(item),
+        "done": bucket == "turned_in",
+        "bucket": bucket,
         "status": _work_status(item),
         "when": _work_when(item, today),
     }
@@ -665,6 +713,7 @@ def class_work_rows(cls, today=None):
             },
         })
     raws.sort(key=lambda a: (
+        _BUCKET_RANK.get(_work_bucket(a), 9),
         _work_due_key(a) is None,
         -(_work_due_key(a).toordinal() if _work_due_key(a) else 0),
         _work_name(a).lower(),
@@ -676,6 +725,33 @@ def class_work_rows(cls, today=None):
     return rows
 
 
+_BUCKET_RANK = {"turned_in": 0, "not_turned_in": 1, "missing": 2}
+_BUCKET_PHRASE = {
+    "missing": "missing",
+    "not_turned_in": "coming up",
+    "turned_in": "turned in",
+}
+
+
+def work_counts(rows):
+    counts = {"turned_in": 0, "not_turned_in": 0, "missing": 0}
+    for row in rows or []:
+        key = row.get("bucket")
+        if key in counts:
+            counts[key] += 1
+    return counts
+
+
+def count_line(counts, *, show_zero_missing=False):
+    """Old class-row vocabulary: '2 missing · 4 turned in'."""
+    parts = []
+    for key in ("missing", "not_turned_in", "turned_in"):
+        n = (counts or {}).get(key) or 0
+        if n or (key == "missing" and show_zero_missing):
+            parts.append(f"{n} {_BUCKET_PHRASE[key]}")
+    return " · ".join(parts)
+
+
 def standing_cards(view_classes, last_checked="", today=None):
     cards = []
     for cls in view_classes or []:
@@ -685,6 +761,10 @@ def standing_cards(view_classes, last_checked="", today=None):
         mark, pct = _grade_display(cls)
         trend, symbol, text = _trend(cls)
         standing_line = f"{mark} {pct}".strip()
+        work = class_work_rows(cls, today)
+        counts = work_counts(work)
+        line = count_line(counts)
+        header = count_line(counts, show_zero_missing=bool(work))
         cards.append({
             "id": f"standing-{cls.get('period') or name}",
             "kind": "standing",
@@ -692,14 +772,18 @@ def standing_cards(view_classes, last_checked="", today=None):
             "period": cls.get("period"),
             "mark": mark,
             "percent": pct,
+            "grade_class": _grade_class(cls, mark),
             "trend": trend,
             "trend_symbol": symbol,
             "trend_text": text,
+            "counts": counts,
+            "count_line": line,
             "drawer": {
-                "kicker": "All the work",
+                "kicker": header or "All the work",
                 "title": name,
                 "course": standing_line or name,
-                "work": class_work_rows(cls, today),
+                "work": work,
+                "counts": counts,
             },
         })
     return cards
