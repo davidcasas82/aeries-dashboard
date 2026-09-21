@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta
 
-from classroom import TURNED_IN_STATES
+from classroom import TURNED_IN_STATES, teacher_card_body
 
 TONIGHT_LIMIT = 3
 FORECAST_MAX_AGE_DAYS = 14
@@ -564,8 +564,11 @@ def _work_name(item):
 
 
 def _work_description(item):
-    """Assignment wording only. Never Drive/Doc excerpts, rubrics, or history."""
+    """Teacher sentence for the card. Not topic, rubric, or student answer."""
     name = _work_name(item)
+    body = teacher_card_body(item, name)
+    if body:
+        return body
     comment = (
         (item or {}).get("teacher_comment")
         or (item or {}).get("comment")
@@ -573,15 +576,6 @@ def _work_description(item):
     ).strip()
     if comment and comment != name:
         return comment[:300]
-    cr = (item or {}).get("classroom") or {}
-    desc = (cr.get("description") or "").strip()
-    if desc and desc != name:
-        return desc[:300]
-    instr = (cr.get("instructions") or "").strip()
-    if instr:
-        first = instr.split("\n\n", 1)[0].strip()
-        if first and first != name:
-            return first[:300]
     return ""
 
 
@@ -729,6 +723,7 @@ def class_work_rows(cls, today=None):
                 "state_label": extra.get("state_label"),
                 "instructions": extra.get("instructions"),
                 "description": extra.get("description"),
+                "excerpt": extra.get("excerpt"),
                 "due": extra.get("due"),
                 "due_date": extra.get("due_date"),
                 "turned_in_on": extra.get("turned_in_on"),

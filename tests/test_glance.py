@@ -236,8 +236,11 @@ class FixtureGlanceTests(unittest.TestCase):
         self.assertEqual(alg["count_line"], "1 coming up · 2 turned in")
         self.assertEqual(alg["drawer"]["kicker"], "0 missing · 1 coming up · 2 turned in")
         blob = json.dumps(alg["drawer"]["work"])
-        for banned in ("rubric", "drive", "text_excerpt", "materials", "attachments"):
-            self.assertNotIn(banned, blob)
+        self.assertNotIn("classroom.google.com", blob)
+        self.assertNotIn("drive.google.com", blob)
+        for row in alg["drawer"]["work"]:
+            for banned in ("rubric", "text_excerpt", "materials", "attachments", "topic"):
+                self.assertNotIn(banned, row)
 
     def test_empty_class_has_no_work_rows(self):
         pe = next(c for c in self.g["standing"] if c["course"] == "PE Course 1")
@@ -532,6 +535,61 @@ class ForecastNewestTests(unittest.TestCase):
         self.assertEqual(forecast["label"], "Due today · Monday, Sep 21")
         self.assertNotIn("Coming", forecast["label"])
         self.assertNotIn("tonight", forecast["label"].lower())
+
+
+class TeacherProseCardTests(unittest.TestCase):
+    def test_stamp_prose_reaches_the_card_and_title_only_stays_empty(self):
+        student = {
+            "name": "Student A",
+            "sn": "1",
+            "classes": [{"period": 5, "course_name": "Algebra 2", "teacher": "Byun", "percent": "81", "mark": "B-"}],
+            "assignments_by_class": [
+                {"class_name": "5- Algebra 2- Fall", "period": 5, "assignments": [
+                    {"description": "LT 1.4", "due_date": "09/10/2026", "points_earned": 10,
+                     "points_possible": 10, "grading_complete": True,
+                     "classroom": {
+                         "instructions": "Name the angle pairs and justify each one.\n\nA linear pair adds to 180.",
+                         "description": "Name the angle pairs and justify each one.",
+                         "excerpt": "A linear pair adds to 180.",
+                         "topic": "Unit 2",
+                     }},
+                    {"description": "Warmup", "due_date": "09/12/2026", "points_earned": None,
+                     "points_possible": 5, "grading_complete": False,
+                     "classroom": {"topic": "Unit 2", "instructions": "Warmup"}},
+                    {"description": "Notes check", "due_date": "09/08/2026", "points_earned": 5,
+                     "points_possible": 5, "grading_complete": True},
+                ]},
+            ],
+            "class_trends": {},
+            "ai_summary": {},
+            "classroom": {"courses": [], "classroom_only": []},
+        }
+        g = view_for(student, today=MONDAY)["glance"]
+        alg = next(c for c in g["standing"] if c["course"] == "Algebra 2")
+        by_name = {w["name"]: w for w in alg["drawer"]["work"]}
+        self.assertIn("Name the angle pairs", by_name["LT 1.4"]["description"])
+        self.assertIn("linear pair", by_name["LT 1.4"]["description"])
+        self.assertEqual(by_name["Warmup"]["description"], "")
+        self.assertEqual(by_name["Notes check"]["description"], "")
+        self.assertNotIn("Unit 2", by_name["LT 1.4"]["description"])
+        blob = json.dumps(alg["drawer"]["work"])
+        self.assertNotIn("classroom.google.com", blob)
+        self.assertNotIn("drive.google.com", blob)
+
+    def test_classroom_only_card_gets_body_without_new_unmatched_cards(self):
+        student = kid_fixture()
+        export = json.loads((FIXTURES / "classroom_export_sample.json").read_text())
+        g = view_for(student, export=export, today=MONDAY)["glance"]
+        alg = next(c for c in g["standing"] if c["course"] == "Algebra 2")
+        names = [w["name"] for w in alg["drawer"]["work"]]
+        self.assertIn("Unit 3 Quiz Review", names)
+        self.assertNotIn("Syllabus signature", names)
+        self.assertNotIn("Unit 3 notes", names)
+        quiz = next(w for w in alg["drawer"]["work"] if w["name"] == "Unit 3 Quiz Review")
+        self.assertIn("review packet", quiz["description"])
+        practice = next(w for w in alg["drawer"]["work"] if w["name"] == "3.2 Practice")
+        self.assertIn("Show all work", practice["description"])
+        self.assertIn("Rubric", practice["description"])
 
 
 if __name__ == "__main__":

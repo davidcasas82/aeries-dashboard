@@ -2065,13 +2065,43 @@
         .glance-work-score.grade-d,
         .glance-work-score.grade-f { color: var(--red); }
         .glance-work-score.grade-none { color: var(--text-3); }
-        .glance-work-desc {
+        .glance-work-prose {
             grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: start;
+            gap: 6px 10px;
+        }
+        .glance-work-desc {
             margin: 0;
             color: #33443b;
             font-size: var(--g-fs-sub);
             line-height: 1.42;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
+        .glance-work-prose.is-open .glance-work-desc {
+            display: block;
+            overflow: visible;
+            white-space: pre-wrap;
+        }
+        .glance-work-caret {
+            display: none;
+            width: 28px;
+            height: 28px;
+            margin: -4px -4px 0 0;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: #617069;
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .glance-work-prose.has-more .glance-work-caret { display: grid; place-items: center; }
+        .glance-work-prose.is-open .glance-work-caret { transform: rotate(180deg); }
         .glance-work-when {
             grid-column: 1 / -1;
             margin: 0;
@@ -4433,18 +4463,43 @@
             return String((item && (item.name || item.description || item.title)) || '').trim();
         }
 
+        function glanceSameText(a, b) {
+            return String(a || '').replace(/\s+/g, ' ').trim().toLowerCase()
+                === String(b || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+
+        function glanceFirstExcerpt(item) {
+            const cr = (item && item.classroom) || {};
+            const direct = String(cr.excerpt || '').trim();
+            if (direct) return direct;
+            for (const m of cr.materials || []) {
+                const text = String((m && m.text_excerpt) || '').trim();
+                if (text) return text;
+            }
+            return '';
+        }
+
         function glanceWorkDescription(item) {
             const name = glanceWorkName(item);
-            const comment = String((item && (item.teacher_comment || item.comment)) || '').trim();
-            if (comment && comment !== name) return comment.slice(0, 300);
             const cr = (item && item.classroom) || {};
-            const desc = String(cr.description || '').trim();
-            if (desc && desc !== name) return desc.slice(0, 300);
-            const instr = String(cr.instructions || '').trim();
-            if (instr) {
-                const first = instr.split('\n\n')[0].trim();
-                if (first && first !== name) return first.slice(0, 300);
+            const sources = [
+                cr.instructions,
+                cr.description,
+                glanceFirstExcerpt(item),
+            ];
+            const aeriesDesc = String((item && item.description) || '').trim();
+            if (aeriesDesc && !glanceSameText(aeriesDesc, name)) sources.push(aeriesDesc);
+            for (let text of sources) {
+                text = String(text || '').trim();
+                if (!text || glanceSameText(text, name)) continue;
+                const parts = text.split('\n\n');
+                if (glanceSameText(parts[0], name) && parts.length > 1) {
+                    text = parts.slice(1).join('\n\n').trim();
+                }
+                if (text && !glanceSameText(text, name)) return text.slice(0, 1200);
             }
+            const comment = String((item && (item.teacher_comment || item.comment)) || '').trim();
+            if (comment && !glanceSameText(comment, name)) return comment.slice(0, 300);
             return '';
         }
 
@@ -4608,13 +4663,40 @@
             const status = row.status || '';
             const late = !!(row.late || /late/.test(when));
             const scoreClass = (!awaiting && row.score_class) ? ` ${esc(row.score_class)}` : '';
+            const prose = desc ? `<div class="glance-work-prose">
+                <p class="glance-work-desc">${esc(desc)}</p>
+                <button type="button" class="glance-work-caret" aria-expanded="false" aria-label="Show full teacher note">▾</button>
+            </div>` : '';
             return `<article class="glance-detail glance-work">
                 <span class="glance-work-name">${esc(row.name)}</span>
                 <span class="glance-work-score${awaiting ? ' awaiting' : ''}${scoreClass}">${esc(score)}</span>
                 ${when ? `<p class="glance-work-when${late ? ' late' : ''}">${esc(when)}</p>` : ''}
-                ${desc ? `<p class="glance-work-desc">${esc(desc)}</p>` : ''}
+                ${prose}
                 ${status ? `<p class="glance-work-status${row.missing ? ' missing' : ''}">${esc(status)}</p>` : ''}
             </article>`;
+        }
+
+        function glanceBindProseCarets(root) {
+            if (!root) return;
+            root.querySelectorAll('.glance-work-prose').forEach(box => {
+                const line = box.querySelector('.glance-work-desc');
+                const caret = box.querySelector('.glance-work-caret');
+                if (!line || !caret) return;
+                const overflow = line.scrollHeight > line.clientHeight + 1;
+                box.classList.toggle('has-more', overflow);
+                if (!overflow) {
+                    caret.hidden = true;
+                    return;
+                }
+                caret.hidden = false;
+                caret.addEventListener('click', ev => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    const open = box.classList.toggle('is-open');
+                    caret.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    caret.setAttribute('aria-label', open ? 'Hide full teacher note' : 'Show full teacher note');
+                });
+            });
         }
 
         function renderGlanceWork(rows) {
@@ -4975,6 +5057,9 @@
                 document.getElementById('glanceAeriesStatus').textContent = (item.drawer && item.drawer.aeries) || '';
             }
             drawer.classList.add('open');
+            if (work) {
+                requestAnimationFrame(() => glanceBindProseCarets(workList));
+            }
             scrim.hidden = false;
             scrim.classList.add('open');
             drawer.setAttribute('aria-hidden', 'false');
