@@ -293,6 +293,55 @@ class ClassContextTests(unittest.TestCase):
         self.assertIn("Quiz Friday", ctx["announcements"][0]["text"])
         self.assertEqual(ctx["materials"][0]["title"], "Unit 3 notes")
 
+    def test_announcements_are_newest_first_not_oldest_three(self):
+        export = load_export()
+        course = export["courses"][0]
+        course["items"] = [
+            {
+                "id": "a-old-1",
+                "type": "announcement",
+                "description": "Welcome to Algebra 2. Bring a notebook.",
+                "assigned_at": "2026-08-12T16:00:00.000Z",
+                "updated_at": "2026-08-12T16:00:00.000Z",
+                "link": "https://classroom.google.com/c/c-alg/p/a-old-1",
+            },
+            {
+                "id": "a-old-2",
+                "type": "announcement",
+                "description": "Syllabus is posted in the class drive.",
+                "assigned_at": "2026-08-18T16:00:00.000Z",
+                "updated_at": "2026-08-18T16:00:00.000Z",
+                "link": "https://classroom.google.com/c/c-alg/p/a-old-2",
+            },
+            {
+                "id": "a-old-3",
+                "type": "announcement",
+                "description": "Office hours start next week.",
+                "assigned_at": "2026-08-25T16:00:00.000Z",
+                "updated_at": "2026-08-25T16:00:00.000Z",
+                "link": "https://classroom.google.com/c/c-alg/p/a-old-3",
+            },
+            {
+                "id": "a-new",
+                "type": "announcement",
+                "description": "Quiz Friday covers 3.1-3.3. Bring a calculator.",
+                "assigned_at": "2026-09-12T20:00:00.000Z",
+                "updated_at": "2026-09-12T20:00:00.000Z",
+                "link": "https://classroom.google.com/c/c-alg/p/a-new",
+            },
+        ] + [i for i in course["items"] if i.get("type") != "announcement"]
+        student = student_with_aeries()
+        attach(student, export)
+        alg = student["classes"][1]
+        ctx = classroom.class_context(
+            student, alg, TODAY, assignments=scraper.assignments_for_class(student, alg)
+        )
+        texts = [a["text"] for a in ctx["announcements"]]
+        self.assertEqual(len(texts), 3)
+        self.assertTrue(texts[0].startswith("Quiz Friday"))
+        self.assertNotIn("Welcome to Algebra 2", texts[0])
+        self.assertNotEqual(texts, sorted(texts))  # not the warehouse dump order
+
     def test_old_unsubmitted_work_stays_out_of_window(self):
         ctx = classroom.class_context(self.student, self.alg, TODAY, assignments=self.alg_rows)
         self.assertNotIn("Syllabus signature", [e["title"] for e in ctx["classroom_only"]])
