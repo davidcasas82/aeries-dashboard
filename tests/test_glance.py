@@ -209,7 +209,7 @@ class FixtureGlanceTests(unittest.TestCase):
 
     def test_standing_drawer_lists_all_class_work(self):
         alg = next(c for c in self.g["standing"] if c["course"] == "Algebra 2")
-        self.assertEqual(alg["drawer"]["kicker"], "0 missing · 1 not turned in · 2 turned in")
+        self.assertEqual(alg["drawer"]["kicker"], "0 missing · 1 coming up · 2 turned in")
         names = [w["name"] for w in alg["drawer"]["work"]]
         self.assertIn("3.2 Practice", names)
         self.assertIn("3.1 Practice", names)
@@ -232,8 +232,8 @@ class FixtureGlanceTests(unittest.TestCase):
         names = [w["name"] for w in alg["drawer"]["work"]]
         self.assertLess(names.index("3.1 Practice"), names.index("Unit 3 Quiz Review"))
         self.assertLess(names.index("3.2 Practice"), names.index("Unit 3 Quiz Review"))
-        self.assertEqual(alg["count_line"], "1 not turned in · 2 turned in")
-        self.assertEqual(alg["drawer"]["kicker"], "0 missing · 1 not turned in · 2 turned in")
+        self.assertEqual(alg["count_line"], "1 coming up · 2 turned in")
+        self.assertEqual(alg["drawer"]["kicker"], "0 missing · 1 coming up · 2 turned in")
         blob = json.dumps(alg["drawer"]["work"])
         for banned in ("rubric", "drive", "text_excerpt", "materials", "attachments"):
             self.assertNotIn(banned, blob)
@@ -292,7 +292,7 @@ class ClassWorkDrawerTests(unittest.TestCase):
         self.assertEqual(scored["when"], "Due Saturday, Sep 12")
         names = [w["name"] for w in bio["drawer"]["work"]]
         self.assertLess(names.index("Cell lab"), names.index("Microscope sketch"))
-        self.assertEqual(bio["count_line"], "1 not turned in · 1 turned in")
+        self.assertEqual(bio["count_line"], "1 coming up · 1 turned in")
 
     def test_due_today_tomorrow_and_turned_in_date(self):
         student = {
@@ -331,7 +331,7 @@ class ClassWorkDrawerTests(unittest.TestCase):
         self.assertEqual(by_name["Notes check"]["status"], "Aeries missing")
         self.assertEqual(by_name["Notes check"]["bucket"], "turned_in")
         self.assertEqual(by_name["Warmup"]["bucket"], "not_turned_in")
-        self.assertEqual(alg["count_line"], "2 not turned in · 1 turned in")
+        self.assertEqual(alg["count_line"], "2 coming up · 1 turned in")
         tonight = json.dumps(g["tonight"])
         self.assertNotIn("4 days late", tonight)
 

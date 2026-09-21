@@ -728,7 +728,7 @@ def class_work_rows(cls, today=None):
 _BUCKET_RANK = {"turned_in": 0, "not_turned_in": 1, "missing": 2}
 _BUCKET_PHRASE = {
     "missing": "missing",
-    "not_turned_in": "not turned in",
+    "not_turned_in": "coming up",
     "turned_in": "turned in",
 }
 

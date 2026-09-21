@@ -1685,6 +1685,7 @@
         .glance-section-head h2 {
             margin: 0 0 4px;
             font-size: var(--g-fs-h2);
+            line-height: 1.15;
             letter-spacing: -.035em;
             color: var(--g-ink);
         }
@@ -4527,7 +4528,7 @@
         }
 
         function glanceCountLine(counts, showZeroMissing) {
-            const labels = { missing: 'missing', not_turned_in: 'not turned in', turned_in: 'turned in' };
+            const labels = { missing: 'missing', not_turned_in: 'coming up', turned_in: 'turned in' };
             const parts = [];
             for (const key of ['missing', 'not_turned_in', 'turned_in']) {
                 const n = (counts && counts[key]) || 0;
@@ -4561,7 +4562,7 @@
             }
             const groups = [
                 { key: 'turned_in', label: 'Turned in' },
-                { key: 'not_turned_in', label: 'Not turned in' },
+                { key: 'not_turned_in', label: 'Coming up' },
                 { key: 'missing', label: 'Missing' },
             ];
             return groups.map(g => {
@@ -4847,7 +4848,7 @@
                 <section class="glance-tonight glance-card">
                     <div class="glance-section-head">
                         <div>
-                            <h2>Tonight</h2>
+                            <h2>Things to focus on tonight</h2>
                             <p>${esc(g.tonight.description)}</p>
                         </div>
                         <span class="glance-tap-note">Tap for evidence</span>
@@ -4861,7 +4862,7 @@
                 <section class="glance-standing glance-card">
                     <div class="glance-section-head">
                         <div>
-                            <h2>Standing</h2>
+                            <h2>Current standing</h2>
                             <p>Every class · mark, percent, seven-day trend</p>
                         </div>
                         <span class="glance-tap-note">Tap a grade for details</span>
