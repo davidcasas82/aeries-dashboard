@@ -2059,6 +2059,12 @@
             white-space: nowrap;
         }
         .glance-work-score.awaiting { color: #617069; font-weight: 750; }
+        .glance-work-score.grade-a { color: var(--teal); }
+        .glance-work-score.grade-b { color: var(--green); }
+        .glance-work-score.grade-c { color: var(--amber); }
+        .glance-work-score.grade-d,
+        .glance-work-score.grade-f { color: var(--red); }
+        .glance-work-score.grade-none { color: var(--text-3); }
         .glance-work-desc {
             grid-column: 1 / -1;
             margin: 0;
@@ -2066,7 +2072,17 @@
             font-size: var(--g-fs-sub);
             line-height: 1.42;
         }
-        .glance-work-when,
+        .glance-work-when {
+            grid-column: 1 / -1;
+            margin: 0;
+            color: #617069;
+            font-size: 12px;
+            font-weight: 750;
+            line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
         .glance-work-status {
             grid-column: 1 / -1;
             margin: 0;
@@ -4456,7 +4472,19 @@
         function glanceWorkBucket(item) {
             if (glanceWorkDone(item)) return 'turned_in';
             if (glanceWorkMissing(item)) return 'missing';
-            return 'not_turned_in';
+            const due = glanceWorkDue(item);
+            const days = daysFromToday(due);
+            if (due && days != null && days < 0) return 'past_due';
+            return 'coming_up';
+        }
+
+        function glanceScoreGradeClass(item) {
+            const earned = item && item.points_earned;
+            const poss = item && item.points_possible;
+            if (earned == null || poss == null || Number(poss) === 0) return '';
+            const n = 100 * Number(earned) / Number(poss);
+            if (!isFinite(n)) return '';
+            return getGradeClass(n);
         }
 
         function glanceWorkStatus(item) {
@@ -4498,6 +4526,7 @@
                 name,
                 description: glanceWorkDescription(item),
                 score: glanceWorkScore(item),
+                score_class: glanceScoreGradeClass(item),
                 missing: bucket === 'missing',
                 turned_in: glanceSubmitted(item),
                 done: bucket === 'turned_in',
@@ -4529,7 +4558,7 @@
                     classroom: extra,
                 });
             }
-            const rank = { turned_in: 0, not_turned_in: 1, missing: 2 };
+            const rank = { past_due: 0, missing: 1, coming_up: 2, turned_in: 3 };
             raws.sort((a, b) => {
                 const ra = rank[glanceWorkBucket(a)] ?? 9;
                 const rb = rank[glanceWorkBucket(b)] ?? 9;
@@ -4545,7 +4574,7 @@
         }
 
         function glanceWorkCounts(rows) {
-            const counts = { turned_in: 0, not_turned_in: 0, missing: 0 };
+            const counts = { past_due: 0, missing: 0, coming_up: 0, turned_in: 0 };
             for (const row of rows || []) {
                 if (counts[row.bucket] != null) counts[row.bucket] += 1;
             }
@@ -4553,13 +4582,22 @@
         }
 
         function glanceCountLine(counts, showZeroMissing) {
-            const labels = { missing: 'missing', not_turned_in: 'coming up', turned_in: 'turned in' };
+            const labels = {
+                past_due: 'past due',
+                missing: 'missing',
+                coming_up: 'coming up',
+                turned_in: 'turned in',
+            };
             const parts = [];
-            for (const key of ['missing', 'not_turned_in', 'turned_in']) {
+            for (const key of ['past_due', 'missing', 'coming_up', 'turned_in']) {
                 const n = (counts && counts[key]) || 0;
                 if (n || (key === 'missing' && showZeroMissing)) parts.push(`${n} ${labels[key]}`);
             }
             return parts.join(' · ');
+        }
+
+        function glanceCountAlert(bit) {
+            return (/\bmissing$/.test(bit) || /\bpast due$/.test(bit)) && !bit.startsWith('0 ');
         }
 
         function renderGlanceWorkRow(row) {
@@ -4569,11 +4607,12 @@
             const when = (row.when || '').trim();
             const status = row.status || '';
             const late = !!(row.late || /late/.test(when));
+            const scoreClass = (!awaiting && row.score_class) ? ` ${esc(row.score_class)}` : '';
             return `<article class="glance-detail glance-work">
                 <span class="glance-work-name">${esc(row.name)}</span>
-                <span class="glance-work-score${awaiting ? ' awaiting' : ''}">${esc(score)}</span>
-                ${desc ? `<p class="glance-work-desc">${esc(desc)}</p>` : ''}
+                <span class="glance-work-score${awaiting ? ' awaiting' : ''}${scoreClass}">${esc(score)}</span>
                 ${when ? `<p class="glance-work-when${late ? ' late' : ''}">${esc(when)}</p>` : ''}
+                ${desc ? `<p class="glance-work-desc">${esc(desc)}</p>` : ''}
                 ${status ? `<p class="glance-work-status${row.missing ? ' missing' : ''}">${esc(status)}</p>` : ''}
             </article>`;
         }
@@ -4586,9 +4625,10 @@
                 </section>`;
             }
             const groups = [
-                { key: 'turned_in', label: 'Turned in' },
-                { key: 'not_turned_in', label: 'Coming up' },
+                { key: 'past_due', label: 'Past due' },
                 { key: 'missing', label: 'Missing' },
+                { key: 'coming_up', label: 'Coming up' },
+                { key: 'turned_in', label: 'Turned in' },
             ];
             return groups.map(g => {
                 const items = rows.filter(r => r.bucket === g.key);
@@ -4834,8 +4874,7 @@
             const grades = (g.standing || []).map(card => {
                 const countHtml = (card.count_line || '')
                     ? `<span class="glance-counts">${(card.count_line || '').split(' · ').map(bit => {
-                        const alert = /\bmissing$/.test(bit) && !bit.startsWith('0 ');
-                        return `<span class="${alert ? 'miss' : ''}">${esc(bit)}</span>`;
+                        return `<span class="${glanceCountAlert(bit) ? 'miss' : ''}">${esc(bit)}</span>`;
                     }).join(' · ')}</span>`
                     : '';
                 return `
@@ -4913,8 +4952,7 @@
             const kicker = (item.drawer && item.drawer.kicker) || 'Verified detail';
             if (item.drawer && item.drawer.counts) {
                 kickerEl.innerHTML = (kicker || '').split(' · ').map(bit => {
-                    const alert = /\bmissing$/.test(bit) && !bit.startsWith('0 ');
-                    return `<span class="${alert ? 'miss' : ''}">${esc(bit)}</span>`;
+                    return `<span class="${glanceCountAlert(bit) ? 'miss' : ''}">${esc(bit)}</span>`;
                 }).join(' · ');
             } else {
                 kickerEl.textContent = kicker;
