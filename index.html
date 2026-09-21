@@ -1629,6 +1629,416 @@
             font-weight: 650;
             cursor: pointer;
         }
+
+        /* ── Official v1 glance (visual spec: PR 20) ── */
+        .glance {
+            --g-ink: #1d2420;
+            --g-muted: #617069;
+            --g-faint: #87938d;
+            --g-paper: #fffdfa;
+            --g-paper-soft: #f7f5f0;
+            --g-line: #dfe3dc;
+            --g-forest: #155c4b;
+            --g-forest-dark: #0d473a;
+            --g-forest-soft: #e5f2ec;
+            --g-blue: #2b5f80;
+            --g-blue-soft: #e8f1f6;
+            --g-amber: #9a6817;
+            --g-amber-soft: #f8efd9;
+            --g-red: #9c483b;
+            --g-red-soft: #fae9e5;
+            --g-shadow: 0 14px 36px rgba(35, 47, 40, .08), 0 2px 6px rgba(35, 47, 40, .04);
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 8px 0 28px;
+        }
+        .glance button, .glance a { font: inherit; }
+        .glance button { color: inherit; }
+        .glance-card {
+            border: 1px solid rgba(111, 128, 118, .2);
+            border-radius: 20px;
+            background: rgba(255, 253, 250, .93);
+            box-shadow: var(--g-shadow);
+        }
+        .glance-section-head {
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+            justify-content: space-between;
+            padding: 22px 24px 17px;
+        }
+        .glance-section-head h2 {
+            margin: 0 0 4px;
+            font-size: 21px;
+            letter-spacing: -.035em;
+            color: var(--g-ink);
+        }
+        .glance-section-head p {
+            margin: 0;
+            color: var(--g-muted);
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .glance-tap-note {
+            color: var(--g-faint);
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .glance-standing { margin-bottom: 22px; overflow: hidden; }
+        .glance-grade-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+            border-top: 1px solid var(--g-line);
+        }
+        .glance-grade {
+            min-height: 162px;
+            padding: 19px 20px 17px;
+            border: 0;
+            border-right: 1px solid var(--g-line);
+            background: transparent;
+            cursor: pointer;
+            text-align: left;
+            width: 100%;
+        }
+        .glance-grade:last-child { border-right: 0; }
+        .glance-grade:hover { background: #f7faf7; }
+        .glance-course {
+            display: block;
+            min-height: 38px;
+            color: #42514a;
+            font-size: 14px;
+            font-weight: 750;
+            line-height: 1.25;
+        }
+        .glance-mark-row {
+            display: flex;
+            align-items: baseline;
+            gap: 7px;
+            margin: 12px 0 10px;
+        }
+        .glance-mark {
+            color: var(--g-ink);
+            font-size: 39px;
+            font-weight: 850;
+            line-height: .9;
+            letter-spacing: -.07em;
+        }
+        .glance-pct { color: var(--g-muted); font-size: 16px; font-weight: 750; }
+        .glance-trend {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--g-muted);
+            font-size: 12px;
+            font-weight: 750;
+        }
+        .glance-trend-symbol {
+            display: grid;
+            place-items: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 15px;
+            line-height: 1;
+        }
+        .glance-trend.up .glance-trend-symbol { color: var(--g-forest); background: var(--g-forest-soft); }
+        .glance-trend.down .glance-trend-symbol { color: var(--g-red); background: var(--g-red-soft); }
+        .glance-trend.flat .glance-trend-symbol { color: var(--g-blue); background: var(--g-blue-soft); }
+        .glance-trend.none .glance-trend-symbol { color: var(--g-faint); background: #eef0ec; }
+        .glance-tonight { overflow: hidden; }
+        .glance-tonight-meta {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 27px;
+            padding: 0 24px 15px;
+            color: var(--g-muted);
+            font-size: 13px;
+            font-weight: 650;
+        }
+        .glance-live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3e9a70;
+            box-shadow: 0 0 0 4px #e2f3e9;
+        }
+        .glance-action-list { display: grid; border-top: 1px solid var(--g-line); }
+        .glance-action {
+            width: 100%;
+            min-height: 97px;
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 14px;
+            padding: 15px 24px;
+            border: 0;
+            border-bottom: 1px solid var(--g-line);
+            background: transparent;
+            cursor: pointer;
+            text-align: left;
+        }
+        .glance-action:last-child { border-bottom: 0; }
+        .glance-action:hover { background: #fbfcfa; }
+        .glance-action-icon {
+            width: 37px;
+            height: 37px;
+            display: grid;
+            place-items: center;
+            border-radius: 11px;
+            font-size: 17px;
+            font-weight: 900;
+        }
+        .glance-action-icon.today { color: var(--g-amber); background: var(--g-amber-soft); }
+        .glance-action-icon.tomorrow, .glance-action-icon.forecast { color: var(--g-blue); background: var(--g-blue-soft); }
+        .glance-action-icon.missing { color: var(--g-red); background: var(--g-red-soft); }
+        .glance-action-icon.weekend { color: var(--g-forest); background: var(--g-forest-soft); }
+        .glance-action-label {
+            display: block;
+            margin-bottom: 2px;
+            color: var(--g-muted);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+        .glance-action-title {
+            display: block;
+            overflow: hidden;
+            color: var(--g-ink);
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: -.02em;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .glance-action-class {
+            display: block;
+            margin-top: 2px;
+            overflow: hidden;
+            color: var(--g-muted);
+            font-size: 13px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .glance-chevron { color: #839088; font-size: 22px; font-weight: 400; }
+        .glance-weekend {
+            margin-top: 0;
+            border-top: 1px solid #d9ebe0;
+            background: #f8fcf9;
+        }
+        .glance-weekend-heading {
+            padding: 15px 18px 13px;
+            background: #eff8f2;
+            color: var(--g-forest-dark);
+        }
+        .glance-weekend-heading strong {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 16px;
+            letter-spacing: -.02em;
+        }
+        .glance-weekend-heading span { font-size: 13px; line-height: 1.35; }
+        .glance-empty {
+            min-height: 168px;
+            display: grid;
+            place-items: center;
+            padding: 28px;
+            border-top: 1px solid var(--g-line);
+            color: var(--g-forest-dark);
+            text-align: center;
+        }
+        .glance-empty-icon {
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            margin: 0 auto 11px;
+            border-radius: 50%;
+            background: var(--g-forest-soft);
+            font-size: 18px;
+        }
+        .glance-empty strong { display: block; margin-bottom: 4px; font-size: 17px; letter-spacing: -.02em; }
+        .glance-empty span { color: var(--g-muted); font-size: 14px; }
+        body.glance-home .tonight-sticky { display: none !important; }
+
+        .glance-scrim {
+            position: fixed;
+            inset: 0;
+            z-index: 29;
+            background: rgba(17, 28, 23, .33);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .2s ease;
+        }
+        .glance-scrim.open { opacity: 1; pointer-events: auto; }
+        .glance-drawer {
+            position: fixed;
+            z-index: 30;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: min(460px, calc(100vw - 28px));
+            display: flex;
+            flex-direction: column;
+            padding: 25px;
+            border-left: 1px solid var(--g-line, #dfe3dc);
+            background: #fffefa;
+            box-shadow: -16px 0 44px rgba(22, 38, 30, .16);
+            transform: translateX(105%);
+            transition: transform .24s cubic-bezier(.2, .8, .2, 1);
+            color: #1d2420;
+        }
+        .glance-drawer.open { transform: translateX(0); }
+        .glance-drawer-top {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            justify-content: space-between;
+        }
+        .glance-drawer-kicker {
+            margin: 0 0 6px;
+            color: #155c4b;
+            font-size: 12px;
+            font-weight: 850;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+        }
+        .glance-drawer h2 {
+            margin: 0 0 2px;
+            font-size: 28px;
+            line-height: 1.04;
+            letter-spacing: -.05em;
+        }
+        .glance-drawer-class {
+            margin: 0;
+            color: #617069;
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .glance-close {
+            width: 40px;
+            height: 40px;
+            display: grid;
+            place-items: center;
+            flex: 0 0 40px;
+            border: 1px solid #dfe3dc;
+            border-radius: 50%;
+            background: #fffdfa;
+            color: #617069;
+            cursor: pointer;
+            font-size: 24px;
+            line-height: 1;
+        }
+        .glance-drawer-body { overflow: auto; padding: 28px 2px 8px; }
+        .glance-detail {
+            padding: 17px;
+            border: 1px solid #dfe3dc;
+            border-radius: 15px;
+            background: #f7f5f0;
+            margin-bottom: 13px;
+        }
+        .glance-detail-label {
+            display: block;
+            margin-bottom: 7px;
+            color: #87938d;
+            font-size: 11px;
+            font-weight: 850;
+            letter-spacing: .09em;
+            text-transform: uppercase;
+        }
+        .glance-teacher-words {
+            margin: 0;
+            color: #33443b;
+            font-size: 16px;
+            line-height: 1.45;
+        }
+        .glance-timeline { display: grid; }
+        .glance-timeline-row {
+            position: relative;
+            padding: 3px 0 17px 25px;
+            border-left: 2px solid #d7e5dc;
+        }
+        .glance-timeline-row:last-child { padding-bottom: 0; border-left-color: transparent; }
+        .glance-timeline-row::before {
+            content: "";
+            position: absolute;
+            left: -6px;
+            top: 5px;
+            width: 10px;
+            height: 10px;
+            border: 2px solid #fffefa;
+            border-radius: 50%;
+            background: #155c4b;
+            box-shadow: 0 0 0 1px #9ccbb7;
+        }
+        .glance-timeline-row.aeries::before { background: #2b5f80; box-shadow: 0 0 0 1px #a8cada; }
+        .glance-timeline-source {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 14px;
+            font-weight: 820;
+        }
+        .glance-timeline-status {
+            display: block;
+            color: #617069;
+            font-size: 14px;
+            line-height: 1.42;
+        }
+        .glance-drawer-cta {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            min-height: 52px;
+            margin-top: auto;
+            border-radius: 13px;
+            background: #155c4b;
+            color: white;
+            font-size: 16px;
+            font-weight: 800;
+            text-decoration: none;
+        }
+        .glance-drawer-cta:hover { background: #0d473a; }
+
+        @media (max-width: 620px) {
+            .glance-section-head { padding: 19px 18px 15px; }
+            .glance-tap-note { display: none; }
+            .glance-grade-grid { grid-template-columns: 1fr; }
+            .glance-grade {
+                min-height: 0;
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto auto;
+                align-items: center;
+                gap: 15px;
+                padding: 15px 18px;
+                border-right: 0;
+                border-bottom: 1px solid var(--g-line);
+            }
+            .glance-grade:last-child { border-bottom: 0; }
+            .glance-course { min-height: 0; font-size: 15px; }
+            .glance-mark-row { margin: 0; gap: 5px; }
+            .glance-mark { font-size: 30px; }
+            .glance-pct { font-size: 14px; }
+            .glance-trend { justify-content: flex-end; }
+            .glance-trend-text { display: none; }
+            .glance-tonight-meta { padding-left: 18px; padding-right: 18px; }
+            .glance-action { gap: 11px; padding: 14px 18px; }
+            .glance-action-title { font-size: 16px; }
+            .glance-drawer {
+                top: auto;
+                width: 100%;
+                height: min(78vh, 650px);
+                padding: 17px;
+                border: 1px solid #dfe3dc;
+                border-radius: 22px 22px 0 0;
+                transform: translateY(105%);
+            }
+            .glance-drawer.open { transform: translateY(0); }
+            .glance-drawer-body { padding-top: 19px; }
+            .glance-drawer h2 { font-size: 24px; }
+        }
     </style>
 </head>
 <body>
@@ -1680,6 +2090,38 @@
             </div>
         </div>
     </div>
+
+    <div class="glance-scrim" id="glanceScrim" hidden></div>
+    <aside class="glance-drawer" id="glanceDrawer" role="dialog" aria-modal="true" aria-labelledby="glanceDrawerTitle" aria-hidden="true">
+        <div class="glance-drawer-top">
+            <div>
+                <p class="glance-drawer-kicker" id="glanceDrawerKicker">Verified detail</p>
+                <h2 id="glanceDrawerTitle">Item details</h2>
+                <p class="glance-drawer-class" id="glanceDrawerClass"></p>
+            </div>
+            <button class="glance-close" id="glanceClose" type="button" aria-label="Close details">×</button>
+        </div>
+        <div class="glance-drawer-body">
+            <section class="glance-detail">
+                <span class="glance-detail-label">Teacher wording</span>
+                <p class="glance-teacher-words" id="glanceTeacherWords"></p>
+            </section>
+            <section class="glance-detail">
+                <span class="glance-detail-label">Status trail</span>
+                <div class="glance-timeline">
+                    <div class="glance-timeline-row">
+                        <span class="glance-timeline-source">Classroom</span>
+                        <span class="glance-timeline-status" id="glanceClassroomStatus"></span>
+                    </div>
+                    <div class="glance-timeline-row aeries">
+                        <span class="glance-timeline-source">Aeries</span>
+                        <span class="glance-timeline-status" id="glanceAeriesStatus"></span>
+                    </div>
+                </div>
+            </section>
+        </div>
+        <a class="glance-drawer-cta" id="glanceClassroomLink" href="https://classroom.google.com/" target="_blank" rel="noreferrer">Open in Classroom <span aria-hidden="true">↗</span></a>
+    </aside>
 
     <div class="settings-overlay" id="settingsOverlay">
         <div class="settings-drawer" role="dialog" aria-modal="true" aria-label="Settings">
@@ -1778,6 +2220,8 @@
         let studentFocusMap = {};
         let studentTonightMap = {};
         let lastPaintedStamp = null;
+        let glanceStore = {};
+        let glanceLastFocus = null;
 
         async function loadData() {
             if (location.protocol === 'file:') {
@@ -3679,6 +4123,7 @@
                     newlyMissing: row.newly_missing || [],
                     period: row.period,
                     classroom: row.classroom || null,
+                    delta_7d: row.delta_7d,
                 };
                 const aiClass = normalizeAiClass({
                     snap: row.snap,
@@ -3695,6 +4140,472 @@
             return `class-${studentIdx}-${period == null ? 'none' : period}`;
         }
 
+        function glanceParseDay(value) {
+            if (!value) return null;
+            const text = String(value).trim();
+            const iso = text.slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+            return parseDate(text);
+        }
+
+        function glanceMonthDay(date) {
+            if (!date) return '';
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        function glanceIsWeekendNight(day) {
+            const wd = day.getDay();
+            return wd === 5 || wd === 6 || wd === 0;
+        }
+
+        function glanceWeekendDates(day) {
+            const wd = day.getDay();
+            if (wd !== 5 && wd !== 6 && wd !== 0) return null;
+            const sat = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+            if (wd === 5) sat.setDate(sat.getDate() + 1);
+            if (wd === 0) sat.setDate(sat.getDate() - 1);
+            const add = (n) => new Date(sat.getFullYear(), sat.getMonth(), sat.getDate() + n);
+            return { Saturday: sat, Sunday: add(1), Monday: add(2) };
+        }
+
+        function glanceSameDay(a, b) {
+            return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+        }
+
+        function glanceSubmitted(item) {
+            if (!item) return false;
+            if (item.turned_in || item.turned_in_classroom || isTurnedIn(item)) return true;
+            const state = item.classroom && String(item.classroom.state || '').toUpperCase();
+            return state === 'TURNED_IN' || state === 'RETURNED';
+        }
+
+        function glanceNewestNotes(notes, limit) {
+            return (notes || [])
+                .filter(n => (n.text || '').trim())
+                .slice()
+                .sort((a, b) => {
+                    const da = glanceParseDay(a.posted_on);
+                    const db = glanceParseDay(b.posted_on);
+                    return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+                })
+                .slice(0, limit == null ? 3 : limit);
+        }
+
+        function glanceTrend(student, courseName, row) {
+            let delta = row && row.delta_7d;
+            if (delta == null) {
+                const t = findClassTrend(student, courseName);
+                delta = t && t.delta_7d;
+            }
+            if (delta == null || delta === '' || Number.isNaN(Number(delta))) {
+                return { trend: 'none', symbol: '•', text: 'no baseline' };
+            }
+            const n = Number(delta);
+            if (Math.abs(n) < 2) return { trend: 'flat', symbol: '→', text: 'steady' };
+            const pts = Number.isInteger(n) ? Math.abs(n) : String(Math.abs(n)).replace(/\.0$/, '');
+            if (n > 0) return { trend: 'up', symbol: '▴', text: `up ${pts} pts` };
+            return { trend: 'down', symbol: '▾', text: `down ${pts} pts` };
+        }
+
+        function glanceWork(profile) {
+            const upcoming = [...(profile.upcoming || [])];
+            const missing = (profile.missing || []).filter(a => !glanceSubmitted(a));
+            const cr = profile.classroom || {};
+            const seen = new Set(upcoming.map(a => String(a.description || a.name || '').toLowerCase()));
+            for (const e of cr.classroom_only || []) {
+                const title = (e.title || '').trim();
+                if (!title || seen.has(title.toLowerCase())) continue;
+                upcoming.push({
+                    description: title,
+                    name: title,
+                    due_date: e.due_date || '',
+                    source: 'classroom',
+                    classroom: e,
+                });
+            }
+            return { upcoming, missing };
+        }
+
+        function glanceClassroomLine(item) {
+            const cr = (item && item.classroom) || {};
+            const parts = [];
+            if (cr.state_label) parts.push(cr.state_label);
+            else if (glanceSubmitted(item)) parts.push('Turned in on Classroom');
+            else if (item) parts.push('Not submitted');
+            if (cr.turned_in_on) parts.push(`turned in ${glanceMonthDay(glanceParseDay(cr.turned_in_on))}`);
+            const due = glanceParseDay((item && item.due_date) || cr.due || cr.due_date);
+            if (due) parts.push(`due ${glanceMonthDay(due)}`);
+            return parts.join(' · ') || 'No Classroom row';
+        }
+
+        function glanceAeriesLine(item, profile, missing) {
+            const checked = currentData && currentData.last_updated
+                ? `last checked ${glanceMonthDay(new Date(currentData.last_updated))}`
+                : 'last checked from Aeries';
+            if (missing) {
+                const due = glanceParseDay(item && item.due_date);
+                return `Missing${due ? ` · posted ${glanceMonthDay(due)}` : ''} · ${checked}`;
+            }
+            if (item && item.source === 'classroom') return `No row yet · ${checked}`;
+            const g = formatGradeDisplay(profile.classMeta, profile.assignments);
+            if (g.letter && g.letter !== '—') return `${g.letter} ${g.pct || ''} current · ${checked}`.replace(/\s+/g, ' ').trim();
+            return `No row yet · ${checked}`;
+        }
+
+        function glanceTeacherWords(item, profile) {
+            const cr = (item && item.classroom) || {};
+            if ((cr.instructions || '').trim()) return cr.instructions.trim();
+            if (item && (item.teacher_comment || '').trim()) return item.teacher_comment.trim();
+            const notes = glanceNewestNotes((profile.classroom || {}).announcements, 1);
+            if (notes[0]) return notes[0].text;
+            return 'No teacher wording in this export.';
+        }
+
+        function glanceLink(item, profile) {
+            const cr = (item && item.classroom) || {};
+            return cr.link || (profile.classroom && profile.classroom.link) || 'https://classroom.google.com/';
+        }
+
+        function glanceAction(kind, item, profile, weekendLabel) {
+            const name = (item.description || item.name || item.title || '').trim();
+            const course = (profile.classMeta && profile.classMeta.course_name) || '';
+            const labels = {
+                today: ['today', '•', 'Due today'],
+                tomorrow: ['tomorrow', '→', 'Due tomorrow'],
+                missing: ['missing', '!', 'Missing'],
+                weekend: ['weekend', (weekendLabel || 'W').slice(0, 1), weekendLabel || 'This weekend'],
+                forecast: ['forecast', 'Q', weekendLabel || 'Coming'],
+            };
+            const [iconKind, icon, label] = labels[kind];
+            return {
+                id: `${kind}-${profile.period}-${name}`.toLowerCase().replace(/\s+/g, '-').slice(0, 80),
+                kind: iconKind,
+                icon,
+                label,
+                title: name,
+                course,
+                period: profile.period,
+                drawer: {
+                    kicker: `${label} · verified`,
+                    title: name,
+                    course,
+                    teacher_words: glanceTeacherWords(item, profile),
+                    classroom: glanceClassroomLine(item),
+                    aeries: glanceAeriesLine(item, profile, kind === 'missing'),
+                    link: glanceLink(item, profile),
+                },
+            };
+        }
+
+        function glanceForecast(profiles) {
+            const assess = /\b(?:unit\s+\d+\s+)?(?:quiz|test|exam|assessment|midterm|final)\b/i;
+            const titleRe = /((?:unit\s+\d+\s+)?(?:quiz|test|exam|assessment|midterm|final)(?:\s+(?:on\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))?)/i;
+            const weekRe = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)\b/i;
+            const days = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+            let best = null;
+            for (const p of profiles || []) {
+                for (const note of glanceNewestNotes((p.classroom || {}).announcements, 8)) {
+                    const text = (note.text || '').trim();
+                    if (!assess.test(text)) continue;
+                    const posted = glanceParseDay(note.posted_on) || TODAY;
+                    if (daysFromToday(posted) < -14) continue;
+                    const wd = weekRe.exec(text);
+                    if (!wd) continue;
+                    const word = wd[1].toLowerCase();
+                    let when = posted;
+                    if (word === 'tomorrow') when = addCalendarDays(posted, 1);
+                    else if (word !== 'today') {
+                        const target = days[word];
+                        const delta = (target - posted.getDay() + 7) % 7;
+                        when = addCalendarDays(posted, delta);
+                    }
+                    if (when < TODAY) continue;
+                    const postedKey = posted.getTime();
+                    if (!best || postedKey > best.postedKey) {
+                        const tm = titleRe.exec(text);
+                        best = {
+                            postedKey,
+                            action: {
+                                id: `forecast-${p.period}`,
+                                kind: 'forecast',
+                                icon: 'Q',
+                                label: `Coming ${word === 'today' || word === 'tomorrow' ? word : word[0].toUpperCase() + word.slice(1)}`,
+                                title: tm ? tm[1] : 'Upcoming assessment',
+                                course: (p.classMeta && p.classMeta.course_name) || '',
+                                period: p.period,
+                                drawer: {
+                                    kicker: `Upcoming · teacher, ${glanceMonthDay(posted)}`,
+                                    title: tm ? tm[1] : 'Upcoming assessment',
+                                    course: (p.classMeta && p.classMeta.course_name) || '',
+                                    teacher_words: text,
+                                    classroom: `Teacher note · posted ${glanceMonthDay(posted)}`,
+                                    aeries: 'No row yet · dated from the teacher note',
+                                    link: note.link || (p.classroom && p.classroom.link) || 'https://classroom.google.com/',
+                                },
+                            },
+                        };
+                    }
+                }
+            }
+            return best && best.action;
+        }
+
+        function buildGlance(student, profiles) {
+            const standing = (profiles || []).map(p => {
+                const c = p.classMeta || {};
+                const g = formatGradeDisplay(c, p.assignments);
+                const tr = glanceTrend(student, c.course_name, { delta_7d: p.delta_7d });
+                const notes = glanceNewestNotes((p.classroom || {}).announcements, 1);
+                const catchUp = (p.classroom && p.classroom.turned_in_aeries_missing) || [];
+                let classroomLine = 'No unfinished Classroom work in the current window.';
+                const only = (p.classroom && p.classroom.classroom_only) || [];
+                if (catchUp[0]) {
+                    const when = glanceMonthDay(glanceParseDay(catchUp[0].turned_in_on));
+                    classroomLine = `${catchUp[0].title || 'Work'} turned in${when ? ` ${when}` : ''} · Aeries has not caught up`;
+                } else if (only[0]) {
+                    classroomLine = glanceClassroomLine({ due_date: only[0].due_date, classroom: only[0] });
+                }
+                return {
+                    id: `standing-${p.period != null ? p.period : c.course_name}`,
+                    course: c.course_name || '',
+                    period: p.period,
+                    mark: g.letter,
+                    percent: g.pct || '',
+                    trend: tr.trend,
+                    trend_symbol: tr.symbol,
+                    trend_text: tr.text,
+                    drawer: {
+                        kicker: 'Standing · verified detail',
+                        title: c.course_name || '',
+                        course: c.course_name || '',
+                        teacher_words: notes[0] ? notes[0].text : 'No teacher wording in this export.',
+                        classroom: classroomLine,
+                        aeries: glanceAeriesLine(null, p, false),
+                        link: (p.classroom && p.classroom.link) || 'https://classroom.google.com/',
+                    },
+                };
+            });
+
+            const weekend = glanceWeekendDates(TODAY);
+            const dueToday = [];
+            const missing = [];
+            const dueTomorrow = [];
+            const weekendItems = [];
+            const seen = new Set();
+            let suppressed = 0;
+            const take = (bucket, kind, item, profile, weekendLabel) => {
+                const name = (item.description || item.name || '').trim();
+                const key = `${normalizeName((profile.classMeta || {}).course_name)}|${name.toLowerCase()}`;
+                if (!name || seen.has(key)) return;
+                if (glanceSubmitted(item)) return;
+                seen.add(key);
+                bucket.push(glanceAction(kind, item, profile, weekendLabel));
+            };
+            for (const p of profiles || []) {
+                const work = glanceWork(p);
+                for (const item of work.upcoming) {
+                    if (glanceSubmitted(item)) { suppressed += 1; continue; }
+                    const due = glanceParseDay(item.due_date);
+                    if (!due) continue;
+                    if (glanceSameDay(due, TODAY)) { take(dueToday, 'today', item, p); continue; }
+                    if (weekend) {
+                        const label = Object.keys(weekend).find(k => glanceSameDay(due, weekend[k]));
+                        if (label) { take(weekendItems, 'weekend', item, p, label); continue; }
+                    } else if (daysFromToday(due) === 1) {
+                        take(dueTomorrow, 'tomorrow', item, p);
+                    }
+                }
+                for (const item of work.missing) {
+                    if (glanceSubmitted(item)) { suppressed += 1; continue; }
+                    take(missing, 'missing', item, p);
+                }
+            }
+            const items = [];
+            const weekendOut = [];
+            for (const row of dueToday) {
+                items.push(row);
+                if (items.length >= 3) break;
+            }
+            if (weekend) {
+                const order = { Saturday: 0, Sunday: 1, Monday: 2 };
+                weekendItems.sort((a, b) => (order[a.label] || 9) - (order[b.label] || 9));
+                for (const row of weekendItems) {
+                    if (items.length + weekendOut.length >= 3) break;
+                    weekendOut.push(row);
+                }
+            }
+            if (items.length + weekendOut.length < 3) {
+                for (const row of missing) {
+                    items.push(row);
+                    if (items.length + weekendOut.length >= 3) break;
+                }
+            }
+            if (!weekend && items.length < 3) {
+                for (const row of dueTomorrow) {
+                    items.push(row);
+                    if (items.length >= 3) break;
+                }
+            }
+            if (items.length + weekendOut.length < 3) {
+                const forecast = glanceForecast(profiles);
+                if (forecast && !items.concat(weekendOut).some(i => i.title === forecast.title && i.course === forecast.course)) {
+                    items.push(forecast);
+                }
+            }
+            const count = items.length + weekendOut.length;
+            const empty = count === 0;
+            let description = 'Nothing is asking for attention.';
+            if (!empty && weekend && !items.length && weekendOut.length) {
+                description = 'Nothing is due today. These are not submitted in Classroom.';
+            } else if (count === 1) description = 'One verified thing to handle.';
+            else if (count > 1) description = `${count} verified things to handle.`;
+            return {
+                standing,
+                tonight: {
+                    description,
+                    empty,
+                    empty_line: 'Nothing verified needs action.',
+                    empty_detail: 'Classroom and Aeries have no unfinished work to surface.',
+                    items,
+                    weekend: weekendOut.length ? {
+                        heading: 'This weekend — turn in before Monday',
+                        subtitle: 'Due Saturday, Sunday, or Monday · not submitted in Classroom',
+                        items: weekendOut,
+                    } : null,
+                },
+                suppressed,
+                verified_count: count,
+            };
+        }
+
+        function glanceActionMarkup(action) {
+            return `<button class="glance-action" type="button" data-glance="${esc(action.id)}" aria-label="Open verified detail for ${esc(action.title)}">
+                <span class="glance-action-icon ${esc(action.kind)}" aria-hidden="true">${esc(action.icon)}</span>
+                <span>
+                    <span class="glance-action-label">${esc(action.label)}</span>
+                    <span class="glance-action-title">${esc(action.title)}</span>
+                    <span class="glance-action-class">${esc(action.course)}</span>
+                </span>
+                <span class="glance-chevron" aria-hidden="true">›</span>
+            </button>`;
+        }
+
+        function renderGlance(student, idx, profiles) {
+            const g = buildGlance(student, profiles);
+            glanceStore[idx] = g;
+            const tonightItems = (g.tonight.items || []).concat((g.tonight.weekend && g.tonight.weekend.items) || []);
+            studentTonightMap[idx] = tonightItems.map(i => ({ name: i.title, className: i.course, period: i.period, status: i.kind }));
+            studentFocusMap[idx] = tonightItems.map(i => `${i.title} (${i.course})`).join('; ');
+            const grades = (g.standing || []).map(card => `
+                <button class="glance-grade" type="button" data-glance="${esc(card.id)}" aria-label="Open detail for ${esc(card.course)}, ${esc(card.mark)}, ${esc(card.percent)}, ${esc(card.trend_text)}">
+                    <span class="glance-course">${esc(card.course)}</span>
+                    <span class="glance-mark-row"><span class="glance-mark">${esc(card.mark)}</span><span class="glance-pct">${esc(card.percent)}</span></span>
+                    <span class="glance-trend ${esc(card.trend)}"><span class="glance-trend-symbol" aria-hidden="true">${esc(card.trend_symbol)}</span><span class="glance-trend-text">${esc(card.trend_text)}</span></span>
+                </button>`).join('');
+            let tonight = '';
+            if (g.tonight.items.length) {
+                tonight += `<div class="glance-action-list">${g.tonight.items.map(glanceActionMarkup).join('')}</div>`;
+            }
+            if (g.tonight.weekend) {
+                const w = g.tonight.weekend;
+                tonight += `<section class="glance-weekend" aria-label="${esc(w.heading)}">
+                    <div class="glance-weekend-heading">
+                        <strong>${esc(w.heading)}</strong>
+                        <span>${esc(w.subtitle)}</span>
+                    </div>
+                    <div class="glance-action-list">${w.items.map(glanceActionMarkup).join('')}</div>
+                </section>`;
+            }
+            if (g.tonight.empty) {
+                tonight = `<div class="glance-empty">
+                    <div>
+                        <span class="glance-empty-icon" aria-hidden="true">✓</span>
+                        <strong>${esc(g.tonight.empty_line)}</strong>
+                        <span>${esc(g.tonight.empty_detail)}</span>
+                    </div>
+                </div>`;
+            }
+            return `<div class="glance" id="glance-${idx}">
+                <section class="glance-standing glance-card">
+                    <div class="glance-section-head">
+                        <div>
+                            <h2>Standing</h2>
+                            <p>Every class · mark, percent, seven-day trend</p>
+                        </div>
+                        <span class="glance-tap-note">Tap a grade for details</span>
+                    </div>
+                    <div class="glance-grade-grid">${grades}</div>
+                </section>
+                <section class="glance-tonight glance-card">
+                    <div class="glance-section-head">
+                        <div>
+                            <h2>Tonight</h2>
+                            <p>${esc(g.tonight.description)}</p>
+                        </div>
+                        <span class="glance-tap-note">Tap for evidence</span>
+                    </div>
+                    <div class="glance-tonight-meta">
+                        <span class="glance-live-dot" aria-hidden="true"></span>
+                        <span>Verified against Classroom and Aeries</span>
+                    </div>
+                    ${tonight}
+                </section>
+            </div>`;
+        }
+
+        function glanceItemById(idx, id) {
+            const g = glanceStore[idx];
+            if (!g) return null;
+            const all = (g.standing || []).concat(g.tonight.items || []).concat((g.tonight.weekend && g.tonight.weekend.items) || []);
+            return all.find(item => item.id === id) || null;
+        }
+
+        function openGlanceDrawer(item, opener) {
+            const drawer = document.getElementById('glanceDrawer');
+            const scrim = document.getElementById('glanceScrim');
+            if (!drawer || !item) return;
+            glanceLastFocus = opener || document.activeElement;
+            document.getElementById('glanceDrawerKicker').textContent = (item.drawer && item.drawer.kicker) || 'Verified detail';
+            document.getElementById('glanceDrawerTitle').textContent = (item.drawer && item.drawer.title) || item.title || item.course;
+            document.getElementById('glanceDrawerClass').textContent = (item.drawer && item.drawer.course) || item.course || '';
+            document.getElementById('glanceTeacherWords').textContent = (item.drawer && item.drawer.teacher_words) || 'No teacher wording in this export.';
+            document.getElementById('glanceClassroomStatus').textContent = (item.drawer && item.drawer.classroom) || '';
+            document.getElementById('glanceAeriesStatus').textContent = (item.drawer && item.drawer.aeries) || '';
+            const link = document.getElementById('glanceClassroomLink');
+            link.href = (item.drawer && item.drawer.link) || 'https://classroom.google.com/';
+            drawer.classList.add('open');
+            scrim.hidden = false;
+            scrim.classList.add('open');
+            drawer.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('glanceClose').focus();
+        }
+
+        function closeGlanceDrawer() {
+            const drawer = document.getElementById('glanceDrawer');
+            const scrim = document.getElementById('glanceScrim');
+            if (!drawer || !drawer.classList.contains('open')) return;
+            drawer.classList.remove('open');
+            scrim.classList.remove('open');
+            scrim.hidden = true;
+            drawer.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            if (glanceLastFocus && glanceLastFocus.focus) glanceLastFocus.focus();
+        }
+
+        function setupGlanceDrawer() {
+            const dashboardsEl = document.getElementById('dashboards');
+            dashboardsEl.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-glance]');
+                if (!btn) return;
+                const dash = btn.closest('.dashboard');
+                const idx = dash ? Number(String(dash.id || '').replace('dashboard-', '')) : activeStudentIndex;
+                openGlanceDrawer(glanceItemById(idx, btn.dataset.glance), btn);
+            });
+            document.getElementById('glanceClose').addEventListener('click', closeGlanceDrawer);
+            document.getElementById('glanceScrim').addEventListener('click', closeGlanceDrawer);
+        }
+
         function renderStudent(student, idx) {
             // Dedupe phantom duplicate ClassSummary rows before building the feed
             student = { ...student, classes: dedupeStudentClasses(student.classes || []) };
@@ -3703,17 +4614,12 @@
             const noSchedule = !hasScheduledClasses(student) || profiles.length === 0;
             // True summer with nothing scheduled: empty-state card
             if (noSchedule && isSummerMode()) {
-                return `
-                    ${renderMasthead(student, idx, profiles)}
-                    ${renderEmptyTermCard()}`;
+                return `${renderEmptyTermCard()}`;
             }
-            // Schedule and/or grades: always show the class feed when we have rows
-            const feed = profiles.length
-                ? renderClassFeed(profiles, idx, student)
-                : (isSummerMode() ? renderEmptyTermCard() : '');
-            return `
-                ${renderMasthead(student, idx, profiles)}
-                ${feed}`;
+            if (!profiles.length) {
+                return isSummerMode() ? renderEmptyTermCard() : '';
+            }
+            return renderGlance(student, idx, profiles);
         }
 
         function updateTopBarTitle() {
@@ -3728,16 +4634,9 @@
             const sticky = document.getElementById('tonightSticky');
             const textEl = document.getElementById('tonightStickyText');
             if (!sticky || !textEl) return;
-
-            const focus = studentFocusMap[activeStudentIndex] || '';
-            if (!focus || document.body.classList.contains('summer-break')) {
-                sticky.hidden = true;
-                sticky.classList.remove('visible');
-                textEl.textContent = '';
-                return;
-            }
-            textEl.textContent = focus;
-            sticky.hidden = false;
+            sticky.hidden = true;
+            sticky.classList.remove('visible');
+            textEl.textContent = '';
         }
 
         function setupTonightSticky() {
@@ -3849,6 +4748,11 @@
                 const tag = (e.target && e.target.tagName) || '';
                 if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
                 if (e.key === 'Escape') {
+                    const drawer = document.getElementById('glanceDrawer');
+                    if (drawer && drawer.classList.contains('open')) {
+                        closeGlanceDrawer();
+                        return;
+                    }
                     const overlay = document.getElementById('settingsOverlay');
                     if (overlay.closeSettings) overlay.closeSettings();
                     else overlay.classList.remove('open');
@@ -3915,6 +4819,7 @@
             }
             lastPaintedStamp = data.last_updated;
             currentData = data;
+            document.body.classList.add('glance-home');
             applySummerBreakFromData(!!data.summer_break);
             renderLastUpdated(data);
             renderYearProgress();
@@ -4079,6 +4984,7 @@
                 setupTonightSticky();
                 setupKeyboard();
                 setupClassCards();
+                setupGlanceDrawer();
                 window.addEventListener('resize', syncTopBarHeight, { passive: true });
                 document.addEventListener('visibilitychange', () => {
                     if (document.visibilityState === 'visible' && getToken()) refreshDashboard();

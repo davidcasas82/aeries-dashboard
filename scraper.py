@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 import classroom
+import glance
 
 load_dotenv()
 
@@ -3403,6 +3404,10 @@ def format_assignment_entry(assignment, today, kind):
             compact["turned_in_on"] = cr["turned_in_on"]
         if cr.get("instructions"):
             compact["instructions"] = cr["instructions"][:300]
+        if cr.get("link"):
+            compact["link"] = cr["link"]
+        if cr.get("state"):
+            compact["state"] = cr["state"]
         if compact:
             entry["classroom"] = compact
     return entry
@@ -3945,6 +3950,8 @@ def build_student_view(student_data, history_context=None):
             ),
         })
 
+    classroom_captured = ((student_data.get("classroom") or {}).get("captured_at") or "")
+    last_checked = classroom_captured or (student_data.get("last_updated") or "")
     return {
         "tonight": tonight.get("items") or [],
         "tonight_label": (tonight.get("label") or "").strip(),
@@ -3952,7 +3959,8 @@ def build_student_view(student_data, history_context=None):
         "wins": list(ai.get("wins") or [])[:2],
         "classes": classes_out,
         "generated_at": ai.get("generated_at"),
-        "classroom_captured_at": ((student_data.get("classroom") or {}).get("captured_at") or ""),
+        "classroom_captured_at": classroom_captured,
+        "glance": glance.build_glance(classes_out, today, last_checked_iso=last_checked),
     }
 
 
