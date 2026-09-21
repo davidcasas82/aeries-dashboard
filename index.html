@@ -2118,19 +2118,44 @@
                 flex: none;
                 min-height: 0;
                 display: grid;
-                grid-template-columns: minmax(0, 1fr) auto auto;
+                grid-template-columns: minmax(0, 1fr) 3.25rem 3.6rem 2rem;
                 grid-template-rows: auto auto;
                 align-items: center;
-                gap: 6px 14px;
+                column-gap: 10px;
+                row-gap: 6px;
                 padding: 14px 16px;
             }
-            .glance-course { min-height: 0; font-size: 18px; grid-column: 1; }
-            .glance-mark-row { margin: 0; gap: 5px; grid-column: 2; }
-            .glance-mark { font-size: 36px; }
-            .glance-pct { font-size: 16px; }
-            .glance-trend { justify-content: flex-end; grid-column: 3; grid-row: 1; }
+            .glance-course { min-height: 0; font-size: 18px; grid-column: 1; grid-row: 1; }
+            .glance-mark-row {
+                display: contents;
+                margin: 0;
+            }
+            .glance-mark {
+                grid-column: 2;
+                grid-row: 1;
+                width: 100%;
+                font-size: 36px;
+                text-align: left;
+                font-variant-numeric: tabular-nums;
+            }
+            .glance-pct {
+                grid-column: 3;
+                grid-row: 1;
+                width: 100%;
+                font-size: 16px;
+                text-align: right;
+                font-variant-numeric: tabular-nums;
+            }
+            .glance-trend {
+                grid-column: 4;
+                grid-row: 1;
+                width: 2rem;
+                height: 2rem;
+                justify-content: center;
+                align-items: center;
+            }
             .glance-trend-text { display: none; }
-            .glance-counts { grid-column: 1 / -1; margin-top: 2px; }
+            .glance-counts { grid-column: 1 / -1; grid-row: 2; margin-top: 2px; padding-top: 0; }
             .glance-tonight-meta { padding-left: 18px; padding-right: 18px; }
             .glance-action { gap: 11px; padding: 14px 18px; }
             .glance-action-title { font-size: 19px; }
