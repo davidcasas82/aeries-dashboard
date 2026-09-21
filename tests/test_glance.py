@@ -692,6 +692,31 @@ class TonightSplitTests(unittest.TestCase):
         self.assertIsNone(g["bands"]["today"])
         self.assertTrue(g["tonight"]["empty"])
 
+    def test_lowest_class_never_becomes_a_focus_line(self):
+        classes = [{
+            "period": 5,
+            "course_name": "Algebra II Business Management",
+            "mark": "C",
+            "percent": "76",
+            "assignments": [],
+            "classroom": {},
+        }, {
+            "period": 8,
+            "course_name": "English",
+            "mark": "C",
+            "percent": "72.8",
+            "assignments": [],
+            "classroom": {},
+        }]
+        g = glance.build_glance(classes, datetime(2026, 9, 21))
+        blob = json.dumps({"bands": g["bands"], "tonight": g["tonight"]}).lower()
+        self.assertNotIn("lowest", blob)
+        self.assertNotIn("is the lowest class", blob)
+        self.assertFalse(any(i.get("kind") == "class" for i in g["tonight"]["items"]))
+        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing due in the next 2 days.")
+        self.assertIsNone(g["bands"]["today"])
+        self.assertNotIn("76%", blob)
+
 
 class TeacherProseCardTests(unittest.TestCase):
     def test_stamp_prose_reaches_the_card_and_title_only_stays_empty(self):

@@ -536,7 +536,7 @@ def _band_item(*, band, kind, icon, label, title, cls, item_key="", due=None):
         "course": course,
         "period": period,
         "due_key": due.isoformat() if due else "",
-        "line": "class" if kind == "class" else "item",
+        "line": "item",
     }
 
 

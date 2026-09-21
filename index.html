@@ -1928,6 +1928,8 @@
         .glance-empty strong { display: block; margin-bottom: 4px; font-size: var(--g-fs-action); letter-spacing: -.02em; }
         .glance-empty span { color: var(--g-muted); font-size: var(--g-fs-sub); }
         body.glance-home .tonight-sticky { display: none !important; }
+        body.glance-home .masthead,
+        body.glance-home .masthead-headline { display: none !important; }
 
         .glance-scrim {
             position: fixed;
@@ -4648,7 +4650,7 @@
                 course,
                 period,
                 due_key: due ? `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}` : '',
-                line: opts.kind === 'class' ? 'class' : 'item',
+                line: 'item',
             };
         }
 
@@ -5008,10 +5010,9 @@
 
         function glanceActionMarkup(action) {
             const openId = action.standing_id || action.id;
-            const klass = action.line === 'class' ? ' glance-action is-class' : ' glance-action';
             const iconKind = action.kind === 'today' && action.band === 'today' ? 'today-done' : action.kind;
-            const course = action.line === 'class' ? '' : action.course;
-            return `<button class="${klass.trim()}" type="button" data-glance="${esc(openId)}" aria-label="Open ${esc(action.course || action.title)}">
+            const course = action.course;
+            return `<button class="glance-action" type="button" data-glance="${esc(openId)}" aria-label="Open ${esc(action.course || action.title)}">
                 <span class="glance-action-icon ${esc(iconKind)}" aria-hidden="true">${esc(action.icon)}</span>
                 <span>
                     <span class="glance-action-label">${esc(action.label)}</span>
@@ -5167,6 +5168,7 @@
             if (!profiles.length) {
                 return isSummerMode() ? renderEmptyTermCard() : '';
             }
+            // Focus + Today + Standing only. No briefing headline, no lowest-class line.
             return renderGlance(student, idx, profiles);
         }
 
