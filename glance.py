@@ -1,13 +1,14 @@
 """Official v1 glance: standing + Focus / Today + drawer facts.
 
 Two bands under the kid header replace the single Tonight list.
-Focus = every unsubmitted assignment due tomorrow or within 2 Pacific days.
-No item cap and no “and N more” truncation. Today = due today or already
-happened (facts only). Under the kid name, before Focus: one fact line per
-class that needs a look (lowest mark, past-due count, due today). Never the
-sentence “X is the lowest class, at N%.” Past due, missing, and class
-summaries stay on the class cards. Empty Today is omitted. Empty Focus
-says the 2-day window is clear — not that the backlog is.
+Focus = every unsubmitted assignment due after today (Pacific), any
+distance out. No 2-day window, no item cap, no “and N more.” Soonest
+due first. Today = due today or already happened (facts only). Under
+the kid name, before Focus: one fact line per class that needs a look
+(lowest mark, past-due count, due today). Never the sentence “X is the
+lowest class, at N%.” Past due, missing, and old pending stay on the
+class cards. Empty Today is omitted. Empty Focus says nothing is coming
+up — not that the backlog is done.
 
 Nothing here logs student names or numbers.
 """
@@ -20,8 +21,7 @@ from datetime import datetime, timedelta
 from classroom import TURNED_IN_STATES, teacher_card_body
 
 BAND_LIMIT = 4
-FOCUS_WINDOW_DAYS = 2
-FOCUS_EMPTY = "Nothing due in the next 2 days."
+FOCUS_EMPTY = "Nothing coming up."
 FORECAST_MAX_AGE_DAYS = 14
 TREND_STEADY_PTS = 2.0
 
@@ -582,15 +582,15 @@ def _band_item(*, band, kind, icon, label, title, cls, item_key="", due=None):
 
 
 def in_focus_window(due, today):
-    """Tomorrow through +2 Pacific days. Not today. Not past due."""
+    """Due after today, any distance out. Not today. Not past due."""
     if due is None:
         return False
     days = (due - _as_date(today)).days
-    return 1 <= days <= FOCUS_WINDOW_DAYS
+    return days >= 1
 
 
 def collect_bands(view_classes, today, last_checked=""):
-    """Focus = every due-soon assignment. Today = due today. No class summaries."""
+    """Focus = every future due assignment. Today = due today. No class summaries."""
     today_d = _as_date(today)
     focus, today_items = [], []
     suppressed = 0
@@ -1047,7 +1047,7 @@ def build_glance(view_classes, today, last_checked_iso=""):
         "bands": {
             "focus": _band_block(
                 "Focus tonight",
-                "Due in the next 2 days",
+                "Due after today",
                 focus,
                 empty_line=FOCUS_EMPTY,
             ),

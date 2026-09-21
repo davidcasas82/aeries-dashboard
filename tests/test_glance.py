@@ -118,8 +118,8 @@ class WeekendRuleTests(unittest.TestCase):
         g = view_for(student, today=FRIDAY)["glance"]
         focus_titles = [i["title"] for i in g["tonight"]["items"]]
         today_titles = [i["title"] for i in (g["tonight"].get("today") or [])]
-        self.assertEqual(set(focus_titles), {"Lab reflection", "Reading draft"})
-        self.assertNotIn("Practice set 2", focus_titles + today_titles)
+        self.assertEqual(focus_titles, ["Lab reflection", "Reading draft", "Practice set 2"])
+        self.assertNotIn("Practice set 2", today_titles)
         self.assertNotIn("Due tonight", json.dumps(g))
         self.assertNotIn("due tonight", json.dumps(g).lower())
         self.assertNotIn("Turn in", json.dumps(g["bands"]))
@@ -268,7 +268,8 @@ class FixtureGlanceTests(unittest.TestCase):
         }
         g = view_for(student, today=MONDAY)["glance"]
         self.assertTrue(g["tonight"]["empty"])
-        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing due in the next 2 days.")
+        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing coming up.")
+        self.assertNotIn("next 2 days", json.dumps(g["bands"]).lower())
         self.assertEqual(g["tonight"]["items"], [])
         self.assertFalse(any("still to do" in json.dumps(g["bands"]).lower() for _ in [0]))
         self.assertEqual(g["verified_count"], 0)
@@ -602,7 +603,7 @@ class TonightSplitTests(unittest.TestCase):
         self.assertNotIn("A2- LT 2.4 Practice", focus_titles)
         self.assertFalse(any(i.get("kind") == "class" for i in g["tonight"]["items"]))
         self.assertFalse(any("lowest" in (i.get("label") or "").lower() for i in g["tonight"]["items"]))
-        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing due in the next 2 days.")
+        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing coming up.")
         blob = json.dumps(g)
         self.assertNotIn("classroom.google.com", blob)
         self.assertNotIn("Student A", blob)
@@ -644,7 +645,7 @@ class TonightSplitTests(unittest.TestCase):
         self.assertNotIn("taken", row["label"].lower())
         self.assertNotIn("50", row["label"])
 
-    def test_focus_is_next_two_days_not_backlog(self):
+    def test_focus_lists_all_future_work_not_the_backlog(self):
         classes = [{
             "period": 5,
             "course_name": "Algebra 2",
@@ -654,6 +655,7 @@ class TonightSplitTests(unittest.TestCase):
                 {"name": "Tomorrow set", "due_date": "09/15/2026", "points_earned": None},
                 {"name": "Two-day set", "due_date": "09/16/2026", "points_earned": None},
                 {"name": "Three-day set", "due_date": "09/17/2026", "points_earned": None},
+                {"name": "Later unit", "due_date": "10/02/2026", "points_earned": None},
                 {"name": "Old packet", "due_date": "09/10/2026", "points_earned": None},
                 {"name": "Already in", "due_date": "09/15/2026", "points_earned": None,
                  "classroom": {"state": "TURNED_IN"}},
@@ -662,13 +664,14 @@ class TonightSplitTests(unittest.TestCase):
         }]
         g = glance.build_glance(classes, MONDAY)
         titles = [i["title"] for i in g["tonight"]["items"]]
-        self.assertEqual(titles, ["Tomorrow set", "Two-day set"])
-        self.assertNotIn("Three-day set", titles)
+        self.assertEqual(titles, ["Tomorrow set", "Two-day set", "Three-day set", "Later unit"])
         self.assertNotIn("Old packet", titles)
         self.assertNotIn("Already in", titles)
         self.assertFalse(any(i.get("kind") == "class" for i in g["tonight"]["items"]))
         self.assertNotIn("lowest", json.dumps(g["tonight"]).lower())
         self.assertNotIn("still to do", json.dumps(g["bands"]).lower())
+        self.assertNotIn("next 2 days", json.dumps(g["bands"]).lower())
+        self.assertEqual(g["bands"]["focus"]["subtitle"], "Due after today")
 
     def test_focus_lists_every_due_soon_assignment(self):
         assignments = [
@@ -713,7 +716,8 @@ class TonightSplitTests(unittest.TestCase):
         }
         g = view_for(student, today=MONDAY)["glance"]
         self.assertEqual(g["bands"]["focus"]["items"], [])
-        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing due in the next 2 days.")
+        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing coming up.")
+        self.assertNotIn("next 2 days", json.dumps(g["bands"]).lower())
         self.assertNotIn("still to do", json.dumps(g["bands"]).lower())
         self.assertNotIn("turn_in", g["bands"])
         self.assertIsNone(g["bands"]["today"])
@@ -740,7 +744,7 @@ class TonightSplitTests(unittest.TestCase):
         self.assertNotIn("lowest", blob)
         self.assertNotIn("is the lowest class", json.dumps(g).lower())
         self.assertFalse(any(i.get("kind") == "class" for i in g["tonight"]["items"]))
-        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing due in the next 2 days.")
+        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing coming up.")
         self.assertIsNone(g["bands"]["today"])
         self.assertNotIn("76%", blob)
         facts = g.get("facts") or []
