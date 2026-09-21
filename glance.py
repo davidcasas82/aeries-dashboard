@@ -299,15 +299,8 @@ def _grade_display(cls):
     return "—", ""
 
 
-def _grade_class(cls, mark=""):
+def _pct_grade_class(n):
     """Same A/B/C/D/F bands as the pre-glance dashboard getGradeClass."""
-    if (mark or "").strip() in ("", "—") and not (cls or {}).get("percent"):
-        return "grade-none"
-    raw = (cls or {}).get("percent")
-    try:
-        n = None if raw in (None, "") else float(raw)
-    except (TypeError, ValueError):
-        return "grade-none"
     if n is None:
         return "grade-none"
     if n >= 90:
@@ -319,6 +312,30 @@ def _grade_class(cls, mark=""):
     if n >= 60:
         return "grade-d"
     return "grade-f"
+
+
+def _grade_class(cls, mark=""):
+    """Same A/B/C/D/F bands as the pre-glance dashboard getGradeClass."""
+    if (mark or "").strip() in ("", "—") and not (cls or {}).get("percent"):
+        return "grade-none"
+    raw = (cls or {}).get("percent")
+    try:
+        n = None if raw in (None, "") else float(raw)
+    except (TypeError, ValueError):
+        return "grade-none"
+    return _pct_grade_class(n)
+
+
+def _score_grade_class(item):
+    """Color a points score from earned/possible. 10/10 is A; 5/10 is F."""
+    earned = (item or {}).get("points_earned")
+    poss = (item or {}).get("points_possible")
+    if earned is None or poss in (None, 0):
+        return ""
+    try:
+        return _pct_grade_class(100.0 * float(earned) / float(poss))
+    except (TypeError, ValueError, ZeroDivisionError):
+        return ""
 
 
 def _classroom_status(item, fallback="No Classroom row"):
@@ -611,13 +628,17 @@ def _work_done(item):
     return _work_turned_in(item) or (item or {}).get("points_earned") is not None
 
 
-def _work_bucket(item):
-    """Turned in / not turned in / missing. Classroom-in is never missing."""
+def _work_bucket(item, today=None):
+    """Past due / missing / coming up / turned in. Classroom-in is never missing."""
     if _work_done(item):
         return "turned_in"
     if _work_missing(item):
         return "missing"
-    return "not_turned_in"
+    due = _work_due_key(item)
+    today_d = _as_date(today) if today is not None else None
+    if due is not None and today_d is not None and due < today_d:
+        return "past_due"
+    return "coming_up"
 
 
 def _turned_in_phrase(item):
@@ -656,11 +677,12 @@ def _work_when(item, today):
 
 
 def _work_row(item, today=None):
-    bucket = _work_bucket(item)
+    bucket = _work_bucket(item, today)
     return {
         "name": _work_name(item),
         "description": _work_description(item),
         "score": _work_score(item),
+        "score_class": _score_grade_class(item),
         "missing": bucket == "missing",
         "turned_in": _work_turned_in(item),
         "done": bucket == "turned_in",
@@ -713,7 +735,7 @@ def class_work_rows(cls, today=None):
             },
         })
     raws.sort(key=lambda a: (
-        _BUCKET_RANK.get(_work_bucket(a), 9),
+        _BUCKET_RANK.get(_work_bucket(a, today), 9),
         _work_due_key(a) is None,
         -(_work_due_key(a).toordinal() if _work_due_key(a) else 0),
         _work_name(a).lower(),
@@ -725,16 +747,17 @@ def class_work_rows(cls, today=None):
     return rows
 
 
-_BUCKET_RANK = {"turned_in": 0, "not_turned_in": 1, "missing": 2}
+_BUCKET_RANK = {"past_due": 0, "missing": 1, "coming_up": 2, "turned_in": 3}
 _BUCKET_PHRASE = {
+    "past_due": "past due",
     "missing": "missing",
-    "not_turned_in": "coming up",
+    "coming_up": "coming up",
     "turned_in": "turned in",
 }
 
 
 def work_counts(rows):
-    counts = {"turned_in": 0, "not_turned_in": 0, "missing": 0}
+    counts = {"past_due": 0, "missing": 0, "coming_up": 0, "turned_in": 0}
     for row in rows or []:
         key = row.get("bucket")
         if key in counts:
@@ -743,9 +766,9 @@ def work_counts(rows):
 
 
 def count_line(counts, *, show_zero_missing=False):
-    """Old class-row vocabulary: '2 missing · 4 turned in'."""
+    """Standing chips: '1 past due · 2 missing · 3 coming up · 4 turned in'."""
     parts = []
-    for key in ("missing", "not_turned_in", "turned_in"):
+    for key in ("past_due", "missing", "coming_up", "turned_in"):
         n = (counts or {}).get(key) or 0
         if n or (key == "missing" and show_zero_missing):
             parts.append(f"{n} {_BUCKET_PHRASE[key]}")
