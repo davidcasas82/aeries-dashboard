@@ -65,6 +65,41 @@ def _month_day(d):
     return f"{d.strftime('%b')} {d.day}"
 
 
+def _weekday_date(d):
+    """Monday, Sep 21 — never weekday-only or date-only."""
+    if d is None:
+        return ""
+    return f"{d.strftime('%A')}, {_month_day(d)}"
+
+
+def _late_label(days):
+    if days == 1:
+        return "1 day late"
+    return f"{days} days late"
+
+
+def due_when_label(due, today, *, kind=None, done=False):
+    """Parent due copy: always weekday + date. Tonight is not a due date."""
+    if due is None:
+        return "Missing" if kind == "missing" else ""
+    wd = _weekday_date(due)
+    today_d = _as_date(today) if today is not None else None
+    if today_d is None:
+        return f"Due {wd}"
+    days = (due - today_d).days
+    if kind == "weekend":
+        return f"This weekend · due {wd}"
+    if days == 0:
+        return f"Due today · {wd}"
+    if days == 1:
+        return f"Due tomorrow · {wd}"
+    if days > 1:
+        return f"Due {wd}"
+    if done:
+        return f"Due {wd}"
+    return f"{_late_label(-days)} · was due {wd}"
+
+
 def _parse_posted(value):
     text = (value or "").strip()
     if not text:
@@ -203,18 +238,19 @@ def pick_forecast(view_classes, today):
     title = _assessment_title(text, word)
     posted = _parse_posted(note.get("posted_on"))
     teacher_when = f"teacher, {_month_day(posted)}" if posted else "teacher"
+    label = due_when_label(when, today_d)
     return {
         "id": f"forecast-{cls.get('period') or 'x'}",
         "kind": "forecast",
         "icon": "Q",
-        "label": f"Coming {word}" if word else "Coming",
+        "label": label,
         "title": title,
         "course": cls.get("course_name") or "",
         "period": cls.get("period"),
         "due_date": when.strftime("%m/%d/%Y"),
         "source": "teacher",
         "drawer": {
-            "kicker": f"Upcoming · {teacher_when}",
+            "kicker": f"{label} · {teacher_when}",
             "title": title,
             "course": cls.get("course_name") or "",
             "teacher_words": text,
@@ -314,23 +350,27 @@ def _teacher_words(item, cls):
     return "No teacher wording in this export."
 
 
-def _action(kind, item, cls, last_checked, *, weekend_label=None):
+def _action(kind, item, cls, last_checked, *, weekend_label=None, today=None):
     name = (item.get("name") or item.get("title") or item.get("description") or "").strip()
     course = cls.get("course_name") or ""
     period = cls.get("period")
     missing = kind == "missing"
-    labels = {
-        "today": ("today", "•", "Due today"),
-        "tomorrow": ("tomorrow", "→", "Due tomorrow"),
-        "missing": ("missing", "!", "Missing"),
-        "weekend": ("weekend", (weekend_label or "W")[:1], weekend_label or "This weekend"),
+    icons = {
+        "today": ("today", "•"),
+        "tomorrow": ("tomorrow", "→"),
+        "missing": ("missing", "!"),
+        "weekend": ("weekend", (weekend_label or "W")[:1]),
     }
-    icon_kind, icon, label = labels[kind]
+    icon_kind, icon = icons[kind]
+    due = _due_days(item)
+    done = submitted_in_classroom(item) or (item or {}).get("points_earned") is not None
+    label = due_when_label(due, today, kind=kind, done=done)
     return {
         "id": f"{kind}-{period}-{name}".lower().replace(" ", "-")[:80],
         "kind": icon_kind,
         "icon": icon,
         "label": label,
+        "weekend_day": weekend_label,
         "title": name,
         "course": course,
         "period": period,
@@ -404,7 +444,7 @@ def collect_tonight(view_classes, today, last_checked=""):
         if submitted_in_classroom(item):
             return
         seen.add(key)
-        bucket.append(_action(kind, item, cls, last_checked, weekend_label=weekend_label))
+        bucket.append(_action(kind, item, cls, last_checked, weekend_label=weekend_label, today=today_d))
 
     for cls in view_classes or []:
         upcoming, miss_rows = _class_work(cls)
@@ -439,7 +479,7 @@ def collect_tonight(view_classes, today, last_checked=""):
     weekend_out = []
     if weekend:
         order = {"Saturday": 0, "Sunday": 1, "Monday": 2}
-        weekend_items.sort(key=lambda i: order.get(i.get("label"), 9))
+        weekend_items.sort(key=lambda i: order.get(i.get("weekend_day") or i.get("label"), 9))
         for row in weekend_items:
             if len(items) + len(weekend_out) >= TONIGHT_LIMIT:
                 break
@@ -558,35 +598,16 @@ def _work_status(item):
     return ""
 
 
-def _late_label(days):
-    if days == 1:
-        return "1 day late"
-    return f"{days} days late"
-
-
 def _work_when(item, today):
     """Due / upcoming / how late. Empty when the payload has no due date.
 
     Late only if the due date passed AND Classroom does not show submitted
     AND Aeries does not show scored or handed in. Same reconcile as Tonight.
+    Always weekday + date.
     """
     due = _work_due_key(item)
-    if due is None:
-        return ""
-    date = _month_day(due)
-    today_d = _as_date(today) if today is not None else None
-    if today_d is None:
-        return f"due {date}"
-    days = (due - today_d).days
-    if days > 1:
-        return f"due {date}"
-    if days == 1:
-        return "due tomorrow"
-    if days == 0:
-        return "due today"
-    if submitted_in_classroom(item) or (item or {}).get("points_earned") is not None:
-        return f"due {date}"
-    return f"{_late_label(-days)} · due {date}"
+    done = submitted_in_classroom(item) or (item or {}).get("points_earned") is not None
+    return due_when_label(due, today, done=done)
 
 
 def _work_row(item, today=None):

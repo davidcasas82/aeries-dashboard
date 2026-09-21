@@ -1800,8 +1800,9 @@
             color: var(--g-muted);
             font-size: 12px;
             font-weight: 800;
-            letter-spacing: .04em;
-            text-transform: uppercase;
+            letter-spacing: .01em;
+            line-height: 1.35;
+            white-space: normal;
         }
         .glance-action-title {
             display: block;
@@ -4176,6 +4177,28 @@
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         }
 
+        function glanceWeekdayDate(date) {
+            if (!date) return '';
+            const weekday = date.toLocaleDateString('en-US', { weekday: 'long' });
+            return `${weekday}, ${glanceMonthDay(date)}`;
+        }
+
+        function glanceDueWhenLabel(due, opts) {
+            const kind = opts && opts.kind;
+            const done = !!(opts && opts.done);
+            if (!due) return kind === 'missing' ? 'Missing' : '';
+            const wd = glanceWeekdayDate(due);
+            const days = daysFromToday(due);
+            if (kind === 'weekend') return `This weekend · due ${wd}`;
+            if (days === 0) return `Due today · ${wd}`;
+            if (days === 1) return `Due tomorrow · ${wd}`;
+            if (days > 1) return `Due ${wd}`;
+            if (done) return `Due ${wd}`;
+            const late = -days;
+            const lateS = late === 1 ? '1 day late' : `${late} days late`;
+            return `${lateS} · was due ${wd}`;
+        }
+
         function glanceIsWeekendNight(day) {
             const wd = day.getDay();
             return wd === 5 || wd === 6 || wd === 0;
@@ -4343,16 +4366,8 @@
         function glanceWorkWhen(item) {
             // Same reconcile as Tonight: Classroom-in or Aeries scored/handed-in is not late.
             const due = glanceWorkDue(item);
-            if (!due) return '';
-            const date = glanceMonthDay(due);
-            const days = daysFromToday(due);
-            if (days > 1) return `due ${date}`;
-            if (days === 1) return 'due tomorrow';
-            if (days === 0) return 'due today';
-            if (glanceSubmitted(item) || (item && item.points_earned != null)) return `due ${date}`;
-            const late = -days;
-            const lateS = late === 1 ? '1 day late' : `${late} days late`;
-            return `${lateS} · due ${date}`;
+            const done = glanceSubmitted(item) || (item && item.points_earned != null);
+            return glanceDueWhenLabel(due, { done });
         }
 
         function glanceWorkRow(item) {
@@ -4430,19 +4445,24 @@
         function glanceAction(kind, item, profile, weekendLabel) {
             const name = (item.description || item.name || item.title || '').trim();
             const course = (profile.classMeta && profile.classMeta.course_name) || '';
-            const labels = {
-                today: ['today', '•', 'Due today'],
-                tomorrow: ['tomorrow', '→', 'Due tomorrow'],
-                missing: ['missing', '!', 'Missing'],
-                weekend: ['weekend', (weekendLabel || 'W').slice(0, 1), weekendLabel || 'This weekend'],
-                forecast: ['forecast', 'Q', weekendLabel || 'Coming'],
+            const icons = {
+                today: ['today', '•'],
+                tomorrow: ['tomorrow', '→'],
+                missing: ['missing', '!'],
+                weekend: ['weekend', (weekendLabel || 'W').slice(0, 1)],
+                forecast: ['forecast', 'Q'],
             };
-            const [iconKind, icon, label] = labels[kind];
+            const [iconKind, icon] = icons[kind];
+            const due = glanceParseDay(item.due_date || item.due)
+                || glanceParseDay(item.classroom && (item.classroom.due || item.classroom.due_date));
+            const done = glanceSubmitted(item) || (item && item.points_earned != null);
+            const label = glanceDueWhenLabel(due, { kind, done });
             return {
                 id: `${kind}-${profile.period}-${name}`.toLowerCase().replace(/\s+/g, '-').slice(0, 80),
                 kind: iconKind,
                 icon,
                 label,
+                weekend_day: weekendLabel || '',
                 title: name,
                 course,
                 period: profile.period,
@@ -4489,12 +4509,12 @@
                                 id: `forecast-${p.period}`,
                                 kind: 'forecast',
                                 icon: 'Q',
-                                label: `Coming ${word === 'today' || word === 'tomorrow' ? word : word[0].toUpperCase() + word.slice(1)}`,
+                                label: glanceDueWhenLabel(when),
                                 title: tm ? tm[1] : 'Upcoming assessment',
                                 course: (p.classMeta && p.classMeta.course_name) || '',
                                 period: p.period,
                                 drawer: {
-                                    kicker: `Upcoming · teacher, ${glanceMonthDay(posted)}`,
+                                    kicker: `${glanceDueWhenLabel(when)} · teacher, ${glanceMonthDay(posted)}`,
                                     title: tm ? tm[1] : 'Upcoming assessment',
                                     course: (p.classMeta && p.classMeta.course_name) || '',
                                     teacher_words: text,
@@ -4576,7 +4596,7 @@
             }
             if (weekend) {
                 const order = { Saturday: 0, Sunday: 1, Monday: 2 };
-                weekendItems.sort((a, b) => (order[a.label] || 9) - (order[b.label] || 9));
+                weekendItems.sort((a, b) => (order[a.weekend_day] || order[a.label] || 9) - (order[b.weekend_day] || order[b.label] || 9));
                 for (const row of weekendItems) {
                     if (items.length + weekendOut.length >= 3) break;
                     weekendOut.push(row);
