@@ -203,13 +203,17 @@ class FixtureGlanceTests(unittest.TestCase):
         self.assertIn("Unit 3 Quiz Review", names)
         scored = next(w for w in alg["drawer"]["work"] if w["name"] == "3.1 Practice")
         self.assertEqual(scored["score"], "18/20")
+        self.assertEqual(scored["when"], "due Sep 8")
         missing = next(w for w in alg["drawer"]["work"] if w["name"] == "3.2 Practice")
         self.assertTrue(missing["missing"])
         self.assertTrue(missing["turned_in"])
         self.assertIn("turned in", missing["status"])
+        self.assertRegex(missing["status"], r"Sep \d+")
+        self.assertEqual(missing["when"], "due Sep 10")
         quiz = next(w for w in alg["drawer"]["work"] if w["name"] == "Unit 3 Quiz Review")
         self.assertEqual(quiz["score"], "awaiting")
         self.assertIn("review packet", quiz["description"])
+        self.assertIn(quiz["when"], ("due tomorrow", "due Sep 15", "due Sep 16"))
         blob = json.dumps(alg["drawer"]["work"])
         for banned in ("rubric", "drive", "text_excerpt", "materials", "attachments"):
             self.assertNotIn(banned, blob)
@@ -259,8 +263,41 @@ class ClassWorkDrawerTests(unittest.TestCase):
         self.assertEqual(row["score"], "awaiting")
         self.assertEqual(row["description"], "Use the circle template.")
         self.assertFalse(row["missing"])
+        self.assertEqual(row["when"], "4 days late · due Sep 10")
         scored = next(w for w in bio["drawer"]["work"] if w["name"] == "Cell lab")
         self.assertEqual(scored["score"], "28/30")
+        self.assertEqual(scored["when"], "due Sep 12")
+
+    def test_due_today_tomorrow_and_turned_in_date(self):
+        student = {
+            "name": "Student A",
+            "sn": "1",
+            "classes": [{"period": 5, "course_name": "Algebra 2", "teacher": "Byun", "percent": "81", "mark": "B-"}],
+            "assignments_by_class": [
+                {"class_name": "5- Algebra 2- Fall", "period": 5, "assignments": [
+                    {"description": "Warmup", "due_date": "09/14/2026", "points_earned": None,
+                     "points_possible": 5, "grading_complete": False},
+                    {"description": "Quiz review", "due_date": "09/15/2026", "points_earned": None,
+                     "points_possible": 10, "grading_complete": False},
+                    {"description": "Notes check", "due_date": "09/10/2026", "points_earned": None,
+                     "points_possible": 5, "grading_complete": False, "aeries_missing": True,
+                     "status": "missing",
+                     "classroom": {"state": "TURNED_IN", "state_label": "Turned in",
+                                   "turned_in_on": "2026-09-11"}},
+                ]},
+            ],
+            "class_trends": {},
+            "ai_summary": {},
+        }
+        g = view_for(student, today=MONDAY)["glance"]
+        alg = next(c for c in g["standing"] if c["course"] == "Algebra 2")
+        by_name = {w["name"]: w for w in alg["drawer"]["work"]}
+        self.assertEqual(by_name["Warmup"]["when"], "due today")
+        self.assertEqual(by_name["Quiz review"]["when"], "due tomorrow")
+        self.assertEqual(by_name["Notes check"]["when"], "due Sep 10")
+        self.assertEqual(by_name["Notes check"]["status"], "turned in Sep 11 · Aeries missing")
+        tonight = json.dumps(g["tonight"])
+        self.assertNotIn("4 days late", tonight)
 
 
 class ForecastNewestTests(unittest.TestCase):

@@ -2032,6 +2032,7 @@
             font-size: 14px;
             line-height: 1.42;
         }
+        .glance-work-when,
         .glance-work-status {
             grid-column: 1 / -1;
             margin: 0;
@@ -2039,6 +2040,7 @@
             font-size: 13px;
             font-weight: 750;
         }
+        .glance-work-when.late,
         .glance-work-status.missing { color: #9b3b2d; }
 
         @media (max-width: 620px) {
@@ -4337,18 +4339,51 @@
             return isAeriesFlaggedMissing(item) || (item && item.status === 'missing');
         }
 
+        function glanceWorkTurnedInOn(item) {
+            const cr = (item && item.classroom) || {};
+            return glanceParseDay(cr.turned_in_on)
+                || glanceParseDay(item && item.turned_in_on)
+                || glanceParseDay(item && item.date_completed);
+        }
+
         function glanceWorkStatus(item) {
             const missing = glanceWorkMissing(item);
             const turned = glanceSubmitted(item);
-            if (turned && missing) return 'turned in · Aeries missing';
+            const on = glanceWorkTurnedInOn(item);
+            const turnedS = turned
+                ? (on ? `turned in ${glanceMonthDay(on)}` : 'turned in')
+                : '';
+            if (turned && missing) return turnedS ? `${turnedS} · Aeries missing` : 'turned in · Aeries missing';
             if (missing) return 'missing';
-            if (turned) return 'turned in';
+            if (turned) return turnedS;
             return '';
+        }
+
+        function glanceWorkDue(item) {
+            return glanceParseDay(
+                (item && (item.due_date || item.due))
+                || (item && item.classroom && (item.classroom.due || item.classroom.due_date))
+            );
+        }
+
+        function glanceWorkWhen(item) {
+            const due = glanceWorkDue(item);
+            if (!due) return '';
+            const date = glanceMonthDay(due);
+            const days = daysFromToday(due);
+            if (days > 1) return `due ${date}`;
+            if (days === 1) return 'due tomorrow';
+            if (days === 0) return 'due today';
+            if (glanceSubmitted(item) || (item && item.points_earned != null)) return `due ${date}`;
+            const late = -days;
+            const lateS = late === 1 ? '1 day late' : `${late} days late`;
+            return `${lateS} · due ${date}`;
         }
 
         function glanceWorkRow(item) {
             const name = glanceWorkName(item);
             if (!name) return null;
+            const when = glanceWorkWhen(item);
             return {
                 name,
                 description: glanceWorkDescription(item),
@@ -4356,7 +4391,8 @@
                 missing: glanceWorkMissing(item),
                 turned_in: glanceSubmitted(item),
                 status: glanceWorkStatus(item),
-                due_date: (item && (item.due_date || item.due)) || '',
+                when,
+                late: /late/.test(when),
             };
         }
 
@@ -4403,11 +4439,14 @@
                 const score = row.score || 'awaiting';
                 const awaiting = String(score).toLowerCase() === 'awaiting';
                 const desc = (row.description || '').trim();
+                const when = (row.when || '').trim();
                 const status = row.status || '';
+                const late = !!(row.late || /late/.test(when));
                 return `<article class="glance-detail glance-work">
                     <span class="glance-work-name">${esc(row.name)}</span>
                     <span class="glance-work-score${awaiting ? ' awaiting' : ''}">${esc(score)}</span>
                     ${desc ? `<p class="glance-work-desc">${esc(desc)}</p>` : ''}
+                    ${when ? `<p class="glance-work-when${late ? ' late' : ''}">${esc(when)}</p>` : ''}
                     ${status ? `<p class="glance-work-status${row.missing ? ' missing' : ''}">${esc(status)}</p>` : ''}
                 </article>`;
             }).join('');

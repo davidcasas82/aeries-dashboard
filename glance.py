@@ -536,19 +536,61 @@ def _work_turned_in(item):
     return bool((item or {}).get("turned_in")) or submitted_in_classroom(item)
 
 
+def _work_turned_in_on(item):
+    cr = (item or {}).get("classroom") or {}
+    for raw in (
+        cr.get("turned_in_on"),
+        (item or {}).get("turned_in_on"),
+        (item or {}).get("date_completed"),
+    ):
+        d = _parse_posted(raw) or _parse_mmdd(raw)
+        if d:
+            return d
+    return None
+
+
 def _work_status(item):
     missing = _work_missing(item)
     turned = _work_turned_in(item)
+    when = _work_turned_in_on(item)
+    turned_s = f"turned in {_month_day(when)}" if turned and when else ("turned in" if turned else "")
     if turned and missing:
-        return "turned in · Aeries missing"
+        return f"{turned_s} · Aeries missing" if turned_s else "turned in · Aeries missing"
     if missing:
         return "missing"
     if turned:
-        return "turned in"
+        return turned_s
     return ""
 
 
-def _work_row(item):
+def _late_label(days):
+    if days == 1:
+        return "1 day late"
+    return f"{days} days late"
+
+
+def _work_when(item, today):
+    """Due / upcoming / how late. Empty when the payload has no due date."""
+    due = _work_due_key(item)
+    if due is None:
+        return ""
+    date = _month_day(due)
+    today_d = _as_date(today) if today is not None else None
+    if today_d is None:
+        return f"due {date}"
+    days = (due - today_d).days
+    if days > 1:
+        return f"due {date}"
+    if days == 1:
+        return "due tomorrow"
+    if days == 0:
+        return "due today"
+    if _work_turned_in(item) or (item or {}).get("points_earned") is not None:
+        return f"due {date}"
+    return f"{_late_label(-days)} · due {date}"
+
+
+def _work_row(item, today=None):
     return {
         "name": _work_name(item),
         "description": _work_description(item),
@@ -556,6 +598,7 @@ def _work_row(item):
         "missing": _work_missing(item),
         "turned_in": _work_turned_in(item),
         "status": _work_status(item),
+        "when": _work_when(item, today),
     }
 
 
@@ -567,7 +610,7 @@ def _work_due_key(item):
     return due
 
 
-def class_work_rows(cls):
+def class_work_rows(cls, today=None):
     """Every assignment in this class. Not Tonight’s 0–3. No warehouse fields."""
     rows = []
     seen = set()
@@ -607,13 +650,13 @@ def class_work_rows(cls):
         _work_name(a).lower(),
     ))
     for item in raws:
-        row = _work_row(item)
+        row = _work_row(item, today)
         if row["name"]:
             rows.append(row)
     return rows
 
 
-def standing_cards(view_classes, last_checked=""):
+def standing_cards(view_classes, last_checked="", today=None):
     cards = []
     for cls in view_classes or []:
         name = (cls.get("course_name") or "").strip()
@@ -637,7 +680,7 @@ def standing_cards(view_classes, last_checked=""):
                 "kicker": "All the work",
                 "title": name,
                 "course": standing_line or name,
-                "work": class_work_rows(cls),
+                "work": class_work_rows(cls, today),
                 "link": cr.get("link") or "https://classroom.google.com/",
             },
         })
@@ -658,7 +701,7 @@ def _last_checked_label(iso):
 
 def build_glance(view_classes, today, last_checked_iso=""):
     last_checked = _last_checked_label(last_checked_iso)
-    standing = standing_cards(view_classes, last_checked=last_checked)
+    standing = standing_cards(view_classes, last_checked=last_checked, today=today)
     items, weekend, suppressed = collect_tonight(view_classes, today, last_checked=last_checked)
     weekend_night = bool(weekend_dates(today))
     count = len(items) + len(weekend)
