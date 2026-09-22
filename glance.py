@@ -1,15 +1,16 @@
-"""Official v1 glance: standing + Focus / Today + drawer facts.
+"""Official v1 glance: standing + Focus / Later / Today + drawer facts.
 
-Two bands under the kid header replace the single Tonight list.
-Focus = every unsubmitted assignment due on the next 5 school days
-(Mon–Fri, Pacific). Saturday and Sunday are skipped. On Fri/Sat/Sun the
-window is the following week. No item cap. Soonest due first, weekday
-and date on each row. Today = due today or already happened (facts
-only). Under the kid name, before Focus: one fact line per class that
-needs a look (lowest mark, past-due count, due today). Never the
-sentence “X is the lowest class, at N%.” Past due, missing, and old
-pending stay on the class cards. Empty Today is omitted. Empty Focus
-says the 5 school-day window is clear — not that the backlog is done.
+Focus tonight = every unsubmitted assignment due on the next 2 school
+days (Mon–Fri, Pacific). Saturday and Sunday are skipped. On Fri/Sat/Sun
+those two days are Monday and Tuesday. No item cap. Soonest due first,
+weekday and date on each row. Later = every other unsubmitted assignment
+due after that window, any date, grouped by school week. Today = due
+today or already happened (facts only). Under the kid name, before
+Focus: one fact line per class that needs a look (lowest mark, past-due
+count, due today). Never the sentence “X is the lowest class, at N%.”
+Past due, missing, and old pending stay on the class cards. Empty Today
+and empty Later are omitted. Empty Focus says the 2 school-day window
+is clear — not that the backlog is done.
 
 Nothing here logs student names or numbers.
 """
@@ -22,9 +23,12 @@ from datetime import datetime, timedelta
 from classroom import TURNED_IN_STATES, teacher_card_body
 
 BAND_LIMIT = 4
-FOCUS_SCHOOL_DAYS = 5
-FOCUS_EMPTY = "Nothing due in the next 5 school days."
-FOCUS_SUBTITLE = "Due in the next 5 school days"
+TONIGHT_SCHOOL_DAYS = 2
+FOCUS_SCHOOL_DAYS = TONIGHT_SCHOOL_DAYS
+FOCUS_EMPTY = "Nothing due in the next 2 school days."
+FOCUS_SUBTITLE = "Due in the next 2 school days"
+LATER_HEADING = "Later"
+LATER_SUBTITLE = "Due after the next 2 school days"
 FORECAST_MAX_AGE_DAYS = 14
 TREND_STEADY_PTS = 2.0
 
@@ -584,7 +588,7 @@ def _band_item(*, band, kind, icon, label, title, cls, item_key="", due=None):
     }
 
 
-def school_days_after(today, n=FOCUS_SCHOOL_DAYS):
+def school_days_after(today, n=TONIGHT_SCHOOL_DAYS):
     """Next n Mon–Fri dates after today. Skips Saturday and Sunday."""
     day = _as_date(today) + timedelta(days=1)
     out = []
@@ -595,8 +599,8 @@ def school_days_after(today, n=FOCUS_SCHOOL_DAYS):
     return out
 
 
-def in_focus_window(due, today):
-    """Due on the next 5 school days. Not today, not weekend, not past due."""
+def in_tonight_window(due, today):
+    """Due on the next 2 school days. Not today, not weekend, not past due."""
     if due is None:
         return False
     due_d = _as_date(due)
@@ -606,10 +610,77 @@ def in_focus_window(due, today):
     return due_d in set(school_days_after(today_d))
 
 
-def collect_bands(view_classes, today, last_checked=""):
-    """Focus = next 5 school days. Today = due today. No class summaries."""
+def in_focus_window(due, today):
+    """Alias for the Tonight school-day window."""
+    return in_tonight_window(due, today)
+
+
+def in_later_window(due, today):
+    """Due after today and after the Tonight school-day window."""
+    if due is None:
+        return False
+    due_d = _as_date(due)
     today_d = _as_date(today)
-    focus, today_items = [], []
+    if due_d <= today_d:
+        return False
+    return not in_tonight_window(due_d, today_d)
+
+
+def _monday_of(day):
+    day = _as_date(day)
+    return day - timedelta(days=day.weekday())
+
+
+def this_school_week_monday(today):
+    """Monday of the current school week. Fri/Sat/Sun use the coming Monday."""
+    day = _as_date(today)
+    wd = day.weekday()
+    if wd >= 4:
+        return day + timedelta(days=(7 - wd) % 7)
+    return day - timedelta(days=wd)
+
+
+def _week_of_label(monday):
+    monday = _as_date(monday)
+    return f"Week of {monday.strftime('%a')}, {_month_day(monday)}"
+
+
+def this_week_has_later_days(today):
+    """True when this school week still has Mon–Fri dates after Tonight."""
+    this_mon = this_school_week_monday(today)
+    last_tonight = school_days_after(today)[-1]
+    return any(this_mon + timedelta(days=i) > last_tonight for i in range(5))
+
+
+def later_week_label(due, today):
+    """This week / Next week / Week of Mon, Oct 5. School weeks are Mon–Fri."""
+    if due is None:
+        return ""
+    week_mon = _monday_of(due)
+    this_mon = this_school_week_monday(today)
+    next_mon = this_mon + timedelta(days=7)
+    if week_mon == this_mon and this_week_has_later_days(today):
+        return "This week"
+    if week_mon == next_mon:
+        return "Next week"
+    return _week_of_label(week_mon)
+
+
+def group_later_weeks(items):
+    """Adjacent items that share a week_label. Empty weeks are never created."""
+    groups = []
+    for item in items or []:
+        label = item.get("week_label") or ""
+        if not groups or groups[-1]["label"] != label:
+            groups.append({"label": label, "items": []})
+        groups[-1]["items"].append(item)
+    return groups
+
+
+def collect_bands(view_classes, today, last_checked=""):
+    """Focus = next 2 school days. Later = after that. Today = due today."""
+    today_d = _as_date(today)
+    focus, later, today_items = [], [], []
     suppressed = 0
     seen = set()
 
@@ -645,12 +716,21 @@ def collect_bands(view_classes, today, last_checked=""):
                     title=name, cls=cls, item_key=name,
                 ), key)
                 continue
-            if in_focus_window(due, today_d):
+            if in_tonight_window(due, today_d):
                 take(focus, _band_item(
                     band="focus", kind="tomorrow", icon="→",
                     label=due_when_label(due, today_d),
                     title=name, cls=cls, item_key=name, due=due,
                 ), key)
+                continue
+            if in_later_window(due, today_d):
+                row = _band_item(
+                    band="later", kind="later", icon="→",
+                    label=due_when_label(due, today_d),
+                    title=name, cls=cls, item_key=name, due=due,
+                )
+                row["week_label"] = later_week_label(due, today_d)
+                take(later, row, key)
 
     forecast = pick_forecast(view_classes, today_d)
     if forecast:
@@ -677,7 +757,8 @@ def collect_bands(view_classes, today, last_checked=""):
             ), key)
 
     focus.sort(key=lambda r: (r.get("due_key") or "", (r.get("title") or "").lower()))
-    return focus, today_items[:BAND_LIMIT], suppressed
+    later.sort(key=lambda r: (r.get("due_key") or "", (r.get("title") or "").lower()))
+    return focus, later, today_items[:BAND_LIMIT], suppressed
 
 
 def collect_facts(view_classes, today):
@@ -746,7 +827,7 @@ def collect_facts(view_classes, today):
 
 def collect_tonight(view_classes, today, last_checked=""):
     """Focus lines plus empty weekend bucket. Prefer collect_bands."""
-    focus, _today, suppressed = collect_bands(
+    focus, _later, _today, suppressed = collect_bands(
         view_classes, today, last_checked=last_checked
     )
     return focus, [], suppressed
@@ -1046,13 +1127,16 @@ def _band_block(heading, subtitle, items, *, empty_line=None):
 def build_glance(view_classes, today, last_checked_iso=""):
     last_checked = _last_checked_label(last_checked_iso)
     standing = standing_cards(view_classes, last_checked=last_checked, today=today)
-    focus, today_items, suppressed = collect_bands(
+    focus, later, today_items, suppressed = collect_bands(
         view_classes, today, last_checked=last_checked
     )
     facts = collect_facts(view_classes, today)
     weekend_night = bool(weekend_dates(today))
-    count = len(focus) + len(today_items)
-    empty = count == 0
+    later_band = _band_block(LATER_HEADING, LATER_SUBTITLE, later)
+    if later_band:
+        later_band["groups"] = group_later_weeks(later)
+    count = len(focus) + len(later) + len(today_items)
+    empty = len(focus) == 0
     if empty:
         description = FOCUS_EMPTY
     elif count == 1:
@@ -1068,6 +1152,7 @@ def build_glance(view_classes, today, last_checked_iso=""):
                 focus,
                 empty_line=FOCUS_EMPTY,
             ),
+            "later": later_band,
             "today": _band_block(
                 "Today",
                 "Due today or already happened",
@@ -1081,6 +1166,7 @@ def build_glance(view_classes, today, last_checked_iso=""):
             "empty_line": FOCUS_EMPTY,
             "empty_detail": "",
             "items": focus,
+            "later": later,
             "today": today_items,
             "weekend": None,
         },
