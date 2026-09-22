@@ -1811,6 +1811,20 @@
             font-weight: 650;
             line-height: 1.4;
         }
+        .glance-week-group + .glance-week-group .glance-week-label {
+            border-top: 1px solid var(--g-line);
+            margin-top: 2px;
+        }
+        .glance-week-label {
+            padding: 12px 24px 4px;
+            color: var(--g-muted);
+            font-size: var(--g-fs-meta);
+            font-weight: 800;
+            letter-spacing: .01em;
+            line-height: 1.35;
+        }
+        .glance-week-group:first-child .glance-week-label { padding-top: 4px; }
+        .glance-week-group .glance-action-list { border-top: 0; }
         .glance-tonight { margin-bottom: 22px; overflow: hidden; }
         .glance-tonight-meta {
             display: flex;
@@ -1856,7 +1870,7 @@
             font-weight: 900;
         }
         .glance-action-icon.today { color: var(--g-amber); background: var(--g-amber-soft); }
-        .glance-action-icon.tomorrow, .glance-action-icon.forecast { color: var(--g-blue); background: var(--g-blue-soft); }
+        .glance-action-icon.tomorrow, .glance-action-icon.forecast, .glance-action-icon.later { color: var(--g-blue); background: var(--g-blue-soft); }
         .glance-action-icon.missing { color: var(--g-red); background: var(--g-red-soft); }
         .glance-action-icon.weekend { color: var(--g-forest); background: var(--g-forest-soft); }
         .glance-action-label {
@@ -2225,6 +2239,7 @@
             .glance-counts { grid-column: 1 / -1; grid-row: 2; margin-top: 2px; padding-top: 0; }
             .glance-tonight-meta { padding-left: 18px; padding-right: 18px; }
             .glance-band-empty { padding-left: 18px; padding-right: 18px; }
+            .glance-week-label { padding-left: 18px; padding-right: 18px; }
             .glance-action { gap: 11px; padding: 14px 18px; }
             .glance-action-title { font-size: 19px; }
             .glance-drawer {
@@ -4994,6 +5009,7 @@
             });
 
             const focus = [];
+            const later = [];
             const todayItems = [];
             const seen = new Set();
             let suppressed = 0;
@@ -5012,10 +5028,46 @@
                 }
                 return out;
             };
-            const focusDays = schoolDaysAfter(TODAY, 5);
-            const inFocusWindow = (due) => {
+            const mondayOf = (day) => addCalendarDays(day, -((day.getDay() + 6) % 7));
+            const thisSchoolWeekMonday = (from) => {
+                const wd = from.getDay();
+                if (wd === 5 || wd === 6 || wd === 0) {
+                    const add = wd === 0 ? 1 : (8 - wd);
+                    return addCalendarDays(from, add);
+                }
+                return mondayOf(from);
+            };
+            const monthDay = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const weekOfLabel = (monday) => `Week of ${monday.toLocaleDateString('en-US', { weekday: 'short' })}, ${monthDay(monday)}`;
+            const tonightDays = schoolDaysAfter(TODAY, 2);
+            const lastTonight = tonightDays[tonightDays.length - 1];
+            const thisMon = thisSchoolWeekMonday(TODAY);
+            const nextMon = addCalendarDays(thisMon, 7);
+            const thisWeekHasLater = [0, 1, 2, 3, 4].some(i => {
+                const day = addCalendarDays(thisMon, i);
+                return day > lastTonight && !glanceSameDay(day, lastTonight);
+            });
+            const inTonightWindow = (due) => {
                 if (!due) return false;
-                return focusDays.some(d => glanceSameDay(due, d));
+                return tonightDays.some(d => glanceSameDay(due, d));
+            };
+            const laterWeekLabel = (due) => {
+                if (!due) return '';
+                const weekMon = mondayOf(due);
+                if (thisWeekHasLater && glanceSameDay(weekMon, thisMon)) return 'This week';
+                if (glanceSameDay(weekMon, nextMon)) return 'Next week';
+                return weekOfLabel(weekMon);
+            };
+            const groupLaterWeeks = (items) => {
+                const groups = [];
+                for (const item of items || []) {
+                    const label = item.week_label || '';
+                    if (!groups.length || groups[groups.length - 1].label !== label) {
+                        groups.push({ label, items: [] });
+                    }
+                    groups[groups.length - 1].items.push(item);
+                }
+                return groups;
             };
             for (const p of profiles || []) {
                 const course = ((p.classMeta || {}).course_name || '').trim();
@@ -5044,12 +5096,22 @@
                         }), key);
                         continue;
                     }
-                    if (inFocusWindow(due)) {
+                    if (inTonightWindow(due)) {
                         take(focus, glanceBandItem(p, {
                             band: 'focus', kind: 'tomorrow', icon: '→',
                             label: glanceDueWhenLabel(due),
                             title: name, itemKey: name, due,
                         }), key);
+                        continue;
+                    }
+                    if (due && daysFromToday(due) > 0) {
+                        const row = glanceBandItem(p, {
+                            band: 'later', kind: 'later', icon: '→',
+                            label: glanceDueWhenLabel(due),
+                            title: name, itemKey: name, due,
+                        });
+                        row.week_label = laterWeekLabel(due);
+                        take(later, row, key);
                     }
                 }
             }
@@ -5070,22 +5132,28 @@
                 }
             }
             focus.sort((a, b) => (a.due_key || '').localeCompare(b.due_key || '') || (a.title || '').localeCompare(b.title || ''));
+            later.sort((a, b) => (a.due_key || '').localeCompare(b.due_key || '') || (a.title || '').localeCompare(b.title || ''));
             const focusOut = focus;
+            const laterOut = later;
+            const laterGroups = groupLaterWeeks(laterOut);
             const todayOut = todayItems.slice(0, 4);
             const facts = glanceCollectFacts(profiles, forecast);
-            const count = focusOut.length + todayOut.length;
-            const empty = count === 0;
-            const focusEmpty = 'Nothing due in the next 5 school days.';
+            const count = focusOut.length + laterOut.length + todayOut.length;
+            const empty = focusOut.length === 0;
+            const focusEmpty = 'Nothing due in the next 2 school days.';
             let description = empty ? focusEmpty : (count === 1 ? 'One verified thing to handle.' : `${count} verified things to handle.`);
             const block = (heading, subtitle, items, emptyLine) => {
                 if (items.length) return { heading, subtitle, items, empty: false };
                 if (emptyLine) return { heading, subtitle, items: [], empty: true, empty_line: emptyLine };
                 return null;
             };
+            const laterBand = block('Later', 'Due after the next 2 school days', laterOut);
+            if (laterBand) laterBand.groups = laterGroups;
             return {
                 standing,
                 bands: {
-                    focus: block('Focus tonight', 'Due in the next 5 school days', focusOut, focusEmpty),
+                    focus: block('Focus tonight', 'Due in the next 2 school days', focusOut, focusEmpty),
+                    later: laterBand,
                     today: block('Today', 'Due today or already happened', todayOut),
                 },
                 tonight: {
@@ -5094,6 +5162,7 @@
                     empty_line: focusEmpty,
                     empty_detail: '',
                     items: focusOut,
+                    later: laterOut,
                     today: todayOut,
                     weekend: null,
                 },
@@ -5123,10 +5192,21 @@
         function renderGlanceBand(band) {
             if (!band) return '';
             const items = band.items || [];
+            const groups = band.groups || [];
             if (!items.length && !band.empty_line) return '';
-            const body = items.length
-                ? `<div class="glance-action-list">${items.map(glanceActionMarkup).join('')}</div>`
-                : `<p class="glance-band-empty">${esc(band.empty_line)}</p>`;
+            let body;
+            if (groups.length) {
+                body = groups.map(group => {
+                    const label = group.label
+                        ? `<div class="glance-week-label">${esc(group.label)}</div>`
+                        : '';
+                    return `<div class="glance-week-group">${label}<div class="glance-action-list">${(group.items || []).map(glanceActionMarkup).join('')}</div></div>`;
+                }).join('');
+            } else if (items.length) {
+                body = `<div class="glance-action-list">${items.map(glanceActionMarkup).join('')}</div>`;
+            } else {
+                body = `<p class="glance-band-empty">${esc(band.empty_line)}</p>`;
+            }
             const tap = items.length ? `<span class="glance-tap-note">Tap a class</span>` : '';
             return `<section class="glance-band glance-card" aria-label="${esc(band.heading)}">
                 <div class="glance-section-head">
@@ -5145,6 +5225,7 @@
             glanceStore[idx] = g;
             const bandItems = []
                 .concat((g.bands.focus && g.bands.focus.items) || [])
+                .concat((g.bands.later && g.bands.later.items) || [])
                 .concat((g.bands.today && g.bands.today.items) || []);
             studentTonightMap[idx] = bandItems.map(i => ({ name: i.title, className: i.course, period: i.period, status: i.kind }));
             studentFocusMap[idx] = bandItems.map(i => `${i.title} (${i.course})`).join('; ');
@@ -5168,6 +5249,7 @@
                 </section>`
                 : '';
             const bands = renderGlanceBand(g.bands.focus)
+                + renderGlanceBand(g.bands.later)
                 + renderGlanceBand(g.bands.today);
             return `<div class="glance" id="glance-${idx}">
                 ${facts}
