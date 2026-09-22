@@ -30,7 +30,6 @@ DUE_SOON_SCHOOL_DAYS = 5
 DUE_SOON_EMPTY = "Nothing due in the next 5 school days."
 DUE_SOON_SUBTITLE = "Not turned in, due in the next 5 school days"
 DUE_SOON_HEADING = "Due soon"
-LOOK_NEXT_HEADING = "Where to look"
 TONIGHT_SCHOOL_DAYS = DUE_SOON_SCHOOL_DAYS
 FOCUS_SCHOOL_DAYS = DUE_SOON_SCHOOL_DAYS
 FOCUS_EMPTY = DUE_SOON_EMPTY
