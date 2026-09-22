@@ -1797,11 +1797,18 @@
         .glance-facts { overflow: hidden; margin-bottom: 14px; }
         .glance-action-icon.fact { color: var(--g-amber); background: var(--g-amber-soft); }
         .glance-look-next {
-            padding: 0 24px 18px;
-            color: var(--g-muted);
-            font-size: var(--g-fs-sub);
-            font-weight: 550;
-            line-height: 1.45;
+            margin-bottom: 22px;
+            overflow: hidden;
+        }
+        .glance-look-next .glance-section-head { padding-bottom: 10px; }
+        .glance-look-next-body {
+            margin: 0;
+            padding: 0 24px 22px;
+            color: var(--g-ink);
+            font-size: var(--g-fs-action);
+            font-weight: 650;
+            line-height: 1.35;
+            letter-spacing: -.02em;
         }
         .glance-bands {
             display: flex;
@@ -2247,7 +2254,7 @@
             .glance-tonight-meta { padding-left: 18px; padding-right: 18px; }
             .glance-band-empty { padding-left: 18px; padding-right: 18px; }
             .glance-week-label { padding-left: 18px; padding-right: 18px; }
-            .glance-look-next { padding-left: 18px; padding-right: 18px; }
+            .glance-look-next-body { padding-left: 18px; padding-right: 18px; }
             .glance-action { gap: 11px; padding: 14px 18px; }
             .glance-action-title { font-size: 19px; }
             .glance-drawer {
@@ -5019,7 +5026,9 @@
             pastRows.sort((a, b) => (b.n - a.n) || String(a.period ?? '').localeCompare(String(b.period ?? '')) || a.course.localeCompare(b.course));
             if (pastRows[0]) {
                 const row = pastRows[0];
-                return row.n === 1 ? `${row.course} has 1 past due.` : `${row.course} has ${row.n} past due.`;
+                return row.n === 1
+                    ? `${row.course} has 1 past due on the class chip.`
+                    : `${row.course} has ${row.n} past due on the class chip.`;
             }
             outside.sort((a, b) => (a.due - b.due) || a.course.localeCompare(b.course) || a.name.localeCompare(b.name));
             if (outside[0]) {
@@ -5200,7 +5209,15 @@
             }).join('');
             const look = (g.look_next || '').trim();
             const lookHtml = look
-                ? `<p class="glance-look-next">${esc(look)}</p>`
+                ? `<section class="glance-look-next glance-card" aria-label="Where to look">
+                    <div class="glance-section-head">
+                        <div>
+                            <h2>Where to look</h2>
+                            <p>Already on the page · not in Due soon</p>
+                        </div>
+                    </div>
+                    <p class="glance-look-next-body">${esc(look)}</p>
+                </section>`
                 : '';
             const bands = renderGlanceBand(g.bands.due_soon || g.bands.focus);
             return `<div class="glance" id="glance-${idx}">
