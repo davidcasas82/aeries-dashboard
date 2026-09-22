@@ -1,16 +1,19 @@
-"""Official v1 glance: standing + Focus / Later / Today + drawer facts.
+"""Official v1 glance: standing + Due soon + look-next + drawer facts.
 
-Focus tonight = every unsubmitted assignment due on the next 2 school
-days (Mon–Fri, Pacific). Saturday and Sunday are skipped. On Fri/Sat/Sun
-those two days are Monday and Tuesday. No item cap. Soonest due first,
-weekday and date on each row. Later = every other unsubmitted assignment
-due after that window, any date, grouped by school week. Today = due
-today or already happened (facts only). Under the kid name, before
-Focus: one fact line per class that needs a look (lowest mark, past-due
-count, due today). Never the sentence “X is the lowest class, at N%.”
-Past due, missing, and old pending stay on the class cards. Empty Today
-and empty Later are omitted. Empty Focus says the 2 school-day window
-is clear — not that the backlog is done.
+Due soon = every unsubmitted assignment due today or on the next 5
+school days including today (Mon–Fri, Pacific). Saturday and Sunday are
+skipped. On Fri/Sat/Sun the window is the coming school days. No item
+cap. Soonest due first, weekday and date on each row. Turned in
+(Classroom TURNED_IN/RETURNED, or Aeries scored / date completed) leaves
+immediately. If neither records a turn-in, the row still leaves once
+the due date is before today — that work stays on the class chip as
+past due. No fact-line strip, no Later, no Today, no Done today.
+Under Due soon: look_next_paragraph names one fact already on the page
+(a past-due count, or an unsubmitted item due outside the window).
+Never the sentence “X is the lowest class, at N%.” Never the raw
+ai_summary headline. Next pass can replace look_next_paragraph with a
+tighter Grok prompt. Empty Due soon: “Nothing due in the next 5 school
+days.”
 
 Nothing here logs student names or numbers.
 """
@@ -23,12 +26,14 @@ from datetime import datetime, timedelta
 from classroom import TURNED_IN_STATES, teacher_card_body
 
 BAND_LIMIT = 4
-TONIGHT_SCHOOL_DAYS = 2
-FOCUS_SCHOOL_DAYS = TONIGHT_SCHOOL_DAYS
-FOCUS_EMPTY = "Nothing due in the next 2 school days."
-FOCUS_SUBTITLE = "Due in the next 2 school days"
-LATER_HEADING = "Later"
-LATER_SUBTITLE = "Due after the next 2 school days"
+DUE_SOON_SCHOOL_DAYS = 5
+DUE_SOON_EMPTY = "Nothing due in the next 5 school days."
+DUE_SOON_SUBTITLE = "Not turned in, due in the next 5 school days"
+DUE_SOON_HEADING = "Due soon"
+TONIGHT_SCHOOL_DAYS = DUE_SOON_SCHOOL_DAYS
+FOCUS_SCHOOL_DAYS = DUE_SOON_SCHOOL_DAYS
+FOCUS_EMPTY = DUE_SOON_EMPTY
+FOCUS_SUBTITLE = DUE_SOON_SUBTITLE
 FORECAST_MAX_AGE_DAYS = 14
 TREND_STEADY_PTS = 2.0
 
@@ -588,9 +593,9 @@ def _band_item(*, band, kind, icon, label, title, cls, item_key="", due=None):
     }
 
 
-def school_days_after(today, n=TONIGHT_SCHOOL_DAYS):
-    """Next n Mon–Fri dates after today. Skips Saturday and Sunday."""
-    day = _as_date(today) + timedelta(days=1)
+def school_days_from(today, n=DUE_SOON_SCHOOL_DAYS):
+    """n Mon–Fri dates starting at today when today is a school day."""
+    day = _as_date(today)
     out = []
     while len(out) < n:
         if day.weekday() < 5:
@@ -599,31 +604,26 @@ def school_days_after(today, n=TONIGHT_SCHOOL_DAYS):
     return out
 
 
-def in_tonight_window(due, today):
-    """Due on the next 2 school days. Not today, not weekend, not past due."""
+def school_days_after(today, n=DUE_SOON_SCHOOL_DAYS):
+    """Next n Mon–Fri dates after today. Skips Saturday and Sunday."""
+    return school_days_from(_as_date(today) + timedelta(days=1), n)
+
+
+def in_due_soon_window(due, today):
+    """Due today or on the next school days in the 5-day window. Not weekend-only."""
     if due is None:
         return False
-    due_d = _as_date(due)
-    today_d = _as_date(today)
-    if due_d <= today_d:
-        return False
-    return due_d in set(school_days_after(today_d))
+    return _as_date(due) in set(school_days_from(today))
+
+
+def in_tonight_window(due, today):
+    """Alias for the Due soon school-day window."""
+    return in_due_soon_window(due, today)
 
 
 def in_focus_window(due, today):
-    """Alias for the Tonight school-day window."""
-    return in_tonight_window(due, today)
-
-
-def in_later_window(due, today):
-    """Due after today and after the Tonight school-day window."""
-    if due is None:
-        return False
-    due_d = _as_date(due)
-    today_d = _as_date(today)
-    if due_d <= today_d:
-        return False
-    return not in_tonight_window(due_d, today_d)
+    """Alias for the Due soon school-day window."""
+    return in_due_soon_window(due, today)
 
 
 def _monday_of(day):
@@ -677,19 +677,12 @@ def group_later_weeks(items):
     return groups
 
 
-def collect_bands(view_classes, today, last_checked=""):
-    """Focus = next 2 school days. Later = after that. Today = due today."""
+def collect_due_soon(view_classes, today):
+    """Unsubmitted work due today or on the next school days in the window."""
     today_d = _as_date(today)
-    focus, later, today_items = [], [], []
+    rows = []
     suppressed = 0
     seen = set()
-
-    def take(bucket, row, key):
-        if not key or key in seen:
-            return
-        seen.add(key)
-        bucket.append(row)
-
     for cls in view_classes or []:
         course = (cls.get("course_name") or "").strip()
         if not course:
@@ -699,66 +692,70 @@ def collect_bands(view_classes, today, last_checked=""):
             if not name:
                 continue
             key = (course.lower(), name.lower())
+            if key in seen:
+                continue
+            seen.add(key)
             due = _work_due_key(item)
             if _work_done(item):
                 suppressed += 1
-                if due == today_d:
-                    take(today_items, _band_item(
-                        band="today", kind="today", icon="✓",
-                        label=today_fact_label(item, today_d, due),
-                        title=name, cls=cls, item_key=name,
-                    ), key)
                 continue
-            if due == today_d:
-                take(today_items, _band_item(
-                    band="today", kind="today", icon="✓",
-                    label=today_fact_label(item, today_d, due),
-                    title=name, cls=cls, item_key=name,
-                ), key)
+            if due is None or due < today_d:
                 continue
-            if in_tonight_window(due, today_d):
-                take(focus, _band_item(
-                    band="focus", kind="tomorrow", icon="→",
-                    label=due_when_label(due, today_d),
-                    title=name, cls=cls, item_key=name, due=due,
-                ), key)
+            if not in_due_soon_window(due, today_d):
                 continue
-            if in_later_window(due, today_d):
-                row = _band_item(
-                    band="later", kind="later", icon="→",
-                    label=due_when_label(due, today_d),
-                    title=name, cls=cls, item_key=name, due=due,
-                )
-                row["week_label"] = later_week_label(due, today_d)
-                take(later, row, key)
+            rows.append(_band_item(
+                band="due_soon", kind="due_soon", icon="→",
+                label=due_when_label(due, today_d),
+                title=name, cls=cls, item_key=name, due=due,
+            ))
+    rows.sort(key=lambda r: (r.get("due_key") or "", (r.get("title") or "").lower()))
+    return rows, suppressed
 
-    forecast = pick_forecast(view_classes, today_d)
-    if forecast:
-        title = forecast.get("title") or "Upcoming assessment"
-        key = ((forecast.get("course") or "").lower(), title.lower())
-        forecast_cls = next(
-            (
-                c for c in (view_classes or [])
-                if (c.get("course_name") or "") == forecast.get("course")
-                and c.get("period") == forecast.get("period")
-            ),
-            None,
-        )
-        when = _parse_mmdd(forecast.get("due_date"))
-        match = matching_forecast_work(forecast_cls, when, title) if forecast_cls else None
-        if forecast_cls and when == today_d and key not in seen:
-            if match and submitted_in_classroom(match):
-                label = today_fact_label(match, today_d, when)
-            else:
-                label = due_when_label(when, today_d)
-            take(today_items, _band_item(
-                band="today", kind="forecast", icon="✓",
-                label=label, title=title, cls=forecast_cls, item_key=title,
-            ), key)
 
-    focus.sort(key=lambda r: (r.get("due_key") or "", (r.get("title") or "").lower()))
-    later.sort(key=lambda r: (r.get("due_key") or "", (r.get("title") or "").lower()))
-    return focus, later, today_items[:BAND_LIMIT], suppressed
+def collect_bands(view_classes, today, last_checked=""):
+    """Due soon only. Later / Today / fact chips are gone."""
+    due_soon, suppressed = collect_due_soon(view_classes, today)
+    return due_soon, [], [], suppressed
+
+
+def look_next_paragraph(view_classes, today):
+    """One fact already on the page. Replace later with a Grok prompt.
+
+    Names a past-due count, or an unsubmitted item due outside the 5
+    school-day window with its class and date. Does not invent a reason,
+    a skill, or a lowest-class sentence. Does not read ai_summary.
+    """
+    today_d = _as_date(today)
+    window = set(school_days_from(today_d))
+    past_rows = []
+    outside = []
+    for cls in view_classes or []:
+        course = (cls.get("course_name") or "").strip()
+        if not course:
+            continue
+        past_n = 0
+        for item in _class_raw_work(cls):
+            name = _work_name(item)
+            if not name or _work_done(item):
+                continue
+            due = _work_due_key(item)
+            if _work_bucket(item, today_d) == "past_due":
+                past_n += 1
+            elif due is not None and due > today_d and due not in window:
+                outside.append((due, course, name))
+        if past_n:
+            past_rows.append((past_n, course, cls.get("period")))
+    if past_rows:
+        past_rows.sort(key=lambda r: (-r[0], str(r[2] or ""), r[1].lower()))
+        n, course, _period = past_rows[0]
+        if n == 1:
+            return f"{course} has 1 past due."
+        return f"{course} has {n} past due."
+    if outside:
+        outside.sort(key=lambda r: (r[0], r[1].lower(), r[2].lower()))
+        due, course, name = outside[0]
+        return f"{course} {name} is due {_weekday_date(due)}, on the class chip."
+    return ""
 
 
 def collect_facts(view_classes, today):
@@ -826,11 +823,9 @@ def collect_facts(view_classes, today):
 
 
 def collect_tonight(view_classes, today, last_checked=""):
-    """Focus lines plus empty weekend bucket. Prefer collect_bands."""
-    focus, _later, _today, suppressed = collect_bands(
-        view_classes, today, last_checked=last_checked
-    )
-    return focus, [], suppressed
+    """Due soon lines. Prefer collect_due_soon."""
+    due_soon, suppressed = collect_due_soon(view_classes, today)
+    return due_soon, [], suppressed
 
 
 def _fmt_pts(n):
@@ -1127,50 +1122,42 @@ def _band_block(heading, subtitle, items, *, empty_line=None):
 def build_glance(view_classes, today, last_checked_iso=""):
     last_checked = _last_checked_label(last_checked_iso)
     standing = standing_cards(view_classes, last_checked=last_checked, today=today)
-    focus, later, today_items, suppressed = collect_bands(
-        view_classes, today, last_checked=last_checked
-    )
-    facts = collect_facts(view_classes, today)
+    due_soon, suppressed = collect_due_soon(view_classes, today)
+    look_next = look_next_paragraph(view_classes, today)
     weekend_night = bool(weekend_dates(today))
-    later_band = _band_block(LATER_HEADING, LATER_SUBTITLE, later)
-    if later_band:
-        later_band["groups"] = group_later_weeks(later)
-    count = len(focus) + len(later) + len(today_items)
-    empty = len(focus) == 0
-    if empty:
-        description = FOCUS_EMPTY
-    elif count == 1:
-        description = "One verified thing to handle."
-    else:
-        description = f"{count} verified things to handle."
+    count = len(due_soon)
+    empty = count == 0
+    description = DUE_SOON_EMPTY if empty else (
+        "One verified thing to handle." if count == 1
+        else f"{count} verified things to handle."
+    )
+    due_soon_band = _band_block(
+        DUE_SOON_HEADING,
+        DUE_SOON_SUBTITLE,
+        due_soon,
+        empty_line=DUE_SOON_EMPTY,
+    )
     return {
         "standing": standing,
         "bands": {
-            "focus": _band_block(
-                "Focus tonight",
-                FOCUS_SUBTITLE,
-                focus,
-                empty_line=FOCUS_EMPTY,
-            ),
-            "later": later_band,
-            "today": _band_block(
-                "Today",
-                "Due today or already happened",
-                today_items,
-            ),
+            "due_soon": due_soon_band,
+            "focus": due_soon_band,
+            "later": None,
+            "today": None,
         },
         "tonight": {
             "weekend_night": weekend_night,
             "description": description,
             "empty": empty,
-            "empty_line": FOCUS_EMPTY,
+            "empty_line": DUE_SOON_EMPTY,
             "empty_detail": "",
-            "items": focus,
-            "later": later,
-            "today": today_items,
+            "items": due_soon,
+            "later": [],
+            "today": [],
             "weekend": None,
         },
-        "facts": facts,
+        "facts": [],
+        "look_next": look_next,
         "suppressed": suppressed,
         "verified_count": count,
     }

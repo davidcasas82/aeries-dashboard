@@ -12,6 +12,7 @@ import glance  # noqa: E402
 import scraper  # noqa: E402
 
 MONDAY = datetime(2026, 9, 14)
+TUESDAY = datetime(2026, 9, 22)
 THURSDAY = datetime(2026, 9, 17)
 FRIDAY = datetime(2026, 9, 18)
 SATURDAY = datetime(2026, 9, 19)
@@ -123,7 +124,8 @@ class WeekendRuleTests(unittest.TestCase):
         self.assertNotIn("Lab reflection", focus_titles)
         self.assertNotIn("Reading draft", focus_titles)
         later_titles = [i["title"] for i in (g["tonight"].get("later") or [])]
-        self.assertEqual(later_titles, ["Lab reflection", "Reading draft"])
+        self.assertEqual(later_titles, [])
+        self.assertIsNone(g["bands"]["later"])
         self.assertNotIn("Practice set 2", today_titles)
         self.assertNotIn("Due tonight", json.dumps(g))
         self.assertNotIn("due tonight", json.dumps(g).lower())
@@ -273,11 +275,13 @@ class FixtureGlanceTests(unittest.TestCase):
         }
         g = view_for(student, today=MONDAY)["glance"]
         self.assertTrue(g["tonight"]["empty"])
-        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing due in the next 2 school days.")
-        self.assertNotIn("coming up.", g["bands"]["focus"]["empty_line"].lower())
-        self.assertNotIn("next 5 school days", json.dumps(g["bands"]).lower())
+        self.assertEqual(g["bands"]["due_soon"]["empty_line"], "Nothing due in the next 5 school days.")
+        self.assertEqual(g["bands"]["due_soon"]["heading"], "Due soon")
+        self.assertNotIn("coming up.", g["bands"]["due_soon"]["empty_line"].lower())
         self.assertEqual(g["tonight"]["items"], [])
         self.assertIsNone(g["bands"]["later"])
+        self.assertIsNone(g["bands"]["today"])
+        self.assertEqual(g["facts"], [])
         self.assertFalse(any("still to do" in json.dumps(g["bands"]).lower() for _ in [0]))
         self.assertEqual(g["verified_count"], 0)
 
@@ -346,10 +350,10 @@ class ClassWorkDrawerTests(unittest.TestCase):
         )
         focus_titles = [i["title"] for i in g["tonight"]["items"]]
         today_titles = [i["title"] for i in (g["tonight"].get("today") or [])]
-        self.assertEqual(focus_titles, ["Quiz review"])
-        self.assertEqual(today_titles, ["Warmup"])
-        self.assertEqual(g["tonight"]["items"][0]["label"], "Due tomorrow · Tuesday, Sep 15")
-        self.assertTrue(g["tonight"]["today"][0]["label"].startswith("Due today · Monday, Sep 14"))
+        self.assertEqual(focus_titles, ["Warmup", "Quiz review"])
+        self.assertEqual(today_titles, [])
+        self.assertEqual(g["tonight"]["items"][0]["label"], "Due today · Monday, Sep 14")
+        self.assertEqual(g["tonight"]["items"][1]["label"], "Due tomorrow · Tuesday, Sep 15")
         self.assertFalse(any(l.lower() in ("due tonight", "coming monday") for l in [i["label"] for i in g["tonight"]["items"]]))
         self.assertEqual(by_name["Quiz review"]["bucket"], "coming_up")
         self.assertEqual(by_name["Notes check"]["status"], "Aeries missing")
@@ -599,18 +603,12 @@ class TonightSplitTests(unittest.TestCase):
         }
         g = glance.build_glance(view["classes"], datetime(2026, 9, 21))
         focus_titles = [i["title"] for i in g["tonight"]["items"]]
-        today_rows = g["tonight"]["today"]
-        today_titles = [i["title"] for i in today_rows]
         self.assertNotIn("test", [t.lower() for t in focus_titles])
-        self.assertIn("test", [t.lower() for t in today_titles])
-        test_row = next(i for i in today_rows if i["title"].lower() == "test")
-        self.assertEqual(test_row["label"], "Due today · Monday, Sep 21")
-        self.assertNotIn("taken", test_row["label"].lower())
-        self.assertNotIn("score", json.dumps(test_row).lower())
+        self.assertEqual(g["tonight"]["today"], [])
         self.assertNotIn("A2- LT 2.4 Practice", focus_titles)
         self.assertFalse(any(i.get("kind") == "class" for i in g["tonight"]["items"]))
         self.assertFalse(any("lowest" in (i.get("label") or "").lower() for i in g["tonight"]["items"]))
-        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing due in the next 2 school days.")
+        self.assertEqual(g["bands"]["due_soon"]["empty_line"], "Nothing due in the next 5 school days.")
         blob = json.dumps(g)
         self.assertNotIn("classroom.google.com", blob)
         self.assertNotIn("Student A", blob)
@@ -645,14 +643,11 @@ class TonightSplitTests(unittest.TestCase):
         }]
         g = glance.build_glance(classes, datetime(2026, 9, 21))
         focus_titles = [i["title"].lower() for i in g["tonight"]["items"]]
-        today_rows = g["tonight"]["today"]
         self.assertFalse(any("test" in t for t in focus_titles))
-        row = next(i for i in today_rows if "test" in i["title"].lower())
-        self.assertTrue(row["label"].startswith("Turned in"))
-        self.assertNotIn("taken", row["label"].lower())
-        self.assertNotIn("50", row["label"])
+        self.assertEqual(g["tonight"]["today"], [])
+        self.assertNotIn("50", json.dumps(g["tonight"]))
 
-    def test_focus_is_next_two_school_days_later_holds_the_rest(self):
+    def test_due_soon_holds_the_five_school_day_window(self):
         classes = [{
             "period": 5,
             "course_name": "Algebra 2",
@@ -671,89 +666,17 @@ class TonightSplitTests(unittest.TestCase):
         }]
         g = glance.build_glance(classes, MONDAY)
         titles = [i["title"] for i in g["tonight"]["items"]]
-        later_titles = [i["title"] for i in g["tonight"]["later"]]
-        self.assertEqual(titles, ["Tomorrow set", "Two-day set"])
-        self.assertEqual(later_titles, ["Three-day set", "Later unit"])
-        self.assertNotIn("Old packet", titles + later_titles)
-        self.assertNotIn("Already in", titles + later_titles)
+        self.assertEqual(titles, ["Tomorrow set", "Two-day set", "Three-day set"])
+        self.assertEqual(g["tonight"]["later"], [])
+        self.assertNotIn("Later unit", titles)
+        self.assertNotIn("Old packet", titles)
+        self.assertNotIn("Already in", titles)
         self.assertFalse(any(i.get("kind") == "class" for i in g["tonight"]["items"]))
         self.assertNotIn("lowest", json.dumps(g["tonight"]).lower())
         self.assertNotIn("still to do", json.dumps(g["bands"]).lower())
-        self.assertEqual(g["bands"]["focus"]["subtitle"], "Due in the next 2 school days")
+        self.assertEqual(g["bands"]["due_soon"]["subtitle"], "Not turned in, due in the next 5 school days")
         self.assertIn("Tuesday, Sep 15", g["tonight"]["items"][0]["label"])
-
-    def test_monday_tonight_is_tue_wed_later_keeps_this_week_and_beyond(self):
-        days = glance.school_days_after(MONDAY)
-        self.assertEqual([d.isoformat() for d in days], ["2026-09-15", "2026-09-16"])
-        today = datetime(2026, 9, 21)
-        classes = [{
-            "period": 5,
-            "course_name": "Algebra 2",
-            "mark": "B-",
-            "percent": "81",
-            "assignments": [
-                {"name": "Tue set", "due_date": "09/22/2026", "points_earned": None},
-                {"name": "Wed quiz", "due_date": "09/23/2026", "points_earned": None},
-                {"name": "Thu notes", "due_date": "09/24/2026", "points_earned": None},
-                {"name": "Fri lab", "due_date": "09/25/2026", "points_earned": None},
-                {"name": "Editorial", "due_date": "10/02/2026", "points_earned": None},
-                {"name": "Portfolio", "due_date": "10/09/2026", "points_earned": None},
-                {"name": "Due today warmup", "due_date": "09/21/2026", "points_earned": None},
-                {"name": "Old packet", "due_date": "09/10/2026", "points_earned": None},
-            ],
-            "classroom": {},
-        }]
-        g = glance.build_glance(classes, today)
-        self.assertEqual(
-            [i["title"] for i in g["tonight"]["items"]],
-            ["Tue set", "Wed quiz"],
-        )
-        later = g["bands"]["later"]
-        self.assertEqual(
-            [i["title"] for i in later["items"]],
-            ["Thu notes", "Fri lab", "Editorial", "Portfolio"],
-        )
-        groups = {group["label"]: [i["title"] for i in group["items"]] for group in later["groups"]}
-        self.assertEqual(groups["This week"], ["Thu notes", "Fri lab"])
-        self.assertEqual(groups["Next week"], ["Editorial"])
-        self.assertEqual(groups["Week of Mon, Oct 5"], ["Portfolio"])
-        self.assertNotIn("Due today warmup", [i["title"] for i in g["tonight"]["items"]])
-        self.assertEqual([i["title"] for i in g["tonight"]["today"]], ["Due today warmup"])
-        self.assertNotIn("Old packet", [i["title"] for i in later["items"]])
-        self.assertIn("Tuesday, Sep 22", g["tonight"]["items"][0]["label"])
-        self.assertIn("Friday, Oct 2", next(i["label"] for i in later["items"] if i["title"] == "Editorial"))
-        self.assertIn("Friday, Oct 9", next(i["label"] for i in later["items"] if i["title"] == "Portfolio"))
-
-    def test_saturday_tonight_is_mon_tue(self):
-        days = glance.school_days_after(SATURDAY)
-        self.assertEqual([d.isoformat() for d in days], ["2026-09-21", "2026-09-22"])
-        self.assertFalse(any(d.weekday() >= 5 for d in days))
-        self.assertEqual(glance.later_week_label(datetime(2026, 9, 23).date(), SATURDAY), "This week")
-        classes = [{
-            "period": 5,
-            "course_name": "Algebra 2",
-            "mark": "B-",
-            "percent": "81",
-            "assignments": [
-                {"name": "Sunday review", "due_date": "09/20/2026", "points_earned": None},
-                {"name": "Monday essay", "due_date": "09/21/2026", "points_earned": None},
-                {"name": "Tuesday set", "due_date": "09/22/2026", "points_earned": None},
-                {"name": "Wednesday notes", "due_date": "09/23/2026", "points_earned": None},
-                {"name": "Friday set", "due_date": "09/25/2026", "points_earned": None},
-                {"name": "Next Monday extra", "due_date": "09/28/2026", "points_earned": None},
-            ],
-            "classroom": {},
-        }]
-        g = glance.build_glance(classes, SATURDAY)
-        titles = [i["title"] for i in g["tonight"]["items"]]
-        later_titles = [i["title"] for i in g["tonight"]["later"]]
-        self.assertEqual(titles, ["Monday essay", "Tuesday set"])
-        self.assertEqual(later_titles, ["Sunday review", "Wednesday notes", "Friday set", "Next Monday extra"])
-        groups = {group["label"]: [i["title"] for i in group["items"]] for group in g["bands"]["later"]["groups"]}
-        self.assertEqual(groups["This week"], ["Wednesday notes", "Friday set"])
-        self.assertEqual(groups["Next week"], ["Next Monday extra"])
-        self.assertIn("Monday, Sep 21", g["tonight"]["items"][0]["label"])
-        self.assertIn("Tuesday, Sep 22", g["tonight"]["items"][1]["label"])
+        self.assertEqual(g["look_next"], "Algebra 2 has 1 past due.")
 
     def test_focus_lists_every_due_soon_assignment(self):
         assignments = [
@@ -797,13 +720,16 @@ class TonightSplitTests(unittest.TestCase):
             "ai_summary": {},
         }
         g = view_for(student, today=MONDAY)["glance"]
-        self.assertEqual(g["bands"]["focus"]["items"], [])
-        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing due in the next 2 school days.")
-        self.assertNotIn("coming up.", g["bands"]["focus"]["empty_line"].lower())
+        self.assertEqual(g["bands"]["due_soon"]["items"], [])
+        self.assertEqual(g["bands"]["due_soon"]["empty_line"], "Nothing due in the next 5 school days.")
+        self.assertEqual(g["bands"]["due_soon"]["heading"], "Due soon")
+        self.assertNotIn("coming up.", g["bands"]["due_soon"]["empty_line"].lower())
         self.assertNotIn("still to do", json.dumps(g["bands"]).lower())
         self.assertNotIn("turn_in", g["bands"])
         self.assertIsNone(g["bands"]["later"])
         self.assertIsNone(g["bands"]["today"])
+        self.assertEqual(g["facts"], [])
+        self.assertEqual(g.get("look_next") or "", "")
         self.assertTrue(g["tonight"]["empty"])
 
     def test_lowest_class_never_becomes_a_focus_line(self):
@@ -823,19 +749,19 @@ class TonightSplitTests(unittest.TestCase):
             "classroom": {},
         }]
         g = glance.build_glance(classes, datetime(2026, 9, 21))
-        blob = json.dumps({"bands": g["bands"], "tonight": g["tonight"]}).lower()
-        self.assertNotIn("lowest", blob)
-        self.assertNotIn("is the lowest class", json.dumps(g).lower())
+        home = json.dumps({
+            "bands": g["bands"], "tonight": g["tonight"],
+            "facts": g["facts"], "look_next": g["look_next"],
+        }).lower()
+        self.assertNotIn("lowest", home)
+        self.assertNotIn("is the lowest class", home)
         self.assertFalse(any(i.get("kind") == "class" for i in g["tonight"]["items"]))
-        self.assertEqual(g["bands"]["focus"]["empty_line"], "Nothing due in the next 2 school days.")
+        self.assertEqual(g["bands"]["due_soon"]["empty_line"], "Nothing due in the next 5 school days.")
         self.assertIsNone(g["bands"]["later"])
         self.assertIsNone(g["bands"]["today"])
-        self.assertNotIn("76%", blob)
-        facts = g.get("facts") or []
-        self.assertEqual([i["title"] for i in facts], ["English"])
-        self.assertEqual(facts[0]["label"], "lowest mark")
-        self.assertNotIn("%", facts[0]["label"])
-        self.assertNotIn("is the lowest class", facts[0]["label"].lower())
+        self.assertNotIn("76%", home)
+        self.assertEqual(g.get("facts") or [], [])
+        self.assertEqual(g.get("look_next") or "", "")
 
     def test_fact_lines_combine_look_reasons_without_titles(self):
         classes = [{
@@ -860,15 +786,183 @@ class TonightSplitTests(unittest.TestCase):
             "classroom": {},
         }]
         g = glance.build_glance(classes, datetime(2026, 9, 21))
-        facts = {i["title"]: i["label"] for i in g["facts"]}
-        self.assertEqual(facts["Algebra 2"], "lowest mark · 1 past due · due today")
-        self.assertEqual(facts["English"], "2 past due")
-        self.assertNotIn("Old packet", json.dumps(g["facts"]))
-        self.assertNotIn("Warmup", json.dumps(g["facts"]))
-        self.assertNotIn("is the lowest class", json.dumps(g).lower())
-        self.assertNotIn("76%", json.dumps(g["facts"]))
-        self.assertNotIn("Algebra 2", [i["title"] for i in g["tonight"]["items"]])
-        self.assertEqual([i["title"] for i in g["tonight"]["today"]], ["Warmup"])
+        self.assertEqual(g.get("facts") or [], [])
+        self.assertEqual(g["look_next"], "English has 2 past due.")
+        home = json.dumps({
+            "bands": g["bands"], "tonight": g["tonight"],
+            "facts": g["facts"], "look_next": g["look_next"],
+        }).lower()
+        self.assertNotIn("is the lowest class", home)
+        self.assertNotIn("lowest", home)
+        self.assertNotIn("76%", home)
+        self.assertEqual([i["title"] for i in g["tonight"]["items"]], ["Warmup"])
+        self.assertEqual(g["tonight"]["today"], [])
+        self.assertIsNone(g["bands"]["later"])
+        self.assertIsNone(g["bands"]["today"])
+
+
+class DueSoonTests(unittest.TestCase):
+    def test_tuesday_window_is_that_day_plus_next_four_school_days(self):
+        days = glance.school_days_from(TUESDAY)
+        self.assertEqual(
+            [d.isoformat() for d in days],
+            ["2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28"],
+        )
+        self.assertTrue(glance.in_due_soon_window(datetime(2026, 9, 22).date(), TUESDAY))
+        self.assertTrue(glance.in_due_soon_window(datetime(2026, 9, 28).date(), TUESDAY))
+        self.assertFalse(glance.in_due_soon_window(datetime(2026, 9, 26).date(), TUESDAY))
+        self.assertFalse(glance.in_due_soon_window(datetime(2026, 9, 29).date(), TUESDAY))
+
+    def test_friday_includes_the_following_monday(self):
+        days = glance.school_days_from(FRIDAY)
+        self.assertEqual(
+            [d.isoformat() for d in days],
+            ["2026-09-18", "2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24"],
+        )
+        self.assertTrue(glance.in_due_soon_window(datetime(2026, 9, 21).date(), FRIDAY))
+
+    def test_saturday_starts_monday(self):
+        days = glance.school_days_from(SATURDAY)
+        self.assertEqual(
+            [d.isoformat() for d in days],
+            ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25"],
+        )
+        sunday = glance.school_days_from(SUNDAY)
+        self.assertEqual([d.isoformat() for d in sunday], [d.isoformat() for d in days])
+
+    def test_turned_in_item_inside_window_is_absent(self):
+        classes = [{
+            "period": 5,
+            "course_name": "Algebra 2",
+            "mark": "B-",
+            "percent": "81",
+            "assignments": [{
+                "name": "Warmup",
+                "due_date": "09/22/2026",
+                "points_earned": None,
+                "classroom": {"state": "TURNED_IN", "turned_in_on": "2026-09-22"},
+            }, {
+                "name": "Returned quiz",
+                "due_date": "09/23/2026",
+                "points_earned": None,
+                "classroom": {"state": "RETURNED"},
+            }, {
+                "name": "Scored set",
+                "due_date": "09/24/2026",
+                "points_earned": 9,
+                "points_possible": 10,
+            }, {
+                "name": "Handed in",
+                "due_date": "09/25/2026",
+                "points_earned": None,
+                "date_completed": "09/22/2026",
+            }],
+            "classroom": {},
+        }]
+        g = glance.build_glance(classes, TUESDAY)
+        self.assertEqual([i["title"] for i in g["tonight"]["items"]], [])
+        self.assertEqual(g["bands"]["due_soon"]["empty_line"], "Nothing due in the next 5 school days.")
+        self.assertGreaterEqual(g["suppressed"], 4)
+
+    def test_past_due_unfinished_item_is_absent(self):
+        classes = [{
+            "period": 6,
+            "course_name": "Biology",
+            "mark": "A",
+            "percent": "93",
+            "assignments": [{
+                "name": "Old lab",
+                "due_date": "09/18/2026",
+                "points_earned": None,
+            }],
+            "classroom": {},
+        }]
+        g = glance.build_glance(classes, TUESDAY)
+        self.assertEqual([i["title"] for i in g["tonight"]["items"]], [])
+        self.assertEqual(g["look_next"], "Biology has 1 past due.")
+        bio = next(c for c in g["standing"] if c["course"] == "Biology")
+        self.assertEqual(bio["counts"]["past_due"], 1)
+        self.assertIn("past due", bio["count_line"])
+
+    def test_pe_questionnaire_due_today_not_turned_in_is_present(self):
+        classes = [{
+            "period": 1,
+            "course_name": "Engineering Geo",
+            "mark": "A",
+            "percent": "94",
+            "assignments": [
+                {"name": f"Geo {n}", "due_date": "09/22/2026", "points_earned": None}
+                for n in range(1, 6)
+            ],
+            "classroom": {},
+        }, {
+            "period": 7,
+            "course_name": "PE Course 1",
+            "mark": "A",
+            "percent": "100",
+            "assignments": [],
+            "classroom": {
+                "classroom_only": [{
+                    "title": "Coach C's PE Questionnaire",
+                    "due_date": "09/22/2026",
+                    "state": "CREATED",
+                    "state_label": "Assigned",
+                }],
+            },
+        }]
+        g = glance.build_glance(classes, TUESDAY)
+        titles = [i["title"] for i in g["tonight"]["items"]]
+        self.assertIn("Coach C's PE Questionnaire", titles)
+        self.assertEqual(sorted(titles), sorted([f"Geo {n}" for n in range(1, 6)] + ["Coach C's PE Questionnaire"]))
+        self.assertEqual(len(titles), 6)
+        self.assertGreater(len(titles), glance.BAND_LIMIT)
+        self.assertEqual(titles, [i["title"] for i in g["bands"]["due_soon"]["items"]])
+        pe = next(i for i in g["tonight"]["items"] if i["title"] == "Coach C's PE Questionnaire")
+        self.assertIn("Tuesday, Sep 22", pe["label"])
+        self.assertNotIn("BAND_LIMIT", json.dumps(g["bands"]["due_soon"]))
+
+    def test_no_band_limit_slice(self):
+        classes = [{
+            "period": 5,
+            "course_name": "Algebra 2",
+            "mark": "B-",
+            "percent": "81",
+            "assignments": [
+                {"name": f"Packet {n}", "due_date": "09/22/2026", "points_earned": None}
+                for n in range(1, 9)
+            ],
+            "classroom": {},
+        }]
+        g = glance.build_glance(classes, TUESDAY)
+        titles = [i["title"] for i in g["tonight"]["items"]]
+        self.assertEqual(len(titles), 8)
+        self.assertGreater(len(titles), glance.BAND_LIMIT)
+        self.assertEqual(titles, [f"Packet {n}" for n in range(1, 9)])
+        self.assertIsNone(g["bands"]["later"])
+        self.assertIsNone(g["bands"]["today"])
+        self.assertEqual(g["facts"], [])
+
+    def test_look_next_names_outside_window_when_no_past_due(self):
+        classes = [{
+            "period": 8,
+            "course_name": "English",
+            "mark": "B",
+            "percent": "88",
+            "assignments": [{
+                "name": "Editorial",
+                "due_date": "10/02/2026",
+                "points_earned": None,
+            }],
+            "classroom": {},
+        }]
+        g = glance.build_glance(classes, TUESDAY)
+        self.assertEqual(g["tonight"]["items"], [])
+        self.assertEqual(
+            g["look_next"],
+            "English Editorial is due Friday, Oct 2, on the class chip.",
+        )
+        self.assertNotIn("lowest", (g["look_next"] or "").lower())
+        self.assertNotIn("ai_summary", json.dumps(g))
 
 
 class TeacherProseCardTests(unittest.TestCase):
