@@ -3953,9 +3953,6 @@ def build_student_view(student_data, history_context=None):
     classroom_captured = ((student_data.get("classroom") or {}).get("captured_at") or "")
     last_checked = classroom_captured or (student_data.get("last_updated") or "")
     glance_obj = glance.build_glance(classes_out, today, last_checked_iso=last_checked)
-    grok_text = (student_data.get("look_next_grok") or "").strip()
-    if grok_text:
-        glance.apply_look_next_grok(glance_obj, grok_text, view_classes=classes_out, today=today)
     return {
         "tonight": tonight.get("items") or [],
         "tonight_label": (tonight.get("label") or "").strip(),
@@ -4604,8 +4601,6 @@ def regenerate_grok_summaries():
         else:
             print("    WARNING: AI summary failed — keeping previous briefing if any")
         attach_student_view(student, history_context=history_context)
-        if GROK_API_KEY:
-            attach_look_next_grok(student)
 
     data["last_updated"] = datetime.now(timezone.utc).isoformat()
     data["summer_break"] = False
@@ -4790,8 +4785,6 @@ def scrape_all():
                 )
 
             attach_student_view(student_data, history_context=history_context)
-            if GROK_API_KEY:
-                attach_look_next_grok(student_data)
 
             # Append today's grade snapshot after briefing (stores previous_briefing from prior AI)
             # Prefer storing the briefing we just replaced as previous — rebuild snapshot with prior AI

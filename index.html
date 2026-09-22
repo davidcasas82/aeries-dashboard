@@ -1797,13 +1797,19 @@
         .glance-facts { overflow: hidden; margin-bottom: 14px; }
         .glance-action-icon.fact { color: var(--g-amber); background: var(--g-amber-soft); }
         .glance-look-next {
-            margin: -8px 0 22px;
-            padding: 0 24px;
-            color: var(--g-ink);
-            font-size: var(--g-fs-action);
-            font-weight: 650;
-            line-height: 1.35;
-            letter-spacing: -.02em;
+            margin: -6px 0 20px;
+            padding: 0 24px 0 42px;
+            color: var(--g-muted);
+            font-size: var(--g-fs-note);
+            font-weight: 550;
+            line-height: 1.4;
+            letter-spacing: 0;
+        }
+        .glance-look-next li { margin: 0 0 3px; }
+        .glance-look-next.is-empty {
+            margin-left: 0;
+            padding-left: 24px;
+            list-style: none;
         }
         .glance-bands {
             display: flex;
@@ -4385,7 +4391,7 @@
         function glanceDueWhenLabel(due, opts) {
             const kind = opts && opts.kind;
             const done = !!(opts && opts.done);
-            if (!due) return kind === 'missing' ? 'Missing' : '';
+            if (!due) return kind === 'missing' ? 'Missing' : 'No due date.';
             const wd = glanceWeekdayDate(due);
             const days = daysFromToday(due);
             if (kind === 'weekend') return `This weekend · due ${wd}`;
@@ -4997,16 +5003,6 @@
 
         const LOOK_NEXT_EMPTY = 'Nothing else outside this list.';
 
-        function glanceLookNextItem(course, name, due) {
-            return {
-                course,
-                title: name,
-                iso: due ? glanceIsoDay(due) : '',
-                date_label: due ? glanceMonthDay(due) : '',
-                weekday_date: due ? glanceWeekdayDate(due) : '',
-            };
-        }
-
         function glanceIsoDay(date) {
             if (!date) return '';
             const y = date.getFullYear();
@@ -5015,238 +5011,80 @@
             return `${y}-${m}-${d}`;
         }
 
-        function glanceAndJoin(parts) {
-            const list = (parts || []).filter(Boolean);
-            if (!list.length) return '';
-            if (list.length === 1) return list[0];
-            if (list.length === 2) return `${list[0]} and ${list[1]}`;
-            return `${list.slice(0, -1).join(', ')}, and ${list[list.length - 1]}`;
-        }
-
-        function glanceDateSpan(dates) {
-            const days = (dates || []).filter(Boolean).slice().sort((a, b) => a - b);
-            if (!days.length) return '';
-            if (glanceSameDay(days[0], days[days.length - 1])) return glanceMonthDay(days[0]);
-            return `${glanceMonthDay(days[0])}–${glanceMonthDay(days[days.length - 1])}`;
-        }
-
         function glanceLookNextPacket(profiles) {
             const windowDays = glanceSchoolDaysFrom(TODAY, 5);
             const inWindow = (due) => due && windowDays.some(d => glanceSameDay(due, d));
             const pastRows = [];
-            const outsideRows = [];
-            const unscoredRows = [];
+            const outsideGroups = new Map();
+            const unscoredGroups = new Map();
             for (const p of profiles || []) {
                 const course = ((p.classMeta || {}).course_name || '').trim();
                 if (!course) continue;
-                const pastItems = [];
-                const outsideItems = [];
+                let pastN = 0;
                 for (const item of glanceRawWork(p)) {
                     const name = glanceWorkName(item);
                     if (!name) continue;
                     const due = glanceWorkDue(item);
                     if (glanceSubmitted(item) && item.points_earned == null && inWindow(due)) {
-                        unscoredRows.push(glanceLookNextItem(course, name, due));
+                        const key = course.toLowerCase();
+                        const row = unscoredGroups.get(key) || { course, count: 0 };
+                        row.count += 1;
+                        unscoredGroups.set(key, row);
                     }
                     if (glanceWorkDone(item)) continue;
-                    if (glanceWorkBucket(item) === 'past_due') {
-                        pastItems.push(glanceLookNextItem(course, name, due));
-                    } else if (due && daysFromToday(due) > 0 && !inWindow(due)) {
-                        outsideItems.push(glanceLookNextItem(course, name, due));
+                    if (glanceWorkBucket(item) === 'past_due') pastN += 1;
+                    else if (due && daysFromToday(due) > 0 && !inWindow(due)) {
+                        const key = `${course.toLowerCase()}|${glanceIsoDay(due)}`;
+                        const row = outsideGroups.get(key) || {
+                            course,
+                            count: 0,
+                            iso: glanceIsoDay(due),
+                            date_label: glanceMonthDay(due),
+                        };
+                        row.count += 1;
+                        outsideGroups.set(key, row);
                     }
                 }
-                if (pastItems.length) {
-                    pastItems.sort((a, b) => (a.iso || '').localeCompare(b.iso || '') || (a.title || '').localeCompare(b.title || ''));
-                    pastRows.push({ n: pastItems.length, course, period: p.period, items: pastItems });
-                }
-                outsideRows.push(...outsideItems);
+                if (pastN) pastRows.push({ n: pastN, course, period: p.period });
             }
-            outsideRows.sort((a, b) => (a.iso || '').localeCompare(b.iso || '') || (a.course || '').localeCompare(b.course || '') || (a.title || '').localeCompare(b.title || ''));
-            let outside = null;
-            if (outsideRows[0]) {
-                const nearest = outsideRows[0];
-                const same = outsideRows.filter(r => (r.course || '').toLowerCase() === (nearest.course || '').toLowerCase());
-                outside = { ...nearest, items: same.length <= 3 ? same : [nearest] };
-            }
-            let past_due = null;
             pastRows.sort((a, b) => (b.n - a.n) || a.course.localeCompare(b.course) || String(a.period ?? '').localeCompare(String(b.period ?? '')));
-            if (pastRows[0]) {
-                const row = pastRows[0];
-                const dates = row.items.map(it => glanceParseDay(it.iso)).filter(Boolean);
-                past_due = {
-                    course: row.course,
-                    count: row.n,
-                    date_span: glanceDateSpan(dates),
-                    items: row.n <= 3 ? row.items : [],
-                };
-            }
-            unscoredRows.sort((a, b) => (a.iso || '').localeCompare(b.iso || '') || (a.course || '').localeCompare(b.course || '') || (a.title || '').localeCompare(b.title || ''));
-            return { outside, past_due, unscored: unscoredRows[0] || null };
+            const outside = [...outsideGroups.values()].sort((a, b) => (a.iso || '').localeCompare(b.iso || '') || (a.course || '').localeCompare(b.course || ''));
+            const unscored = [...unscoredGroups.values()].sort((a, b) => (a.course || '').localeCompare(b.course || ''));
+            return {
+                past_due: pastRows[0] ? { course: pastRows[0].course, count: pastRows[0].n } : null,
+                outside,
+                unscored,
+            };
         }
 
-        function glancePastDueSentence(fact) {
-            if (!fact) return '';
-            const course = (fact.course || '').trim();
-            const items = fact.items || [];
-            if (items.length) {
-                const bits = items.filter(it => it.title && it.date_label).map(it => `${it.title} due ${it.date_label}`);
-                if (bits.length) return `${course} still has ${glanceAndJoin(bits)}.`;
-            }
-            const n = fact.count || 0;
-            const span = (fact.date_span || '').trim();
-            if (n && span) return `${course} still has ${n} out, ${span}.`;
-            if (n) return `${course} still has ${n} out.`;
-            return '';
-        }
-
-        function glanceOutsideSentence(fact) {
-            if (!fact) return '';
-            const course = (fact.course || '').trim();
-            let items = fact.items || [];
-            if (!items.length && fact.title) items = [fact];
-            const bits = items.filter(it => it.title && it.date_label).map(it => `${it.title} is due ${it.date_label}`);
-            if (!bits.length) return '';
-            if (bits.length === 1) return `${course} ${bits[0]}.`;
-            return `${course} ${glanceAndJoin(bits)}.`;
-        }
-
-        function glanceUnscoredSentence(fact) {
-            const title = fact && (fact.title || '').trim();
-            return title ? `${title} is already turned in, no score yet.` : '';
-        }
-
-        function glanceLookNextSentences(packet) {
-            const parts = [];
-            const past = glancePastDueSentence(packet && packet.past_due);
-            if (past) parts.push(past);
-            const outside = glanceOutsideSentence(packet && packet.outside);
-            if (outside) parts.push(outside);
-            const unscored = glanceUnscoredSentence(packet && packet.unscored);
-            if (unscored) parts.push(unscored);
-            if (!parts.length) return LOOK_NEXT_EMPTY;
-            if (parts.length <= 2) return parts.join(' ');
-            return `${parts[0]} ${parts[1].replace(/\.$/, '')}; ${parts[2]}`;
-        }
-
-        function glanceLookNextKnownTitles(profiles) {
-            const titles = [];
-            for (const p of profiles || []) {
-                for (const item of glanceRawWork(p)) {
-                    const name = glanceWorkName(item);
-                    if (name) titles.push(name);
+        function glanceLookNextLines(packet) {
+            const lines = [];
+            const past = packet && packet.past_due;
+            if (past && past.course && past.count) lines.push(`${past.course} has ${past.count} past due.`);
+            for (const row of (packet && packet.outside) || []) {
+                if (row.course && row.count && row.date_label) {
+                    lines.push(`${row.course} has ${row.count} due ${row.date_label}.`);
                 }
             }
-            return titles;
+            for (const row of (packet && packet.unscored) || []) {
+                if (row.course && row.count) {
+                    lines.push(`${row.course} has ${row.count} turned in, no score yet.`);
+                }
+            }
+            return lines.length ? lines : [LOOK_NEXT_EMPTY];
         }
 
-        function glancePacketTitles(packet) {
-            const titles = [];
-            const add = (t) => { if (t) titles.push(t); };
-            const outside = (packet && packet.outside) || {};
-            add(outside.title);
-            add(outside.course);
-            for (const it of outside.items || []) add(it.title);
-            const past = (packet && packet.past_due) || {};
-            add(past.course);
-            for (const it of past.items || []) add(it.title);
-            const unscored = (packet && packet.unscored) || {};
-            add(unscored.title);
-            add(unscored.course);
-            return titles;
+        function glanceLookNext(profiles) {
+            // Always the class-count bullets. Never a stored Grok paragraph.
+            return glanceLookNextLines(glanceLookNextPacket(profiles));
         }
 
-        function glanceExtractLookDates(text) {
-            const found = [];
-            const months = {
-                jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
-                apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7,
-                aug: 8, august: 8, sep: 9, sept: 9, september: 9,
-                oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
-            };
-            const word = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})\b/gi;
-            let m;
-            while ((m = word.exec(text || ''))) {
-                const month = months[m[1].toLowerCase().replace(/\.$/, '')];
-                if (month) found.push(`${month}-${Number(m[2])}`);
-            }
-            const num = /\b(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?\b/g;
-            while ((m = num.exec(text || ''))) {
-                const month = Number(m[1]);
-                const day = Number(m[2]);
-                if (month >= 1 && month <= 12 && day >= 1 && day <= 31) found.push(`${month}-${day}`);
-            }
-            return found;
-        }
-
-        function glancePacketDates(packet) {
-            const dates = new Set();
-            const addText = (...texts) => {
-                for (const text of texts) glanceExtractLookDates(text || '').forEach(d => dates.add(d));
-            };
-            const addIso = (iso) => {
-                const d = glanceParseDay(iso);
-                if (d) dates.add(`${d.getMonth() + 1}-${d.getDate()}`);
-            };
-            const outside = (packet && packet.outside) || {};
-            addIso(outside.iso);
-            addText(outside.date_label, outside.weekday_date, outside.title);
-            for (const it of outside.items || []) {
-                addIso(it.iso);
-                addText(it.date_label, it.weekday_date, it.title);
-            }
-            const past = (packet && packet.past_due) || {};
-            addText(past.date_span);
-            for (const it of past.items || []) {
-                addIso(it.iso);
-                addText(it.date_label, it.weekday_date, it.title);
-            }
-            const unscored = (packet && packet.unscored) || {};
-            addIso(unscored.iso);
-            addText(unscored.date_label, unscored.weekday_date, unscored.title);
-            return dates;
-        }
-
-        function glanceTitleInText(title, text) {
-            const name = String(title || '').trim();
-            if (!name || !text) return false;
-            const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            if (new RegExp(esc, 'i').test(text)) return true;
-            const lead = name.match(/^(\d+\.\d+[a-z]?)\b/i);
-            if (lead && new RegExp(`\\b${lead[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text)) return true;
-            return false;
-        }
-
-        function glanceLookNextAccepts(text, packet, knownTitles) {
-            const raw = String(text || '').trim();
-            if (!raw) return false;
-            if (raw === LOOK_NEXT_EMPTY) {
-                return !(packet && (packet.outside || packet.past_due || packet.unscored));
-            }
-            const allowedDates = glancePacketDates(packet);
-            for (const d of glanceExtractLookDates(raw)) {
-                if (!allowedDates.has(d)) return false;
-            }
-            const allowed = new Set(glancePacketTitles(packet).map(t => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase()));
-            for (const title of knownTitles || []) {
-                const key = String(title || '').replace(/\s+/g, ' ').trim().toLowerCase();
-                if (allowed.has(key)) continue;
-                if (glanceTitleInText(title, raw)) return false;
-            }
-            return true;
-        }
-
-        function glanceLookNext(profiles, student) {
-            // Same packet the scrape path sends to grok-4. No API key. No browser Grok.
-            const packet = glanceLookNextPacket(profiles);
-            const grok = String(
-                (student && (student.look_next_grok
-                    || (student.view && student.view.glance && student.view.glance.look_next_grok)))
-                || ''
-            ).trim();
-            if (grok && glanceLookNextAccepts(grok, packet, glanceLookNextKnownTitles(profiles))) {
-                return grok;
-            }
-            return glanceLookNextSentences(packet);
+        function glanceLookNextMarkup(lines) {
+            const rows = (lines || []).filter(Boolean);
+            const list = rows.length ? rows : [LOOK_NEXT_EMPTY];
+            const empty = list.length === 1 && list[0] === LOOK_NEXT_EMPTY;
+            if (empty) return `<p class="glance-look-next is-empty">${esc(LOOK_NEXT_EMPTY)}</p>`;
+            return `<ul class="glance-look-next">${list.map(line => `<li>${esc(line)}</li>`).join('')}</ul>`;
         }
 
         function buildGlance(student, profiles) {
@@ -5302,7 +5140,16 @@
                         suppressed += 1;
                         continue;
                     }
-                    if (!due || daysFromToday(due) < 0) continue;
+                    if (!due) {
+                        if (glanceWorkBucket(item) !== 'coming_up') continue;
+                        dueSoon.push(glanceBandItem(p, {
+                            band: 'due_soon', kind: 'due_soon', icon: '→',
+                            label: 'No due date.',
+                            title: name, itemKey: name, due: null,
+                        }));
+                        continue;
+                    }
+                    if (daysFromToday(due) < 0) continue;
                     if (!inDueSoonWindow(due)) continue;
                     dueSoon.push(glanceBandItem(p, {
                         band: 'due_soon', kind: 'due_soon', icon: '→',
@@ -5311,9 +5158,15 @@
                     }));
                 }
             }
-            dueSoon.sort((a, b) => (a.due_key || '').localeCompare(b.due_key || '') || (a.title || '').localeCompare(b.title || ''));
-            const lookNext = glanceLookNext(profiles, student);
+            dueSoon.sort((a, b) => {
+                const ad = a.due_key || '';
+                const bd = b.due_key || '';
+                if (!ad && bd) return 1;
+                if (ad && !bd) return -1;
+                return ad.localeCompare(bd) || (a.title || '').localeCompare(b.title || '');
+            });
             const lookPacket = glanceLookNextPacket(profiles);
+            const lookNext = glanceLookNextLines(lookPacket);
             const count = dueSoon.length;
             const empty = count === 0;
             const dueSoonEmpty = 'Nothing due in the next 5 school days.';
@@ -5345,7 +5198,6 @@
                 facts: [],
                 look_next: lookNext,
                 look_next_packet: lookPacket,
-                look_next_grok: String((student && student.look_next_grok) || '').trim(),
                 suppressed,
                 verified_count: count,
             };
@@ -5421,8 +5273,10 @@
                     ${countHtml}
                 </button>`;
             }).join('');
-            const look = (g.look_next || '').trim() || LOOK_NEXT_EMPTY;
-            const lookHtml = `<p class="glance-look-next">${esc(look)}</p>`;
+            const lookLines = Array.isArray(g.look_next)
+                ? g.look_next
+                : String(g.look_next || '').split('\n').filter(Boolean);
+            const lookHtml = glanceLookNextMarkup(lookLines);
             const bands = renderGlanceBand(g.bands.due_soon || g.bands.focus);
             return `<div class="glance" id="glance-${idx}">
                 ${bands ? `<div class="glance-bands">${bands}</div>` : ''}
