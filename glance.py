@@ -30,6 +30,7 @@ DUE_SOON_SCHOOL_DAYS = 5
 DUE_SOON_EMPTY = "Nothing due in the next 5 school days."
 DUE_SOON_SUBTITLE = "Not turned in, due in the next 5 school days"
 DUE_SOON_HEADING = "Due soon"
+LOOK_NEXT_HEADING = "Where to look"
 TONIGHT_SCHOOL_DAYS = DUE_SOON_SCHOOL_DAYS
 FOCUS_SCHOOL_DAYS = DUE_SOON_SCHOOL_DAYS
 FOCUS_EMPTY = DUE_SOON_EMPTY
@@ -749,8 +750,8 @@ def look_next_paragraph(view_classes, today):
         past_rows.sort(key=lambda r: (-r[0], str(r[2] or ""), r[1].lower()))
         n, course, _period = past_rows[0]
         if n == 1:
-            return f"{course} has 1 past due."
-        return f"{course} has {n} past due."
+            return f"{course} has 1 past due on the class chip."
+        return f"{course} has {n} past due on the class chip."
     if outside:
         outside.sort(key=lambda r: (r[0], r[1].lower(), r[2].lower()))
         due, course, name = outside[0]

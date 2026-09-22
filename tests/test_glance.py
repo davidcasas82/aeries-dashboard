@@ -676,7 +676,7 @@ class TonightSplitTests(unittest.TestCase):
         self.assertNotIn("still to do", json.dumps(g["bands"]).lower())
         self.assertEqual(g["bands"]["due_soon"]["subtitle"], "Not turned in, due in the next 5 school days")
         self.assertIn("Tuesday, Sep 15", g["tonight"]["items"][0]["label"])
-        self.assertEqual(g["look_next"], "Algebra 2 has 1 past due.")
+        self.assertEqual(g["look_next"], "Algebra 2 has 1 past due on the class chip.")
 
     def test_focus_lists_every_due_soon_assignment(self):
         assignments = [
@@ -787,7 +787,7 @@ class TonightSplitTests(unittest.TestCase):
         }]
         g = glance.build_glance(classes, datetime(2026, 9, 21))
         self.assertEqual(g.get("facts") or [], [])
-        self.assertEqual(g["look_next"], "English has 2 past due.")
+        self.assertEqual(g["look_next"], "English has 2 past due on the class chip.")
         home = json.dumps({
             "bands": g["bands"], "tonight": g["tonight"],
             "facts": g["facts"], "look_next": g["look_next"],
@@ -879,7 +879,7 @@ class DueSoonTests(unittest.TestCase):
         }]
         g = glance.build_glance(classes, TUESDAY)
         self.assertEqual([i["title"] for i in g["tonight"]["items"]], [])
-        self.assertEqual(g["look_next"], "Biology has 1 past due.")
+        self.assertEqual(g["look_next"], "Biology has 1 past due on the class chip.")
         bio = next(c for c in g["standing"] if c["course"] == "Biology")
         self.assertEqual(bio["counts"]["past_due"], 1)
         self.assertIn("past due", bio["count_line"])
@@ -961,8 +961,10 @@ class DueSoonTests(unittest.TestCase):
             g["look_next"],
             "English Editorial is due Friday, Oct 2, on the class chip.",
         )
+        self.assertEqual(glance.LOOK_NEXT_HEADING, "Where to look")
         self.assertNotIn("lowest", (g["look_next"] or "").lower())
         self.assertNotIn("ai_summary", json.dumps(g))
+        self.assertNotIn("lowest class", (g["look_next"] or "").lower())
 
 
 class TeacherProseCardTests(unittest.TestCase):
