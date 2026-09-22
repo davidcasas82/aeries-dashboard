@@ -1,4 +1,4 @@
-"""Official v1 glance: standing + Due soon + look-next + drawer facts.
+"""Official v1 glance: standing + Due soon + look-next packet + drawer facts.
 
 Due soon = every unsubmitted assignment due today or on the next 5
 school days including today (Mon–Fri, Pacific). Saturday and Sunday are
@@ -8,12 +8,15 @@ cap. Soonest due first, weekday and date on each row. Turned in
 immediately. If neither records a turn-in, the row still leaves once
 the due date is before today — that work stays on the class chip as
 past due. No fact-line strip, no Later, no Today, no Done today.
-Under Due soon: look_next_paragraph names one fact already on the page
-(a past-due count, or an unsubmitted item due outside the window).
-Never the sentence “X is the lowest class, at N%.” Never the raw
-ai_summary headline. Next pass can replace look_next_paragraph with a
-tighter Grok prompt. Empty Due soon: “Nothing due in the next 5 school
-days.”
+Under Due soon, no extra heading: look_next_packet picks at most three
+facts the list does not show (nearest work after the window, the class
+with the most past due, one turned-in unscored item in the window).
+look_next_sentences writes up to two short lines from that packet.
+Grok may only rephrase the same packet; look_next_grok_accepts throws
+the sentence out when a title or date is not in the packet. Never the
+sentence “X is the lowest class, at N%.” Never the raw ai_summary
+headline. Empty Due soon: “Nothing due in the next 5 school days.”
+Empty packet: “Nothing else outside this list.”
 
 Nothing here logs student names or numbers.
 """
@@ -30,6 +33,7 @@ DUE_SOON_SCHOOL_DAYS = 5
 DUE_SOON_EMPTY = "Nothing due in the next 5 school days."
 DUE_SOON_SUBTITLE = "Not turned in, due in the next 5 school days"
 DUE_SOON_HEADING = "Due soon"
+LOOK_NEXT_EMPTY = "Nothing else outside this list."
 TONIGHT_SCHOOL_DAYS = DUE_SOON_SCHOOL_DAYS
 FOCUS_SCHOOL_DAYS = DUE_SOON_SCHOOL_DAYS
 FOCUS_EMPTY = DUE_SOON_EMPTY
@@ -718,44 +722,355 @@ def collect_bands(view_classes, today, last_checked=""):
     return due_soon, [], [], suppressed
 
 
-def look_next_paragraph(view_classes, today):
-    """One fact already on the page. Replace later with a Grok prompt.
+def _look_next_item(course, name, due):
+    return {
+        "course": course,
+        "title": name,
+        "iso": due.isoformat() if due else "",
+        "date_label": _month_day(due) if due else "",
+        "weekday_date": _weekday_date(due) if due else "",
+    }
 
-    Names a past-due count, or an unsubmitted item due outside the 5
-    school-day window with its class and date. Does not invent a reason,
-    a skill, or a lowest-class sentence. Does not read ai_summary.
+
+def _and_join(parts):
+    parts = [p for p in parts if p]
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return f"{parts[0]} and {parts[1]}"
+    return f"{', '.join(parts[:-1])}, and {parts[-1]}"
+
+
+def _date_span_label(dates):
+    dates = sorted(d for d in dates if d)
+    if not dates:
+        return ""
+    if dates[0] == dates[-1]:
+        return _month_day(dates[0])
+    return f"{_month_day(dates[0])}–{_month_day(dates[-1])}"
+
+
+def look_next_packet(view_classes, today):
+    """At most one fact of each kind. Skip a kind when it is not there.
+
+    1. Nearest unsubmitted work due after the 5 school days. If that
+       class has 3 or fewer such items, name them; otherwise the nearest
+       only.
+    2. Class with the most past due. Name items with dates if 3 or
+       fewer; otherwise count and date span only.
+    3. One item due inside the Due soon window that is turned in and
+       has no score yet.
     """
     today_d = _as_date(today)
     window = set(school_days_from(today_d))
     past_rows = []
-    outside = []
+    outside_rows = []
+    unscored_rows = []
     for cls in view_classes or []:
         course = (cls.get("course_name") or "").strip()
         if not course:
             continue
-        past_n = 0
+        past_items = []
+        outside_items = []
         for item in _class_raw_work(cls):
             name = _work_name(item)
-            if not name or _work_done(item):
+            if not name:
                 continue
             due = _work_due_key(item)
+            if (
+                _work_turned_in(item)
+                and item.get("points_earned") is None
+                and due is not None
+                and due in window
+            ):
+                unscored_rows.append((due, course, name, cls.get("period")))
+            if _work_done(item):
+                continue
             if _work_bucket(item, today_d) == "past_due":
-                past_n += 1
+                past_items.append(_look_next_item(course, name, due))
             elif due is not None and due > today_d and due not in window:
-                outside.append((due, course, name))
-        if past_n:
-            past_rows.append((past_n, course, cls.get("period")))
+                outside_items.append(_look_next_item(course, name, due))
+        if past_items:
+            past_items.sort(key=lambda r: (r.get("iso") or "", (r.get("title") or "").lower()))
+            past_rows.append((len(past_items), course, cls.get("period"), past_items))
+        outside_rows.extend(outside_items)
+    outside = None
+    if outside_rows:
+        outside_rows.sort(key=lambda r: (r.get("iso") or "", (r.get("course") or "").lower(), (r.get("title") or "").lower()))
+        nearest = outside_rows[0]
+        same = [
+            r for r in outside_rows
+            if (r.get("course") or "").lower() == (nearest.get("course") or "").lower()
+        ]
+        named = same if len(same) <= 3 else [nearest]
+        outside = {
+            "course": nearest["course"],
+            "title": nearest["title"],
+            "iso": nearest["iso"],
+            "date_label": nearest["date_label"],
+            "weekday_date": nearest["weekday_date"],
+            "items": named,
+        }
+    past_due = None
     if past_rows:
-        past_rows.sort(key=lambda r: (-r[0], str(r[2] or ""), r[1].lower()))
-        n, course, _period = past_rows[0]
-        if n == 1:
-            return f"{course} has 1 past due on the class chip."
-        return f"{course} has {n} past due on the class chip."
-    if outside:
-        outside.sort(key=lambda r: (r[0], r[1].lower(), r[2].lower()))
-        due, course, name = outside[0]
-        return f"{course} {name} is due {_weekday_date(due)}, on the class chip."
+        past_rows.sort(key=lambda r: (-r[0], (r[1] or "").lower(), str(r[2] or "")))
+        n, course, _period, items = past_rows[0]
+        dates = [_parse_iso(it.get("iso")) for it in items]
+        past_due = {
+            "course": course,
+            "count": n,
+            "date_span": _date_span_label(dates),
+            "items": items if n <= 3 else [],
+        }
+    unscored = None
+    if unscored_rows:
+        unscored_rows.sort(key=lambda r: (r[0], r[1].lower(), r[2].lower()))
+        due, course, name, _period = unscored_rows[0]
+        unscored = _look_next_item(course, name, due)
+    return {"outside": outside, "past_due": past_due, "unscored": unscored}
+
+
+def _parse_iso(value):
+    text = (value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _past_due_sentence(fact):
+    course = (fact.get("course") or "").strip()
+    items = fact.get("items") or []
+    if items:
+        bits = [
+            f"{it['title']} due {it['date_label']}"
+            for it in items
+            if it.get("title") and it.get("date_label")
+        ]
+        if bits:
+            return f"{course} still has {_and_join(bits)}."
+    n = fact.get("count") or 0
+    span = (fact.get("date_span") or "").strip()
+    if n and span:
+        return f"{course} still has {n} out, {span}."
+    if n:
+        return f"{course} still has {n} out."
     return ""
+
+
+def _outside_sentence(fact):
+    course = (fact.get("course") or "").strip()
+    items = fact.get("items") or []
+    if not items and fact.get("title"):
+        items = [fact]
+    bits = []
+    for it in items:
+        title = (it.get("title") or "").strip()
+        label = (it.get("date_label") or "").strip()
+        if title and label:
+            bits.append(f"{title} is due {label}")
+    if not bits:
+        return ""
+    if len(bits) == 1:
+        return f"{course} {bits[0]}."
+    return f"{course} {_and_join(bits)}."
+
+
+def _unscored_sentence(fact):
+    title = (fact.get("title") or "").strip()
+    if not title:
+        return ""
+    return f"{title} is already turned in, no score yet."
+
+
+def look_next_sentences(packet):
+    """Up to two short sentences. Skip a missing fact. Empty packet → one line."""
+    packet = packet or {}
+    parts = []
+    past = _past_due_sentence(packet.get("past_due") or {})
+    if past:
+        parts.append(past)
+    outside = _outside_sentence(packet.get("outside") or {})
+    if outside:
+        parts.append(outside)
+    unscored = _unscored_sentence(packet.get("unscored") or {})
+    if unscored:
+        parts.append(unscored)
+    if not parts:
+        return LOOK_NEXT_EMPTY
+    if len(parts) <= 2:
+        return " ".join(parts)
+    return f"{parts[0]} {parts[1][:-1]}; {parts[2]}"
+
+
+def look_next_paragraph(view_classes, today):
+    """Plain sentences from the packet. Grok may only rephrase this packet."""
+    return look_next_sentences(look_next_packet(view_classes, today))
+
+
+def look_next_known_titles(view_classes):
+    titles = []
+    for cls in view_classes or []:
+        for item in _class_raw_work(cls):
+            name = _work_name(item)
+            if name:
+                titles.append(name)
+    return titles
+
+
+def _packet_titles(packet):
+    titles = []
+    packet = packet or {}
+    outside = packet.get("outside") or {}
+    if outside.get("title"):
+        titles.append(outside["title"])
+    for it in outside.get("items") or []:
+        if it.get("title"):
+            titles.append(it["title"])
+    past = packet.get("past_due") or {}
+    if past.get("course"):
+        titles.append(past["course"])
+    for it in past.get("items") or []:
+        if it.get("title"):
+            titles.append(it["title"])
+    unscored = packet.get("unscored") or {}
+    if unscored.get("title"):
+        titles.append(unscored["title"])
+    if outside.get("course"):
+        titles.append(outside["course"])
+    if unscored.get("course"):
+        titles.append(unscored["course"])
+    return titles
+
+
+def _packet_dates(packet):
+    dates = set()
+    packet = packet or {}
+
+    def add_text(*texts):
+        for text in texts:
+            dates.update(extract_look_next_dates(text or ""))
+
+    def add_iso(value):
+        d = _parse_iso(value)
+        if d:
+            dates.add((d.month, d.day))
+
+    outside = packet.get("outside") or {}
+    add_iso(outside.get("iso"))
+    add_text(outside.get("date_label"), outside.get("weekday_date"), outside.get("title"))
+    for it in outside.get("items") or []:
+        add_iso(it.get("iso"))
+        add_text(it.get("date_label"), it.get("weekday_date"), it.get("title"))
+    past = packet.get("past_due") or {}
+    add_text(past.get("date_span"))
+    for it in past.get("items") or []:
+        add_iso(it.get("iso"))
+        add_text(it.get("date_label"), it.get("weekday_date"), it.get("title"))
+    unscored = packet.get("unscored") or {}
+    add_iso(unscored.get("iso"))
+    add_text(unscored.get("date_label"), unscored.get("weekday_date"), unscored.get("title"))
+    return dates
+
+
+_MONTH_NUM = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
+    "oct": 10, "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+_LOOK_DATE_WORD = re.compile(
+    r"\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+    r"jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|"
+    r"dec(?:ember)?)\s+(\d{1,2})\b",
+    re.I,
+)
+_LOOK_DATE_NUM = re.compile(r"\b(\d{1,2})/(\d{1,2})(?:/\d{2,4})?\b")
+
+
+def extract_look_next_dates(text):
+    """Calendar (month, day) pairs named in a sentence or title."""
+    found = set()
+    for m in _LOOK_DATE_WORD.finditer(text or ""):
+        month = _MONTH_NUM.get(m.group(1).lower().rstrip("."))
+        if month:
+            found.add((month, int(m.group(2))))
+    for m in _LOOK_DATE_NUM.finditer(text or ""):
+        month, day = int(m.group(1)), int(m.group(2))
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            found.add((month, day))
+    return found
+
+
+def _title_in_text(title, text):
+    title = (title or "").strip()
+    if not title or not text:
+        return False
+    if re.search(re.escape(title), text, re.I):
+        return True
+    lead = re.match(r"^(\d+\.\d+[a-z]?)\b", title, re.I)
+    if lead and re.search(r"\b" + re.escape(lead.group(1)) + r"\b", text, re.I):
+        return True
+    return False
+
+
+def look_next_grok_accepts(text, packet, known_titles=None):
+    """True only when every title and date in the sentence is in the packet."""
+    text = (text or "").strip()
+    if not text:
+        return False
+    if text == LOOK_NEXT_EMPTY:
+        packet = packet or {}
+        return not (packet.get("outside") or packet.get("past_due") or packet.get("unscored"))
+    allowed_dates = _packet_dates(packet)
+    if not allowed_dates and text != LOOK_NEXT_EMPTY:
+        # A sentence that names a date the packet does not have is a miss.
+        if extract_look_next_dates(text):
+            return False
+    for d in extract_look_next_dates(text):
+        if d not in allowed_dates:
+            return False
+    allowed = {_norm_title(t) for t in _packet_titles(packet)}
+    for title in known_titles or []:
+        if _norm_title(title) in allowed:
+            continue
+        if _title_in_text(title, text):
+            return False
+    return True
+
+
+def _norm_title(title):
+    return re.sub(r"\s+", " ", (title or "").strip()).lower()
+
+
+def look_next_for_page(view_classes, today, grok_text=""):
+    """Sentences the page should show. Accept stored Grok text only if it matches."""
+    packet = look_next_packet(view_classes, today)
+    plain = look_next_sentences(packet)
+    grok_text = (grok_text or "").strip()
+    if grok_text and look_next_grok_accepts(grok_text, packet, look_next_known_titles(view_classes)):
+        return packet, grok_text
+    return packet, plain
+
+
+def apply_look_next_grok(glance_obj, grok_text, view_classes=None, today=None):
+    """Store Grok phrasing; keep plain sentences when a title or date is new."""
+    glance_obj = glance_obj or {}
+    text = (grok_text or "").strip()
+    glance_obj["look_next_grok"] = text
+    packet = glance_obj.get("look_next_packet")
+    if packet is None and view_classes is not None:
+        packet, plain = look_next_for_page(view_classes, today)
+        glance_obj["look_next_packet"] = packet
+        glance_obj["look_next"] = plain
+    known = look_next_known_titles(view_classes) if view_classes is not None else None
+    if text and look_next_grok_accepts(text, glance_obj.get("look_next_packet"), known):
+        glance_obj["look_next"] = text
+    return glance_obj
 
 
 def collect_facts(view_classes, today):
@@ -1123,7 +1438,7 @@ def build_glance(view_classes, today, last_checked_iso=""):
     last_checked = _last_checked_label(last_checked_iso)
     standing = standing_cards(view_classes, last_checked=last_checked, today=today)
     due_soon, suppressed = collect_due_soon(view_classes, today)
-    look_next = look_next_paragraph(view_classes, today)
+    packet, look_next = look_next_for_page(view_classes, today)
     weekend_night = bool(weekend_dates(today))
     count = len(due_soon)
     empty = count == 0
@@ -1158,6 +1473,8 @@ def build_glance(view_classes, today, last_checked_iso=""):
         },
         "facts": [],
         "look_next": look_next,
+        "look_next_packet": packet,
+        "look_next_grok": "",
         "suppressed": suppressed,
         "verified_count": count,
     }

@@ -3952,6 +3952,10 @@ def build_student_view(student_data, history_context=None):
 
     classroom_captured = ((student_data.get("classroom") or {}).get("captured_at") or "")
     last_checked = classroom_captured or (student_data.get("last_updated") or "")
+    glance_obj = glance.build_glance(classes_out, today, last_checked_iso=last_checked)
+    grok_text = (student_data.get("look_next_grok") or "").strip()
+    if grok_text:
+        glance.apply_look_next_grok(glance_obj, grok_text, view_classes=classes_out, today=today)
     return {
         "tonight": tonight.get("items") or [],
         "tonight_label": (tonight.get("label") or "").strip(),
@@ -3960,7 +3964,7 @@ def build_student_view(student_data, history_context=None):
         "classes": classes_out,
         "generated_at": ai.get("generated_at"),
         "classroom_captured_at": classroom_captured,
-        "glance": glance.build_glance(classes_out, today, last_checked_iso=last_checked),
+        "glance": glance_obj,
     }
 
 
@@ -4456,6 +4460,86 @@ Rules:
         return None
 
 
+LOOK_NEXT_GROK_SYSTEM = """You phrase at most two short sentences for a parent grade dashboard.
+
+LOOK_NEXT_PACKET is the only source. Copy titles and dates exactly as given. Do not add a fact that is not in the packet.
+
+Rules:
+- At most two sentences. Skip a missing fact. If the packet is empty, reply exactly: Nothing else outside this list.
+- Facts only. Do not invent a cause, a skill, effort, psychology, or a lowest-class sentence.
+- Do not repeat a Due soon list. Do not mention work that is not in the packet.
+- If past_due lists a count and date span only, do not name those assignments.
+- Do not name a student. No Classroom or Drive links.
+- Prefer the date_label fields (Sep 18, Oct 2). Do not move a date.
+
+Respond ONLY with JSON: {"sentences": "..."}"""
+
+
+def generate_look_next(packet, today=None):
+    """Phrase the look-next packet with grok-4. Packet only — not the warehouse."""
+    if not GROK_API_KEY:
+        return None
+    packet = packet or {}
+    if not (packet.get("outside") or packet.get("past_due") or packet.get("unscored")):
+        return glance.LOOK_NEXT_EMPTY
+    today_d = glance._as_date(today) if today is not None else pacific_today()
+    today_label = today_d.strftime("%A, %B %d, %Y") if hasattr(today_d, "strftime") else str(today_d)
+    context = (
+        f"Today is {today_label} (Pacific).\n\n"
+        "LOOK_NEXT_PACKET:\n"
+        f"{json.dumps(packet, indent=2)}"
+    )
+    try:
+        resp = requests.post(
+            GROK_API_URL,
+            headers={
+                "Authorization": f"Bearer {GROK_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROK_MODEL,
+                "messages": [
+                    {"role": "system", "content": LOOK_NEXT_GROK_SYSTEM},
+                    {"role": "user", "content": context},
+                ],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.2,
+                "max_tokens": 400,
+            },
+            timeout=60,
+        )
+        if resp.status_code != 200:
+            print(f"  WARNING: Grok look-next returned {resp.status_code}")
+            return None
+        result = resp.json()
+        content = result["choices"][0]["message"]["content"]
+        parsed = json.loads(content)
+        text = (parsed.get("sentences") or parsed.get("paragraph") or "").strip()
+        return text or None
+    except requests.exceptions.Timeout:
+        print("  WARNING: Grok look-next timed out")
+        return None
+    except (json.JSONDecodeError, KeyError, IndexError) as e:
+        print(f"  WARNING: Failed to parse Grok look-next: {e}")
+        return None
+
+
+def attach_look_next_grok(student_data, today=None):
+    """Call grok-4 on the packet and store the phrasing on the payload."""
+    view = student_data.get("view") or {}
+    classes = view.get("classes") or []
+    g = view.get("glance") or {}
+    packet = g.get("look_next_packet")
+    if packet is None:
+        packet = glance.look_next_packet(classes, today or pacific_today_dt())
+    text = generate_look_next(packet, today or pacific_today_dt())
+    if not text:
+        return student_data
+    student_data["look_next_grok"] = text
+    glance.apply_look_next_grok(g, text, view_classes=classes, today=today or pacific_today_dt())
+    return student_data
+
+
 def _prepare_student_for_briefing(student_data, history, aeries_series_by_class=None):
     """Build analytics, history context, UI trend fields; return history_context."""
     attach_gradebook_insights(
@@ -4520,6 +4604,8 @@ def regenerate_grok_summaries():
         else:
             print("    WARNING: AI summary failed — keeping previous briefing if any")
         attach_student_view(student, history_context=history_context)
+        if GROK_API_KEY:
+            attach_look_next_grok(student)
 
     data["last_updated"] = datetime.now(timezone.utc).isoformat()
     data["summer_break"] = False
@@ -4704,6 +4790,8 @@ def scrape_all():
                 )
 
             attach_student_view(student_data, history_context=history_context)
+            if GROK_API_KEY:
+                attach_look_next_grok(student_data)
 
             # Append today's grade snapshot after briefing (stores previous_briefing from prior AI)
             # Prefer storing the briefing we just replaced as previous — rebuild snapshot with prior AI
