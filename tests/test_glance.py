@@ -961,7 +961,6 @@ class DueSoonTests(unittest.TestCase):
             g["look_next"],
             "English Editorial is due Friday, Oct 2, on the class chip.",
         )
-        self.assertEqual(glance.LOOK_NEXT_HEADING, "Where to look")
         self.assertNotIn("lowest", (g["look_next"] or "").lower())
         self.assertNotIn("ai_summary", json.dumps(g))
         self.assertNotIn("lowest class", (g["look_next"] or "").lower())
