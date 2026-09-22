@@ -678,9 +678,15 @@ class TonightSplitTests(unittest.TestCase):
         self.assertIn("Tuesday, Sep 15", g["tonight"]["items"][0]["label"])
         self.assertEqual(
             g["look_next"],
-            "Algebra 2 still has Old packet due Sep 10. "
-            "Algebra 2 Later unit is due Oct 2; Already in is already turned in, no score yet.",
+            [
+                "Algebra 2 has 1 past due.",
+                "Algebra 2 has 1 due Oct 2.",
+                "Algebra 2 has 1 turned in, no score yet.",
+            ],
         )
+        self.assertNotIn("Old packet", json.dumps(g["look_next"]))
+        self.assertNotIn("Later unit", json.dumps(g["look_next"]))
+        self.assertNotIn("Already in", json.dumps(g["look_next"]))
 
     def test_focus_lists_every_due_soon_assignment(self):
         assignments = [
@@ -733,7 +739,7 @@ class TonightSplitTests(unittest.TestCase):
         self.assertIsNone(g["bands"]["later"])
         self.assertIsNone(g["bands"]["today"])
         self.assertEqual(g["facts"], [])
-        self.assertEqual(g.get("look_next") or "", glance.LOOK_NEXT_EMPTY)
+        self.assertEqual(g.get("look_next"), [glance.LOOK_NEXT_EMPTY])
         self.assertTrue(g["tonight"]["empty"])
 
     def test_lowest_class_never_becomes_a_focus_line(self):
@@ -765,7 +771,7 @@ class TonightSplitTests(unittest.TestCase):
         self.assertIsNone(g["bands"]["today"])
         self.assertNotIn("76%", home)
         self.assertEqual(g.get("facts") or [], [])
-        self.assertEqual(g.get("look_next") or "", glance.LOOK_NEXT_EMPTY)
+        self.assertEqual(g.get("look_next"), [glance.LOOK_NEXT_EMPTY])
 
     def test_fact_lines_combine_look_reasons_without_titles(self):
         classes = [{
@@ -791,10 +797,9 @@ class TonightSplitTests(unittest.TestCase):
         }]
         g = glance.build_glance(classes, datetime(2026, 9, 21))
         self.assertEqual(g.get("facts") or [], [])
-        self.assertEqual(
-            g["look_next"],
-            "English still has Essay due Sep 8 and Draft due Sep 9.",
-        )
+        self.assertEqual(g["look_next"], ["English has 2 past due."])
+        self.assertNotIn("Essay", json.dumps(g["look_next"]))
+        self.assertNotIn("Draft", json.dumps(g["look_next"]))
         home = json.dumps({
             "bands": g["bands"], "tonight": g["tonight"],
             "facts": g["facts"], "look_next": g["look_next"],
@@ -886,7 +891,8 @@ class DueSoonTests(unittest.TestCase):
         }]
         g = glance.build_glance(classes, TUESDAY)
         self.assertEqual([i["title"] for i in g["tonight"]["items"]], [])
-        self.assertEqual(g["look_next"], "Biology still has Old lab due Sep 18.")
+        self.assertEqual(g["look_next"], ["Biology has 1 past due."])
+        self.assertNotIn("Old lab", json.dumps(g["look_next"]))
         bio = next(c for c in g["standing"] if c["course"] == "Biology")
         self.assertEqual(bio["counts"]["past_due"], 1)
         self.assertIn("past due", bio["count_line"])
@@ -964,10 +970,11 @@ class DueSoonTests(unittest.TestCase):
         }]
         g = glance.build_glance(classes, TUESDAY)
         self.assertEqual(g["tonight"]["items"], [])
-        self.assertEqual(g["look_next"], "English Editorial is due Oct 2.")
-        self.assertNotIn("lowest", (g["look_next"] or "").lower())
+        self.assertEqual(g["look_next"], ["English has 1 due Oct 2."])
+        self.assertNotIn("Editorial", json.dumps(g["look_next"]))
+        self.assertNotIn("lowest", json.dumps(g["look_next"]).lower())
         self.assertNotIn("ai_summary", json.dumps(g))
-        self.assertNotIn("lowest class", (g["look_next"] or "").lower())
+        self.assertNotIn("lowest class", json.dumps(g["look_next"]).lower())
 
 
 class TeacherProseCardTests(unittest.TestCase):
@@ -1126,73 +1133,68 @@ def other_tuesday_classes():
     }]
 
 
-class GrokJobTests(unittest.TestCase):
-    def test_quiet_page_mentions_practices_and_later_items(self):
-        g = glance.build_glance(quiet_tuesday_classes(), TUESDAY)
-        text = g["look_next"]
-        self.assertEqual(g["tonight"]["items"], [])
-        self.assertIn("Practice", text)
-        self.assertIn("A2- LT 2.4 Practice", text)
-        self.assertIn("A2- LT 2.5 Practice", text)
-        self.assertIn("A2- LT 2.6 Practice (HW)", text)
-        self.assertIn("Sep 18", text)
-        self.assertIn("Sep 20", text)
-        self.assertIn("Oct 2", text)
-        self.assertIn("Oct 9", text)
-        self.assertIn("Design of Editorial", text)
-        self.assertIn("Portfolio - Unit 1", text)
-        self.assertNotIn("Nothing due in the next 5 school days", text)
-        self.assertNotIn("Where to look", text)
-        self.assertNotIn("Already on the page", text)
-        self.assertNotIn("lowest", text.lower())
-        self.assertLessEqual(len(re.findall(r"[.!](?:\s|$)", text)), 2)
+def _hint_blob(g):
+    look = g.get("look_next")
+    if isinstance(look, list):
+        return "\n".join(look)
+    return str(look or "")
 
-    def test_other_page_mentions_span_and_unscored_not_tomorrow_as_today(self):
-        g = glance.build_glance(other_tuesday_classes(), TUESDAY)
-        text = g["look_next"]
+
+def _assert_no_assignment_titles(test, hint, classes):
+    blob = hint if isinstance(hint, str) else "\n".join(hint)
+    for title in glance.look_next_known_titles(classes):
+        test.assertNotIn(title, blob)
+
+
+class LookNextHintTests(unittest.TestCase):
+    def test_quiet_page_renders_class_counts_without_titles(self):
+        classes = quiet_tuesday_classes()
+        g = glance.build_glance(classes, TUESDAY)
+        lines = g["look_next"]
+        self.assertEqual(g["tonight"]["items"], [])
+        self.assertEqual(lines, [
+            "Alg ll Bus Mang has 3 past due.",
+            "US Hist Media has 2 due Oct 2.",
+            "US Hist Media has 1 due Oct 9.",
+        ])
+        _assert_no_assignment_titles(self, lines, classes)
+        self.assertNotIn("Where to look", "\n".join(lines))
+        self.assertNotIn("Already on the page", "\n".join(lines))
+        self.assertNotIn("lowest", "\n".join(lines).lower())
+
+    def test_other_page_renders_past_due_and_unscored_counts(self):
+        classes = other_tuesday_classes()
+        g = glance.build_glance(classes, TUESDAY)
+        lines = g["look_next"]
         due_titles = [i["title"] for i in g["tonight"]["items"]]
         self.assertIn("1.5 Verify Properties of Triangles", due_titles)
         self.assertIn("1.4b Solve Angles of Triangles", due_titles)
         self.assertNotIn("1.4a Prove Triangle Sum Theorem", due_titles)
-        self.assertIn("5 out", text)
-        self.assertIn("Sep 11", text)
-        self.assertIn("Sep 18", text)
-        self.assertIn("1.4a Prove Triangle Sum Theorem", text)
-        self.assertIn("turned in", text.lower())
-        self.assertIn("no score", text.lower())
-        self.assertNotIn("1.5", text)
-        self.assertNotIn("1.4b", text)
-        self.assertNotIn("due today", text.lower())
-        self.assertNotIn("Coach C's PE Questionnaire", text)
-        self.assertNotIn("Unit 1 Research Guide", text)
-        self.assertNotIn("Where to look", text)
-        self.assertNotIn("lowest", text.lower())
-        self.assertLessEqual(len(re.findall(r"[.!](?:\s|$)", text)), 2)
+        self.assertEqual(lines, [
+            "Tech of Biology has 5 past due.",
+            "Engineering Geo has 1 turned in, no score yet.",
+        ])
+        _assert_no_assignment_titles(self, lines, classes)
+        self.assertNotIn("due today", "\n".join(lines).lower())
+        self.assertNotIn("Where to look", "\n".join(lines))
 
-    def test_grok_sentence_that_changes_a_date_is_rejected(self):
+    def test_stored_grok_paragraph_does_not_replace_bullets(self):
         classes = quiet_tuesday_classes()
-        packet = glance.look_next_packet(classes, TUESDAY)
-        known = glance.look_next_known_titles(classes)
-        plain = glance.look_next_sentences(packet)
-        self.assertTrue(glance.look_next_grok_accepts(plain, packet, known))
-        self.assertFalse(glance.look_next_grok_accepts(
-            "US Hist Media Design of Editorial is due Oct 3.",
-            packet,
-            known,
-        ))
-        other = other_tuesday_classes()
-        other_packet = glance.look_next_packet(other, TUESDAY)
-        other_known = glance.look_next_known_titles(other)
-        self.assertFalse(glance.look_next_grok_accepts(
-            "1.5 Verify Properties of Triangles is due today.",
-            other_packet,
-            other_known,
-        ))
-        accepted, shown = glance.look_next_for_page(
-            classes, TUESDAY, grok_text="US Hist Media Design of Editorial is due Oct 3."
+        packet, lines = glance.look_next_for_page(
+            classes, TUESDAY,
+            grok_text="Alg ll Bus Mang still has A2- LT 2.4 Practice due Sep 18.",
         )
-        self.assertEqual(shown, plain)
-        self.assertEqual(accepted, packet)
+        self.assertEqual(lines, glance.look_next_lines(packet))
+        _assert_no_assignment_titles(self, lines, classes)
+        glance_obj = {"look_next": list(lines), "look_next_packet": packet}
+        glance.apply_look_next_grok(
+            glance_obj,
+            "Alg ll Bus Mang still has A2- LT 2.4 Practice due Sep 18.",
+            view_classes=classes,
+            today=TUESDAY,
+        )
+        self.assertEqual(glance_obj["look_next"], lines)
+        _assert_no_assignment_titles(self, glance_obj["look_next"], classes)
 
     def test_empty_packet_is_the_outside_line(self):
         classes = [{
@@ -1206,11 +1208,7 @@ class GrokJobTests(unittest.TestCase):
             }],
             "classroom": {},
         }]
-        self.assertEqual(glance.look_next_paragraph(classes, TUESDAY), glance.LOOK_NEXT_EMPTY)
-        self.assertTrue(glance.look_next_grok_accepts(
-            glance.LOOK_NEXT_EMPTY,
-            glance.look_next_packet(classes, TUESDAY),
-        ))
+        self.assertEqual(glance.look_next_paragraph(classes, TUESDAY), [glance.LOOK_NEXT_EMPTY])
 
     def test_page_source_has_no_heading_or_key(self):
         html = Path(__file__).resolve().parents[1].joinpath("index.html").read_text()
@@ -1219,38 +1217,99 @@ class GrokJobTests(unittest.TestCase):
         self.assertNotIn("GROK_API_KEY", html)
         self.assertNotIn("api.x.ai", html)
         self.assertIn("Nothing else outside this list.", html)
-        self.assertIn("glanceLookNextAccepts", html)
-        src = Path(scraper.__file__).read_text()
-        self.assertIn("LOOK_NEXT_PACKET", src)
-        self.assertNotIn("PRECOMPUTED_ANALYTICS", scraper.LOOK_NEXT_GROK_SYSTEM)
-        self.assertEqual(scraper.GROK_MODEL, "grok-4")
+        self.assertIn("glanceLookNextMarkup", html)
+        self.assertNotIn("glanceLookNextAccepts", html)
+        self.assertIn("No due date.", html)
 
-    def test_generate_look_next_sends_the_packet_not_the_warehouse(self):
-        packet = glance.look_next_packet(quiet_tuesday_classes(), TUESDAY)
-        captured = {}
 
-        class _Resp:
-            status_code = 200
-            def json(self):
-                return {"choices": [{"message": {"content": json.dumps({
-                    "sentences": "Alg ll Bus Mang still has A2- LT 2.4 Practice due Sep 18."
-                })}}]}
+class UndatedDueSoonTests(unittest.TestCase):
+    def test_undated_coming_up_appears_after_dated_rows(self):
+        classes = [{
+            "period": 1,
+            "course_name": "Bus of Gaming",
+            "mark": "A",
+            "percent": "95",
+            "assignments": [{
+                "name": "Warmup",
+                "due_date": "09/22/2026",
+                "points_earned": None,
+            }],
+            "classroom": {
+                "classroom_only": [{
+                    "title": "Club Rush Planning",
+                    "due_date": "",
+                    "state": "CREATED",
+                }],
+            },
+        }]
+        g = glance.build_glance(classes, TUESDAY)
+        rows = g["tonight"]["items"]
+        self.assertEqual([i["title"] for i in rows], ["Warmup", "Club Rush Planning"])
+        self.assertIn("Tuesday, Sep 22", rows[0]["label"])
+        self.assertEqual(rows[1]["label"], "No due date.")
+        self.assertEqual(rows[1]["course"], "Bus of Gaming")
+        self.assertFalse(rows[1].get("due_key"))
 
-        def fake_post(url, headers=None, json=None, timeout=None):
-            captured["url"] = url
-            captured["json"] = json
-            captured["headers"] = headers
-            return _Resp()
+    def test_dated_item_after_the_window_does_not_appear(self):
+        classes = [{
+            "period": 8,
+            "course_name": "English",
+            "mark": "B",
+            "percent": "88",
+            "assignments": [{
+                "name": "Editorial",
+                "due_date": "10/02/2026",
+                "points_earned": None,
+            }],
+            "classroom": {},
+        }]
+        g = glance.build_glance(classes, TUESDAY)
+        titles = [i["title"] for i in g["tonight"]["items"]]
+        self.assertNotIn("Editorial", titles)
+        self.assertTrue(all(i["label"] != "No due date." for i in g["tonight"]["items"]))
 
-        with patch.object(scraper, "GROK_API_KEY", "test-key"), patch.object(scraper.requests, "post", fake_post):
-            text = scraper.generate_look_next(packet, TUESDAY)
-        self.assertIn("A2- LT 2.4 Practice", text)
-        self.assertEqual(captured["json"]["model"], "grok-4")
-        user = captured["json"]["messages"][1]["content"]
-        self.assertIn("LOOK_NEXT_PACKET", user)
-        self.assertNotIn("PRECOMPUTED_ANALYTICS", user)
-        self.assertNotIn("announcements", user.lower())
-        self.assertNotIn("Authorization", json.dumps(captured["json"]))
+    def test_past_due_item_does_not_appear(self):
+        classes = [{
+            "period": 6,
+            "course_name": "Biology",
+            "mark": "A",
+            "percent": "93",
+            "assignments": [{
+                "name": "Old lab",
+                "due_date": "09/18/2026",
+                "points_earned": None,
+            }],
+            "classroom": {},
+        }]
+        g = glance.build_glance(classes, TUESDAY)
+        titles = [i["title"] for i in g["tonight"]["items"]]
+        self.assertNotIn("Old lab", titles)
+
+    def test_missing_or_turned_in_undated_does_not_appear(self):
+        classes = [{
+            "period": 5,
+            "course_name": "Algebra 2",
+            "mark": "B-",
+            "percent": "81",
+            "assignments": [{
+                "name": "No date missing",
+                "due_date": "",
+                "points_earned": None,
+                "aeries_missing": True,
+                "status": "missing",
+            }, {
+                "name": "No date turned in",
+                "due_date": "",
+                "points_earned": None,
+                "classroom": {"state": "TURNED_IN"},
+            }],
+            "classroom": {},
+        }]
+        g = glance.build_glance(classes, TUESDAY)
+        titles = [i["title"] for i in g["tonight"]["items"]]
+        self.assertNotIn("No date missing", titles)
+        self.assertNotIn("No date turned in", titles)
+        self.assertEqual(titles, [])
 
 
 if __name__ == "__main__":
