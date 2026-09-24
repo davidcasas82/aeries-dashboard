@@ -104,7 +104,16 @@
             gap: 12px;
         }
 
-        .top-bar-left { flex: 1; min-width: 0; }
+        .top-bar-left { flex: 1 1 auto; min-width: 0; }
+
+        .top-bar-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            flex: 0 0 auto;
+            min-width: 0;
+        }
 
         .top-bar-title {
             font-size: var(--fs-title);
@@ -121,6 +130,9 @@
             font-size: var(--fs-small);
             color: var(--text-3);
             margin-top: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .last-updated.stale { color: var(--amber); font-weight: 600; }
@@ -254,28 +266,37 @@
             display: none !important;
         }
 
-        /* ── Student switch ── */
+        /* ── Student switch (compact, right side of the sticky header row) ── */
         .student-picker {
             display: flex;
             gap: 0;
             background: var(--surface);
             border-radius: 999px;
-            padding: 5px;
-            margin: 8px auto 0;
+            padding: 2px;
+            margin: 0;
             border: 1px solid var(--border);
-            max-width: var(--content-max);
-            width: var(--content-max);
+            width: auto;
+            max-width: 100%;
+            flex: 0 0 auto;
             box-shadow: var(--shadow-sm);
         }
 
         .student-seg {
-            flex: 1;
-            min-height: var(--touch-min);
+            flex: 0 0 auto;
+            min-width: 0;
+            max-width: 9rem;
+            height: 30px;
+            padding: 0 12px;
             border: none;
             background: none;
             color: var(--text-2);
-            font-size: var(--fs-body);
-            font-weight: 600;
+            font-size: var(--fs-label);
+            font-weight: 650;
+            line-height: 1;
+            letter-spacing: -0.01em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             cursor: pointer;
             border-radius: 999px;
             transition: background 0.12s, color 0.12s, box-shadow 0.12s;
@@ -286,6 +307,21 @@
             background: var(--surface-2);
             color: var(--teal);
             box-shadow: var(--shadow-sm);
+        }
+
+        @media (max-width: 520px) {
+            .top-bar {
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+
+            .top-bar-row { gap: 8px; }
+            .top-bar-actions { gap: 6px; }
+
+            .student-seg {
+                max-width: 6.25rem;
+                padding: 0 8px;
+            }
         }
 
         /* ── Sticky tonight ── */
@@ -2295,17 +2331,19 @@
                 <div class="top-bar-title" id="topBarTitle">Grade Dashboard</div>
                 <span class="last-updated" id="lastUpdated"></span>
             </div>
-            <button class="settings-btn" id="settingsBtn" aria-label="Settings">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
-                </svg>
-            </button>
+            <div class="top-bar-actions">
+                <div class="student-picker" id="studentPicker" aria-label="Switch student"></div>
+                <button class="settings-btn" id="settingsBtn" aria-label="Settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+                    </svg>
+                </button>
+            </div>
         </div>
         <div class="year-progress" id="yearProgress" hidden></div>
     </header>
 
-    <div class="student-picker" id="studentPicker"></div>
     <button type="button" class="tonight-sticky" id="tonightSticky" hidden>
         <span class="tonight-sticky-label">Heads up</span>
         <span class="tonight-sticky-text" id="tonightStickyText"></span>
@@ -5492,8 +5530,8 @@
                         || formatSessionDay(currentData && currentData.school_session && currentData.school_session.first_day)
                         || 'on the first instructional day';
                     banner.textContent = `School is out — Aeries scrape and Grok are paused (TUSD calendar). Showing last school-year grades and attendance. Resumes ${resume}.`;
-                    const picker = document.getElementById('studentPicker');
-                    picker.parentNode.insertBefore(banner, picker.nextSibling);
+                    const header = document.querySelector('.top-bar');
+                    header.parentNode.insertBefore(banner, header.nextSibling);
                 }
             } else {
                 document.body.classList.remove('summer-break');
@@ -5596,6 +5634,7 @@
 
             data.students.forEach((student, i) => {
                 const seg = document.createElement('button');
+                seg.type = 'button';
                 seg.className = `student-seg ${i === keepIndex ? 'active' : ''}`;
                 seg.textContent = student.name;
                 seg.addEventListener('click', () => switchStudent(i));
