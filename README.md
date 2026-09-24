@@ -43,7 +43,7 @@ python -m unittest discover -s tests -v
 
 ## Schedule
 
-Cloudflare cron on `family-data` dispatches these workflows (fixed UTC):
+Cloudflare cron on `family-data` dispatches these workflows. The afternoon scrape stays at 4:45 PM Pacific year-round: two UTC crons (`45 23 * * *` during daylight time and `45 0 * * *` during standard time) wake the Worker, and it dispatches only when local Pacific time is 4:45 PM.
 
 - Overnight ~2:07am PT
 - After school 4:45 PM PT
