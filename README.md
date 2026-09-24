@@ -43,10 +43,10 @@ python -m unittest discover -s tests -v
 
 ## Schedule
 
-Cloudflare cron on `family-data` dispatches these workflows (UTC, same minutes as the old `aeries-cf-dispatch` worker):
+Cloudflare cron on `family-data` dispatches these workflows (fixed UTC):
 
 - Overnight ~2:07am PT
-- After school ~4:07pm PT
+- After school 4:45 PM PT
 - Evening ~8:07pm PT
 
 Actions logs print `student 1`, not names or student numbers. The Pages site is public; grades themselves are behind the PIN.
