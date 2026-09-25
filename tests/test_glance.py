@@ -1349,5 +1349,42 @@ class UndatedDueSoonTests(unittest.TestCase):
         self.assertEqual(g["look_next"], ["Algebra has 1 turned in, no score yet."])
 
 
+class DrawerOrderTests(unittest.TestCase):
+    def test_coming_up_reads_soonest_first_and_undated_last(self):
+        classes = [{
+            "period": 4,
+            "course_name": "US Hist Media",
+            "mark": "B",
+            "percent": "88",
+            "assignments": [
+                {"name": "Portfolio - Unit 1", "due_date": "10/09/2026", "points_earned": None},
+                {"name": "Design of Editorial", "due_date": "10/02/2026", "points_earned": None},
+                {"name": "Editorial - Unit 1", "due_date": "09/29/2026", "points_earned": None},
+                {"name": "Research Guide - Unit 1", "due_date": "09/23/2026", "points_earned": None},
+                {"name": "CER", "due_date": "09/09/2026", "points_earned": 8, "points_possible": 10},
+                {"name": "Syllabus Quiz", "due_date": "09/16/2026", "points_earned": 9, "points_possible": 10},
+            ],
+            "classroom": {
+                "classroom_only": [{
+                    "title": "Unit 1 Magazine Spread",
+                    "due_date": "",
+                    "state": "CREATED",
+                }],
+            },
+        }]
+        g = glance.build_glance(classes, TUESDAY)
+        work = next(c for c in g["standing"] if c["course"] == "US Hist Media")["drawer"]["work"]
+        coming_up = [w["name"] for w in work if w["bucket"] == "coming_up"]
+        self.assertEqual(coming_up, [
+            "Research Guide - Unit 1",
+            "Editorial - Unit 1",
+            "Design of Editorial",
+            "Portfolio - Unit 1",
+            "Unit 1 Magazine Spread",
+        ])
+        turned_in = [w["name"] for w in work if w["bucket"] == "turned_in"]
+        self.assertEqual(turned_in, ["Syllabus Quiz", "CER"])
+
+
 if __name__ == "__main__":
     unittest.main()

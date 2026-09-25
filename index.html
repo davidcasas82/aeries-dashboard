@@ -4777,7 +4777,8 @@
             const raws = glanceRawWork(profile);
             const rank = { past_due: 0, missing: 1, coming_up: 2, turned_in: 3 };
             raws.sort((a, b) => {
-                const ra = rank[glanceWorkBucket(a)] ?? 9;
+                const bucket = glanceWorkBucket(a);
+                const ra = rank[bucket] ?? 9;
                 const rb = rank[glanceWorkBucket(b)] ?? 9;
                 if (ra !== rb) return ra - rb;
                 const da = glanceParseDay(a.due_date || a.due || (a.classroom && (a.classroom.due || a.classroom.due_date)));
@@ -4785,7 +4786,8 @@
                 if (!da && !db) return glanceWorkName(a).localeCompare(glanceWorkName(b));
                 if (!da) return 1;
                 if (!db) return -1;
-                return db - da;
+                // Coming up reads soonest first. The other groups keep the newest date first.
+                return bucket === 'coming_up' ? da - db : db - da;
             });
             return raws.map(glanceWorkRow).filter(Boolean);
         }
