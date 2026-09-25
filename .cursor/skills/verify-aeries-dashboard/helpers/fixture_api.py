@@ -35,6 +35,7 @@ def payload():
     today = pacific_today()
     window = school_days(today, 5)
     due = window[1] if len(window) > 1 else window[0]
+    later = window[3]
     past = today - timedelta(days=21)
     scored = today - timedelta(days=14)
     now = datetime.now(PACIFIC).isoformat(timespec="seconds")
@@ -74,13 +75,27 @@ def payload():
     ]
     science = [
         {
+            "description": "Unit Project",
+            "due_date": mdy(later),
+            "points_earned": None,
+            "points_possible": 50,
+            "aeries_missing": False,
+        },
+        {
             "description": "Lab Safety",
             "due_date": mdy(scored),
             "points_earned": 10,
             "points_possible": 10,
             "percentage": 100,
             "aeries_missing": False,
-        }
+        },
+        {
+            "description": "Field Notes",
+            "due_date": mdy(due),
+            "points_earned": None,
+            "points_possible": 10,
+            "aeries_missing": False,
+        },
     ]
 
     def student(name, classes, groups):
@@ -148,6 +163,15 @@ def payload():
                             "teacher": "Teacher Example",
                             "mark": "A",
                             "percent": "91",
+                            "classroom": {
+                                "classroom_only": [{
+                                    "title": "Study Guide",
+                                    "due_date": "",
+                                    "due": "",
+                                    "state": "CREATED",
+                                    "state_label": "Assigned",
+                                }],
+                            },
                         }
                     ],
                     [

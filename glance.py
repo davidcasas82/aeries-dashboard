@@ -1135,12 +1135,20 @@ def _class_raw_work(cls):
 def class_work_rows(cls, today=None):
     """Every assignment in this class. Not Tonight’s 0–3. No warehouse fields."""
     raws = _class_raw_work(cls)
-    raws.sort(key=lambda a: (
-        _BUCKET_RANK.get(_work_bucket(a, today), 9),
-        _work_due_key(a) is None,
-        -(_work_due_key(a).toordinal() if _work_due_key(a) else 0),
-        _work_name(a).lower(),
-    ))
+
+    def order(a):
+        bucket = _work_bucket(a, today)
+        due = _work_due_key(a)
+        day = due.toordinal() if due else 0
+        # Coming up reads soonest first. The other groups keep the newest date first.
+        return (
+            _BUCKET_RANK.get(bucket, 9),
+            due is None,
+            day if bucket == "coming_up" else -day,
+            _work_name(a).lower(),
+        )
+
+    raws.sort(key=order)
     rows = []
     for item in raws:
         row = _work_row(item, today)

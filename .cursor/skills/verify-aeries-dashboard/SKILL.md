@@ -11,7 +11,7 @@ Run every command from the repo root. The harness is `.cursor/skills/verify-aeri
 
 ## Launch
 
-Start one isolated instance. The static server is the repo's own preview command (`python3 -m http.server`), bound to `127.0.0.1`. Port `8765` is preferred; a higher free port is used when `8765` is taken. The page always calls `http://127.0.0.1:8787` from localhost, so the fixture API must own that port. A second launch is refused while a state file exists or while `8787` is taken. Chrome uses a throwaway profile under `/tmp/aeries-dashboard-verify/`.
+Start one isolated instance. The static server is the repo's own preview command (`python3 -m http.server`), bound to `127.0.0.1`. Port `8765` is preferred; a higher free port is used when `8765` is taken. The page always calls `http://127.0.0.1:8787` from localhost, so the fixture API must own that port. A second launch is refused while a state file exists or while `8787` is taken. Right after `cleanup`, `8787` can stay taken by TIME_WAIT sockets for up to a minute; wait before launching again. Chrome uses a throwaway profile under `/tmp/aeries-dashboard-verify/`.
 
 ```bash
 .cursor/skills/verify-aeries-dashboard/verify.sh launch
