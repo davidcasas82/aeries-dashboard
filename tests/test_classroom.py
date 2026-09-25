@@ -346,6 +346,36 @@ class ClassContextTests(unittest.TestCase):
         ctx = classroom.class_context(self.student, self.alg, TODAY, assignments=self.alg_rows)
         self.assertNotIn("Syllabus signature", [e["title"] for e in ctx["classroom_only"]])
 
+    def test_unmatched_turn_in_stays_on_the_class_feed(self):
+        export = load_export()
+        course = next(c for c in export["courses"] if c["id"] == "c-alg")
+        course["items"].append({
+            "id": "w-exit",
+            "type": "assignment",
+            "title": "Exit Ticket",
+            "description": "Three questions from today's lesson.",
+            "due": "2026-09-15",
+            "submission": {
+                "state": "TURNED_IN",
+                "turned_in_at": "2026-09-14T18:00:00.000Z",
+            },
+        })
+        student = student_with_aeries()
+        attach(student, export)
+        alg = student["classes"][1]
+        rows = scraper.assignments_for_class(student, alg)
+        ctx = classroom.class_context(student, alg, TODAY, assignments=rows)
+        titles = [e["title"] for e in ctx["classroom_only"]]
+        self.assertEqual(titles[0], "Unit 3 Quiz Review")
+        self.assertIn("Exit Ticket", titles)
+        ticket = next(e for e in ctx["classroom_only"] if e["title"] == "Exit Ticket")
+        self.assertEqual(ticket["state"], "TURNED_IN")
+        self.assertEqual(ticket["turned_in_on"], "2026-09-14")
+        upcoming = [e["title"] for e in classroom.grok_context(ctx)["classroom_only_upcoming"]]
+        self.assertIn("Unit 3 Quiz Review", upcoming)
+        self.assertNotIn("Exit Ticket", upcoming)
+        self.assertNotIn("Exit Ticket", [p["description"] for p in classroom.pseudo_assignments(ctx)])
+
     def test_class_without_course_has_no_context(self):
         bio = self.student["classes"][2]
         self.assertIsNone(classroom.class_context(self.student, bio, TODAY, assignments=[]))

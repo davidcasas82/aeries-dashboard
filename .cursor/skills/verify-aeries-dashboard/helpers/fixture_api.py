@@ -47,6 +47,14 @@ def payload():
             "aeries_missing": False,
         },
         {
+            "description": "Optional Warmup",
+            "due_date": mdy(due),
+            "points_earned": None,
+            "points_possible": 5,
+            "score_raw": "NA",
+            "aeries_missing": False,
+        },
+        {
             "description": "Chapter Quiz",
             "due_date": mdy(scored),
             "points_earned": 18,
@@ -107,6 +115,16 @@ def payload():
                             "teacher": "Teacher Example",
                             "mark": "A",
                             "percent": "94",
+                            "classroom": {
+                                "classroom_only": [{
+                                    "title": "Exit Ticket",
+                                    "due_date": mdy(due),
+                                    "due": due.isoformat(),
+                                    "state": "TURNED_IN",
+                                    "state_label": "Turned in",
+                                    "turned_in_on": due.isoformat(),
+                                }],
+                            },
                         },
                         {
                             "period": 2,

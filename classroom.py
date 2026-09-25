@@ -1143,8 +1143,6 @@ def class_context(student_data, class_meta, today, assignments=None):
                 })
             continue
 
-        if turned_in:
-            continue
         due_d = due_to_pacific_date(item.get("due"))
         assigned_d = None
         if item.get("assigned_on"):
@@ -1185,11 +1183,17 @@ def class_context(student_data, class_meta, today, assignments=None):
             ][:8]
         if item.get("grade_category"):
             entry["grade_category"] = item["grade_category"].get("name") or ""
+        if sub.get("turned_in_on"):
+            entry["turned_in_on"] = sub["turned_in_on"]
         classroom_only.append(entry)
         if days is not None and 0 <= days <= 2 and (sub.get("state") or "") in NOT_STARTED_STATES:
             not_started_due_soon.append({"title": item.get("title"), "days_until_due": days})
 
-    classroom_only.sort(key=lambda e: (e.get("due") or "9999", e.get("title") or ""))
+    def _open_first(entry):
+        state = (entry.get("state") or "").upper()
+        return 1 if state in TURNED_IN_STATES else 0
+
+    classroom_only.sort(key=lambda e: (_open_first(e), e.get("due") or "9999", e.get("title") or ""))
     announcements.sort(
         key=lambda a: a.get("posted_on") or "",
         reverse=True,
@@ -1224,6 +1228,7 @@ def grok_context(context):
                 **({"rubric_criteria": [c.get("title") for c in e["rubric"]][:6]} if e.get("rubric") else {}),
             }
             for e in context.get("classroom_only") or []
+            if (e.get("state") or "").upper() not in TURNED_IN_STATES
         ][:6],
         "turned_in_on_classroom_but_aeries_missing": [
             e.get("title") for e in context.get("turned_in_aeries_missing") or []
@@ -1238,6 +1243,8 @@ def pseudo_assignments(context):
     """Classroom-only work due soon, shaped like Aeries rows for the tonight plan."""
     out = []
     for e in (context or {}).get("classroom_only") or []:
+        if (e.get("state") or "").upper() in TURNED_IN_STATES:
+            continue
         if not e.get("due_date"):
             continue
         out.append({

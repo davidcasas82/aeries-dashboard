@@ -3064,6 +3064,7 @@
                     staleAwaitingCount: awaiting.filter(isStaleAwaiting).length,
                     newlyMissing: [],
                     period: c.period,
+                    classroom: c.classroom || null,
                 });
             }
             return profiles;
@@ -4615,8 +4616,17 @@
             return glanceSubmitted(item) || (item && item.points_earned != null);
         }
 
+        function glanceScoreMark(item) {
+            return !!scoreStatusCode(item);
+        }
+
+        function glanceNotOpenWork(item) {
+            return glanceWorkDone(item) || glanceScoreMark(item);
+        }
+
         function glanceWorkBucket(item) {
             if (glanceWorkDone(item)) return 'turned_in';
+            if (glanceScoreMark(item)) return 'marked';
             if (glanceWorkMissing(item)) return 'missing';
             const due = glanceWorkDue(item);
             const days = daysFromToday(due);
@@ -4863,6 +4873,7 @@
                 { key: 'missing', label: 'Missing' },
                 { key: 'coming_up', label: 'Coming up' },
                 { key: 'turned_in', label: 'Turned in' },
+                { key: 'marked', label: 'Marked' },
             ];
             return groups.map(g => {
                 const items = rows.filter(r => r.bucket === g.key);
@@ -5069,7 +5080,7 @@
                         row.count += 1;
                         unscoredGroups.set(key, row);
                     }
-                    if (glanceWorkDone(item)) continue;
+                    if (glanceNotOpenWork(item)) continue;
                     if (glanceWorkBucket(item) === 'past_due') pastN += 1;
                     else if (due && daysFromToday(due) > 0 && !inWindow(due)) {
                         const key = `${course.toLowerCase()}|${glanceIsoDay(due)}`;
@@ -5174,7 +5185,7 @@
                     if (seen.has(key)) continue;
                     seen.add(key);
                     const due = glanceWorkDue(item);
-                    if (glanceWorkDone(item)) {
+                    if (glanceNotOpenWork(item)) {
                         suppressed += 1;
                         continue;
                     }

@@ -6,7 +6,8 @@ with no due date (labeled “No due date.”). Saturday and Sunday are
 skipped. On Fri/Sat/Sun the window is the coming school days. No item
 cap. Dated rows first, then undated. Turned in
 (Classroom TURNED_IN/RETURNED, or Aeries scored / date completed) leaves
-immediately. If neither records a turn-in, the row still leaves once
+immediately. A recorded Aeries mark (NA, TX, EX, NT) also leaves.
+If neither records a turn-in or a mark, the row still leaves once
 the due date is before today — that work stays on the class chip as
 past due. No fact-line strip, no Later, no Today, no Done today.
 Under Due soon, no extra heading: a quiet bullet list of class
@@ -701,7 +702,7 @@ def collect_due_soon(view_classes, today):
                 continue
             seen.add(key)
             due = _work_due_key(item)
-            if _work_done(item):
+            if _not_open_work(item):
                 suppressed += 1
                 continue
             if due is None:
@@ -771,7 +772,7 @@ def look_next_packet(view_classes, today):
                     row = {"course": course, "count": 0}
                     unscored_groups[key] = row
                 row["count"] += 1
-            if _work_done(item):
+            if _not_open_work(item):
                 continue
             if _work_bucket(item, today_d) == "past_due":
                 past_n += 1
@@ -1004,15 +1005,28 @@ def _work_turned_in_on(item):
     return None
 
 
+_SCORE_MARK_RE = re.compile(r"\b(NA|TX|EX|NT)\b", re.I)
+
+
+def _score_mark(item):
+    return bool(_SCORE_MARK_RE.search(str((item or {}).get("score_raw") or "")))
+
+
 def _work_done(item):
     """Classroom in or Aeries scored/completed. Same already-in as Tonight."""
     return _work_turned_in(item) or (item or {}).get("points_earned") is not None
+
+
+def _not_open_work(item):
+    return _work_done(item) or _score_mark(item)
 
 
 def _work_bucket(item, today=None):
     """Past due / missing / coming up / turned in. Classroom-in is never missing."""
     if _work_done(item):
         return "turned_in"
+    if _score_mark(item):
+        return "marked"
     if _work_missing(item):
         return "missing"
     due = _work_due_key(item)

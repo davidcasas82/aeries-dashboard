@@ -1311,6 +1311,43 @@ class UndatedDueSoonTests(unittest.TestCase):
         self.assertNotIn("No date turned in", titles)
         self.assertEqual(titles, [])
 
+    def test_score_mark_and_classroom_turn_in_stay_off_due_soon(self):
+        classes = [{
+            "period": 1,
+            "course_name": "Algebra",
+            "mark": "A",
+            "percent": "94",
+            "assignments": [
+                {"name": "Lab Worksheet", "due_date": "09/23/2026",
+                 "points_earned": None, "points_possible": 10},
+                {"name": "Optional Warmup", "due_date": "09/23/2026",
+                 "points_earned": None, "score_raw": "NA"},
+                {"name": "Old Transfer", "due_date": "09/10/2026",
+                 "points_earned": None, "score_raw": "TX"},
+                {"name": "Later Exempt", "due_date": "10/02/2026",
+                 "points_earned": None, "score_raw": "EX"},
+            ],
+            "classroom": {
+                "classroom_only": [{
+                    "title": "Exit Ticket",
+                    "due_date": "09/23/2026",
+                    "state": "TURNED_IN",
+                    "turned_in_on": "2026-09-22",
+                }],
+            },
+        }]
+        g = glance.build_glance(classes, TUESDAY)
+        self.assertEqual([i["title"] for i in g["tonight"]["items"]], ["Lab Worksheet"])
+        card = g["standing"][0]
+        self.assertEqual(card["count_line"], "1 coming up · 1 turned in")
+        by_name = {w["name"]: w for w in card["drawer"]["work"]}
+        self.assertEqual(by_name["Optional Warmup"]["bucket"], "marked")
+        self.assertEqual(by_name["Optional Warmup"]["score"], "NA")
+        self.assertEqual(by_name["Old Transfer"]["bucket"], "marked")
+        self.assertEqual(by_name["Old Transfer"]["score"], "TX")
+        self.assertEqual(by_name["Exit Ticket"]["bucket"], "turned_in")
+        self.assertEqual(g["look_next"], ["Algebra has 1 turned in, no score yet."])
+
 
 if __name__ == "__main__":
     unittest.main()
