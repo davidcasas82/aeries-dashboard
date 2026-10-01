@@ -2192,8 +2192,9 @@
             grid-column: 1 / -1;
             margin: -4px 0 0;
             color: #26332c;
-            font-size: var(--g-fs-sub);
-            font-weight: 700;
+            /* One step under the 19px title, one step over the --fs-label tag line. */
+            font-size: calc(var(--fs-label) + 2px);
+            font-weight: 650;
             letter-spacing: -.01em;
             line-height: 1.35;
             text-wrap: pretty;
