@@ -2208,6 +2208,34 @@
         }
         .glance-work-when.late,
         .glance-work-status.missing { color: #9b3b2d; }
+        .glance-work-tags {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px 10px;
+            min-width: 0;
+            margin: 0;
+        }
+        .glance-work-tag {
+            max-width: 100%;
+            padding: 2px 10px;
+            border: 1px solid #c9d3cc;
+            border-radius: 8px;
+            background: #f1f4f1;
+            color: #1d2420;
+            font-size: var(--g-fs-sub);
+            font-weight: 750;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+        .glance-work-tag.summative { border-color: #9ccbb7; background: #e6f2ec; color: #124d3f; }
+        .glance-work-tag.formative { border-color: #a8cada; background: #e8f1f7; color: #234f6b; }
+        .glance-work-tags .assn-status {
+            margin: 0;
+            font-size: var(--g-fs-sub);
+            font-weight: 750;
+        }
         .glance-work-split {
             display: flex;
             align-items: center;
@@ -2940,6 +2968,18 @@
                 .sort((a, b) => (parseDate(b.due_date) || 0) - (parseDate(a.due_date) || 0));
         }
 
+        function insightCategoryFor(a, insight) {
+            const bn = normalizeName((a && a.category) || '');
+            const mix = (insight && insight.categories) || [];
+            if (!bn) return null;
+            return mix.find(c => normalizeName(c.name) === bn)
+                || mix.find(c => {
+                    const an = normalizeName(c.name);
+                    return an && (an.includes(bn) || bn.includes(an));
+                })
+                || null;
+        }
+
         function inferAssignmentStatus(a, insight) {
             // Classroom-only rows have no Aeries score to reason about; the stamp shows their state.
             if (a.classroom_only) return { status: 'pending', label: '' };
@@ -2961,12 +3001,7 @@
                 return { status: a.status, label: a.status_label };
             }
             const cat = (a.category || '').trim();
-            const mix = (insight && insight.categories) || [];
-            const hit = mix.find(c => {
-                const an = normalizeName(c.name);
-                const bn = normalizeName(cat);
-                return an && bn && (an === bn || an.includes(bn) || bn.includes(an));
-            });
+            const hit = insightCategoryFor(a, insight);
             if (hit && hit.weight_pct === 0) {
                 return { status: 'zero_weight', label: '0% category (doesn\'t count)' };
             }
@@ -4673,11 +4708,14 @@
             return dueS || turned;
         }
 
-        function glanceWorkRow(item) {
+        function glanceWorkRow(item, insight) {
             const name = glanceWorkName(item);
             if (!name) return null;
             const bucket = glanceWorkBucket(item);
             const when = glanceWorkWhen(item);
+            const hit = insightCategoryFor(item, insight);
+            const kind = hit && /^(summative|formative)$/.test(hit.kind || '') ? hit.kind : '';
+            const st = inferAssignmentStatus(item, insight);
             return {
                 name,
                 description: glanceWorkDescription(item),
@@ -4690,6 +4728,9 @@
                 status: glanceWorkStatus(item),
                 when,
                 late: /late/.test(when),
+                category: String(item.category || '').trim(),
+                kind,
+                weight_note: st.status === 'zero_weight' ? st.label : '',
             };
         }
 
@@ -4789,7 +4830,8 @@
                 // Coming up reads soonest first. The other groups keep the newest date first.
                 return bucket === 'coming_up' ? da - db : db - da;
             });
-            return raws.map(glanceWorkRow).filter(Boolean);
+            const insight = profile && profile.classMeta && profile.classMeta.counted_insight;
+            return raws.map(a => glanceWorkRow(a, insight)).filter(Boolean);
         }
 
         function glanceWorkCounts(rows) {
@@ -4831,9 +4873,15 @@
                 <p class="glance-work-desc">${esc(desc)}</p>
                 <button type="button" class="glance-work-caret" aria-expanded="false" aria-label="Show full teacher note">▾</button>
             </div>` : '';
+            const kind = row.kind === 'summative' || row.kind === 'formative' ? row.kind : '';
+            const tagText = kind ? kind[0].toUpperCase() + kind.slice(1) : (row.category || '').trim();
+            const tag = tagText ? `<span class="glance-work-tag${kind ? ` ${kind}` : ''}">${esc(tagText)}</span>` : '';
+            const weightNote = row.weight_note ? `<span class="assn-status zero_weight">${esc(row.weight_note)}</span>` : '';
+            const tags = tag || weightNote ? `<p class="glance-work-tags">${tag}${weightNote}</p>` : '';
             return `<article class="glance-detail glance-work">
                 <span class="glance-work-name">${esc(row.name)}</span>
                 <span class="glance-work-score${awaiting ? ' awaiting' : ''}${scoreClass}">${esc(score)}</span>
+                ${tags}
                 ${when ? `<p class="glance-work-when${late ? ' late' : ''}">${esc(when)}</p>` : ''}
                 ${prose}
                 ${status ? `<p class="glance-work-status${row.missing ? ' missing' : ''}">${esc(status)}</p>` : ''}

@@ -6,7 +6,7 @@ SKILL_DIR=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$SKILL_DIR/../../.." && pwd)
 STATE_DIR=/tmp/aeries-dashboard-verify
 STATE="$STATE_DIR/state.json"
-EVIDENCE=/cursor/stores/bc-f23fc86a-c458-4bdb-87a7-037a8949b15a/media/verify-aeries-dashboard
+EVIDENCE=${AERIES_VERIFY_EVIDENCE:-/cursor/stores/bc-f23fc86a-c458-4bdb-87a7-037a8949b15a/media/verify-aeries-dashboard}
 
 usage() {
   echo "usage: verify.sh launch|doctor|drive|cleanup" >&2
@@ -130,9 +130,9 @@ PY
 }
 
 write_state() {
-  python3 - "$STATE" "$1" "$2" "$3" "$4" "$5" "$6" "$7" <<'PY'
+  python3 - "$STATE" "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$EVIDENCE" <<'PY'
 import json, sys
-path, api, static, chrome, port, chrome_port, profile, base = sys.argv[1:]
+path, api, static, chrome, port, chrome_port, profile, base, evidence = sys.argv[1:]
 json.dump({
     "api_pid": int(api),
     "static_pid": int(static),
@@ -142,7 +142,7 @@ json.dump({
     "chrome_port": int(chrome_port),
     "chrome_profile": profile,
     "base_url": base,
-    "evidence_dir": "/cursor/stores/bc-f23fc86a-c458-4bdb-87a7-037a8949b15a/media/verify-aeries-dashboard",
+    "evidence_dir": evidence,
 }, open(path, "w"), indent=2)
 PY
 }

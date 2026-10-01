@@ -111,15 +111,17 @@ function findEl(selector, role, name) {
 }
 `;
 
+function viewport() {
+  const m = /^(\d+)x(\d+)$/.exec(process.env.AERIES_VERIFY_VIEWPORT || "");
+  if (!m) return { width: 1400, height: 1000, deviceScaleFactor: 1, mobile: false };
+  const width = Number(m[1]);
+  return { width, height: Number(m[2]), deviceScaleFactor: width <= 620 ? 2 : 1, mobile: width <= 620 };
+}
+
 async function withPage(fn) {
   const { ws, send } = await connect();
   try {
-    await send("Emulation.setDeviceMetricsOverride", {
-      width: 1400,
-      height: 1000,
-      deviceScaleFactor: 1,
-      mobile: false,
-    });
+    await send("Emulation.setDeviceMetricsOverride", viewport());
     return await fn(send);
   } finally {
     ws.close();

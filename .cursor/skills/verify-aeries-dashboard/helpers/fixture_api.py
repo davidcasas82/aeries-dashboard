@@ -76,6 +76,7 @@ def payload():
     science = [
         {
             "description": "Unit Project",
+            "category": "Summative Assessments",
             "due_date": mdy(later),
             "points_earned": None,
             "points_possible": 50,
@@ -83,6 +84,7 @@ def payload():
         },
         {
             "description": "Lab Safety",
+            "category": "Formative Practice",
             "due_date": mdy(scored),
             "points_earned": 10,
             "points_possible": 10,
@@ -91,12 +93,30 @@ def payload():
         },
         {
             "description": "Field Notes",
+            "category": "Participation",
             "due_date": mdy(due),
             "points_earned": None,
             "points_possible": 10,
             "aeries_missing": False,
         },
+        {
+            "description": "Notebook Check",
+            "category": "Lab Notebook",
+            "due_date": mdy(scored - timedelta(days=1)),
+            "points_earned": 8,
+            "points_possible": 10,
+            "percentage": 80,
+            "aeries_missing": False,
+        },
     ]
+    science_insight = {
+        "categories": [
+            {"name": "Summative Assessments", "kind": "summative", "weight_pct": 70},
+            {"name": "Formative Practice", "kind": "formative", "weight_pct": 20},
+            {"name": "Participation", "kind": None, "weight_pct": 10},
+            {"name": "Lab Notebook", "kind": None, "weight_pct": 0, "reason": "zero_weight"},
+        ],
+    }
 
     def student(name, classes, groups):
         return {
@@ -163,6 +183,7 @@ def payload():
                             "teacher": "Teacher Example",
                             "mark": "A",
                             "percent": "91",
+                            "counted_insight": science_insight,
                             "classroom": {
                                 "classroom_only": [{
                                     "title": "Study Guide",

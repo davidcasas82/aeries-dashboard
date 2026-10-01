@@ -1071,8 +1071,47 @@ def _work_when(item, today):
     return due_s or turned
 
 
-def _work_row(item, today=None):
+ZERO_WEIGHT_LABEL = "0% category (doesn't count)"
+_WORK_KINDS = ("summative", "formative")
+
+
+def _category_key(text):
+    return re.sub(r"[^a-z0-9]", "", str(text or "").lower())
+
+
+def _insight_category(item, insight):
+    """Footer category for this assignment. Same match as the page's insightCategoryFor."""
+    want = _category_key((item or {}).get("category"))
+    if not want:
+        return None
+    cats = (insight or {}).get("categories") or []
+    for cat in cats:
+        if _category_key(cat.get("name")) == want:
+            return cat
+    for cat in cats:
+        have = _category_key(cat.get("name"))
+        if have and (have in want or want in have):
+            return cat
+    return None
+
+
+def _work_zero_weight(item, insight):
+    """Same order as the page's inferAssignmentStatus: only a real score can be 0%-weight."""
+    item = item or {}
+    if item.get("classroom_only") or _score_mark(item):
+        return False
+    if item.get("points_earned") is None:
+        return False
+    if item.get("status") and item.get("status_label"):
+        return item.get("status") == "zero_weight"
+    hit = _insight_category(item, insight)
+    return bool(hit) and hit.get("weight_pct") == 0
+
+
+def _work_row(item, today=None, insight=None):
     bucket = _work_bucket(item, today)
+    hit = _insight_category(item, insight)
+    kind = (hit or {}).get("kind")
     return {
         "name": _work_name(item),
         "description": _work_description(item),
@@ -1084,6 +1123,9 @@ def _work_row(item, today=None):
         "bucket": bucket,
         "status": _work_status(item),
         "when": _work_when(item, today),
+        "category": str((item or {}).get("category") or "").strip(),
+        "kind": kind if kind in _WORK_KINDS else "",
+        "weight_note": ZERO_WEIGHT_LABEL if _work_zero_weight(item, insight) else "",
     }
 
 
@@ -1149,9 +1191,10 @@ def class_work_rows(cls, today=None):
         )
 
     raws.sort(key=order)
+    insight = (cls or {}).get("counted_insight")
     rows = []
     for item in raws:
-        row = _work_row(item, today)
+        row = _work_row(item, today, insight)
         if row["name"]:
             rows.append(row)
     return rows
