@@ -76,7 +76,7 @@ def payload():
     science = [
         {
             "description": "Unit Project",
-            "category": "Summative Assessments",
+            "category": "Assessments",
             "due_date": mdy(later),
             "points_earned": None,
             "points_possible": 50,
@@ -84,7 +84,7 @@ def payload():
         },
         {
             "description": "Lab Safety",
-            "category": "Formative Practice",
+            "category": "Assignments",
             "due_date": mdy(scored),
             "points_earned": 10,
             "points_possible": 10,
@@ -93,7 +93,7 @@ def payload():
         },
         {
             "description": "Field Notes",
-            "category": "Participation",
+            "category": "Field Work",
             "due_date": mdy(due),
             "points_earned": None,
             "points_possible": 10,
@@ -101,7 +101,7 @@ def payload():
         },
         {
             "description": "Notebook Check",
-            "category": "Lab Notebook",
+            "category": "Daily Assignments",
             "due_date": mdy(scored - timedelta(days=1)),
             "points_earned": 8,
             "points_possible": 10,
@@ -109,12 +109,55 @@ def payload():
             "aeries_missing": False,
         },
     ]
+    # Shaped like scraper.build_counted_insight output for the two real footer layouts.
     science_insight = {
+        "layout": "percent_of_grade",
         "categories": [
-            {"name": "Summative Assessments", "kind": "summative", "weight_pct": 70},
-            {"name": "Formative Practice", "kind": "formative", "weight_pct": 20},
-            {"name": "Participation", "kind": None, "weight_pct": 10},
-            {"name": "Lab Notebook", "kind": None, "weight_pct": 0, "reason": "zero_weight"},
+            {"name": "Assessments", "kind": None, "weight_pct": 70, "weight_basis": "category"},
+            {"name": "Assignments", "kind": None, "weight_pct": 20, "weight_basis": "category"},
+            {"name": "Presentations", "kind": None, "weight_pct": 10, "weight_basis": "category"},
+            {"name": "Daily Assignments", "kind": None, "weight_pct": 0, "weight_basis": "category",
+             "reason": "zero_weight"},
+        ],
+    }
+    history = [
+        {
+            "description": "Unit Essay",
+            "category": "Assessments",
+            "due_date": mdy(scored),
+            "points_earned": 42,
+            "points_possible": 50,
+            "percentage": 84,
+            "aeries_missing": False,
+        },
+        {
+            "description": "Reading Notes",
+            "category": "Classwork",
+            "due_date": mdy(scored + timedelta(days=1)),
+            "points_earned": 9,
+            "points_possible": 10,
+            "percentage": 90,
+            "aeries_missing": False,
+        },
+        {
+            "description": "Timeline Project",
+            "category": "Projects",
+            "due_date": mdy(scored + timedelta(days=2)),
+            "points_earned": 18,
+            "points_possible": 20,
+            "percentage": 90,
+            "aeries_missing": False,
+        },
+    ]
+    history_insight = {
+        "layout": "summative_formative",
+        "summative_weight_pct": 70,
+        "formative_weight_pct": 30,
+        "categories": [
+            {"name": "Assessments", "kind": "summative", "weight_pct": 70, "weight_basis": "bucket"},
+            {"name": "Classwork", "kind": "formative", "weight_pct": 30, "weight_basis": "bucket"},
+            {"name": "Projects", "kind": "summative", "weight_pct": 70, "weight_basis": "bucket"},
+            {"name": "Projects", "kind": "formative", "weight_pct": 30, "weight_basis": "bucket"},
         ],
     }
 
@@ -193,10 +236,19 @@ def payload():
                                     "state_label": "Assigned",
                                 }],
                             },
-                        }
+                        },
+                        {
+                            "period": 2,
+                            "course_name": "History Fixture",
+                            "teacher": "Teacher Example",
+                            "mark": "B",
+                            "percent": "86",
+                            "counted_insight": history_insight,
+                        },
                     ],
                     [
                         {"class_name": "1-Science Fixture", "period": 1, "assignments": science},
+                        {"class_name": "2-History Fixture", "period": 2, "assignments": history},
                     ],
                 ),
             ],

@@ -105,7 +105,7 @@ try:
         for course in student.get("classes") or []:
             courses.append(course.get("course_name"))
     expected_names = ["Fixture Alpha", "Fixture Beta"]
-    expected_courses = ["Algebra Fixture", "English Fixture", "Science Fixture"]
+    expected_courses = ["Algebra Fixture", "English Fixture", "Science Fixture", "History Fixture"]
     if names != expected_names or courses != expected_courses:
         errors.append("fixture roster mismatch")
 except Exception:

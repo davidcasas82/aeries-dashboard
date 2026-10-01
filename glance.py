@@ -24,6 +24,7 @@ Nothing here logs student names or numbers.
 
 from __future__ import annotations
 
+import math
 import re
 from datetime import datetime, timedelta
 
@@ -1071,47 +1072,176 @@ def _work_when(item, today):
     return due_s or turned
 
 
-ZERO_WEIGHT_LABEL = "0% category (doesn't count)"
+WEIGHS_MOST_LABEL = "weighs most"
+_DOES_NOT_COUNT = "0% (doesn't count)"
 _WORK_KINDS = ("summative", "formative")
+_TOTAL_NAME_RE = re.compile(r"^(total|overall|grand total)\b", re.IGNORECASE)
 
 
 def _category_key(text):
     return re.sub(r"[^a-z0-9]", "", str(text or "").lower())
 
 
-def _insight_category(item, insight):
-    """Footer category for this assignment. Same match as the page's insightCategoryFor."""
-    want = _category_key((item or {}).get("category"))
-    if not want:
-        return None
-    cats = (insight or {}).get("categories") or []
-    for cat in cats:
-        if _category_key(cat.get("name")) == want:
-            return cat
-    for cat in cats:
-        have = _category_key(cat.get("name"))
-        if have and (have in want or want in have):
-            return cat
+def _singular(word):
+    if len(word) > 4 and word.endswith("ies"):
+        return word[:-3] + "y"
+    if len(word) > 4 and word.endswith("zzes"):
+        return word[:-3]
+    if len(word) > 4 and word.endswith(("sses", "shes", "ches", "xes")):
+        return word[:-2]
+    if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+        return word[:-1]
+    return word
+
+
+def _category_tokens(text):
+    return [_singular(w) for w in re.findall(r"[a-z0-9]+", str(text or "").lower())]
+
+
+def _contains_run(longer, shorter):
+    n = len(shorter)
+    return any(longer[i:i + n] == shorter for i in range(len(longer) - n + 1))
+
+
+def footer_category_matches(category, categories):
+    """Footer entries for an assignment category. Same order as the page's insightCategoryMatches.
+
+    Exact normalized name, then singular/plural, then the longest footer name whose words
+    sit inside the assignment category. A shorter assignment category never matches a longer
+    footer name, so "Assignments" cannot land on "Daily Assignments". Several entries come
+    back only when one name sits on both sides of a summative/formative footer.
+    """
+    want_key = _category_key(category)
+    if not want_key:
+        return []
+    cats = [
+        c for c in categories or []
+        if isinstance(c, dict) and _category_key(c.get("name"))
+        and not _TOTAL_NAME_RE.match(str(c.get("name") or "").strip())
+    ]
+    exact = [c for c in cats if _category_key(c.get("name")) == want_key]
+    if exact:
+        return exact
+    want_tokens = _category_tokens(category)
+    plural = [c for c in cats if _category_tokens(c.get("name")) == want_tokens]
+    if plural:
+        return plural
+    best_key, best_size = None, None
+    for c in cats:
+        have = _category_tokens(c.get("name"))
+        if not have or len(have) >= len(want_tokens) or not _contains_run(want_tokens, have):
+            continue
+        size = (len(have), len(_category_key(c.get("name"))))
+        if best_size is None or size > best_size:
+            best_key, best_size = _category_key(c.get("name")), size
+    if best_key is None:
+        return []
+    return [c for c in cats if _category_key(c.get("name")) == best_key]
+
+
+def insight_layout(insight):
+    insight = insight or {}
+    layout = insight.get("layout")
+    if layout in ("percent_of_grade", "perc_of_grade"):
+        return "percent_of_grade"
+    if layout == "summative_formative":
+        return layout
+    cats = [c for c in insight.get("categories") or [] if isinstance(c, dict)]
+    if any(c.get("weight_basis") == "bucket" or c.get("kind") in _WORK_KINDS for c in cats):
+        return "summative_formative"
+    if any(c.get("weight_basis") == "category" or c.get("weight_pct") is not None for c in cats):
+        return "percent_of_grade"
+    return ""
+
+
+def _bucket_weight(insight, kind):
+    top = (insight or {}).get(f"{kind}_weight_pct")
+    if top is not None:
+        return top
+    for c in (insight or {}).get("categories") or []:
+        if c.get("kind") == kind and c.get("weight_pct") is not None:
+            return c.get("weight_pct")
     return None
 
 
-def _work_zero_weight(item, insight):
-    """Same order as the page's inferAssignmentStatus: only a real score can be 0%-weight."""
-    item = item or {}
-    if item.get("classroom_only") or _score_mark(item):
-        return False
-    if item.get("points_earned") is None:
-        return False
-    if item.get("status") and item.get("status_label"):
-        return item.get("status") == "zero_weight"
-    hit = _insight_category(item, insight)
-    return bool(hit) and hit.get("weight_pct") == 0
+def _pct_text(value):
+    # Half-up like the page's Math.round, not Python's half-even round().
+    r = math.floor(float(value) * 10 + 0.5) / 10
+    return str(int(r)) if r.is_integer() else str(r)
+
+
+def _weighs_most_key(insight, layout):
+    """The one bucket or category with the unique highest weight above 0, else None."""
+    if layout == "summative_formative":
+        weights = {k: _bucket_weight(insight, k) for k in _WORK_KINDS}
+    else:
+        weights = {}
+        for c in (insight or {}).get("categories") or []:
+            key = _category_key(c.get("name"))
+            if key and c.get("weight_pct") is not None:
+                weights[key] = c.get("weight_pct")
+    if not weights or any(w is None for w in weights.values()):
+        return None
+    top = max(weights.values())
+    if top <= 0 or sum(1 for w in weights.values() if w == top) != 1:
+        return None
+    return next(k for k, w in weights.items() if w == top)
+
+
+def work_tag(item, insight):
+    """Drawer tag for one row. Same rules as the page's glanceWorkTag.
+
+    The bare category name shows only when no weight is known for it.
+    """
+    category = str((item or {}).get("category") or "").strip()
+    out = {"tag": category, "tag_kind": "", "tag_zero": False, "tag_top": False}
+    if not category:
+        return out
+    hits = footer_category_matches(category, (insight or {}).get("categories"))
+    if not hits:
+        return out
+    layout = insight_layout(insight)
+    if layout == "summative_formative":
+        kinds = [k for k in _WORK_KINDS if any(c.get("kind") == k for c in hits)]
+        if len(kinds) == 2:
+            sw, fw = _bucket_weight(insight, "summative"), _bucket_weight(insight, "formative")
+            if sw is not None and fw is not None:
+                name = str(hits[0].get("name") or category).strip()
+                out["tag"] = f"{name} · Summative {_pct_text(sw)}% or Formative {_pct_text(fw)}%"
+            return out
+        if not kinds:
+            return out
+        kind = kinds[0]
+        label = kind.capitalize()
+        weight = _bucket_weight(insight, kind)
+        out["tag_kind"] = kind
+        if weight is None:
+            out["tag"] = label
+        elif weight == 0:
+            out["tag"] = f"{label} · {_DOES_NOT_COUNT}"
+            out["tag_zero"] = True
+        else:
+            out["tag"] = f"{label} · {_pct_text(weight)}%"
+            out["tag_top"] = _weighs_most_key(insight, layout) == kind
+        return out
+    if layout == "percent_of_grade":
+        hit = hits[0]
+        weight = hit.get("weight_pct")
+        if weight is None:
+            return out
+        name = str(hit.get("name") or category).strip()
+        if weight == 0:
+            out["tag"] = f"{name} · {_DOES_NOT_COUNT}"
+            out["tag_zero"] = True
+        else:
+            out["tag"] = f"{name} · {_pct_text(weight)}% of grade"
+            out["tag_top"] = _weighs_most_key(insight, layout) == _category_key(hit.get("name"))
+    return out
 
 
 def _work_row(item, today=None, insight=None):
     bucket = _work_bucket(item, today)
-    hit = _insight_category(item, insight)
-    kind = (hit or {}).get("kind")
+    tag = work_tag(item, insight)
     return {
         "name": _work_name(item),
         "description": _work_description(item),
@@ -1124,8 +1254,10 @@ def _work_row(item, today=None, insight=None):
         "status": _work_status(item),
         "when": _work_when(item, today),
         "category": str((item or {}).get("category") or "").strip(),
-        "kind": kind if kind in _WORK_KINDS else "",
-        "weight_note": ZERO_WEIGHT_LABEL if _work_zero_weight(item, insight) else "",
+        "kind": tag["tag_kind"],
+        "tag": tag["tag"],
+        "tag_zero": tag["tag_zero"],
+        "tag_top": tag["tag_top"],
     }
 
 
