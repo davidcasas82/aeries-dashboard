@@ -44,4 +44,5 @@ Each feature file starts with an H1 title and one paragraph describing the user-
 - [Open standing detail](./standing-detail.md) covers the Current standing grade buttons and the detail drawer.
 - [Due soon](./due-soon.md) covers the due-soon band on the unlocked board.
 - [Coming up order](./coming-up-order.md) covers the soonest-first order inside the drawer's Coming up group.
+- [Work tags](./work-tags.md) covers the Summative / Formative / category tag and the 0%-weight note on drawer rows.
 - [Settings lock](./settings-lock.md) covers the settings drawer and locking the board again.

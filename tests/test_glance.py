@@ -318,6 +318,95 @@ class ClassWorkDrawerTests(unittest.TestCase):
         self.assertEqual(bio["count_line"], "1 past due · 1 turned in")
         self.assertNotIn("coming up", bio["count_line"])
 
+    def _tagged_class(self):
+        return {
+            "period": 3,
+            "course_name": "Fixture Science",
+            "counted_insight": {"categories": [
+                {"name": "Summative Assessments", "kind": "summative", "weight_pct": 70},
+                {"name": "Formative Practice", "kind": "formative", "weight_pct": 30},
+                {"name": "Lab Notebook", "kind": None, "weight_pct": 0},
+                {"name": "Participation", "kind": None, "weight_pct": 10},
+            ]},
+            "assignments": [
+                {"description": "Unit 1 Test", "category": "Summative Assessments",
+                 "due_date": "09/10/2026", "points_earned": 45, "points_possible": 50},
+                {"description": "Practice Set A", "category": "Formative Practice",
+                 "due_date": "09/11/2026", "points_earned": 9, "points_possible": 10},
+                {"description": "Warmup Log", "category": "Participation",
+                 "due_date": "09/09/2026", "points_earned": 5, "points_possible": 5},
+                {"description": "Notebook Check", "category": "Lab Notebook",
+                 "due_date": "09/08/2026", "points_earned": 8, "points_possible": 10},
+                {"description": "Bonus Reading", "category": "Enrichment",
+                 "due_date": "09/07/2026", "points_earned": 3, "points_possible": 5},
+                {"description": "Untagged Sheet", "due_date": "09/06/2026",
+                 "points_earned": 4, "points_possible": 5},
+            ],
+        }
+
+    def _tagged_rows(self):
+        rows = glance.class_work_rows(self._tagged_class(), MONDAY)
+        return {r["name"]: r for r in rows}
+
+    def test_summative_row_carries_kind_and_category(self):
+        row = self._tagged_rows()["Unit 1 Test"]
+        self.assertEqual(row["kind"], "summative")
+        self.assertEqual(row["category"], "Summative Assessments")
+        self.assertEqual(row["weight_note"], "")
+
+    def test_formative_row_carries_kind_and_category(self):
+        row = self._tagged_rows()["Practice Set A"]
+        self.assertEqual(row["kind"], "formative")
+        self.assertEqual(row["category"], "Formative Practice")
+        self.assertEqual(row["weight_note"], "")
+
+    def test_row_without_kind_falls_back_to_category_name(self):
+        rows = self._tagged_rows()
+        self.assertEqual(rows["Warmup Log"]["kind"], "")
+        self.assertEqual(rows["Warmup Log"]["category"], "Participation")
+        self.assertEqual(rows["Bonus Reading"]["kind"], "")
+        self.assertEqual(rows["Bonus Reading"]["category"], "Enrichment")
+        self.assertEqual(rows["Untagged Sheet"]["kind"], "")
+        self.assertEqual(rows["Untagged Sheet"]["category"], "")
+
+    def test_zero_weight_row_says_it_does_not_count(self):
+        rows = self._tagged_rows()
+        row = rows["Notebook Check"]
+        self.assertEqual(row["category"], "Lab Notebook")
+        self.assertEqual(row["kind"], "")
+        self.assertEqual(row["weight_note"], "0% category (doesn't count)")
+        for name in ("Unit 1 Test", "Practice Set A", "Warmup Log", "Bonus Reading", "Untagged Sheet"):
+            self.assertEqual(rows[name]["weight_note"], "", name)
+
+    def test_unscored_zero_weight_row_matches_page_status_order(self):
+        cls = self._tagged_class()
+        cls["assignments"] = [{"description": "Notebook Draft", "category": "Lab Notebook",
+                               "due_date": "09/16/2026", "points_earned": None, "points_possible": 10}]
+        row = glance.class_work_rows(cls, MONDAY)[0]
+        self.assertEqual(row["category"], "Lab Notebook")
+        self.assertEqual(row["weight_note"], "")
+
+    def test_student_view_drawer_passes_category_and_kind(self):
+        student = {
+            "name": "Student A",
+            "sn": "1",
+            "classes": [{"period": 3, "course_name": "Fixture Science", "teacher": "T", "percent": "90",
+                         "mark": "A-", "counted_insight": self._tagged_class()["counted_insight"]}],
+            "assignments_by_class": [
+                {"class_name": "3- Fixture Science- Fall", "period": 3,
+                 "assignments": self._tagged_class()["assignments"]},
+            ],
+            "class_trends": {},
+            "ai_summary": {},
+        }
+        g = view_for(student, today=MONDAY)["glance"]
+        sci = next(c for c in g["standing"] if c["course"] == "Fixture Science")
+        by_name = {w["name"]: w for w in sci["drawer"]["work"]}
+        self.assertEqual(by_name["Unit 1 Test"]["kind"], "summative")
+        self.assertEqual(by_name["Practice Set A"]["kind"], "formative")
+        self.assertEqual(by_name["Warmup Log"]["category"], "Participation")
+        self.assertEqual(by_name["Notebook Check"]["weight_note"], "0% category (doesn't count)")
+
     def test_due_today_tomorrow_and_turned_in_date(self):
         student = {
             "name": "Student A",

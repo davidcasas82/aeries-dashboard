@@ -64,6 +64,8 @@ Proof shows the user action and the resulting state. For the standing-detail fea
 
 `/cursor/stores/bc-f23fc86a-c458-4bdb-87a7-037a8949b15a/media/verify-aeries-dashboard/`
 
+That store only exists on the agent that owns it. Elsewhere, export `AERIES_VERIFY_EVIDENCE=<dir>` before `launch`. Export `AERIES_VERIFY_VIEWPORT=<width>x<height>` (for example `390x844`) to drive at a phone width; widths of 620 or less emulate a mobile device.
+
 Use filenames that do not contain student names or student numbers. `standing-board.png`, `standing-drawer.png`, and `standing-drawer-title.txt` are the standing-detail set. Do not capture production data. The fixture is the production boundary: the dashboard's real fetch path runs, and the worker is replaced only at `127.0.0.1:8787`. Confirm the browser origin is the local static server (doctor does this) so a run cannot silently hit `family-data.davidcasas.workers.dev`.
 
 ## Cleanup
