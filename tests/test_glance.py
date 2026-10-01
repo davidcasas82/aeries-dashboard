@@ -1,5 +1,7 @@
 import json
 import re
+import shutil
+import subprocess
 import sys
 import unittest
 from datetime import datetime
@@ -7,7 +9,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import footer_fixtures as ff  # noqa: E402
 import glance  # noqa: E402
 import scraper  # noqa: E402
 
@@ -318,95 +322,6 @@ class ClassWorkDrawerTests(unittest.TestCase):
         self.assertEqual(bio["count_line"], "1 past due · 1 turned in")
         self.assertNotIn("coming up", bio["count_line"])
 
-    def _tagged_class(self):
-        return {
-            "period": 3,
-            "course_name": "Fixture Science",
-            "counted_insight": {"categories": [
-                {"name": "Summative Assessments", "kind": "summative", "weight_pct": 70},
-                {"name": "Formative Practice", "kind": "formative", "weight_pct": 30},
-                {"name": "Lab Notebook", "kind": None, "weight_pct": 0},
-                {"name": "Participation", "kind": None, "weight_pct": 10},
-            ]},
-            "assignments": [
-                {"description": "Unit 1 Test", "category": "Summative Assessments",
-                 "due_date": "09/10/2026", "points_earned": 45, "points_possible": 50},
-                {"description": "Practice Set A", "category": "Formative Practice",
-                 "due_date": "09/11/2026", "points_earned": 9, "points_possible": 10},
-                {"description": "Warmup Log", "category": "Participation",
-                 "due_date": "09/09/2026", "points_earned": 5, "points_possible": 5},
-                {"description": "Notebook Check", "category": "Lab Notebook",
-                 "due_date": "09/08/2026", "points_earned": 8, "points_possible": 10},
-                {"description": "Bonus Reading", "category": "Enrichment",
-                 "due_date": "09/07/2026", "points_earned": 3, "points_possible": 5},
-                {"description": "Untagged Sheet", "due_date": "09/06/2026",
-                 "points_earned": 4, "points_possible": 5},
-            ],
-        }
-
-    def _tagged_rows(self):
-        rows = glance.class_work_rows(self._tagged_class(), MONDAY)
-        return {r["name"]: r for r in rows}
-
-    def test_summative_row_carries_kind_and_category(self):
-        row = self._tagged_rows()["Unit 1 Test"]
-        self.assertEqual(row["kind"], "summative")
-        self.assertEqual(row["category"], "Summative Assessments")
-        self.assertEqual(row["weight_note"], "")
-
-    def test_formative_row_carries_kind_and_category(self):
-        row = self._tagged_rows()["Practice Set A"]
-        self.assertEqual(row["kind"], "formative")
-        self.assertEqual(row["category"], "Formative Practice")
-        self.assertEqual(row["weight_note"], "")
-
-    def test_row_without_kind_falls_back_to_category_name(self):
-        rows = self._tagged_rows()
-        self.assertEqual(rows["Warmup Log"]["kind"], "")
-        self.assertEqual(rows["Warmup Log"]["category"], "Participation")
-        self.assertEqual(rows["Bonus Reading"]["kind"], "")
-        self.assertEqual(rows["Bonus Reading"]["category"], "Enrichment")
-        self.assertEqual(rows["Untagged Sheet"]["kind"], "")
-        self.assertEqual(rows["Untagged Sheet"]["category"], "")
-
-    def test_zero_weight_row_says_it_does_not_count(self):
-        rows = self._tagged_rows()
-        row = rows["Notebook Check"]
-        self.assertEqual(row["category"], "Lab Notebook")
-        self.assertEqual(row["kind"], "")
-        self.assertEqual(row["weight_note"], "0% category (doesn't count)")
-        for name in ("Unit 1 Test", "Practice Set A", "Warmup Log", "Bonus Reading", "Untagged Sheet"):
-            self.assertEqual(rows[name]["weight_note"], "", name)
-
-    def test_unscored_zero_weight_row_matches_page_status_order(self):
-        cls = self._tagged_class()
-        cls["assignments"] = [{"description": "Notebook Draft", "category": "Lab Notebook",
-                               "due_date": "09/16/2026", "points_earned": None, "points_possible": 10}]
-        row = glance.class_work_rows(cls, MONDAY)[0]
-        self.assertEqual(row["category"], "Lab Notebook")
-        self.assertEqual(row["weight_note"], "")
-
-    def test_student_view_drawer_passes_category_and_kind(self):
-        student = {
-            "name": "Student A",
-            "sn": "1",
-            "classes": [{"period": 3, "course_name": "Fixture Science", "teacher": "T", "percent": "90",
-                         "mark": "A-", "counted_insight": self._tagged_class()["counted_insight"]}],
-            "assignments_by_class": [
-                {"class_name": "3- Fixture Science- Fall", "period": 3,
-                 "assignments": self._tagged_class()["assignments"]},
-            ],
-            "class_trends": {},
-            "ai_summary": {},
-        }
-        g = view_for(student, today=MONDAY)["glance"]
-        sci = next(c for c in g["standing"] if c["course"] == "Fixture Science")
-        by_name = {w["name"]: w for w in sci["drawer"]["work"]}
-        self.assertEqual(by_name["Unit 1 Test"]["kind"], "summative")
-        self.assertEqual(by_name["Practice Set A"]["kind"], "formative")
-        self.assertEqual(by_name["Warmup Log"]["category"], "Participation")
-        self.assertEqual(by_name["Notebook Check"]["weight_note"], "0% category (doesn't count)")
-
     def test_due_today_tomorrow_and_turned_in_date(self):
         student = {
             "name": "Student A",
@@ -572,6 +487,235 @@ class ClassWorkDrawerTests(unittest.TestCase):
         self.assertEqual(alg["count_line"], "1 past due · 1 missing · 1 coming up · 1 turned in")
         self.assertNotIn("coming up", by_name["Late packet"]["when"].lower())
         self.assertEqual(alg["drawer"]["kicker"], "1 past due · 1 missing · 1 coming up · 1 turned in")
+
+
+def _work(description, category, due="09/10/2026", earned=8, possible=10):
+    return {"description": description, "category": category, "due_date": due,
+            "points_earned": earned, "points_possible": possible}
+
+
+def _tags(insight, assignments):
+    cls = {"period": 3, "course_name": "Fixture Class", "counted_insight": insight,
+           "assignments": assignments}
+    return {r["name"]: r for r in glance.class_work_rows(cls, MONDAY)}
+
+
+POG_A = [("Assessments", 60), ("Classwork", 40)]
+POG_B = [("Assessments", 70), ("Assignments", 20), ("Presentations", 10), ("Daily Assignments", 0)]
+
+
+class WorkTagTests(unittest.TestCase):
+    """Drawer tags from real-shaped footer HTML, through the scraper parser and counted_insight."""
+
+    def test_a_percent_of_grade_tags_and_weighs_most(self):
+        insight = ff.insight_for(ff.page(ff.pog_table(POG_A)))
+        self.assertEqual(insight["layout"], "percent_of_grade")
+        rows = _tags(insight, [_work("Unit Test", "Assessments"), _work("Lab Sheet", "Classwork")])
+        self.assertEqual(rows["Unit Test"]["tag"], "Assessments · 60% of grade")
+        self.assertTrue(rows["Unit Test"]["tag_top"])
+        self.assertEqual(rows["Lab Sheet"]["tag"], "Classwork · 40% of grade")
+        self.assertFalse(rows["Lab Sheet"]["tag_top"])
+        self.assertFalse(rows["Lab Sheet"]["tag_zero"])
+        self.assertEqual(rows["Unit Test"]["kind"], "")
+
+    def test_b_substring_trap_and_zero_weight(self):
+        insight = ff.insight_for(ff.page(ff.pog_table(POG_B, filled=["Assignments", "Presentations",
+                                                                     "Daily Assignments"])))
+        rows = _tags(insight, [
+            _work("Homework 3", "Assignments"),
+            _work("Bell Work", "Daily Assignments"),
+            _work("Unit 1 Test", "Assessments", earned=None),
+            _work("Slides", "Presentations"),
+        ])
+        self.assertEqual(rows["Homework 3"]["tag"], "Assignments · 20% of grade")
+        self.assertFalse(rows["Homework 3"]["tag_zero"])
+        self.assertEqual(rows["Bell Work"]["tag"], "Daily Assignments · 0% (doesn't count)")
+        self.assertTrue(rows["Bell Work"]["tag_zero"])
+        self.assertFalse(rows["Bell Work"]["tag_top"])
+        self.assertEqual(rows["Unit 1 Test"]["tag"], "Assessments · 70% of grade")
+        self.assertTrue(rows["Unit 1 Test"]["tag_top"])
+        self.assertEqual(rows["Slides"]["tag"], "Presentations · 10% of grade")
+
+    def test_b_assignments_never_lands_on_daily_assignments_when_absent(self):
+        weights = [("Assessments", 70), ("Presentations", 30), ("Daily Assignments", 0)]
+        insight = ff.insight_for(ff.page(ff.pog_table(weights)))
+        row = _tags(insight, [_work("Homework 3", "Assignments")])["Homework 3"]
+        self.assertEqual(row["tag"], "Assignments")
+        self.assertFalse(row["tag_zero"])
+
+    def test_c_summative_formative_100_0(self):
+        html = ff.page(ff.sf_table(100, 0, [("Summatives", "summative"), ("Formatives", "none")]))
+        insight = ff.insight_for(html)
+        self.assertEqual(insight["layout"], "summative_formative")
+        rows = _tags(insight, [_work("Game Design Doc", "Summatives"), _work("Warmup", "Formatives")])
+        self.assertEqual(rows["Game Design Doc"]["tag"], "Summative · 100%")
+        self.assertEqual(rows["Game Design Doc"]["kind"], "summative")
+        self.assertTrue(rows["Game Design Doc"]["tag_top"])
+        self.assertEqual(rows["Warmup"]["tag"], "Formative · 0% (doesn't count)")
+        self.assertEqual(rows["Warmup"]["kind"], "formative")
+        self.assertTrue(rows["Warmup"]["tag_zero"])
+        self.assertFalse(rows["Warmup"]["tag_top"])
+
+    def test_d_summative_formative_neutral_names_and_two_sided_row(self):
+        html = ff.page(ff.sf_table(70, 30, [
+            ("Assessments", "summative"), ("Classwork", "formative"), ("Projects", "both"),
+        ]))
+        insight = ff.insight_for(html)
+        projects = [c for c in insight["categories"] if c["name"] == "Projects"]
+        self.assertEqual(sorted(c["kind"] for c in projects), ["formative", "summative"])
+        rows = _tags(insight, [
+            _work("Chapter Quiz", "Assessments"),
+            _work("Notes", "Classwork"),
+            _work("Model Build", "Projects"),
+        ])
+        self.assertEqual(rows["Chapter Quiz"]["tag"], "Summative · 70%")
+        self.assertTrue(rows["Chapter Quiz"]["tag_top"])
+        self.assertEqual(rows["Notes"]["tag"], "Formative · 30%")
+        self.assertFalse(rows["Notes"]["tag_top"])
+        self.assertEqual(rows["Model Build"]["tag"], "Projects · Summative 70% or Formative 30%")
+        self.assertFalse(rows["Model Build"]["tag_top"])
+        self.assertFalse(rows["Model Build"]["tag_zero"])
+
+    def test_e_no_footer_gives_bare_names(self):
+        self.assertIsNone(ff.insight_for(ff.page()))
+        names = ["Affective", "Cognitive", "Fitness", "Psychomotor"]
+        rows = _tags(None, [_work(f"Week {i}", n) for i, n in enumerate(names)])
+        for i, n in enumerate(names):
+            self.assertEqual(rows[f"Week {i}"]["tag"], n)
+            self.assertFalse(rows[f"Week {i}"]["tag_top"])
+            self.assertFalse(rows[f"Week {i}"]["tag_zero"])
+
+    def test_f_singular_category_matches_plural_footer(self):
+        insight = ff.insight_for(ff.page(ff.pog_table(POG_A)))
+        row = _tags(insight, [_work("Unit Test", "Assessment")])["Unit Test"]
+        self.assertEqual(row["tag"], "Assessments · 60% of grade")
+        self.assertTrue(row["tag_top"])
+
+    def test_g_tie_has_no_weighs_most(self):
+        insight = ff.insight_for(ff.page(ff.pog_table([("Tests", 50), ("Labs", 50)])))
+        rows = _tags(insight, [_work("Test 1", "Tests"), _work("Lab 1", "Labs")])
+        self.assertEqual(rows["Test 1"]["tag"], "Tests · 50% of grade")
+        self.assertFalse(rows["Test 1"]["tag_top"])
+        self.assertFalse(rows["Lab 1"]["tag_top"])
+
+    def test_h_category_missing_from_footer_is_bare(self):
+        insight = ff.insight_for(ff.page(ff.pog_table(POG_A)))
+        row = _tags(insight, [_work("Bonus Reading", "Enrichment")])["Bonus Reading"]
+        self.assertEqual(row["tag"], "Enrichment")
+        self.assertFalse(row["tag_top"])
+
+    def test_i_class_with_no_gradebook_group(self):
+        classes = [{"period": 2, "course_name": "Fixture Art", "percent": "90", "mark": "A-"}]
+        groups = [{"class_name": "5- Fixture Music- Fall", "period": 5, "assignments": [],
+                   "totals": ff.totals_for(ff.page(ff.pog_table(POG_A)))}]
+        scraper.attach_gradebook_insights(classes, groups)
+        self.assertNotIn("counted_insight", classes[0])
+        student = {
+            "name": "Student A", "sn": "1", "classes": classes, "assignments_by_class": groups,
+            "class_trends": {}, "ai_summary": {},
+        }
+        g = view_for(student, today=MONDAY)["glance"]
+        art = next(c for c in g["standing"] if c["course"] == "Fixture Art")
+        self.assertEqual(art["drawer"]["work"], [])
+        cls = {"period": 2, "course_name": "Fixture Art", "assignments": [_work("Sketch", "Studio")]}
+        self.assertEqual(glance.class_work_rows(cls, MONDAY)[0]["tag"], "Studio")
+
+    def test_no_category_means_no_tag(self):
+        insight = ff.insight_for(ff.page(ff.pog_table(POG_A)))
+        row = _tags(insight, [_work("Loose Sheet", "")])["Loose Sheet"]
+        self.assertEqual(row["tag"], "")
+
+    def test_points_based_insight_without_weights_is_bare(self):
+        insight = {"categories": [{"name": "Homework", "weight_pct": None}]}
+        self.assertEqual(_tags(insight, [_work("HW 1", "Homework")])["HW 1"]["tag"], "Homework")
+
+    def test_longest_footer_name_wins_the_substring_fallback(self):
+        insight = ff.insight_for(ff.page(ff.pog_table(POG_B)))
+        row = _tags(insight, [_work("Week 3", "Daily Assignments Week 3")])["Week 3"]
+        self.assertEqual(row["tag"], "Daily Assignments · 0% (doesn't count)")
+        row = _tags(insight, [_work("Essay", "Written Assignments")])["Essay"]
+        self.assertEqual(row["tag"], "Assignments · 20% of grade")
+
+    def test_student_view_drawer_carries_tags(self):
+        insight_html = ff.page(ff.pog_table(POG_B))
+        classes = [{"period": 3, "course_name": "Fixture Science", "teacher": "T", "percent": "90",
+                    "mark": "A-"}]
+        groups = [{"class_name": "3- Fixture Science- Fall", "period": 3,
+                   "assignments": [_work("Homework 3", "Assignments"), _work("Bell Work", "Daily Assignments")],
+                   "totals": ff.totals_for(insight_html)}]
+        scraper.attach_gradebook_insights(classes, groups)
+        student = {"name": "Student A", "sn": "1", "classes": classes, "assignments_by_class": groups,
+                   "class_trends": {}, "ai_summary": {}}
+        g = view_for(student, today=MONDAY)["glance"]
+        sci = next(c for c in g["standing"] if c["course"] == "Fixture Science")
+        by_name = {w["name"]: w for w in sci["drawer"]["work"]}
+        self.assertEqual(by_name["Homework 3"]["tag"], "Assignments · 20% of grade")
+        self.assertEqual(by_name["Bell Work"]["tag"], "Daily Assignments · 0% (doesn't count)")
+        self.assertTrue(by_name["Bell Work"]["tag_zero"])
+        self.assertNotIn("weight_note", by_name["Bell Work"])
+
+
+def _js_functions(html, names):
+    out = []
+    for name in names:
+        m = re.search(rf"^( *)function {name}\(.*?^\1\}}$", html, re.M | re.S)
+        assert m, name
+        out.append(m.group(0))
+    return "\n".join(out)
+
+
+@unittest.skipUnless(shutil.which("node"), "node not installed")
+class WorkTagPageParityTests(unittest.TestCase):
+    """The page's glanceWorkTag must give the same tag as glance.work_tag on every case."""
+
+    def _cases(self):
+        sf_c = ff.insight_for(ff.page(ff.sf_table(100, 0, [("Summatives", "summative"), ("Formatives", "none")])))
+        sf_d = ff.insight_for(ff.page(ff.sf_table(70, 30, [
+            ("Assessments", "summative"), ("Classwork", "formative"), ("Projects", "both")])))
+        pog_a = ff.insight_for(ff.page(ff.pog_table(POG_A)))
+        pog_b = ff.insight_for(ff.page(ff.pog_table(POG_B)))
+        pog_b_no_assignments = ff.insight_for(ff.page(ff.pog_table(
+            [("Assessments", 70), ("Presentations", 30), ("Daily Assignments", 0)])))
+        tie = ff.insight_for(ff.page(ff.pog_table([("Tests", 50), ("Labs", 50)])))
+        legacy = {"layout": "perc_of_grade", "categories": [
+            {"name": "Quizzes", "weight_pct": 33.25}, {"name": "Activities", "weight_pct": 66.75}]}
+        cases = []
+        for insight, cats in (
+            (pog_a, ["Assessments", "Assessment", "Classwork", "Enrichment", ""]),
+            (pog_b, ["Assignments", "Daily Assignments", "Assessments", "Presentations",
+                     "Daily Assignments Week 3", "Written Assignments", "Assignment"]),
+            (pog_b_no_assignments, ["Assignments"]),
+            (sf_c, ["Summatives", "Formatives", "Summative", "Other"]),
+            (sf_d, ["Assessments", "Classwork", "Projects", "Project"]),
+            (tie, ["Tests", "Labs"]),
+            (None, ["Affective", "Fitness"]),
+            (legacy, ["Quiz", "Activity", "Quizzes"]),
+        ):
+            for cat in cats:
+                cases.append({"category": cat, "insight": insight})
+        return cases
+
+    def test_page_and_python_agree(self):
+        html = Path(__file__).resolve().parents[1].joinpath("index.html").read_text()
+        consts = "\n".join(re.findall(r"^ *const (?:WORK_KINDS|TOTAL_NAME_RE) = .*$", html, re.M))
+        fns = _js_functions(html, [
+            "normalizeName", "categorySingular", "categoryTokens", "containsRun",
+            "insightCategoryMatches", "insightLayout", "insightBucketWeight", "pctText",
+            "insightWeighsMostKey", "glanceWorkTag",
+        ])
+        cases = self._cases()
+        script = (
+            f"{consts}\n{fns}\n"
+            "const cases = JSON.parse(require('fs').readFileSync(0, 'utf8'));\n"
+            "process.stdout.write(JSON.stringify(cases.map(c => glanceWorkTag({category: c.category}, c.insight))));\n"
+        )
+        done = subprocess.run(["node", "-e", script], input=json.dumps(cases), capture_output=True,
+                              text=True, check=True)
+        page = json.loads(done.stdout)
+        for case, got in zip(cases, page):
+            want = glance.work_tag({"category": case["category"]}, case["insight"])
+            self.assertEqual(got, want, case["category"])
+        self.assertIn("Quizzes · 33.3% of grade", [p["tag"] for p in page])
 
 
 class DueWhenLabelTests(unittest.TestCase):
