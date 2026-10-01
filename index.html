@@ -2236,6 +2236,17 @@
             font-size: var(--g-fs-sub);
             font-weight: 750;
         }
+        .glance-work-tag.zero_weight { border-style: dashed; background: #f7f7f4; }
+        .glance-work-top {
+            padding: 2px 10px;
+            border-radius: 8px;
+            background: #124d3f;
+            color: #fff;
+            font-size: var(--g-fs-sub);
+            font-weight: 800;
+            line-height: 1.35;
+            white-space: nowrap;
+        }
         .glance-work-split {
             display: flex;
             align-items: center;
@@ -2968,16 +2979,151 @@
                 .sort((a, b) => (parseDate(b.due_date) || 0) - (parseDate(a.due_date) || 0));
         }
 
+        const WORK_KINDS = ['summative', 'formative'];
+        const TOTAL_NAME_RE = /^(total|overall|grand total)\b/i;
+
+        function categorySingular(word) {
+            if (word.length > 4 && word.endsWith('ies')) return word.slice(0, -3) + 'y';
+            if (word.length > 4 && word.endsWith('zzes')) return word.slice(0, -3);
+            if (word.length > 4 && ['sses', 'shes', 'ches', 'xes'].some(end => word.endsWith(end))) return word.slice(0, -2);
+            if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+            return word;
+        }
+
+        function categoryTokens(text) {
+            return (String(text || '').toLowerCase().match(/[a-z0-9]+/g) || []).map(categorySingular);
+        }
+
+        function containsRun(longer, shorter) {
+            const n = shorter.length;
+            for (let i = 0; i + n <= longer.length; i += 1) {
+                if (shorter.every((w, j) => longer[i + j] === w)) return true;
+            }
+            return false;
+        }
+
+        // Same order as glance.footer_category_matches: exact, singular/plural, then the longest
+        // footer name inside the assignment category. "Assignments" never lands on "Daily Assignments".
+        function insightCategoryMatches(category, insight) {
+            const wantKey = normalizeName(category || '');
+            if (!wantKey) return [];
+            const cats = ((insight && insight.categories) || []).filter(c => c
+                && normalizeName(c.name) && !TOTAL_NAME_RE.test(String(c.name || '').trim()));
+            const exact = cats.filter(c => normalizeName(c.name) === wantKey);
+            if (exact.length) return exact;
+            const want = categoryTokens(category);
+            const plural = cats.filter(c => categoryTokens(c.name).join(' ') === want.join(' '));
+            if (plural.length) return plural;
+            let bestKey = null;
+            let best = null;
+            for (const c of cats) {
+                const have = categoryTokens(c.name);
+                if (!have.length || have.length >= want.length || !containsRun(want, have)) continue;
+                const size = [have.length, normalizeName(c.name).length];
+                if (!best || size[0] > best[0] || (size[0] === best[0] && size[1] > best[1])) {
+                    best = size;
+                    bestKey = normalizeName(c.name);
+                }
+            }
+            return bestKey == null ? [] : cats.filter(c => normalizeName(c.name) === bestKey);
+        }
+
         function insightCategoryFor(a, insight) {
-            const bn = normalizeName((a && a.category) || '');
-            const mix = (insight && insight.categories) || [];
-            if (!bn) return null;
-            return mix.find(c => normalizeName(c.name) === bn)
-                || mix.find(c => {
-                    const an = normalizeName(c.name);
-                    return an && (an.includes(bn) || bn.includes(an));
-                })
-                || null;
+            const hits = insightCategoryMatches(a && a.category, insight);
+            if (!hits.length) return null;
+            const weighted = hits.filter(c => c.weight_pct != null);
+            if (!weighted.length) return hits[0];
+            return weighted.reduce((top, c) => (c.weight_pct > top.weight_pct ? c : top));
+        }
+
+        function insightLayout(insight) {
+            const layout = insight && insight.layout;
+            if (layout === 'percent_of_grade' || layout === 'perc_of_grade') return 'percent_of_grade';
+            if (layout === 'summative_formative') return layout;
+            const cats = ((insight && insight.categories) || []).filter(Boolean);
+            if (cats.some(c => c.weight_basis === 'bucket' || WORK_KINDS.includes(c.kind))) return 'summative_formative';
+            if (cats.some(c => c.weight_basis === 'category' || c.weight_pct != null)) return 'percent_of_grade';
+            return '';
+        }
+
+        function insightBucketWeight(insight, kind) {
+            const top = insight && insight[`${kind}_weight_pct`];
+            if (top != null) return top;
+            const hit = ((insight && insight.categories) || []).find(c => c && c.kind === kind && c.weight_pct != null);
+            return hit ? hit.weight_pct : null;
+        }
+
+        function pctText(value) {
+            return String(Math.round(Number(value) * 10) / 10);
+        }
+
+        function insightWeighsMostKey(insight, layout) {
+            const weights = new Map();
+            if (layout === 'summative_formative') {
+                for (const k of WORK_KINDS) weights.set(k, insightBucketWeight(insight, k));
+            } else {
+                for (const c of (insight && insight.categories) || []) {
+                    const key = normalizeName(c && c.name);
+                    if (key && c.weight_pct != null) weights.set(key, c.weight_pct);
+                }
+            }
+            const values = [...weights.values()];
+            if (!values.length || values.some(w => w == null)) return null;
+            const top = Math.max(...values);
+            if (top <= 0 || values.filter(w => w === top).length !== 1) return null;
+            return [...weights.entries()].find(([, w]) => w === top)[0];
+        }
+
+        // Same rules as glance.work_tag. The bare category name shows only when no weight is known.
+        function glanceWorkTag(item, insight) {
+            const category = String((item && item.category) || '').trim();
+            const out = { tag: category, tag_kind: '', tag_zero: false, tag_top: false };
+            if (!category) return out;
+            const hits = insightCategoryMatches(category, insight);
+            if (!hits.length) return out;
+            const layout = insightLayout(insight);
+            const noCount = '0% (doesn\'t count)';
+            if (layout === 'summative_formative') {
+                const kinds = WORK_KINDS.filter(k => hits.some(c => c.kind === k));
+                if (kinds.length === 2) {
+                    const sw = insightBucketWeight(insight, 'summative');
+                    const fw = insightBucketWeight(insight, 'formative');
+                    if (sw != null && fw != null) {
+                        const name = String(hits[0].name || category).trim();
+                        out.tag = `${name} · Summative ${pctText(sw)}% or Formative ${pctText(fw)}%`;
+                    }
+                    return out;
+                }
+                if (!kinds.length) return out;
+                const kind = kinds[0];
+                const label = kind[0].toUpperCase() + kind.slice(1);
+                const weight = insightBucketWeight(insight, kind);
+                out.tag_kind = kind;
+                if (weight == null) {
+                    out.tag = label;
+                } else if (weight === 0) {
+                    out.tag = `${label} · ${noCount}`;
+                    out.tag_zero = true;
+                } else {
+                    out.tag = `${label} · ${pctText(weight)}%`;
+                    out.tag_top = insightWeighsMostKey(insight, layout) === kind;
+                }
+                return out;
+            }
+            if (layout === 'percent_of_grade') {
+                const hit = hits[0];
+                const weight = hit.weight_pct;
+                if (weight == null) return out;
+                const name = String(hit.name || category).trim();
+                if (weight === 0) {
+                    out.tag = `${name} · ${noCount}`;
+                    out.tag_zero = true;
+                } else {
+                    out.tag = `${name} · ${pctText(weight)}% of grade`;
+                    out.tag_top = insightWeighsMostKey(insight, layout) === normalizeName(hit.name);
+                }
+            }
+            return out;
         }
 
         function inferAssignmentStatus(a, insight) {
@@ -4713,9 +4859,7 @@
             if (!name) return null;
             const bucket = glanceWorkBucket(item);
             const when = glanceWorkWhen(item);
-            const hit = insightCategoryFor(item, insight);
-            const kind = hit && /^(summative|formative)$/.test(hit.kind || '') ? hit.kind : '';
-            const st = inferAssignmentStatus(item, insight);
+            const tag = glanceWorkTag(item, insight);
             return {
                 name,
                 description: glanceWorkDescription(item),
@@ -4729,8 +4873,10 @@
                 when,
                 late: /late/.test(when),
                 category: String(item.category || '').trim(),
-                kind,
-                weight_note: st.status === 'zero_weight' ? st.label : '',
+                kind: tag.tag_kind,
+                tag: tag.tag,
+                tag_zero: tag.tag_zero,
+                tag_top: tag.tag_top,
             };
         }
 
@@ -4874,10 +5020,11 @@
                 <button type="button" class="glance-work-caret" aria-expanded="false" aria-label="Show full teacher note">▾</button>
             </div>` : '';
             const kind = row.kind === 'summative' || row.kind === 'formative' ? row.kind : '';
-            const tagText = kind ? kind[0].toUpperCase() + kind.slice(1) : (row.category || '').trim();
-            const tag = tagText ? `<span class="glance-work-tag${kind ? ` ${kind}` : ''}">${esc(tagText)}</span>` : '';
-            const weightNote = row.weight_note ? `<span class="assn-status zero_weight">${esc(row.weight_note)}</span>` : '';
-            const tags = tag || weightNote ? `<p class="glance-work-tags">${tag}${weightNote}</p>` : '';
+            const tagText = String(row.tag == null ? (row.category || '') : row.tag).trim();
+            const tagClass = row.tag_zero ? ' assn-status zero_weight' : (kind ? ` ${kind}` : '');
+            const tag = tagText ? `<span class="glance-work-tag${tagClass}">${esc(tagText)}</span>` : '';
+            const top = tag && row.tag_top ? '<span class="glance-work-top">weighs most</span>' : '';
+            const tags = tag ? `<p class="glance-work-tags">${tag}${top}</p>` : '';
             return `<article class="glance-detail glance-work">
                 <span class="glance-work-name">${esc(row.name)}</span>
                 <span class="glance-work-score${awaiting ? ' awaiting' : ''}${scoreClass}">${esc(score)}</span>

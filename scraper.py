@@ -1398,12 +1398,52 @@ def select_current_gradebook_options(option_tags, today=None, calendar=None):
     }
 
 
+def totals_parse_warning(label, parsed, classes):
+    """GitHub Actions warning when no class footer parsed, else None."""
+    if classes <= 0 or parsed:
+        return None
+    return (
+        f"::warning::GradebookDetails totals parsed for 0/{classes} class(es) for {label}; "
+        "category weights are unknown. Run the scrape workflow with "
+        "probe_gradebook_totals=true to see the footer structure."
+    )
+
+
+def _parse_totals_logged(soup, ordinal, count):
+    """parse_gradebook_totals, printing why each footer candidate was rejected (structure only)."""
+    diagnostics = []
+    totals = parse_gradebook_totals(soup, diagnostics)
+    if not totals:
+        for d in diagnostics:
+            where = f" {d['container']}" if d.get("container") else ""
+            print(f"  Totals footer class {ordinal}/{count}: rejected{where}: {d['reason']}")
+    return totals
+
+
 def fetch_all_assignments(session):
     """Fetch assignments for current-term classes via GradebookDetails postback."""
+    entries = []
+    for page in iter_gradebook_class_pages(session):
+        soup = page["soup"]
+        entries.append(_assignment_group_entry(
+            page["label"],
+            parse_assignment_rows(soup),
+            _parse_totals_logged(soup, page["ordinal"], page["count"]),
+        ))
+    for entry in entries:
+        finalize_gradebook_group(entry)
+    return entries
+
+
+def iter_gradebook_class_pages(session):
+    """Yield one GradebookDetails page per current-term class.
+
+    Each item: label, ordinal, count, soup, raw text, and is_async (an UpdatePanel delta).
+    """
     resp = session.get(f"{BASE_URL}/student/GradebookDetails.aspx")
     if resp.status_code != 200:
         print(f"  GradebookDetails status {resp.status_code}")
-        return []
+        return
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
@@ -1417,7 +1457,7 @@ def fetch_all_assignments(session):
     class_select = soup.find("select", {"id": re.compile("dlGN")})
     if not class_select:
         print("  GradebookDetails: no class dropdown (dlGN)")
-        return []
+        return
 
     chosen, meta = select_current_gradebook_options(class_select.find_all("option"))
     print(
@@ -1426,19 +1466,18 @@ def fetch_all_assignments(session):
         f"({meta.get('chosen_count', 0)} class(es))"
     )
     if not chosen:
-        return []
+        return
 
-    all_class_assignments = []
-    first_assignments = parse_assignment_rows(soup)
-    first_totals = parse_gradebook_totals(soup)
+    count = len(chosen)
     start_index = 0
     if meta.get("preload_ok"):
-        all_class_assignments.append(
-            _assignment_group_entry(chosen[0][1], first_assignments, first_totals)
-        )
+        yield {
+            "label": chosen[0][1], "ordinal": 1, "count": count,
+            "soup": soup, "text": resp.text, "is_async": False,
+        }
         start_index = 1
 
-    for class_value, class_label in chosen[start_index:]:
+    for ordinal, (class_value, class_label) in enumerate(chosen[start_index:], start=start_index + 1):
 
         form_data = dict(all_inputs)
         form_data["__EVENTTARGET"] = "ctl00$MainContent$subGBS$dlGN"
@@ -1459,12 +1498,11 @@ def fetch_all_assignments(session):
         )
 
         if resp2.status_code == 200 and len(resp2.text) > 500:
-            frag_soup = BeautifulSoup(resp2.text, "html.parser")
-            assignments = parse_assignment_rows(frag_soup)
-            totals = parse_gradebook_totals(frag_soup)
-            all_class_assignments.append(
-                _assignment_group_entry(class_label, assignments, totals)
-            )
+            yield {
+                "label": class_label, "ordinal": ordinal, "count": count,
+                "soup": BeautifulSoup(resp2.text, "html.parser"),
+                "text": resp2.text, "is_async": True,
+            }
 
             vs_match = re.search(r"__VIEWSTATE\|([^|]+)\|", resp2.text)
             if vs_match:
@@ -1472,10 +1510,6 @@ def fetch_all_assignments(session):
             vsg_match = re.search(r"__VIEWSTATEGENERATOR\|([^|]+)\|", resp2.text)
             if vsg_match:
                 all_inputs["__VIEWSTATEGENERATOR"] = vsg_match.group(1)
-
-    for entry in all_class_assignments:
-        finalize_gradebook_group(entry)
-    return all_class_assignments
 
 
 def parse_assignment_rows(soup):
@@ -1672,77 +1706,196 @@ def _weight_in_header(text):
         return None
 
 
-def _header_cells(table):
-    if table is None:
-        return []
-    thead = table.find("thead")
-    if thead:
-        row = thead.find("tr")
-        if row:
-            cells = row.find_all(["th", "td"])
-            if cells:
-                return [_cell_text(c) for c in cells]
-    first = table.find("tr")
-    if not first:
-        return []
-    cells = first.find_all("th")
-    if not cells:
-        # Some Aeries footers use a header row of td cells
-        maybe = first.find_all("td")
-        if maybe and any(
-            re.search(r"category|perc of grade|summative|formative", _norm_header(_cell_text(c)))
-            for c in maybe
+_ASSIGNMENT_LIST_RE = re.compile(r"description|due date|grading complete|date assigned")
+_WEIGHT_HEADER_RE = re.compile(r"(?:perc(?:ent(?:age)?)?|pct|%)\s*(?:of\s*)?(?:the\s*)?grade|^weight")
+_FOOTER_HINT_RE = re.compile(
+    r"category|(?:perc(?:ent)?|pct|%)\s*(?:of\s*)?grade|summative|formative|weight", re.IGNORECASE
+)
+_GRID_IDENT_RE = re.compile(r"grid|table|totals?", re.IGNORECASE)
+_GRID_ROW_CLASS_RE = re.compile(r"^row$|[-_]row$|[a-z]Row$|^row[-_]", re.IGNORECASE)
+_CATEGORY_HEADER_FALLBACK = ("", "name", "type", "assignment type")
+REASON_ASSIGNMENT_LIST = "headers look like the assignment list"
+REASON_NO_HEADER = "no header row"
+
+
+def _element_ident(el):
+    parts = [el.name or "?"]
+    if el.get("id"):
+        parts.append("#" + str(el.get("id")))
+    classes = el.get("class") or []
+    if classes:
+        parts.append("." + ".".join(classes))
+    return "".join(parts)
+
+
+def _is_grid_row(el):
+    if (el.get("role") or "").lower() == "row":
+        return True
+    return any(_GRID_ROW_CLASS_RE.search(c) for c in el.get("class") or [])
+
+
+def _is_grid_div(el):
+    """A div laid out as a table: role=grid/table, or a grid/table/totals id or class with rows."""
+    if getattr(el, "name", None) != "div":
+        return False
+    role = (el.get("role") or "").lower()
+    ident = f"{el.get('id') or ''} {' '.join(el.get('class') or [])}"
+    if role not in ("grid", "table", "treegrid") and not _GRID_IDENT_RE.search(ident):
+        return False
+    return any(_is_grid_row(r) for r in el.find_all(True))
+
+
+def _totals_candidates(soup):
+    return soup.find_all(lambda el: el.name == "table" or _is_grid_div(el))
+
+
+def _colspan(cell):
+    try:
+        return max(1, min(int(cell.get("colspan") or 1), 20))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _container_rows(container):
+    """Rows of a <table> (not its nested tables) or a grid div, as lists of (text, colspan)."""
+    if container.name == "table":
+        rows = [tr for tr in container.find_all("tr") if tr.find_parent("table") is container]
+        return [
+            [(_cell_text(c), _colspan(c)) for c in tr.find_all(["th", "td"], recursive=False)]
+            for tr in rows
+        ]
+    rows = [r for r in container.find_all(True) if _is_grid_row(r)]
+    leaves = [r for r in rows if not any(_is_grid_row(d) for d in r.find_all(True))]
+    return [[(_cell_text(c), 1) for c in r.find_all(True, recursive=False)] for r in leaves]
+
+
+def _expand_cells(cells):
+    out = []
+    for text, span in cells:
+        out.append(text)
+        out.extend([""] * (span - 1))
+    return out
+
+
+def _merge_header_rows(parent, child):
+    """Two-row header: a spanning 'Summative (100%)' over 'Pts | Max | Perc' reads as one row."""
+    child_texts = [text for text, _ in child]
+    merged = []
+    for text, span in parent:
+        if span > 1:
+            for _ in range(span):
+                sub = child_texts.pop(0) if child_texts else ""
+                merged.append(f"{text} {sub}".strip())
+        else:
+            merged.append(text)
+    return merged
+
+
+def _classify_totals_headers_reason(headers):
+    """Return (layout, column index map, reject reason). Layout is None when rejected."""
+    norms = [_norm_header(h) for h in headers]
+    if not any(norms):
+        return None, {}, REASON_NO_HEADER
+    if _ASSIGNMENT_LIST_RE.search(" | ".join(norms)):
+        return None, {}, REASON_ASSIGNMENT_LIST
+
+    def has(h, *words):
+        return any(w in h for w in words)
+
+    idx = {}
+    for i, h in enumerate(norms):
+        key = None
+        if "category" in h:
+            key = "category"
+        elif _WEIGHT_HEADER_RE.search(h):
+            key = "weight"
+        elif "summative" in h or "formative" in h:
+            side = "summative" if "summative" in h else "formative"
+            if has(h, "pts", "points"):
+                key = f"{side}_pts"
+            elif has(h, "max", "possible"):
+                key = f"{side}_max"
+            elif has(h, "perc", "percent", "pct", "%"):
+                key = f"{side}_perc"
+        elif "overall" in h and has(h, "perc", "percent", "pct", "%"):
+            key = "overall_perc"
+        elif h in ("points", "pts") or h.endswith("pts"):
+            key = "points"
+        elif h in ("max", "max pts", "points possible", "possible"):
+            key = "max"
+        elif h in ("perc", "percent", "%", "percentage", "pct") or (
+            has(h, "perc", "percent") and "grade" not in h and "overall" not in h
         ):
-            cells = maybe
-    return [_cell_text(c) for c in cells]
+            key = "perc"
+        elif h in ("mark", "letter"):
+            key = "mark"
+        if key and key not in idx:
+            idx[key] = i
+
+    if "summative_perc" in idx and "formative_perc" in idx:
+        layout = "summative_formative"
+    elif "weight" in idx:
+        layout = "percent_of_grade"
+    elif ("summative_perc" in idx) != ("formative_perc" in idx):
+        return None, {}, "only one of Summative/Formative Perc columns"
+    else:
+        return None, {}, "no Perc of Grade or Summative/Formative Perc column"
+    if "category" not in idx and norms[0] in _CATEGORY_HEADER_FALLBACK:
+        idx["category"] = 0
+    if "category" not in idx:
+        return None, {}, "no Category column"
+    return layout, idx, None
 
 
 def _classify_totals_headers(headers):
     """Return layout name and column index map, or (None, {})."""
-    norms = [_norm_header(h) for h in headers]
-    joined = " | ".join(norms)
-    if re.search(r"description|due date|grading complete|date assigned", joined):
-        return None, {}
-    if not any("category" in h for h in norms):
-        return None, {}
+    layout, idx, _ = _classify_totals_headers_reason(headers)
+    return layout, idx
 
-    idx = {}
-    for i, h in enumerate(norms):
-        if "category" in h and "idx_category" not in idx:
-            idx["category"] = i
-        elif "perc of grade" in h or "percent of grade" in h or h in ("weight", "weight %"):
-            idx["weight"] = i
-        elif "summative" in h and "pts" in h:
-            idx["summative_pts"] = i
-        elif "summative" in h and "max" in h:
-            idx["summative_max"] = i
-        elif "summative" in h and ("perc" in h or "percent" in h or "%" in h):
-            idx["summative_perc"] = i
-        elif "formative" in h and "pts" in h:
-            idx["formative_pts"] = i
-        elif "formative" in h and "max" in h:
-            idx["formative_max"] = i
-        elif "formative" in h and ("perc" in h or "percent" in h or "%" in h):
-            idx["formative_perc"] = i
-        elif "overall" in h and ("perc" in h or "percent" in h or "%" in h):
-            idx["overall_perc"] = i
-        elif h in ("points", "pts") or (h.endswith("pts") and "summative" not in h and "formative" not in h):
-            idx["points"] = i
-        elif h == "max" or h == "max pts" or h == "points possible":
-            idx["max"] = i
-        elif h in ("perc", "percent", "%", "percentage") or (
-            ("perc" in h or "percent" in h) and "grade" not in h and "overall" not in h
-            and "summative" not in h and "formative" not in h
-        ):
-            idx["perc"] = i
-        elif h == "mark" or h == "letter":
-            idx["mark"] = i
 
-    if "summative_perc" in idx and "formative_perc" in idx:
-        return "summative_formative", idx
-    if "weight" in idx:
-        return "perc_of_grade", idx
-    return None, {}
+def _find_totals_header(rows):
+    """First header-like row: (row index, headers, layout, idx, reason). Index is None when rejected.
+
+    Header rows may be th or td, in thead or tbody, and may not be the first row.
+    """
+    hint_reason = None
+    first_reason = None
+    for i, cells in enumerate(rows):
+        if len(cells) < 2:
+            continue
+        if any(span > 1 for _, span in cells) and i + 1 < len(rows):
+            merged = _merge_header_rows(cells, rows[i + 1])
+            m_layout, m_idx, _ = _classify_totals_headers_reason(merged)
+            if m_layout:
+                return i + 1, merged, m_layout, m_idx, None
+        headers = _expand_cells(cells)
+        layout, idx, reason = _classify_totals_headers_reason(headers)
+        if layout:
+            return i, headers, layout, idx, None
+        if first_reason is None:
+            first_reason = reason
+        if hint_reason is None and _FOOTER_HINT_RE.search(" ".join(t for t in headers if len(t) < 60)):
+            hint_reason = reason
+    return None, [], None, {}, hint_reason or first_reason or REASON_NO_HEADER
+
+
+def _header_cells(table):
+    if table is None:
+        return []
+    rows = _container_rows(table)
+    i, headers, _, _, _ = _find_totals_header(rows)
+    if i is not None:
+        return headers
+    return _expand_cells(rows[0]) if rows else []
+
+
+def _looks_like_footer(container, rows):
+    if re.search(r"total|categor|weight", _element_ident(container), re.IGNORECASE):
+        return True
+    for cells in rows[:6]:
+        if any(len(t) < 60 and _FOOTER_HINT_RE.search(t) for t, _ in cells):
+            return True
+    return False
 
 
 def parse_min_max_assignment_scale(soup):
@@ -1763,51 +1916,60 @@ def parse_min_max_assignment_scale(soup):
     return None, None
 
 
-def parse_gradebook_totals(soup):
-    """Parse the GradebookDetails Totals footer. Soft-fail (None) if absent."""
+def _select_totals_footer(soup, diagnostics=None):
+    """Best footer container as (container, headers, layout, idx, body rows), or None.
+
+    Rejected footer candidates land in diagnostics as {"container", "reason"}.
+    The assignment list is not a footer candidate and is never reported.
+    """
+    ranked = []
+    candidates = _totals_candidates(soup)
+    for container in candidates:
+        rows = _container_rows(container)
+        header_i, headers, layout, idx, reason = _find_totals_header(rows)
+        body = []
+        if layout:
+            for cells in rows[header_i + 1:]:
+                texts = _expand_cells(cells)
+                if not texts or _classify_totals_headers_reason(texts)[0]:
+                    continue
+                body.append(texts)
+            ci = idx["category"]
+            if not any(ci < len(t) and t[ci].strip() for t in body):
+                layout, reason = None, "no category rows under the header"
+        if not layout:
+            if diagnostics is not None and reason != REASON_ASSIGNMENT_LIST and _looks_like_footer(container, rows):
+                diagnostics.append({"container": _element_ident(container), "reason": reason})
+            continue
+        score = 2 if re.search(r"total", _element_ident(container), re.IGNORECASE) else 1
+        ranked.append((score, container, headers, layout, idx, body))
+    if not ranked:
+        if diagnostics is not None and not diagnostics:
+            tables = sum(1 for c in candidates if c.name == "table")
+            diagnostics.append({
+                "container": "",
+                "reason": f"no footer candidate among {tables} table(s) and {len(candidates) - tables} grid div(s)",
+            })
+        return None
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return ranked[0][1:]
+
+
+def parse_gradebook_totals(soup, diagnostics=None):
+    """Parse the GradebookDetails Totals footer. Soft-fail (None) if absent.
+
+    Each category carries weight_basis: "category" when weight_pct is that category's own
+    Perc of Grade, "bucket" when it is the Summative/Formative bucket weight. In the
+    summative/formative layout one name can appear twice, once per kind.
+    """
     if soup is None:
         return None
     try:
-        tables = list(soup.find_all("table"))
-        # Prefer a table whose id/class mentions totals, but accept header match anywhere
-        ranked = []
-        for table in tables:
-            ident = " ".join(
-                filter(
-                    None,
-                    [
-                        table.get("id") or "",
-                        " ".join(table.get("class") or []),
-                    ],
-                )
-            )
-            headers = _header_cells(table)
-            layout, idx = _classify_totals_headers(headers)
-            if not layout:
-                continue
-            score = 2 if re.search(r"total", ident, re.I) else 1
-            ranked.append((score, table, headers, layout, idx))
-        if not ranked:
+        picked = _select_totals_footer(soup, diagnostics)
+        if not picked:
             return None
-        ranked.sort(key=lambda item: item[0], reverse=True)
-        _, table, headers, layout, idx = ranked[0]
+        _, headers, layout, idx, body_rows = picked
         min_pct, max_pct = parse_min_max_assignment_scale(soup)
-
-        body_rows = []
-        thead = table.find("thead")
-        for row in table.find_all("tr"):
-            if thead and row.parent is thead:
-                continue
-            cells = row.find_all(["td", "th"])
-            if not cells:
-                continue
-            texts = [_cell_text(c) for c in cells]
-            # Skip a repeated header row
-            if texts and _norm_header(texts[0]) == "category" and any(
-                "perc" in _norm_header(t) or "pts" in _norm_header(t) for t in texts[1:]
-            ):
-                continue
-            body_rows.append(texts)
 
         def col(texts, key):
             i = idx.get(key)
@@ -1822,12 +1984,12 @@ def parse_gradebook_totals(soup):
         formative_weight = _weight_in_header(headers[idx["formative_perc"]]) if "formative_perc" in idx else None
 
         for texts in body_rows:
-            name = col(texts, "category") or (texts[0] if texts else "")
+            name = col(texts, "category").strip()
             if not name:
                 continue
             is_total = bool(_TOTAL_ROW_RE.match(name))
 
-            if layout == "perc_of_grade":
+            if layout == "percent_of_grade":
                 weight = _parse_pct_value(col(texts, "weight"))
                 points = safe_float(col(texts, "points"))
                 maximum = safe_float(col(texts, "max"))
@@ -1840,7 +2002,9 @@ def parse_gradebook_totals(soup):
                     continue
                 categories.append({
                     "name": name,
+                    "kind": None,
                     "weight_pct": weight,
+                    "weight_basis": "category",
                     "points": points,
                     "max": maximum,
                     "perc": perc,
@@ -1857,46 +2021,23 @@ def parse_gradebook_totals(soup):
                 o_perc = _parse_pct_value(col(texts, "overall_perc"))
                 mark = col(texts, "mark")
                 if is_total:
+                    # The Total row's type Perc is the bucket score, not the weight
                     overall_perc = o_perc if o_perc is not None else overall_perc
                     overall_mark = mark or overall_mark
-                    if s_perc is not None:
-                        # Total row type perc is the bucket score, not the weight
-                        pass
-                    # Represent the two weighted buckets from the Total row when present
                     continue
-                # A category row lives on one side or both
                 s_empty = s_pts in (0, None) and s_max in (0, None)
                 f_empty = f_pts in (0, None) and f_max in (0, None)
+                sides = []
                 if not s_empty or s_perc is not None:
-                    categories.append({
-                        "name": name,
-                        "kind": "summative",
-                        "weight_pct": summative_weight,
-                        "points": s_pts,
-                        "max": s_max,
-                        "perc": s_perc,
-                        "mark": mark,
-                        "empty": s_empty,
-                    })
+                    sides.append(("summative", s_pts, s_max, s_perc, s_empty))
                 if not f_empty or f_perc is not None:
-                    categories.append({
-                        "name": name,
-                        "kind": "formative",
-                        "weight_pct": formative_weight,
-                        "points": f_pts,
-                        "max": f_max,
-                        "perc": f_perc,
-                        "mark": mark,
-                        "empty": f_empty,
-                    })
-                if s_empty and f_empty and s_perc is None and f_perc is None:
-                    # Still record the named category so weights can attach later
-                    kind = None
+                    sides.append(("formative", f_pts, f_max, f_perc, f_empty))
+                if not sides:
+                    # Nothing on either side yet: only the name can say which bucket it is
                     lname = name.lower()
-                    if "summative" in lname:
-                        kind = "summative"
-                    elif "formative" in lname:
-                        kind = "formative"
+                    kind = "summative" if "summative" in lname else "formative" if "formative" in lname else None
+                    sides.append((kind, 0.0, 0.0, None, True))
+                for kind, pts, mx, perc, empty in sides:
                     categories.append({
                         "name": name,
                         "kind": kind,
@@ -1905,32 +2046,23 @@ def parse_gradebook_totals(soup):
                             else formative_weight if kind == "formative"
                             else None
                         ),
-                        "points": 0.0,
-                        "max": 0.0,
-                        "perc": None,
+                        "weight_basis": "bucket",
+                        "points": pts,
+                        "max": mx,
+                        "perc": perc,
                         "mark": mark,
-                        "empty": True,
+                        "empty": empty,
                     })
 
-        if layout == "summative_formative":
-            # If no per-category rows landed, synthesize buckets from weights alone
-            if not categories:
-                if summative_weight is not None:
+        if layout == "summative_formative" and not categories:
+            # No per-category rows landed: synthesize buckets from weights alone
+            for kind, weight in (("summative", summative_weight), ("formative", formative_weight)):
+                if weight is not None:
                     categories.append({
-                        "name": "Summative",
-                        "kind": "summative",
-                        "weight_pct": summative_weight,
-                        "points": None,
-                        "max": None,
-                        "perc": None,
-                        "mark": "",
-                        "empty": True,
-                    })
-                if formative_weight is not None:
-                    categories.append({
-                        "name": "Formative",
-                        "kind": "formative",
-                        "weight_pct": formative_weight,
+                        "name": kind.capitalize(),
+                        "kind": kind,
+                        "weight_pct": weight,
+                        "weight_basis": "bucket",
                         "points": None,
                         "max": None,
                         "perc": None,
@@ -1952,7 +2084,9 @@ def parse_gradebook_totals(soup):
             totals["summative_weight_pct"] = summative_weight
             totals["formative_weight_pct"] = formative_weight
         return totals
-    except Exception:
+    except Exception as e:
+        if diagnostics is not None:
+            diagnostics.append({"container": "", "reason": f"parser error ({type(e).__name__})"})
         return None
 
 
@@ -1968,35 +2102,28 @@ def category_weight_map(totals):
         weight = cat.get("weight_pct")
         if weight is None:
             continue
-        weights[_norm_course_name(name)] = weight
-        weights[name.lower()] = weight
-    # Layout A: also map the type words
+        # A name on both summative/formative sides keeps its larger weight, so it is
+        # never called 0% when one side counts.
+        for key in (_norm_course_name(name), name.lower()):
+            if weights.get(key) is None or weight > weights[key]:
+                weights[key] = weight
     if totals.get("layout") == "summative_formative":
-        if totals.get("summative_weight_pct") is not None:
-            weights["summative"] = totals["summative_weight_pct"]
-            weights["summatives"] = totals["summative_weight_pct"]
-        if totals.get("formative_weight_pct") is not None:
-            weights["formative"] = totals["formative_weight_pct"]
-            weights["formatives"] = totals["formative_weight_pct"]
+        for kind in ("summative", "formative"):
+            weight = totals.get(f"{kind}_weight_pct")
+            if weight is not None:
+                weights.setdefault(kind, weight)
     return weights
 
 
 def lookup_category_weight(category, weights):
+    """Same match order as the drawer tags (glance.footer_category_matches)."""
     if not category or not weights:
         return None
-    key = _norm_course_name(category)
-    if key in weights:
-        return weights[key]
-    low = category.strip().lower()
-    if low in weights:
-        return weights[low]
-    # Prefix / contains match for "Summatives" vs "Summative"
-    for stored, weight in weights.items():
-        if not stored:
-            continue
-        if stored in key or key in stored:
-            return weight
-    return None
+    hits = glance.footer_category_matches(
+        category, [{"name": name, "weight_pct": w} for name, w in weights.items()]
+    )
+    found = [h["weight_pct"] for h in hits if h.get("weight_pct") is not None]
+    return max(found) if found else None
 
 
 def annotate_assignment_status(assignment, weights=None):
@@ -2227,6 +2354,9 @@ def build_counted_insight(totals, assignments=None, posted_pct=None, posted_mark
             "name": name,
             "kind": cat.get("kind"),
             "weight_pct": weight,
+            "weight_basis": cat.get("weight_basis") or (
+                "bucket" if totals.get("layout") == "summative_formative" else "category"
+            ),
             "perc": cat.get("perc"),
             "points": pts,
             "max": mx,
@@ -2254,6 +2384,8 @@ def build_counted_insight(totals, assignments=None, posted_pct=None, posted_mark
         "min_assignment_pct": totals.get("min_assignment_pct"),
         "max_assignment_pct": totals.get("max_assignment_pct"),
         "extra_credit": extra_credit,
+        "summative_weight_pct": totals.get("summative_weight_pct"),
+        "formative_weight_pct": totals.get("formative_weight_pct"),
     }
 
 
@@ -4703,6 +4835,9 @@ def scrape_all():
             totals_n = sum(1 for ca in class_assignments if ca.get("totals"))
             print(f"  {total_assignments} assignments across {len(class_assignments)} classes")
             print(f"  GradebookDetails totals parsed for {totals_n}/{len(class_assignments)} class(es)")
+            warning = totals_parse_warning(label, totals_n, len(class_assignments))
+            if warning:
+                print(warning)
 
             # Optional within-term grade curves from GradebookSummary
             print("  Fetching gradebook trend series...")
@@ -4860,6 +4995,145 @@ def probe_gradebook():
         print("  chosen", [(value, extract_class_name(label)) for value, label in chosen])
 
 
+_PROBE_MAX_CONTAINERS = 80
+_PROBE_MAX_ROWS = 25
+
+
+def _probe_redact(text, student):
+    """Probe-safe text: configured identifiers, each word of the student name, and long digit runs removed."""
+    out = redact_probe_text(text, student)
+    for word in re.findall(r"[^\W\d_]{2,}", str(student.get("name") or "")):
+        out = re.sub(rf"\b{re.escape(word)}\b", "[redacted]", out, flags=re.IGNORECASE)
+    out = re.sub(r"\d{5,}", "<num>", out)
+    out = re.sub(r"\S+@\S+", "<email>", out)
+    return out[:80]
+
+
+def _probe_cell_shape(text):
+    t = (text or "").strip()
+    if not t:
+        return "blank"
+    if re.fullmatch(r"-?[\d.,]+\s*%", t):
+        return "pct"
+    if re.fullmatch(r"-?[\d.,]+\s*/\s*-?[\d.,]*", t):
+        return "fraction"
+    if re.fullmatch(r"-?[\d.,]+", t):
+        return "num"
+    if re.fullmatch(r"[A-F][+-]?|P|NP|I", t):
+        return "mark"
+    return "text"
+
+
+def _probe_text_cell(text, student):
+    """Words only. Any number, percent, fraction, or letter mark prints as its shape, never its value."""
+    shape = _probe_cell_shape(text)
+    return _probe_redact(text, student) if shape == "text" else f"<{shape}>"
+
+
+def _probe_weight_cell(text):
+    t = (text or "").strip()
+    if re.fullmatch(r"-?\d+(?:\.\d+)?\s*%?", t):
+        return f"{_parse_pct_value(t):g}%"
+    return f"<{_probe_cell_shape(t)}>"
+
+
+def _async_delta_segments(text):
+    """(type, id, content) segments of an ASP.NET UpdatePanel delta (length|type|id|content|)."""
+    out = []
+    i = 0
+    while i < len(text):
+        j = text.find("|", i)
+        k = text.find("|", j + 1) if j >= 0 else -1
+        m = text.find("|", k + 1) if k >= 0 else -1
+        if m < 0 or not text[i:j].isdigit():
+            break
+        length = int(text[i:j])
+        out.append((text[j + 1:k], text[k + 1:m], text[m + 1:m + 1 + length]))
+        i = m + 1 + length + 1
+    return out
+
+
+def probe_totals_structure(soup, student, out=print):
+    """Footer structure of one GradebookDetails page or fragment. Never prints scores or names.
+
+    Lists every table and grid div; for footer-like containers also the header texts, the
+    first cell of each body row, and values only under weight headers (Perc of Grade).
+    Percent and points columns are scores, so their cells print as a shape (<pct>, <blank>).
+    """
+    containers = _totals_candidates(soup)
+    out(f"    containers: {len(containers)} (tables and grid divs)")
+    for n, container in enumerate(containers[:_PROBE_MAX_CONTAINERS], start=1):
+        rows = _container_rows(container)
+        parent = container.find_parent(lambda el: el.get("id"))
+        where = f" in #{parent.get('id')}" if parent else ""
+        out(f"    [{n}] {_probe_redact(_element_ident(container), student)}{where} rows={len(rows)}")
+        header_i, headers, layout, idx, reason = _find_totals_header(rows)
+        if header_i is None:
+            first = next((cells for cells in rows if len(cells) >= 2), None)
+            if first and _looks_like_footer(container, rows) and all(len(t) < 40 for t, _ in first):
+                out(f"        first row: {[_probe_text_cell(t, student) for t, _ in first]}")
+            if reason != REASON_ASSIGNMENT_LIST and _looks_like_footer(container, rows):
+                out(f"        not a footer: {reason}")
+            continue
+        out(f"        header row {header_i}: {[_probe_text_cell(h, student) for h in headers]}")
+        out(f"        layout={layout} columns={sorted(idx)}")
+        weight_cols = [i for i, h in enumerate(headers) if _WEIGHT_HEADER_RE.search(_norm_header(h))]
+        ci = idx.get("category", 0)
+        for cells in rows[header_i + 1:header_i + 1 + _PROBE_MAX_ROWS]:
+            texts = _expand_cells(cells)
+            if not texts:
+                continue
+            name = _probe_text_cell(texts[ci] if ci < len(texts) else "", student)
+            weights = {headers[i]: _probe_weight_cell(texts[i]) for i in weight_cols if i < len(texts)}
+            shapes = [f"<{_probe_cell_shape(t)}>" for i, t in enumerate(texts) if i != ci and i not in weight_cols]
+            out(f"        row: {name!r} weights={weights} other_cells={shapes}")
+    if len(containers) > _PROBE_MAX_CONTAINERS:
+        out(f"    ... {len(containers) - _PROBE_MAX_CONTAINERS} more container(s) not listed")
+    diagnostics = []
+    totals = parse_gradebook_totals(soup, diagnostics)
+    if totals:
+        bits = [
+            f"{_probe_text_cell(c.get('name'), student)}"
+            f"[{c.get('kind') or '-'}]={c.get('weight_pct')}/{c.get('weight_basis')}"
+            for c in totals.get("categories") or []
+        ]
+        out(f"    parser: layout={totals['layout']} categories={bits}")
+    else:
+        out("    parser: no totals")
+        for d in diagnostics:
+            out(f"      rejected {_probe_redact(d.get('container') or '-', student)}: {d['reason']}")
+
+
+def probe_gradebook_totals():
+    """Login and log GradebookDetails footer structure per class. Writes and publishes nothing."""
+    require_scrape_config()
+    session = login()
+    for i, student in enumerate(STUDENTS, start=1):
+        print(f"\n=== PROBE gradebook totals: {student_log_label(i)} ===")
+        switch_student(session, student["school_code"], student["sn"])
+        parsed = 0
+        seen = 0
+        for page in iter_gradebook_class_pages(session):
+            seen += 1
+            course = _probe_redact(extract_class_name(page["label"]), student)
+            kind = "async UpdatePanel" if page["is_async"] else "full page"
+            print(f"\n  --- class {page['ordinal']}/{page['count']}: {course!r} ({kind}, {len(page['text'])} bytes) ---")
+            if page["is_async"]:
+                segments = _async_delta_segments(page["text"])
+                panels = [(ident, content) for typ, ident, content in segments if typ == "updatePanel"]
+                print(f"    delta: {len(segments)} segment(s), updatePanels={[(p, len(c)) for p, c in panels]}")
+                for ident, content in panels:
+                    print(f"   updatePanel {_probe_redact(ident, student)}:")
+                    probe_totals_structure(BeautifulSoup(content, "html.parser"), student)
+                if not panels:
+                    probe_totals_structure(page["soup"], student)
+            else:
+                probe_totals_structure(page["soup"], student)
+            if parse_gradebook_totals(page["soup"]):
+                parsed += 1
+        print(f"\n  totals parsed for {parsed}/{seen} class(es)")
+
+
 def rebuild_views_only():
     """Rebuild dashboard view payloads from existing grades_data.json (no Aeries)."""
     if not OUTPUT_FILE.exists():
@@ -4898,6 +5172,12 @@ if __name__ == "__main__":
         help="Login and dump GradebookDetails dropdown terms (no grades_data write)",
     )
     parser.add_argument(
+        "--probe-gradebook-totals",
+        action="store_true",
+        help="Login and log GradebookDetails footer structure per class: ids, headers, "
+             "category names, weights only (no scores, no grades_data write, no publish)",
+    )
+    parser.add_argument(
         "--attendance-only",
         action="store_true",
         help="Refresh absences/tardies only (works during summer; no Grok)",
@@ -4919,6 +5199,8 @@ if __name__ == "__main__":
             publish_existing()
         elif args.probe_attendance:
             probe_attendance()
+        elif args.probe_gradebook_totals:
+            probe_gradebook_totals()
         elif args.probe_gradebook:
             probe_gradebook()
         elif args.attendance_only:

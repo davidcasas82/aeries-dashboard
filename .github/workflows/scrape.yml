@@ -15,6 +15,10 @@ on:
         description: 'Debug: dump GradebookDetails dropdown terms only'
         type: boolean
         default: false
+      probe_gradebook_totals:
+        description: 'Debug: log GradebookDetails footer structure and weights only (no scores, no publish)'
+        type: boolean
+        default: false
       attendance_only:
         description: 'Refresh absences/tardies only (no grades/Grok)'
         type: boolean
@@ -67,6 +71,8 @@ jobs:
         run: |
           if [ "${{ inputs.probe_attendance }}" = "true" ]; then
             python scraper.py --probe-attendance
+          elif [ "${{ inputs.probe_gradebook_totals }}" = "true" ]; then
+            python scraper.py --probe-gradebook-totals
           elif [ "${{ inputs.probe_gradebook }}" = "true" ]; then
             python scraper.py --probe-gradebook
           elif [ "${{ inputs.attendance_only }}" = "true" ]; then
