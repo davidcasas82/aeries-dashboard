@@ -30,8 +30,11 @@ python scraper.py --attendance-only
 python scraper.py --rebuild-view  # dashboard view payload only
 python scraper.py --publish-only  # POST existing local JSON to family-data
 python scraper.py --probe-gradebook
+python scraper.py --probe-gradebook-totals  # footer structure + weights only, no scores, no publish
 python scraper.py --probe-attendance
 ```
+
+In CI, run the footer probe from Actions → Daily Grade Scrape → Run workflow with `probe_gradebook_totals` checked.
 
 `SUMMER_BREAK=true` pauses grades and Grok (attendance can still refresh). Leave it unset to follow `school_calendar.json`.
 
