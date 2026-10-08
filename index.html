@@ -128,13 +128,18 @@
         .since-yesterday {
             display: block;
             margin-top: 2px;
+            max-width: 100%;
+            min-width: 0;
             color: var(--text-2);
             font-size: var(--fs-small);
             font-weight: 550;
             line-height: 1.35;
-            white-space: normal;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
+        .since-yesterday:empty,
         .since-yesterday[hidden] { display: none; }
 
         .last-updated {
