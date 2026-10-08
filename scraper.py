@@ -86,8 +86,12 @@ FAMILY_DATA_URL = os.getenv("FAMILY_DATA_URL", "").rstrip("/")
 FAMILY_PIN = os.getenv("FAMILY_PIN", "")
 HISTORY_MAX_DAYS = 120
 HISTORY_MISSING_NAMES_CAP = 8
+HISTORY_ITEM_DAYS = 14
+HISTORY_ITEM_CAP = 12
 PCT_HISTORY_UI_POINTS = 30
 TREND_DELTA_THRESHOLD = 2.0  # percentage points over 7d for improve/slip labels
+UNGRADED_STREAK_WEEKDAYS = 5
+EVENING_SNAPSHOT_HOUR = 19  # 7pm Pacific and later; the ~8pm scrape is the one that sticks
 
 # Official TUSD 6–12 quarter end dates (not on the public first/last calendar page)
 _TUSD_6_12_QUARTERS_2026_27 = {
@@ -2774,7 +2778,303 @@ def snapshot_missing_names(class_analytics_entry):
     return names
 
 
-def build_student_snapshot(student_data, class_analytics_list, captured_at=None):
+def is_evening_snapshot(now=None):
+    """True for the last scrape of the Pacific day (about 8pm)."""
+    now = now or pacific_now()
+    return now.hour >= EVENING_SNAPSHOT_HOUR
+
+
+def _history_item_key(title):
+    return re.sub(r"[^a-z0-9]+", "", (title or "").lower())
+
+
+def snapshot_item_state(assignment):
+    """open, turned_in, marked, or missing. A recorded score wins over a turn-in."""
+    if assignment_has_score_mark(assignment):
+        return "marked"
+    classroom = assignment.get("classroom") or {}
+    turned = assignment_turned_in(assignment) or classroom.get("state") in (
+        "TURNED_IN",
+        "RETURNED",
+    )
+    if turned:
+        return "turned_in"
+    if assignment.get("aeries_missing"):
+        return "missing"
+    return "open"
+
+
+def _snapshot_due_iso(assignment):
+    due = parse_due_date(assignment.get("due_date"))
+    if not due:
+        return ""
+    return due.date().isoformat()
+
+
+def snapshot_items_for_class(assignments, today, keep_keys=None):
+    """Capped rows that a day-to-day diff can follow. Not the whole gradebook."""
+    today_d = today.date() if isinstance(today, datetime) else today
+    keep_keys = keep_keys or set()
+    ranked = []
+    for assignment in assignments or []:
+        title = (assignment.get("description") or "").strip()
+        if not title:
+            continue
+        state = snapshot_item_state(assignment)
+        due = _snapshot_due_iso(assignment)
+        due_d = _parse_iso_date(due)
+        key = _history_item_key(title)
+        window = False
+        if due_d is None:
+            window = state in ("open", "turned_in", "missing")
+        else:
+            age = (today_d - due_d).days
+            window = -14 <= age <= 21
+        if key not in keep_keys and not window and state != "missing":
+            continue
+        if key not in keep_keys and state == "marked" and (due_d is None or (today_d - due_d).days > 14):
+            continue
+        row = {"title": title, "due": due, "state": state}
+        code = score_status_code(assignment.get("score_raw"))
+        if code:
+            row["mark_code"] = code
+        if state == "missing":
+            rank = 0
+        elif state == "open" and due_d and due_d < today_d:
+            rank = 1
+        elif state == "turned_in":
+            rank = 2
+        elif state == "open":
+            rank = 3
+        else:
+            rank = 4
+        ranked.append((rank, due or "9999", key, row))
+    ranked.sort(key=lambda item: (item[0], item[1], item[2]))
+    chosen = []
+    seen = set()
+    for _rank, _due, key, row in ranked:
+        if key in seen:
+            continue
+        seen.add(key)
+        chosen.append(row)
+        if len(chosen) >= HISTORY_ITEM_CAP:
+            break
+    return chosen
+
+
+def _class_item_index(class_row):
+    indexed = {}
+    for item in (class_row or {}).get("items") or []:
+        key = _history_item_key(item.get("title"))
+        if key:
+            indexed[key] = item
+    return indexed
+
+
+def _weekdays_after(start, end):
+    """Weekdays strictly after start, through end."""
+    if not start or not end or end <= start:
+        return 0
+    count = 0
+    day = start
+    while day < end:
+        day = day.fromordinal(day.toordinal() + 1)
+        if day.weekday() < 5:
+            count += 1
+    return count
+
+
+def diff_change_events(today_snap, yesterday_snap, today=None):
+    """Turned in, lapsed, newly missing, newly marked, and percent moves."""
+    today_d = today or _parse_iso_date((today_snap or {}).get("date")) or pacific_today()
+    if isinstance(today_d, datetime):
+        today_d = today_d.date()
+    events = []
+    today_classes = (today_snap or {}).get("classes") or {}
+    yesterday_classes = (yesterday_snap or {}).get("classes") or {}
+    for name in sorted(set(today_classes) | set(yesterday_classes)):
+        now = today_classes.get(name) or {}
+        prev = yesterday_classes.get(name) or {}
+        delta = _pct_delta(now.get("pct"), prev)
+        if delta is not None and abs(delta) >= TREND_DELTA_THRESHOLD:
+            events.append({
+                "type": "pct_move",
+                "class_name": name,
+                "delta": delta,
+                "pct": now.get("pct"),
+            })
+        now_items = _class_item_index(now)
+        prev_items = _class_item_index(prev)
+        for key in sorted(set(now_items) | set(prev_items)):
+            cur = now_items.get(key)
+            old = prev_items.get(key)
+            cur_state = (cur or {}).get("state")
+            old_state = (old or {}).get("state")
+            title = ((cur or old) or {}).get("title") or ""
+            due = ((cur or old) or {}).get("due") or ""
+            base = {"class_name": name, "title": title, "due": due}
+            if cur_state == "turned_in" and old_state in ("open", "missing"):
+                events.append({**base, "type": "turned_in"})
+            elif cur_state == "missing" and old_state != "missing":
+                events.append({**base, "type": "newly_missing"})
+            elif cur_state == "marked" and old_state in ("open", "missing", "turned_in"):
+                marked = {**base, "type": "marked"}
+                code = (cur or {}).get("mark_code")
+                if code:
+                    marked["mark_code"] = code
+                events.append(marked)
+            elif cur_state == "open" and due:
+                due_d = _parse_iso_date(due)
+                old_due = _parse_iso_date((old or {}).get("due"))
+                yesterday_d = _parse_iso_date((yesterday_snap or {}).get("date"))
+                already = (
+                    old_state == "open"
+                    and old_due
+                    and yesterday_d
+                    and old_due < yesterday_d
+                )
+                if due_d and due_d < today_d and not already:
+                    events.append({**base, "type": "lapsed"})
+    return events
+
+
+def ungraded_streak_events(snapshots, today=None):
+    """Turned in with no score for several school days. Silent until two weeks exist."""
+    today_d = today or pacific_today()
+    if isinstance(today_d, datetime):
+        today_d = today_d.date()
+    dated = []
+    for snap in snapshots or []:
+        day = _parse_iso_date(snap.get("date"))
+        if day and day <= today_d:
+            dated.append((day, snap))
+    dated.sort(key=lambda pair: pair[0])
+    if not dated:
+        return []
+    item_days = [
+        day for day, snap in dated
+        if any(
+            isinstance(row, dict) and row.get("items")
+            for row in (snap.get("classes") or {}).values()
+        )
+    ]
+    if not item_days or (today_d - item_days[0]).days < HISTORY_ITEM_DAYS:
+        return []
+    events = []
+    class_names = set()
+    for _day, snap in dated:
+        class_names.update((snap.get("classes") or {}).keys())
+    for name in sorted(class_names):
+        series = []
+        for day, snap in dated:
+            indexed = _class_item_index((snap.get("classes") or {}).get(name))
+            if indexed:
+                series.append((day, indexed))
+        if not series:
+            continue
+        latest_day, latest = series[-1]
+        if latest_day != today_d and (today_d - latest_day).days > 1:
+            continue
+        for key, item in latest.items():
+            if item.get("state") != "turned_in":
+                continue
+            first = None
+            broken = False
+            for day, indexed in series:
+                row = indexed.get(key)
+                if row is None:
+                    continue
+                if row.get("state") == "marked":
+                    first = None
+                    broken = True
+                    continue
+                if row.get("state") == "turned_in":
+                    if first is None:
+                        first = day
+                    broken = False
+                else:
+                    first = None
+            if broken or first is None:
+                continue
+            weekdays = _weekdays_after(first, today_d)
+            if weekdays < UNGRADED_STREAK_WEEKDAYS:
+                continue
+            events.append({
+                "type": "ungraded_streak",
+                "class_name": name,
+                "title": item.get("title") or "",
+                "due": item.get("due") or "",
+                "days": weekdays,
+            })
+    return events
+
+
+def phrase_since_yesterday(events):
+    """One sentence from the event list. No cause that is not already an event."""
+    bits = []
+    for event in events or []:
+        kind = event.get("type")
+        title = (event.get("title") or "").strip()
+        course = (event.get("class_name") or "").strip()
+        if kind == "turned_in" and title and course:
+            bits.append(f"{title} in {course} was turned in")
+        elif kind == "newly_missing" and title and course:
+            bits.append(f"{title} in {course} is newly missing")
+        elif kind == "lapsed" and title and course:
+            bits.append(f"{title} in {course} was due and is still open")
+        elif kind == "marked" and title and course:
+            code = event.get("mark_code")
+            if code:
+                bits.append(f"{title} in {course} was marked {code}")
+            else:
+                bits.append(f"{title} in {course} was graded")
+        elif kind == "pct_move" and course and event.get("delta") is not None:
+            delta = event["delta"]
+            way = "up" if delta > 0 else "down"
+            bits.append(f"{course} is {way} {abs(delta):g} points")
+        elif kind == "ungraded_streak" and title and course:
+            bits.append(
+                f"{title} in {course} has been turned in with no score for {event.get('days')} school days"
+            )
+    if not bits:
+        return ""
+    shown = bits[:4]
+    text = "; ".join(shown)
+    extra = len(bits) - len(shown)
+    if extra:
+        text += f"; and {extra} more"
+    return text[0].upper() + text[1:] + "."
+
+
+def latest_since_yesterday(history, student_sn):
+    """Sentence from the newest snapshot that recorded an evening note, possibly empty."""
+    entry = (history.get("students") or {}).get(str(student_sn), {})
+    snaps = list(entry.get("snapshots") or [])
+    snaps.sort(key=lambda snap: snap.get("date") or "")
+    for snap in reversed(snaps):
+        if "change_note_date" in snap:
+            return (snap.get("since_yesterday") or "").strip()
+    return ""
+
+
+def _strip_stale_snapshot_items(snaps):
+    """Assignment lists live on the last 14 days. Older days keep percent, mark, and counts."""
+    if not snaps:
+        return snaps
+    newest = _parse_iso_date(snaps[-1].get("date"))
+    if not newest:
+        return snaps
+    for snap in snaps:
+        day = _parse_iso_date(snap.get("date"))
+        if not day or (newest - day).days <= HISTORY_ITEM_DAYS:
+            continue
+        for class_row in (snap.get("classes") or {}).values():
+            if isinstance(class_row, dict):
+                class_row.pop("items", None)
+    return snaps
+
+
+def build_student_snapshot(student_data, class_analytics_list, captured_at=None, include_items=False, prior_items=None):
     """Compact daily snapshot for one student."""
     now = captured_at or datetime.now(timezone.utc)
     date_str = pacific_today().isoformat()
@@ -2807,6 +3107,19 @@ def build_student_snapshot(student_data, class_analytics_list, captured_at=None)
             "missing_names": snapshot_missing_names(c),
             "aeries_trend": trend.get("direction") if isinstance(trend, dict) else None,
         }
+    if include_items:
+        today = pacific_today_dt()
+        prior_items = prior_items or {}
+        for class_meta in student_data.get("classes") or []:
+            name = (class_meta.get("course_name") or "").strip()
+            if name not in classes:
+                continue
+            keep = prior_items.get(name) or set()
+            classes[name]["items"] = snapshot_items_for_class(
+                assignments_for_class(student_data, class_meta),
+                today,
+                keep_keys=keep,
+            )
     prev_brief = None
     ai = student_data.get("ai_summary") or {}
     if ai.get("headline") or ai.get("focus_tonight"):
@@ -2824,18 +3137,42 @@ def build_student_snapshot(student_data, class_analytics_list, captured_at=None)
     return snap
 
 
-def upsert_student_snapshot(history, student_sn, student_name, snapshot):
-    """One snapshot per student per calendar day; trim old days."""
+def upsert_student_snapshot(history, student_sn, student_name, snapshot, replace_items=True):
+    """One snapshot per student per calendar day; trim old days.
+
+    Morning and afternoon scrapes update percents but keep the evening item list
+    and the Since yesterday sentence. The evening scrape replaces both.
+    """
     students = history.setdefault("students", {})
     entry = students.setdefault(str(student_sn), {"name": student_name, "snapshots": []})
     entry["name"] = student_name or entry.get("name", "")
     snaps = entry.get("snapshots") or []
     date_str = snapshot.get("date")
-    snaps = [s for s in snaps if s.get("date") != date_str]
+    existing = next((snap for snap in snaps if snap.get("date") == date_str), None)
+    if existing and not replace_items:
+        merged = dict(snapshot)
+        merged_classes = {}
+        for name, class_row in (snapshot.get("classes") or {}).items():
+            row = dict(class_row)
+            old = (existing.get("classes") or {}).get(name) or {}
+            if "items" in old:
+                row["items"] = old["items"]
+            else:
+                row.pop("items", None)
+            merged_classes[name] = row
+        merged["classes"] = merged_classes
+        if "change_note_date" in existing:
+            merged["change_note_date"] = existing["change_note_date"]
+            merged["since_yesterday"] = existing.get("since_yesterday") or ""
+            if existing.get("change_events") is not None:
+                merged["change_events"] = existing["change_events"]
+        snapshot = merged
+    snaps = [snap for snap in snaps if snap.get("date") != date_str]
     snaps.append(snapshot)
-    snaps.sort(key=lambda s: s.get("date") or "")
+    snaps.sort(key=lambda snap: snap.get("date") or "")
     if len(snaps) > HISTORY_MAX_DAYS:
         snaps = snaps[-HISTORY_MAX_DAYS:]
+    _strip_stale_snapshot_items(snaps)
     entry["snapshots"] = snaps
     return history
 
@@ -4604,6 +4941,116 @@ Rules:
 Respond ONLY with JSON: {"sentences": "..."}"""
 
 
+SINCE_YESTERDAY_SYSTEM = """You write one sentence a parent can read under a student's name.
+
+CHANGE_EVENTS is the only source. Phrase those events. Do not add a fact, a cause, a habit, or a teacher pattern that is not already an event.
+
+Rules:
+- One sentence. If CHANGE_EVENTS is empty, reply with an empty sentence.
+- Name the class and the assignment title exactly as given.
+- Do not name a student. No Classroom or Drive links.
+- Do not say why something happened.
+
+Respond ONLY with JSON: {"sentence": "..."}"""
+
+
+def generate_since_yesterday(events):
+    """Phrase the evening diff. Falls back to the event list when the model is unavailable."""
+    events = events or []
+    if not events:
+        return ""
+    plain = phrase_since_yesterday(events)
+    if not GROK_API_KEY:
+        return plain
+    context = "CHANGE_EVENTS:\n" + json.dumps(events, indent=2)
+    try:
+        resp = requests.post(
+            GROK_API_URL,
+            headers={
+                "Authorization": f"Bearer {GROK_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROK_MODEL,
+                "messages": [
+                    {"role": "system", "content": SINCE_YESTERDAY_SYSTEM},
+                    {"role": "user", "content": context},
+                ],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.2,
+                "max_tokens": 220,
+            },
+            timeout=60,
+        )
+        if resp.status_code != 200:
+            print(f"  WARNING: Grok since-yesterday returned {resp.status_code}")
+            return plain
+        content = resp.json()["choices"][0]["message"]["content"]
+        sentence = (json.loads(content).get("sentence") or "").strip()
+        if not sentence or len(sentence) > 320:
+            return plain
+        return sentence
+    except requests.exceptions.Timeout:
+        print("  WARNING: Grok since-yesterday timed out")
+        return plain
+    except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
+        print(f"  WARNING: Failed to parse Grok since-yesterday: {exc}")
+        return plain
+
+
+def previous_snapshot(history, student_sn, before_date):
+    entry = (history.get("students") or {}).get(str(student_sn), {})
+    best = None
+    best_date = None
+    for snap in entry.get("snapshots") or []:
+        day = _parse_iso_date(snap.get("date"))
+        if not day or day >= before_date:
+            continue
+        if best_date is None or day > best_date:
+            best = snap
+            best_date = day
+    return best
+
+
+def apply_daily_change_snapshot(history, student_sn, student_name, student_data, class_list, now=None):
+    """Write today's snapshot. Only the evening scrape records the assignment diff."""
+    now = now or pacific_now()
+    evening = is_evening_snapshot(now)
+    today = now.date() if isinstance(now, datetime) else pacific_today()
+    prior_snap = previous_snapshot(history, student_sn, today)
+    prior_items = {}
+    if prior_snap:
+        for name, class_row in (prior_snap.get("classes") or {}).items():
+            prior_items[name] = set(_class_item_index(class_row))
+    snapshot = build_student_snapshot(
+        student_data,
+        class_list,
+        captured_at=now,
+        include_items=evening,
+        prior_items=prior_items if evening else None,
+    )
+    if evening:
+        events = diff_change_events(snapshot, prior_snap, today)
+        dated = list(((history.get("students") or {}).get(str(student_sn), {})).get("snapshots") or [])
+        dated = [snap for snap in dated if snap.get("date") != snapshot.get("date")]
+        dated.append(snapshot)
+        events.extend(ungraded_streak_events(dated, today))
+        sentence = generate_since_yesterday(events) if events else ""
+        snapshot["since_yesterday"] = sentence
+        snapshot["change_note_date"] = snapshot.get("date")
+        snapshot["change_events"] = events
+        print(f"  Since yesterday: {len(events)} event(s)")
+    upsert_student_snapshot(
+        history,
+        student_sn,
+        student_name,
+        snapshot,
+        replace_items=evening,
+    )
+    student_data["since_yesterday"] = latest_since_yesterday(history, student_sn)
+    return snapshot
+
+
 def generate_look_next(packet, today=None):
     """Phrase the look-next packet with grok-4. Packet only — not the warehouse."""
     if not GROK_API_KEY:
@@ -4921,15 +5368,17 @@ def scrape_all():
 
             attach_student_view(student_data, history_context=history_context)
 
-            # Append today's grade snapshot after briefing (stores previous_briefing from prior AI)
-            # Prefer storing the briefing we just replaced as previous — rebuild snapshot with prior AI
+            # One snapshot per Pacific day. The evening scrape records the assignment
+            # diff and the Since yesterday sentence. Earlier scrapes keep that note.
             snap_source = dict(student_data)
             if prior.get("ai_summary"):
                 snap_source["ai_summary"] = prior["ai_summary"]
-            snapshot = build_student_snapshot(snap_source, class_list)
-            upsert_student_snapshot(
-                history, student["sn"], student["name"], snapshot
+            apply_daily_change_snapshot(
+                history, student["sn"], student["name"], snap_source, class_list
             )
+            note = (snap_source.get("since_yesterday") or "").strip()
+            if note:
+                student_data["since_yesterday"] = note
             print(
                 "  History snapshots: "
                 f"{len((history.get('students') or {}).get(str(student['sn']), {}).get('snapshots') or [])}"

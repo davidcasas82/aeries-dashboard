@@ -125,6 +125,18 @@
             text-overflow: ellipsis;
         }
 
+        .since-yesterday {
+            display: block;
+            margin-top: 2px;
+            color: var(--text-2);
+            font-size: var(--fs-small);
+            font-weight: 550;
+            line-height: 1.35;
+            white-space: normal;
+        }
+
+        .since-yesterday[hidden] { display: none; }
+
         .last-updated {
             display: block;
             font-size: var(--fs-small);
@@ -2377,6 +2389,7 @@
         <div class="top-bar-row">
             <div class="top-bar-left">
                 <div class="top-bar-title" id="topBarTitle">Grade Dashboard</div>
+                <p class="since-yesterday" id="sinceYesterday" hidden></p>
                 <span class="last-updated" id="lastUpdated"></span>
             </div>
             <div class="top-bar-actions">
@@ -5644,7 +5657,19 @@
             const student = currentData.students[activeStudentIndex];
             const title = document.getElementById('topBarTitle');
             if (title && student) title.textContent = student.name || 'Grade Dashboard';
+            updateSinceYesterday();
             updateTonightSticky();
+        }
+
+        function updateSinceYesterday() {
+            const el = document.getElementById('sinceYesterday');
+            if (!el) return;
+            const student = currentData && currentData.students
+                ? currentData.students[activeStudentIndex]
+                : null;
+            const text = (student && student.since_yesterday || '').trim();
+            el.textContent = text;
+            el.hidden = !text;
         }
 
         function updateTonightSticky() {
