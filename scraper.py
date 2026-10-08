@@ -2903,8 +2903,12 @@ def diff_change_events(today_snap, yesterday_snap, today=None):
                 "delta": delta,
                 "pct": now.get("pct"),
             })
+        # Percent-only prior days have no item list. Do not treat the backlog as new.
+        if not isinstance(prev.get("items"), list):
+            continue
         now_items = _class_item_index(now)
         prev_items = _class_item_index(prev)
+        yesterday_d = _parse_iso_date((yesterday_snap or {}).get("date"))
         for key in sorted(set(now_items) | set(prev_items)):
             cur = now_items.get(key)
             old = prev_items.get(key)
@@ -2923,17 +2927,17 @@ def diff_change_events(today_snap, yesterday_snap, today=None):
                 if code:
                     marked["mark_code"] = code
                 events.append(marked)
-            elif cur_state == "open" and due:
-                due_d = _parse_iso_date(due)
+            elif cur_state == "open" and old_state == "open":
+                # Once: yesterday saw it open, and the due date was not already past yesterday.
                 old_due = _parse_iso_date((old or {}).get("due"))
-                yesterday_d = _parse_iso_date((yesterday_snap or {}).get("date"))
-                already = (
-                    old_state == "open"
-                    and old_due
+                due_d = _parse_iso_date(due)
+                if (
+                    old_due
+                    and due_d
                     and yesterday_d
-                    and old_due < yesterday_d
-                )
-                if due_d and due_d < today_d and not already:
+                    and yesterday_d <= old_due
+                    and due_d < today_d
+                ):
                     events.append({**base, "type": "lapsed"})
     return events
 
@@ -3009,8 +3013,28 @@ def ungraded_streak_events(snapshots, today=None):
     return events
 
 
+_ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_SHORT_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_SINCE_YESTERDAY_MAX_CHARS = 140
+
+
+def _short_due_label(value):
+    """Oct 2 from an ISO due date. Anything else is left as given, unless it hides an ISO date."""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    if _ISO_DATE_RE.fullmatch(raw):
+        day = _parse_iso_date(raw)
+        if day is None:
+            return ""
+        return f"{_SHORT_MONTHS[day.month - 1]} {day.day}"
+    if _ISO_DATE_RE.search(raw):
+        return ""
+    return raw
+
+
 def phrase_since_yesterday(events):
-    """One sentence from the event list. No cause that is not already an event."""
+    """One short line: at most two named changes, then a count. No ISO dates."""
     bits = []
     for event in events or []:
         kind = event.get("type")
@@ -3021,7 +3045,11 @@ def phrase_since_yesterday(events):
         elif kind == "newly_missing" and title and course:
             bits.append(f"{title} in {course} is newly missing")
         elif kind == "lapsed" and title and course:
-            bits.append(f"{title} in {course} was due and is still open")
+            label = _short_due_label(event.get("due"))
+            if label:
+                bits.append(f"{title} in {course} was due {label} and is still open")
+            else:
+                bits.append(f"{title} in {course} was due and is still open")
         elif kind == "marked" and title and course:
             code = event.get("mark_code")
             if code:
@@ -3038,11 +3066,11 @@ def phrase_since_yesterday(events):
             )
     if not bits:
         return ""
-    shown = bits[:4]
+    shown = bits[:2]
     text = "; ".join(shown)
     extra = len(bits) - len(shown)
     if extra:
-        text += f"; and {extra} more"
+        text += f", and {extra} more"
     return text[0].upper() + text[1:] + "."
 
 
@@ -4941,28 +4969,60 @@ Rules:
 Respond ONLY with JSON: {"sentences": "..."}"""
 
 
-SINCE_YESTERDAY_SYSTEM = """You write one sentence a parent can read under a student's name.
+SINCE_YESTERDAY_SYSTEM = """You write one short line a parent can read under a student's name.
 
 CHANGE_EVENTS is the only source. Phrase those events. Do not add a fact, a cause, a habit, or a teacher pattern that is not already an event.
 
 Rules:
-- One sentence. If CHANGE_EVENTS is empty, reply with an empty sentence.
+- One sentence, at most 140 characters. No second sentence and no paragraph.
+- Name at most two changes. If other events remain, end with "and N more".
 - Name the class and the assignment title exactly as given.
+- If you mention a date, copy due_label (Oct 2). Never write an ISO date.
 - Do not name a student. No Classroom or Drive links.
 - Do not say why something happened.
+- If CHANGE_EVENTS is empty, reply with an empty sentence.
 
 Respond ONLY with JSON: {"sentence": "..."}"""
 
 
+def _since_yesterday_model_events(events):
+    """Event copy for the model. Dates are due_label (Oct 2), never ISO."""
+    shaped = []
+    for event in events or []:
+        row = {
+            key: event.get(key)
+            for key in ("type", "class_name", "title", "delta", "pct", "mark_code", "days")
+            if event.get(key) not in (None, "")
+        }
+        label = _short_due_label(event.get("due"))
+        if label:
+            row["due_label"] = label
+        shaped.append(row)
+    return shaped
+
+
+def _since_yesterday_model_sentence_ok(sentence):
+    """One sentence, about 140 characters, and no ISO date."""
+    text = (sentence or "").strip()
+    if not text or len(text) > _SINCE_YESTERDAY_MAX_CHARS:
+        return False
+    if "\n" in text or "\r" in text:
+        return False
+    if _ISO_DATE_RE.search(text):
+        return False
+    masked = re.sub(r"\d\.\d", "", text)
+    return len(re.findall(r"[.!?]", masked)) <= 1
+
+
 def generate_since_yesterday(events):
-    """Phrase the evening diff. Falls back to the event list when the model is unavailable."""
+    """Phrase the evening diff. A long or multi-sentence model reply is discarded."""
     events = events or []
     if not events:
         return ""
     plain = phrase_since_yesterday(events)
     if not GROK_API_KEY:
         return plain
-    context = "CHANGE_EVENTS:\n" + json.dumps(events, indent=2)
+    context = "CHANGE_EVENTS:\n" + json.dumps(_since_yesterday_model_events(events), indent=2)
     try:
         resp = requests.post(
             GROK_API_URL,
@@ -4978,7 +5038,7 @@ def generate_since_yesterday(events):
                 ],
                 "response_format": {"type": "json_object"},
                 "temperature": 0.2,
-                "max_tokens": 220,
+                "max_tokens": 120,
             },
             timeout=60,
         )
@@ -4987,7 +5047,7 @@ def generate_since_yesterday(events):
             return plain
         content = resp.json()["choices"][0]["message"]["content"]
         sentence = (json.loads(content).get("sentence") or "").strip()
-        if not sentence or len(sentence) > 320:
+        if not _since_yesterday_model_sentence_ok(sentence):
             return plain
         return sentence
     except requests.exceptions.Timeout:

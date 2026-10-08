@@ -161,12 +161,16 @@ def payload():
         ],
     }
 
-    def student(name, classes, groups):
-        return {
+    def student(name, classes, groups, since_yesterday=""):
+        row = {
             "name": name,
             "classes": classes,
             "assignments_by_class": groups,
         }
+        note = (since_yesterday or "").strip()
+        if note:
+            row["since_yesterday"] = note
+        return row
 
     return {
         "latest": {
@@ -216,6 +220,7 @@ def payload():
                         {"class_name": "1-Algebra Fixture", "period": 1, "assignments": algebra},
                         {"class_name": "2-English Fixture", "period": 2, "assignments": english},
                     ],
+                    "Quiz in Algebra Fixture was turned in; Lab Worksheet was due Oct 2, and 3 more.",
                 ),
                 student(
                     "Fixture Beta",
