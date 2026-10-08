@@ -1,3 +1,4 @@
+import json
 import sys
 import unittest
 from datetime import datetime
@@ -107,6 +108,58 @@ class ChangeSnapshotTests(unittest.TestCase):
         self.assertIn(("pct_move", "Algebra"), kinds)
         self.assertNotIn(("lapsed", "Poster"), kinds)
 
+    def test_percent_only_prior_does_not_dump_lapses(self):
+        with mock.patch.object(scraper, "pacific_today", return_value=TODAY.date()), \
+                mock.patch.object(scraper, "pacific_today_dt", return_value=TODAY):
+            snap = scraper.build_student_snapshot(
+                _student(), [], captured_at=TODAY, include_items=True,
+                prior_items={"Algebra": {"worksheet", "quiz", "poster", "lab", "warmup"}},
+            )
+        prior = {
+            "date": YESTERDAY,
+            "classes": {"Algebra": {"pct": 86, "mark": "B"}},
+        }
+        events = scraper.diff_change_events(snap, prior, TODAY.date())
+        kinds = {event["type"] for event in events}
+        self.assertNotIn("lapsed", kinds)
+        self.assertNotIn("turned_in", kinds)
+        self.assertNotIn("newly_missing", kinds)
+        self.assertNotIn("marked", kinds)
+        self.assertIn("pct_move", kinds)
+
+    def test_already_past_due_open_item_does_not_lapse_again(self):
+        first_night = {
+            "date": "2026-09-24",
+            "classes": {
+                "Algebra": {
+                    "pct": 90,
+                    "items": [{"title": "Lab", "due": "2026-09-24", "state": "open"}],
+                }
+            },
+        }
+        second_night = {
+            "date": "2026-09-25",
+            "classes": {
+                "Algebra": {
+                    "pct": 90,
+                    "items": [{"title": "Lab", "due": "2026-09-24", "state": "open"}],
+                }
+            },
+        }
+        third_night = {
+            "date": "2026-09-26",
+            "classes": {
+                "Algebra": {
+                    "pct": 90,
+                    "items": [{"title": "Lab", "due": "2026-09-24", "state": "open"}],
+                }
+            },
+        }
+        first = scraper.diff_change_events(second_night, first_night, datetime(2026, 9, 25).date())
+        self.assertEqual([event["type"] for event in first], ["lapsed"])
+        again = scraper.diff_change_events(third_night, second_night, datetime(2026, 9, 26).date())
+        self.assertFalse(any(event["type"] == "lapsed" for event in again))
+
     def test_streak_stays_silent_until_two_weeks_of_item_snapshots(self):
         snaps = []
         for offset in range(6):
@@ -191,6 +244,57 @@ class ChangeSnapshotTests(unittest.TestCase):
         self.assertIn("Quiz in Algebra was turned in", text)
         self.assertIn("Algebra is down 3.5 points", text)
         self.assertNotIn("because", text.lower())
+        self.assertNotIn("\n", text)
+
+    def test_phrase_names_two_changes_then_a_count(self):
+        text = scraper.phrase_since_yesterday([
+            {"type": "lapsed", "title": "Lab", "class_name": "Algebra", "due": "2026-10-02"},
+            {"type": "turned_in", "title": "Quiz", "class_name": "Algebra"},
+            {"type": "newly_missing", "title": "Worksheet", "class_name": "Algebra"},
+            {"type": "marked", "title": "Warmup", "class_name": "Algebra", "mark_code": "NA"},
+            {"type": "pct_move", "class_name": "Biology", "delta": -4, "pct": 80},
+        ])
+        self.assertIn("Lab in Algebra was due Oct 2 and is still open", text)
+        self.assertIn("Quiz in Algebra was turned in", text)
+        self.assertIn("and 3 more", text)
+        self.assertNotIn("Worksheet", text)
+        self.assertNotIn("Warmup", text)
+        self.assertNotIn("Biology", text)
+        self.assertNotIn("2026-10-02", text)
+        self.assertNotIn("\n", text)
+        self.assertEqual(text.count("."), 1)
+
+    def test_model_reply_longer_than_one_short_line_is_discarded(self):
+        events = [{"type": "turned_in", "title": "Quiz", "class_name": "Algebra"}]
+        plain = scraper.phrase_since_yesterday(events)
+        wall = (
+            "Lab (2026-10-02), Quiz (2026-10-01), and Poster (2026-09-18) have lapsed. "
+            "Worksheet was turned in."
+        )
+        long_line = "Quiz in Algebra was turned in, and " + ("more " * 40)
+        kept = "Quiz in Algebra was turned in."
+        cases = {
+            "two sentences": wall,
+            "over 140 characters": long_line.strip(),
+            "iso date": "Lab was due 2026-10-02 and is still open.",
+            "kept": kept,
+        }
+        for name, sentence in cases.items():
+            response = mock.Mock()
+            response.status_code = 200
+            response.json.return_value = {
+                "choices": [{"message": {"content": json.dumps({"sentence": sentence})}}],
+            }
+            with mock.patch.object(scraper, "GROK_API_KEY", "test-key"), \
+                    mock.patch.object(scraper.requests, "post", return_value=response) as post:
+                text = scraper.generate_since_yesterday(events)
+            sent = json.loads(post.call_args.kwargs["json"]["messages"][1]["content"].split("\n", 1)[1])
+            self.assertNotIn("due", sent[0])
+            if name == "kept":
+                self.assertEqual(text, kept)
+            else:
+                self.assertEqual(text, plain, name)
+                self.assertNotIn("2026-", text)
 
     def test_evening_window_is_after_the_afternoon_scrape(self):
         self.assertFalse(scraper.is_evening_snapshot(datetime(2026, 9, 25, 16, 45)))
