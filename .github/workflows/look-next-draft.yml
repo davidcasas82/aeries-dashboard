@@ -1,0 +1,41 @@
+name: Draft look-next Grok
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: look-next-draft
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Draft look-next paragraphs
+        env:
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          FAMILY_PIN: ${{ secrets.FAMILY_PIN }}
+          FAMILY_DATA_URL: https://family-data.davidcasas.workers.dev
+          LOOK_NEXT_OUT: ${{ runner.temp }}/look-next-draft.json
+          PYTHONUNBUFFERED: "1"
+        run: python scripts/draft_look_next_grok.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: look-next-draft
+          path: ${{ runner.temp }}/look-next-draft.json
