@@ -155,6 +155,18 @@
         .last-updated.stale { color: var(--amber); font-weight: 600; }
         .last-updated.very-stale { color: var(--red); font-weight: 600; }
 
+        .stale-banner {
+            margin: 6px 0 0;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: var(--amber-soft);
+            color: var(--amber);
+            font-size: var(--fs-small);
+            font-weight: 600;
+        }
+        .stale-banner.very-stale { color: var(--red); }
+        .stale-banner[hidden] { display: none; }
+
         .settings-btn {
             display: flex;
             align-items: center;
@@ -2396,6 +2408,7 @@
                 <div class="top-bar-title" id="topBarTitle">Grade Dashboard</div>
                 <p class="since-yesterday" id="sinceYesterday" hidden></p>
                 <span class="last-updated" id="lastUpdated"></span>
+                <p class="stale-banner" id="staleBanner" role="status" hidden></p>
             </div>
             <div class="top-bar-actions">
                 <div class="student-picker" id="studentPicker" aria-label="Switch student"></div>
@@ -5814,30 +5827,44 @@
             });
         }
 
-        function renderLastUpdated(data) {
-            const el = document.getElementById('lastUpdated');
-            const updated = new Date(data.last_updated);
-            if (Number.isNaN(updated.getTime())) {
-                el.textContent = '';
-                el.className = 'last-updated';
-                return;
-            }
+        const STALE_HOURS = 20;
+        const VERY_STALE_HOURS = 44;
+
+        function lastUpdatedView(data, now) {
+            const updated = new Date(data && data.last_updated);
+            if (Number.isNaN(updated.getTime())) return { text: '', cls: 'last-updated', banner: '' };
             const opts = { timeZone: 'America/Los_Angeles' };
-            const now = new Date();
             const isToday = updated.toLocaleDateString('en-US', opts) === now.toLocaleDateString('en-US', opts);
             const timeStr = updated.toLocaleTimeString('en-US', { ...opts, hour: 'numeric', minute: '2-digit' });
             const ageH = (now - updated) / 3600000;
             const summer = !!data.summer_break;
             // Scrapes land ~3× a day; anything older than a day means a run failed.
-            const stale = !summer && ageH > 20;
-            const veryStale = !summer && ageH > 44;
+            const stale = !summer && ageH > STALE_HOURS;
+            const veryStale = !summer && ageH > VERY_STALE_HOURS;
             const when = isToday
-                ? `today ${timeStr}`
-                : `${updated.toLocaleDateString('en-US', { ...opts, month: 'short', day: 'numeric' })} ${timeStr}`;
-            el.textContent = veryStale
-                ? `Not updated since ${when}`
-                : `Updated ${when}`;
-            el.className = `last-updated${veryStale ? ' very-stale' : (stale ? ' stale' : '')}`;
+                ? `today ${timeStr} PT`
+                : `${updated.toLocaleDateString('en-US', { ...opts, month: 'short', day: 'numeric' })} ${timeStr} PT`;
+            return {
+                text: veryStale ? `Not updated since ${when}` : `Last updated ${when}`,
+                cls: `last-updated${veryStale ? ' very-stale' : (stale ? ' stale' : '')}`,
+                banner: stale
+                    ? `⚠ Grades may be out of date: no new data for ${Math.floor(ageH)} hours (last update ${when}).`
+                    : '',
+                bannerCls: `stale-banner${veryStale ? ' very-stale' : ''}`,
+            };
+        }
+
+        function renderLastUpdated(data) {
+            const el = document.getElementById('lastUpdated');
+            const banner = document.getElementById('staleBanner');
+            const view = lastUpdatedView(data, new Date());
+            el.textContent = view.text;
+            el.className = view.cls;
+            if (banner) {
+                banner.textContent = view.banner;
+                banner.className = view.bannerCls || 'stale-banner';
+                banner.hidden = !view.banner;
+            }
         }
 
         function expandedRowIds() {
