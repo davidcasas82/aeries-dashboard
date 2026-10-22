@@ -601,6 +601,34 @@ class FakeOpener:
         return self.status, b'{"ok": true}'
 
 
+def worker_accepts(body):
+    """A mirror of family-data cleanInsights (src/insights.js): True when the Worker would take it."""
+    def js_len(text):
+        return len(text.encode("utf-16-le")) // 2
+
+    def text_ok(value, limit):
+        return isinstance(value, str) and value.strip() != "" and js_len(value) <= limit
+
+    def line_ok(value, field):
+        cites = value.get("cites") or []
+        return (isinstance(value, dict) and text_ok(value.get(field), 600) and len(cites) <= 12
+                and all(text_ok(c, 120) for c in cites))
+
+    students = body.get("students")
+    if not isinstance(students, dict) or len(students) > 8:
+        return False
+    for key, up in students.items():
+        if not re.fullmatch(r"[A-Za-z0-9-]{1,32}", key) or len(up.get("stories") or []) > 40:
+            return False
+        if up.get("as_of") is not None and not text_ok(up["as_of"], 40):
+            return False
+        if up.get("headline") is not None and not line_ok(up["headline"], "text"):
+            return False
+        if not all(line_ok(s, "story") and text_ok(s.get("class"), 120) for s in up.get("stories") or []):
+            return False
+    return True
+
+
 class InsightsPublisherTests(unittest.TestCase):
     """PR5's write path. The network is always a fake: no real PUT ever leaves a test."""
 
@@ -646,18 +674,95 @@ class InsightsPublisherTests(unittest.TestCase):
         self.assertNotIn(SECRET_STANDIN, str(caught.exception))
 
     def test_a_redirect_is_never_followed(self):
-        import io
-        import urllib.error
+        """Through the real opener and _RefuseRedirects: a 302 is an error and the target gets nothing."""
+        import http.server
+        import threading
 
-        def redirect(request, timeout=None):
-            raise urllib.error.HTTPError(request.full_url, 302, "Found", {"Location": "https://elsewhere/"},
-                                         io.BytesIO(b""))
+        hits = {"origin": [], "elsewhere": []}
 
-        opener = types.SimpleNamespace(open=redirect)
-        publisher = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN,
-                                             opener=lambda request: runner._open_request(request, opener))
-        with self.assertRaises(runner.FamilyDataError):
-            publisher.put(self.UPS)
+        def handler(name, redirect_to=None):
+            class Handler(http.server.BaseHTTPRequestHandler):
+                def _any(self):
+                    length = int(self.headers.get("Content-Length") or 0)
+                    if length:
+                        self.rfile.read(length)
+                    hits[name].append((self.command, self.path, self.headers.get("Authorization")))
+                    if redirect_to:
+                        self.send_response(302)
+                        self.send_header("Location", f"http://127.0.0.1:{redirect_to()}/collect")
+                    else:
+                        self.send_response(200)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+
+                do_PUT = do_GET = do_POST = _any
+
+                def log_message(self, *args):
+                    pass
+
+            return Handler
+
+        elsewhere = http.server.HTTPServer(("127.0.0.1", 0), handler("elsewhere"))
+        origin = http.server.HTTPServer(("127.0.0.1", 0), handler("origin", lambda: elsewhere.server_port))
+        threads = [threading.Thread(target=srv.serve_forever, daemon=True) for srv in (origin, elsewhere)]
+        for thread in threads:
+            thread.start()
+        try:
+            publisher = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN,
+                                                 base=f"http://127.0.0.1:{origin.server_port}")
+            with self.assertRaises(runner.FamilyDataError) as caught:
+                publisher.put(self.UPS)
+        finally:
+            for srv, thread in zip((origin, elsewhere), threads):
+                srv.shutdown()
+                srv.server_close()
+                thread.join(timeout=5)
+        self.assertEqual(str(caught.exception), "PUT /v1/grades/insights returned 302")
+        self.assertEqual(hits["origin"], [("PUT", "/v1/grades/insights", f"Bearer {SECRET_STANDIN}")])
+        self.assertEqual(hits["elsewhere"], [])
+
+    def test_no_student_key_means_no_put_at_all(self):
+        opener = FakeOpener()
+        reads = []
+        publisher = runner.InsightsPublisher(secret=lambda: reads.append(1) or SECRET_STANDIN, opener=opener)
+        for ups in ([{"stories": []}], [], None, [{"sn": "", "stories": []}, {"as_of": "2026-10-22"}]):
+            self.assertIs(publisher.put(ups), False)
+        self.assertEqual(opener.requests, [])
+        self.assertEqual(reads, [])
+
+    def test_the_payload_is_capped_and_deduped_right_before_the_put(self):
+        cites12 = [f"fact:{i}" for i in range(12)]
+        ups = [{"sn": "9001", "as_of": "2026-10-22",
+                "headline": {"text": "h" * 601, "cites": ["fact:0"]},
+                "stories": [
+                    {"class": "Math", "story": "Dup cites.", "cites": ["a", "b", "a", "b", "a"]},
+                    {"class": "Art", "story": "No cites."},
+                    {"class": "Art", "story": "Empty cites.", "cites": []},
+                    {"class": "Biology", "story": "Too many.", "cites": cites12 + ["fact:12"]},
+                    {"class": "Biology", "story": "x" * 601, "cites": ["fact:0"]},
+                    {"class": "Chem", "story": "y" * 600, "cites": cites12 + cites12},
+                    {"class": "Spanish", "story": "Long cite.", "cites": ["c" * 121]},
+                ]}]
+        opener = FakeOpener()
+        runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener).put(ups)
+        body = json.loads(opener.requests[0].data.decode("utf-8"))
+        kid = body["students"]["9001"]
+        self.assertIsNone(kid["headline"])
+        self.assertEqual(kid["stories"], [
+            {"class": "Math", "story": "Dup cites.", "cites": ["a", "b"]},
+            {"class": "Chem", "story": "y" * 600, "cites": cites12},
+        ])
+        self.assertTrue(worker_accepts(body))
+
+    def test_the_guard_holds_in_behavior_too(self):
+        client = runner.ReadOnlyFamilyData(pin=lambda: "0000", opener=FakeOpener())
+        for method in ("PUT", "PATCH", "DELETE", "POST"):
+            with self.assertRaises(runner.FamilyDataError):
+                client._send(method, "/v1/grades/insights", {})
+        opener = FakeOpener()
+        runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener).put(self.UPS)
+        self.assertEqual([(r.get_method(), r.full_url.split("/", 3)[3]) for r in opener.requests],
+                         [("PUT", "v1/grades/insights")])
 
     def test_publishing_is_off_unless_the_flag_is_exactly_1(self):
         fake = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=FakeOpener())

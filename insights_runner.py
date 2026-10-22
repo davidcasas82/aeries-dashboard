@@ -317,7 +317,11 @@ class InsightsPublisher:
         self._open = opener or _open_request
 
     def put(self, write_ups):
-        body = json.dumps(insights_doc(write_ups)).encode("utf-8")
+        """True after a 200. False, with nothing sent, when no write-up has a student key."""
+        doc = insights_doc(write_ups)
+        if not doc["students"]:
+            return False
+        body = json.dumps(doc).encode("utf-8")
         request = urllib.request.Request(
             self._base + INSIGHTS_PATH,
             data=body,
@@ -335,23 +339,61 @@ class InsightsPublisher:
         return True
 
 
+# family-data src/insights.js cleanInsights limits, all inclusive, lengths in UTF-16 code units like JS.
+# Checked again here, right before the PUT, so one bad story can't fail the whole publish.
+PUBLISH_MAX_STUDENTS = 8
+PUBLISH_MAX_STORIES = 40
+PUBLISH_MAX_TEXT = 600
+PUBLISH_MAX_CITES = 12
+PUBLISH_MAX_CITE = 120
+PUBLISH_MAX_CLASS = 120
+PUBLISH_MAX_AS_OF = 40
+
+
+def _fits(text, limit):
+    return isinstance(text, str) and bool(text.strip()) and len(text.encode("utf-16-le")) // 2 <= limit
+
+
+def _publish_line(value, field, class_name=None):
+    """{field, "cites"} with cites deduped in order, or None: no text, no cites, or over a limit.
+
+    Over a limit drops the whole line; nothing is trimmed.
+    """
+    if not isinstance(value, dict) or not _fits(value.get(field), PUBLISH_MAX_TEXT):
+        return None
+    seen, cites = set(), []
+    for cite in value.get("cites") or []:
+        if isinstance(cite, str) and cite not in seen:
+            seen.add(cite)
+            cites.append(cite)
+    if not cites or len(cites) > PUBLISH_MAX_CITES or not all(_fits(c, PUBLISH_MAX_CITE) for c in cites):
+        return None
+    line = {field: value[field], "cites": cites}
+    if class_name is not None:
+        if not _fits(class_name, PUBLISH_MAX_CLASS):
+            return None
+        line = {"class": class_name, **line}
+    return line
+
+
 def insights_doc(write_ups):
     """{"students": {sn: {"as_of", "headline", "stories"}}} from the writer's published write-ups.
 
-    A write-up with no student key is skipped: the dashboard could not place it.
+    A write-up with no student key is skipped: the dashboard could not place it. Each story and the
+    headline must have cites and fit the Worker's limits, or that one line is dropped.
     """
     students = {}
     for up in write_ups or []:
         sn = str((up or {}).get("sn") or "").strip()
-        if not sn:
+        if not sn or len(students) >= PUBLISH_MAX_STUDENTS:
             continue
+        stories = [line for line in (_publish_line(story, "story", (story or {}).get("class"))
+                                     for story in up.get("stories") or []) if line]
+        as_of = up.get("as_of")
         students[sn] = {
-            "as_of": up.get("as_of"),
-            "headline": up.get("headline") or None,
-            "stories": [
-                {k: story[k] for k in ("class", "story", "cites") if k in story}
-                for story in up.get("stories") or []
-            ],
+            "as_of": as_of if _fits(as_of, PUBLISH_MAX_AS_OF) else None,
+            "headline": _publish_line(up.get("headline"), "text"),
+            "stories": stories[:PUBLISH_MAX_STORIES],
         }
     return {"students": students}
 

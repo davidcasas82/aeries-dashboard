@@ -376,6 +376,48 @@ class ClassSlotTests(unittest.TestCase):
         self.assertEqual([p and p["story"] for p in picks], ["art", None])
 
 
+class PublishLimitTests(unittest.TestCase):
+    """Cites are deduped; a story or headline over family-data's limits (or with no cites) is dropped alone."""
+
+    def test_duplicate_cites_are_deduped_in_order(self):
+        raw = json.dumps({"sentences": [{"text": f"S{i}.", "cites": ["a", "b", "a"] if i % 2 else ["c"] * 3}
+                                        for i in range(5)]})
+        self.assertEqual([s["cites"] for s in w._sentences(raw)], [["c"], ["a", "b"], ["c"], ["a", "b"], ["c"]])
+        tripled = [{**s, "cites": s["cites"] * 3} for s in GOOD]
+        story = w.write_class(ScriptedModel({"Math": tripled}), math_facts(), "Math")
+        self.assertEqual(story["story"], GOOD_STORY)
+        self.assertEqual(story["cites"], [NEXT, CAUSE, PATTERN, WHATIF])
+        self.assertTrue(w.story_fits(story))
+
+    def test_five_sentences_of_three_duplicate_cites_pass(self):
+        cites = w._unique([c for i in range(5) for c in [f"fact:{i}"] * 3])
+        self.assertEqual(len(cites), 5)
+        self.assertTrue(w.within_publish_limits("Five short sentences. " * 5, cites, "Math"))
+
+    def test_an_oversize_story_is_dropped_and_the_others_stay(self):
+        ok = {"class": "Math", "story": "Still a B.", "cites": ["a"]}
+        edge = {"class": "Art", "story": "z" * 600, "cites": [f"f{i}" for i in range(12)]}
+        many = {"class": "Biology", "story": "Fine text.", "cites": [f"f{i}" for i in range(13)]}
+        long = {"class": "Chem", "story": "x" * 601, "cites": ["a"]}
+        bare = {"class": "Spanish", "story": "No cites.", "cites": []}
+        stories = iter([ok, edge, many, long, bare])
+        with mock.patch.object(w, "class_names", return_value=["Math", "Art", "Biology", "Chem", "Spanish"]), \
+                mock.patch.object(w, "write_class", side_effect=lambda *a, **k: next(stories)), \
+                mock.patch.object(w, "write_headline", return_value=None):
+            up = w.write_up(None, {"as_of": "2026-10-22", "facts": []})
+        self.assertEqual([s["class"] for s in up["stories"]], ["Math", "Art"])
+        public = w.public_write_up({**up, "stories": [ok, edge, many, long, bare],
+                                    "headline": {"text": "h" * 601, "cites": ["a"]}})
+        self.assertEqual([s["class"] for s in public["stories"]], ["Math", "Art"])
+        self.assertIsNone(public["headline"])
+
+    def test_headlines_follow_the_same_limits(self):
+        self.assertTrue(w.headline_fits({"text": "h" * 600, "cites": ["a"]}))
+        self.assertFalse(w.headline_fits({"text": "h" * 601, "cites": ["a"]}))
+        self.assertFalse(w.headline_fits({"text": "Fine.", "cites": [f"f{i}" for i in range(13)]}))
+        self.assertFalse(w.headline_fits({"text": "Fine.", "cites": []}))
+
+
 def ch5(due="2026-10-30", points=50.0, bucket="Tests"):
     return {"class": "Math", "bucket": bucket, "title": "Ch. 5 Test", "due": due, "points": points}
 

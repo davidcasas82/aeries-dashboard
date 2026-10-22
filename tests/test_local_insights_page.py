@@ -112,6 +112,11 @@ class LocalNotesPageTests(unittest.TestCase):
             ([("Art", "a")], ["Art", "ART"]),
             ([("Int Eng&Marktg", "a"), ("Physics & Eng", "b")], ["Int Eng & Marktg", "Physics & Eng", "Eng"]),
             ([], ["Math"]),
+            ([("Math", "a")], ["", "Math"]),
+            ([("", "a"), ("Math", "b")], ["Math", ""]),
+            ([(None, "a"), ("Art", "b")], ["Art", "Math"]),
+            ([("!!!", "a"), ("Art", "b")], ["&&", "Art", "..."]),
+            ([("Math", "a")], [None, "Math"]),
         ]
         data = [{"stories": [{"class": c, "story": t} for c, t in stories], "names": names}
                 for stories, names in cases]
@@ -150,10 +155,11 @@ class LocalNotesPageTests(unittest.TestCase):
         got = run_page(
             "process.stdout.write(JSON.stringify({dates: data.dates.map(shortPostedDate), sub: data.ups.map(up =>"
             " walk(buildLocalInsights(up, []).section).find(n => n.tagName === 'P')._text)}));",
-            {"dates": ["2026-10-21", "2026-01-05", "2026-13-01", "Oct 21", "", None],
+            {"dates": ["2026-10-21", "2026-01-05", "2026-13-01", "Oct 21", "", None, "2026-02-31", "2026-04-31",
+                       "2028-02-29", "2026-02-29", "2026-00-10", "2026-10-00"],
              "ups": [{"as_of": "2026-10-21", "stories": []}, {"stories": []}]},
         )
-        self.assertEqual(got["dates"], ["Oct 21", "Jan 5", "", "", "", ""])
+        self.assertEqual(got["dates"], ["Oct 21", "Jan 5", "", "", "", "", "", "", "Feb 29", "", "", ""])
         self.assertEqual(got["sub"], ["From grades posted through Oct 21", "From the posted grades"])
 
     def test_notes_and_drawer_story_text_wrap(self):

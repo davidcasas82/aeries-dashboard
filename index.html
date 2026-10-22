@@ -5682,14 +5682,16 @@
             return out;
         }
 
-        // "2026-10-21" -> "Oct 21". Anything else -> '' (never an ISO date on the page).
+        // "2026-10-21" -> "Oct 21". Anything else, an impossible date like Feb 31 included -> ''
+        // (the card then says "From the posted grades"; never an ISO date on the page).
         function shortPostedDate(asOf) {
             const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(asOf || ''));
             if (!m) return '';
             const month = Number(m[2]);
             const day = Number(m[3]);
             const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+            const check = new Date(Date.UTC(Number(m[1]), month - 1, day));
+            if (month < 1 || month > 12 || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return '';
             return `${names[month - 1]} ${day}`;
         }
 

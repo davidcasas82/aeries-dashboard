@@ -1770,12 +1770,53 @@ def _json(raw):
     return None
 
 
+def _unique(items):
+    """Items with repeats removed, first occurrence kept, order kept."""
+    seen = set()
+    return [x for x in items if not (x in seen or seen.add(x))]
+
+
+# family-data src/insights.js cleanInsights limits (all inclusive, lengths in UTF-16 code units like JS):
+# text <= 600, cites 1..12 and each cite 1..120, class <= 120. A story over any limit, or with no cites, is dropped alone,
+# so the rest of the publish still goes through; a headline over a limit is dropped the same way.
+PUBLISH_MAX_TEXT = 600
+PUBLISH_MAX_CITES = 12
+PUBLISH_MAX_CITE = 120
+PUBLISH_MAX_CLASS = 120
+
+
+def _js_len(text):
+    return len(text.encode("utf-16-le")) // 2
+
+
+def _fits_text(text, limit):
+    return isinstance(text, str) and bool(text.strip()) and _js_len(text) <= limit
+
+
+def within_publish_limits(text, cites, class_name=None):
+    """True when the Worker would accept this story or headline line as is."""
+    if not _fits_text(text, PUBLISH_MAX_TEXT):
+        return False
+    if class_name is not None and not _fits_text(class_name, PUBLISH_MAX_CLASS):
+        return False
+    cites = cites or []
+    return 0 < len(cites) <= PUBLISH_MAX_CITES and all(_fits_text(c, PUBLISH_MAX_CITE) for c in cites)
+
+
+def story_fits(story):
+    return within_publish_limits((story or {}).get("story"), (story or {}).get("cites"), (story or {}).get("class"))
+
+
+def headline_fits(headline):
+    return within_publish_limits((headline or {}).get("text"), (headline or {}).get("cites"))
+
+
 def _sentences(raw):
     parsed = _json(raw) or {}
     out = []
     for item in parsed.get("sentences") or []:
         if isinstance(item, dict) and isinstance(item.get("text"), str):
-            cites = [c for c in item.get("cites") or [] if isinstance(c, str)]
+            cites = _unique([c for c in item.get("cites") or [] if isinstance(c, str)])
             out.append({"text": fix_articles(item["text"].strip()), "cites": cites})
     return out
 
@@ -1833,7 +1874,7 @@ def write_class(model, facts, name, votes=VOTES):
         "class": name,
         "story": " ".join(s["text"] for s in voted),
         "slotted": " ".join(s.get("slots", s["text"]) for s in voted),
-        "cites": [c for s in voted for c in s["cites"]],
+        "cites": _unique([c for s in voted for c in s["cites"]]),
         # Reason codes only: the full reasons quote grade numbers, so they stay out of stores and logs.
         "dropped": [reason_code(d["reason"]) for d in dropped],
     }
@@ -1848,7 +1889,7 @@ def write_headline(model, facts, stories):
                       indent=1)
     parsed = _json(model.complete(HEADLINE_SYSTEM, user)) or {}
     text = fix_articles((parsed.get("text") or "").strip()) if isinstance(parsed.get("text"), str) else ""
-    cites = [c for c in parsed.get("cites") or [] if isinstance(c, str)]
+    cites = _unique([c for c in parsed.get("cites") or [] if isinstance(c, str)])
     used = {c for s in stories for c in s["cites"]}
     # A headline cites a fact from the stories and says something concrete, or there is none.
     if not text or not cites or not set(cites) <= used or check_sentence(text, cites, index, headline=True):
@@ -1858,7 +1899,8 @@ def write_headline(model, facts, stories):
     text = fix_articles(fill_slots(text, index))
     if _story_basics([{"text": text, "cites": cites}], index) or not _concrete_headline(text, cites, index):
         return None
-    return {"text": text, "cites": cites}
+    headline = {"text": text, "cites": cites}
+    return headline if headline_fits(headline) else None
 
 
 def write_up(model, insight_facts, log_items=None, votes=VOTES, upcoming=None):
@@ -1867,7 +1909,8 @@ def write_up(model, insight_facts, log_items=None, votes=VOTES, upcoming=None):
     upcoming (from upcoming_items) lets a what-if name the real next item and its due date.
     """
     facts = attach_next_items(merged_facts(insight_facts, log_items), upcoming)
-    stories = [s for s in (write_class(model, facts, name, votes) for name in class_names(facts)) if s]
+    # A story over the Worker's limits is dropped alone; the others still publish.
+    stories = [s for s in (write_class(model, facts, name, votes) for name in class_names(facts)) if s and story_fits(s)]
     return {
         "as_of": (insight_facts or {}).get("as_of"),
         "headline": write_headline(model, facts, stories),
@@ -1949,8 +1992,7 @@ def publish_write_up(local, put, env=None):
     """
     if not publish_enabled(env):
         return False
-    put(public_write_up(local))
-    return True
+    return put(public_write_up(local)) is not False
 
 
 def public_write_up(local):
@@ -1958,7 +2000,10 @@ def public_write_up(local):
     def one(up):
         up = dict(up or {})
         if "stories" in up:
-            up["stories"] = [{k: s[k] for k in ("class", "story", "cites") if k in s} for s in up.get("stories") or []]
+            up["stories"] = [{k: s[k] for k in ("class", "story", "cites") if k in s}
+                             for s in up.get("stories") or [] if story_fits(s)]
+        if up.get("headline") and not headline_fits(up["headline"]):
+            up["headline"] = None
         return up
 
     return one(local) if isinstance(local, dict) else [one(up) for up in local or []]
