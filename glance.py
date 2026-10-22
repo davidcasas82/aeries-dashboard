@@ -14,9 +14,8 @@ Under Due soon, no extra heading: a quiet bullet list of class
 highlights the list does not show (most past due, work after the
 window grouped by class and date, turned-in unscored counts). Count
 and date only — never assignment titles. The page always renders those
-bullets. A stored Grok paragraph must not replace them. Never the
-sentence “X is the lowest class, at N%.” Never the raw ai_summary
-headline. Empty Due soon: “Nothing due in the next 5 school days.”
+bullets. Never the
+sentence “X is the lowest class, at N%.” Empty Due soon: “Nothing due in the next 5 school days.”
 Empty packet: “Nothing else outside this list.”
 
 Nothing here logs student names or numbers.
@@ -831,7 +830,7 @@ def look_next_lines(packet):
 
 
 def look_next_sentences(packet):
-    """Alias for the bullet lines. Grok must not replace these."""
+    """Alias for the bullet lines."""
     return look_next_lines(packet)
 
 
@@ -850,21 +849,10 @@ def look_next_known_titles(view_classes):
     return titles
 
 
-def look_next_for_page(view_classes, today, grok_text=""):
-    """Always the class-count bullets. Stored Grok prose is ignored."""
+def look_next_for_page(view_classes, today):
+    """Always the class-count bullets."""
     packet = look_next_packet(view_classes, today)
     return packet, look_next_lines(packet)
-
-
-def apply_look_next_grok(glance_obj, grok_text, view_classes=None, today=None):
-    """May store leftover Grok text. Never use it as the hint."""
-    glance_obj = glance_obj or {}
-    glance_obj["look_next_grok"] = (grok_text or "").strip()
-    if glance_obj.get("look_next_packet") is None and view_classes is not None:
-        packet, lines = look_next_for_page(view_classes, today)
-        glance_obj["look_next_packet"] = packet
-        glance_obj["look_next"] = lines
-    return glance_obj
 
 
 def collect_facts(view_classes, today):
@@ -1463,7 +1451,6 @@ def build_glance(view_classes, today, last_checked_iso=""):
         "facts": [],
         "look_next": look_next,
         "look_next_packet": packet,
-        "look_next_grok": "",
         "suppressed": suppressed,
         "verified_count": count,
     }

@@ -30,5 +30,5 @@
     "fall_last_md": "01-04",
     "q3_last_md": "03-15"
   },
-  "notes": "First/last instructional days. 2026-27 quarters are official TUSD 6–12 quarter end dates (Q1 2026-10-09, Q2 2026-12-18, Q3 2027-03-12, Q4 2027-05-28). Scraper auto-pauses Aeries + Grok outside first/last windows (summer). term_cutovers drive GradebookDetails term selection and are not the progress-bar dates. SUMMER_BREAK env can still force on/off."
+  "notes": "First/last instructional days. 2026-27 quarters are official TUSD 6–12 quarter end dates (Q1 2026-10-09, Q2 2026-12-18, Q3 2027-03-12, Q4 2027-05-28). Scraper auto-pauses Aeries outside first/last windows (summer). term_cutovers drive GradebookDetails term selection and are not the progress-bar dates. SUMMER_BREAK env can still force on/off."
 }

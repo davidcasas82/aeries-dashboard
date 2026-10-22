@@ -158,112 +158,6 @@ class PhantomZeroTests(unittest.TestCase):
         self.assertEqual(analyzed["current_grade_mark"], "A")
 
 
-class StaleCopyRewriteTests(unittest.TestCase):
-    def test_scored_aug19_not_due_weekday(self):
-        a = _asgn(
-            description="Anatomy of a Great Game",
-            due_date="08/19/2026",
-            points_earned=5.0,
-            points_possible=5.0,
-        )
-        entry = scraper.format_assignment_entry(a, TODAY, "recent")
-        snap = "Anatomy of a Great Game · due Wed"
-        rewritten = scraper.rewrite_stale_due_copy(snap, [entry])
-        self.assertNotIn("due Wed", rewritten)
-        self.assertIn("5/5", rewritten)
-
-    def test_weekday_only_without_name_uses_completed_fallback(self):
-        a = _asgn(
-            description="0.1 Simplify Expressions",
-            due_date="08/20/2026",
-            points_earned=8.0,
-            points_possible=10.0,
-        )
-        entry = scraper.format_assignment_entry(a, TODAY, "recent")
-        snap = "Algebra Boot Camp assignments · due Thu"
-        rewritten = scraper.rewrite_stale_due_copy(snap, [entry])
-        self.assertNotRegex(rewritten, r"\bdue Thu\b")
-        self.assertIn("8/10", rewritten)
-
-    def test_future_due_label_kept(self):
-        a = _asgn(description="LT 1.1 - CER # 1", due_date="09/09/2026")
-        entry = scraper.format_assignment_entry(a, TODAY, "upcoming")
-        snap = "LT 1.1 - CER # 1 · due Wed Sep 9"
-        self.assertEqual(scraper.rewrite_stale_due_copy(snap, [entry]), snap)
-
-    def test_phantom_zero_headline(self):
-        text = "Engineering Geo at 0% needs attention; Leah holds A's"
-        out = scraper.rewrite_phantom_zero_copy(text)
-        self.assertNotIn("at 0%", out)
-        self.assertNotIn("0% needs attention", out)
-        self.assertIn("no grade yet", out.lower())
-
-    def test_sanitize_briefing_kills_live_lies(self):
-        analytics = {
-            "classes": [
-                {
-                    "course_name": "Rapid Prototype",
-                    "phantom_zero": True,
-                    "recent_scores": [
-                        scraper.format_assignment_entry(
-                            _asgn(
-                                description="Article: Design Principle Jigsaw",
-                                due_date="08/20/2026",
-                                points_earned=1.0,
-                                points_possible=3.0,
-                            ),
-                            TODAY,
-                            "recent",
-                        )
-                    ],
-                    "upcoming": [],
-                    "missing_assignments": [],
-                    "pending_grade": [],
-                },
-                {
-                    "course_name": "Bus of Gaming",
-                    "phantom_zero": False,
-                    "recent_scores": [
-                        scraper.format_assignment_entry(
-                            _asgn(
-                                description="Anatomy of a Great Game",
-                                due_date="08/19/2026",
-                                points_earned=5.0,
-                                points_possible=5.0,
-                            ),
-                            TODAY,
-                            "recent",
-                        )
-                    ],
-                    "upcoming": [],
-                    "missing_assignments": [],
-                    "pending_grade": [],
-                },
-            ]
-        }
-        summary = {
-            "headline": "Daniel needs attention in Rapid Prototype at 0% while holding an A in Bus of Gaming",
-            "wins": [],
-            "classes": [
-                {
-                    "class_name": "Rapid Prototype",
-                    "snap": "LT 1.1 - Poster of Myself in Adobe Illustrator · due Fri",
-                    "story": "Grade at 0% after 33% on Article: Design Principle Jigsaw.",
-                },
-                {
-                    "class_name": "Bus of Gaming",
-                    "snap": "Anatomy of a Great Game · due Wed",
-                    "story": "",
-                },
-            ],
-        }
-        out = scraper.sanitize_briefing_copy(summary, analytics)
-        self.assertNotIn("at 0%", out["headline"])
-        self.assertNotIn("due Wed", out["classes"][1]["snap"])
-        self.assertIn("5/5", out["classes"][1]["snap"])
-        self.assertNotIn("0%", out["classes"][0]["story"])
-
-
 class FirstGradeDeltaTests(unittest.TestCase):
     def test_phantom_history_point(self):
         self.assertTrue(scraper._is_phantom_history_point({"pct": 0.0, "mark": ""}))
@@ -384,10 +278,6 @@ class ClassworkIsNotHomeworkTests(unittest.TestCase):
         names = [p["name"] for p in analyzed["pending_grade"]]
         self.assertEqual(names, ["Old lab", "Exit Ticket"])
 
-    def test_prompt_says_awaiting_is_not_missing(self):
-        src = Path(scraper.__file__).read_text()
-        self.assertIn("Awaiting score is not missing", src)
-
     def test_tonight_plan_skips_turned_in_and_adds_due_tomorrow(self):
         analytics = [
             {
@@ -415,11 +305,7 @@ class ClassworkIsNotHomeworkTests(unittest.TestCase):
         self.assertNotIn("Warm Ups", plan["label"])
 
 
-class ModelAndPromptTests(unittest.TestCase):
-    def test_not_mini(self):
-        self.assertEqual(scraper.GROK_MODEL, "grok-4")
-        self.assertNotIn("mini", scraper.GROK_MODEL)
-
+class SourceCopyTests(unittest.TestCase):
     def test_prompt_drops_due_tue_example(self):
         src = Path(scraper.__file__).read_text()
         self.assertNotIn("Anatomy of a Great Game · due Tue", src)

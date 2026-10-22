@@ -4,7 +4,7 @@ The student's Apps Script (tools/classroom_apps_script.gs) writes
 classroom_export.json into their Drive and shares it with a service account.
 This module downloads those exports, maps each Classroom course onto an Aeries
 class, matches Classroom items to Aeries gradebook rows, and derives the
-signals the dashboard and Grok can use.
+signals the dashboard can use.
 
 Nothing here logs student names or numbers. Exports are keyed by
 ``student_slot`` (1 = STUDENT_1, 2 = STUDENT_2).
@@ -1084,7 +1084,7 @@ def _course_for_class(block, class_meta):
 
 
 def class_context(student_data, class_meta, today, assignments=None):
-    """Dashboard/Grok facts for one Aeries class from its mapped Classroom course."""
+    """Dashboard facts for one Aeries class from its mapped Classroom course."""
     block = (student_data or {}).get("classroom") or {}
     course = _course_for_class(block, class_meta)
     if not course:
@@ -1210,32 +1210,6 @@ def class_context(student_data, class_meta, today, assignments=None):
         "late_turn_ins": late_count,
         "announcements": announcements,
         "materials": materials,
-    }
-
-
-def grok_context(context):
-    """Trimmed copy of class_context for the Grok analytics payload (no links)."""
-    if not context:
-        return None
-    return {
-        "classroom_only_upcoming": [
-            {
-                "title": e.get("title"),
-                "due_date": e.get("due_date"),
-                "days_until_due": e.get("days_until_due"),
-                "state_label": e.get("state_label"),
-                "instructions": _clip(e.get("instructions"), 300),
-                **({"rubric_criteria": [c.get("title") for c in e["rubric"]][:6]} if e.get("rubric") else {}),
-            }
-            for e in context.get("classroom_only") or []
-            if (e.get("state") or "").upper() not in TURNED_IN_STATES
-        ][:6],
-        "turned_in_on_classroom_but_aeries_missing": [
-            e.get("title") for e in context.get("turned_in_aeries_missing") or []
-        ],
-        "not_started_due_soon": context.get("not_started_due_soon") or [],
-        "late_turn_ins": context.get("late_turn_ins") or 0,
-        "recent_announcements": [a.get("text") for a in context.get("announcements") or []],
     }
 
 
