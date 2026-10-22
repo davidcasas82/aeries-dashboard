@@ -57,11 +57,11 @@ def insight_facts():
 GOOD = [
     {"text": "Still a B, 2.1 points from an A.", "cites": [NEXT]},
     {"text": "Mostly the {item:" + CAUSE + "}.", "cites": [CAUSE]},
-    {"text": "Scores mostly post on Fridays.", "cites": [PATTERN]},
-    {"text": "An 88% on the {next:" + WHATIF + "} gets the A back.", "cites": [WHATIF]},
+    {"text": "Scores usually post Fridays.", "cites": [PATTERN]},
+    {"text": "An 88 or better on the {next:" + WHATIF + "} gets it to an A.", "cites": [WHATIF]},
 ]
 GOOD_STORY = ("Still a B, 2.1 points from an A. Mostly the Ch.4 Quiz (31/50). "
-              "Scores mostly post on Fridays. An 88% on the next test gets the A back.")
+              "Scores usually post Fridays. An 88 or better on the next test gets it to an A.")
 
 
 class ScriptedModel:
@@ -113,7 +113,7 @@ def claims(text, cites, idx, name=None, classes=None):
     CauseFormGateTests covers the cause-sentence gate, LetterFormTests the letter-sentence one.
     """
     reason = w.check_sentence(text, cites, idx, name, classes)
-    return None if reason in (w.CAUSE_FORM_REASON, w.LETTER_FORM_REASON) else reason
+    return None if reason == w.FORM_REASON else reason
 
 
 def check(text, cites, idx, name=None):
@@ -199,7 +199,7 @@ class CheckerTests(unittest.TestCase):
                          "number 95 isn't in the cited facts")
 
     def test_cites_must_exist_and_belong_to_the_class(self):
-        self.assertEqual(w.check_sentence("Math: B.", [], index()), "cites nothing")
+        self.assertEqual(w.check_sentence("Math: B.", [], index()), w.FREE_REASON)
         self.assertEqual(w.check_sentence("Math: B.", ["next:art"], index()), "unknown fact next:art")
         both = w.fact_index(math_facts() + quiet_facts())
         self.assertEqual(w.check_sentence("Biology: B.", ["next:biology"], both, "Math"),
@@ -1010,15 +1010,23 @@ class PolishPassTests(unittest.TestCase):
             up = w.write_up(ScriptedModel({"Math": GOOD}, headline=headline), insight_facts())
             self.assertIsNone(up["headline"], headline["text"])
             self.assertEqual(w.apply_write_up({"headline": "Grok headline"}, up)["headline"], "")
-        for text, cites, out in (("Math: an 88 or better on the {next:" + WHATIF + "} gets the A back.", [WHATIF],
-                                  "Math: an 88 or better on the next test gets the A back."),
-                                 ("The {item:" + CAUSE + "} did most of the damage.", [CAUSE],
-                                  "The Ch.4 Quiz (31/50) did most of the damage.")):
+        for text, cites, out in (("Math: an 88 or better on the {next:" + WHATIF + "} gets it to an A.", [WHATIF],
+                                  "Math: an 88 or better on the next test gets it to an A."),
+                                 ("An 88 or better on the {next:" + WHATIF + "} gets it to an A.", [WHATIF],
+                                  "An 88 or better on the next test gets it to an A."),
+                                 ("{class:" + WHATIF + "} is 2.1 pts from an A; an 88 or better on the {next:" + WHATIF
+                                  + "} gets it to an A.", [NEXT, WHATIF],
+                                  "Math is 2.1 pts from an A; an 88 or better on the next test gets it to an A.")):
             up = w.write_up(ScriptedModel({"Math": GOOD}, headline={"text": text, "cites": cites}), insight_facts())
             self.assertEqual(up["headline"], {"text": out, "cites": cites})
+        # Only the headline forms: a cause line, or the step reworded, is no headline.
+        for text, cites in (("The {item:" + CAUSE + "} did most of the damage.", [CAUSE]),
+                            ("Math: an 88 or better on the {next:" + WHATIF + "} gets the A back.", [WHATIF])):
+            up = w.write_up(ScriptedModel({"Math": GOOD}, headline={"text": text, "cites": cites}), insight_facts())
+            self.assertIsNone(up["headline"], text)
         fixed = w.write_up(ScriptedModel({"Math": GOOD}, headline={
-            "text": "Math: a 88 or better on the {next:" + WHATIF + "} gets the A back.", "cites": [WHATIF]}), insight_facts())
-        self.assertEqual(fixed["headline"]["text"], "Math: an 88 or better on the next test gets the A back.")
+            "text": "Math: a 88 or better on the {next:" + WHATIF + "} gets it to an A.", "cites": [WHATIF]}), insight_facts())
+        self.assertEqual(fixed["headline"]["text"], "Math: an 88 or better on the next test gets it to an A.")
 
 
 class CtoRoundFourTests(unittest.TestCase):
@@ -1042,9 +1050,11 @@ class CtoRoundFourTests(unittest.TestCase):
         self.assertIsNone(self.headline("Alg ll Bus Mang: 85 on {next:%s} for a B." % self.ALG))
         self.assertIsNone(self.headline("Alg ll Bus Mang: 85 on next assessment item for a B."))
         self.assertIsNone(self.headline("Alg ll Bus Mang: 84.3 on the {next:%s} gets a B." % self.ALG))
-        self.assertIsNone(self.headline("Alg ll Bus Mang: an 86 or better on the {next:%s} gets a B." % self.ALG))
-        ok = self.headline("Alg ll Bus Mang: an 85 or better on the {next:%s} gets a B." % self.ALG)
-        self.assertEqual(ok, {"text": "Alg ll Bus Mang: an 85 or better on the next assessment gets a B.", "cites": [self.ALG]})
+        self.assertIsNone(self.headline("Alg ll Bus Mang: an 86 or better on the {next:%s} gets it to a B." % self.ALG))
+        self.assertIsNone(self.headline("Alg ll Bus Mang: an 85 or better on the {next:%s} gets a B." % self.ALG))
+        ok = self.headline("Alg ll Bus Mang: an 85 or better on the {next:%s} gets it to a B." % self.ALG)
+        self.assertEqual(ok, {"text": "Alg ll Bus Mang: an 85 or better on the next assessment gets it to a B.",
+                              "cites": [self.ALG]})
 
     def test_next_fills_for_singular_plural_and_mass_buckets(self):
         cases = {"Assessment": "assessment", "Assessments": "assessment", "Summative": "summative", "Tests": "test",
@@ -1101,8 +1111,9 @@ class SlotRoundThreeTests(unittest.TestCase):
         # Cause wording on a what_if's bucket still needs a grade_move or cause.
         self.assertEqual(w.check_sentence("{bucket:whatif:geo} did most of the damage.", ["whatif:geo"], idx, "Geo"),
                          "states a cause without citing a grade_move or cause")
-        self.assertIsNone(w.check_sentence("A 74 or better on the next {bucket:whatif:geo} score gets it to a C.",
-                                           ["whatif:geo"], idx, "Geo"))
+        # Off the say_step's words ("the next {bucket:} score" for "the {next:}"): not an allowed form.
+        self.assertEqual(w.check_sentence("A 74 or better on the next {bucket:whatif:geo} score gets it to a C.",
+                                          ["whatif:geo"], idx, "Geo"), w.FORM_REASON)
         self.assertEqual(w.fill_slots("A 74 or better on the next {bucket:whatif:geo} score gets it to a C.", idx),
                          "A 74 or better on the next homework score gets it to a C.")
         # Share order: "mostly" on a bucket that isn't the top bucket by net share is dropped (by the gate).
@@ -1137,14 +1148,14 @@ class SlotRoundThreeTests(unittest.TestCase):
                  ("Geo", "In Geo, scores usually post Thursdays.", ["Geo"]))
         for cls, text, classes in cases:
             idx = self.idx(cls=cls)
-            self.assertIsNone(w.check_sentence(text, ["pattern:posting_day:geo"], idx, cls, classes), text)
+            self.assertIsNone(claims(text, ["pattern:posting_day:geo"], idx, cls, classes), text)
         # "Eng" is short for both Int Eng&Marktg and English 10: ambiguous, so dropped.
         idx = self.idx(cls="Int Eng&Marktg")
         self.assertEqual(w.check_sentence("Eng scores usually post Thursdays.", ["pattern:posting_day:geo"], idx,
                                           "Int Eng&Marktg", ["Int Eng&Marktg", "English 10"]),
                          "names a class by an ambiguous short form (Eng)")
-        self.assertIsNone(w.check_sentence("Int Eng&Marktg scores usually post Thursdays.", ["pattern:posting_day:geo"],
-                                           idx, "Int Eng&Marktg", ["Int Eng&Marktg", "English 10"]))
+        self.assertIsNone(claims("Int Eng&Marktg scores usually post Thursdays.", ["pattern:posting_day:geo"],
+                                 idx, "Int Eng&Marktg", ["Int Eng&Marktg", "English 10"]))
 
     def test_checks_read_slots_as_neutral_tokens(self):
         for title in ("Final Exam - B+ curve", "Ch 5 Test due 10/30", "Make-up for 11/20", "Unit 3: Part 2", "Quiz 3 (20 pts)"):
@@ -1213,7 +1224,8 @@ class SlotRoundThreeTests(unittest.TestCase):
 class HeadlineAndTakeoverTests(unittest.TestCase):
     def test_write_up_headline_and_stories(self):
         model = ScriptedModel({"Math": GOOD}, headline={
-            "text": "Math is 2.1 pts from an A; an 88 or better on the {next:" + WHATIF + "} gets it back.", "cites": [NEXT, WHATIF]})
+            "text": "Math is 2.1 pts from an A; an 88 or better on the {next:" + WHATIF + "} gets it to an A.",
+            "cites": [NEXT, WHATIF]})
         up = w.write_up(model, insight_facts())
         self.assertEqual([s["class"] for s in up["stories"]], ["Math"])
         self.assertEqual(up["headline"]["cites"], [NEXT, WHATIF])
@@ -1576,16 +1588,25 @@ class CauseFormGateTests(unittest.TestCase):
             self.assertIsNone(w.check_sentence(text, cites, geo, "Geometry"), text)
 
     def test_the_prompt_teaches_the_forms_and_its_right_example_passes(self):
-        self.assertIn("A sentence about a cause is one of these forms", w.DRAFT_SYSTEM)
+        self.assertIn("Every sentence that cites a fact is one of these forms, word for word.", w.DRAFT_SYSTEM)
         for form in ('"Mostly the {item:<cause id>}."', '"The {item:<cause id>} did most of the damage."',
-                     '"The {item:<cause id>} hurt."', '"The {item:<cause id>} helped."', "Right:", "Wrong:"):
+                     '"The {item:<cause id>} hurt."', '"The {item:<cause id>} helped."', "say_opening", "say_pattern",
+                     "say_step", "of the grade.", "A sentence that cites no fact", "Right:", "Wrong:"):
             self.assertIn(form, w.DRAFT_SYSTEM)
         idx = w.fact_index(w.model_facts(w.EXAMPLE_FACTS))
         right = re.search(r'Right: "(The \{item:[^"]+)"', w.DRAFT_SYSTEM).group(1)
-        wrong = re.search(r'Wrong: "(The \{item:[^"]+)"', w.DRAFT_SYSTEM).group(1)
+        wrong = re.search(r'Wrong: "(Still [^"]+)"', w.DRAFT_SYSTEM).group(1)
         fid = re.search(r"\{item:([^}]+)\}", right).group(1)
         self.assertIsNone(w.check_sentence(right, [fid], idx, "Ceramics"))
-        self.assertEqual(w.check_sentence(wrong, [fid], idx, "Ceramics"), w.CAUSE_FORM_REASON)
+        self.assertIsNotNone(w.check_sentence(wrong, ["next:ceramics"], idx, "Ceramics"))
+        self.assertEqual(w.check_sentence(wrong.replace(", and slipping", ", so far"), ["next:ceramics"], idx,
+                                          "Ceramics"), w.FORM_REASON)
+        # The example facts carry the say_ fields the model copies.
+        model = {f["id"]: f for f in w.model_facts(w.EXAMPLE_FACTS)}
+        example = {f["id"]: f for f in w.EXAMPLE_FACTS}
+        for fid, field in (("whatif:ceramics:projects:20", "say_step"), ("pattern:posting_day:ceramics", "say_pattern")):
+            self.assertEqual(example[fid][field], model[fid][field])
+        self.assertIn("Copy the slots as the story has them. Any other headline is thrown away.", w.HEADLINE_SYSTEM)
         for sentence in w.EXAMPLE_NOTE:
             self.assertIsNone(w.check_sentence(sentence["text"], sentence["cites"], idx, "Ceramics"), sentence["text"])
 
@@ -1613,10 +1634,11 @@ class GateReviewTests(unittest.TestCase):
                                 ("Mostly {bucket:whatif:g} scores.", ["whatif:g", "move:g"]),
                                 ("{bucket:whatif:g} scores did most of the damage.", ["whatif:g"])):
                 self.assertIsNotNone(w.check_sentence(text, cites, idx, "Geo"), text)
-            # With no direction word a what-if bucket is fine: the next step and a weight.
+            # With no direction word a what-if bucket's weight is fine; other wording is off the forms.
+            self.assertIsNone(w.check_sentence("{bucket:whatif:g} is 50% of the grade.", ["whatif:g"], idx, "Geo"))
             for text in ("A 74 or better on the next {bucket:whatif:g} score gets it to a C.",
-                         "{bucket:whatif:g} is 50% of the grade.", "The next {bucket:whatif:g} score decides it."):
-                self.assertIsNone(w.check_sentence(text, ["whatif:g"], idx, "Geo"), text)
+                         "The next {bucket:whatif:g} score decides it."):
+                self.assertEqual(w.check_sentence(text, ["whatif:g"], idx, "Geo"), w.FORM_REASON, text)
 
     def test_a_bucket_reads_its_net_share_in_the_move(self):
         # Drop of 2.0: Tests nets +1.0 (a -1.0, c +2.0), Labs -3.0.
@@ -1913,11 +1935,11 @@ class LetterFormTests(unittest.TestCase):
                 for cites in (["next:g"], ["next:g", "pat:g"]):
                     self.assertIsNotNone(w.check_sentence(text, cites, idx, "Geo", ["Geo"]), (label, text, cites))
             for text in ("Still a D, 1.0 points from a C, and slipping.", "No longer a C.", "From a C to a D."):
-                self.assertEqual(w.check_sentence(text, ["next:g"], idx, "Geo", ["Geo"]), w.LETTER_FORM_REASON, text)
+                self.assertEqual(w.check_sentence(text, ["next:g"], idx, "Geo", ["Geo"]), w.FORM_REASON, text)
             # Off the opening's words, even with no direction: the short form drops too (fail closed).
             for text in ("Geo: D, 1 pts from a C.", "Still a D.", "Still a D, 1 point from a C."):
-                self.assertEqual(w.check_sentence(text, ["next:g"], idx, "Geo", ["Geo"]), w.LETTER_FORM_REASON, text)
-            self.assertEqual(w.reason_code(w.LETTER_FORM_REASON), w.LETTER_FORM_REASON)
+                self.assertEqual(w.check_sentence(text, ["next:g"], idx, "Geo", ["Geo"]), w.FORM_REASON, text)
+            self.assertEqual(w.reason_code(w.FORM_REASON), w.FORM_REASON)
 
     def test_the_exact_opening_and_the_step_pass(self):
         for label, facts in self.facts().items():
@@ -1978,8 +2000,9 @@ class OtherClassNameTests(unittest.TestCase):
     CLASSES = ["Geo", "English 10", "Physics", "Art", "Band", "Health"]
 
     def check(self, text, cites=("cause:geo:t",), classes=None, cls="Geo"):
-        return w.check_sentence(text, list(cites), w.fact_index(w.model_facts(geo_facts(cls=cls))), cls,
-                                self.CLASSES if classes is None else classes)
+        """The names check (fixed forms aside: these sentences are about class names)."""
+        return claims(text, list(cites), w.fact_index(w.model_facts(geo_facts(cls=cls))), cls,
+                      self.CLASSES if classes is None else classes)
 
     def test_another_class_in_lowercase_is_dropped(self):
         for text in ("physics scores dragged it.", "Down 2.5; physics grades dragged it.", "physics dragged it.",
@@ -1996,7 +2019,7 @@ class OtherClassNameTests(unittest.TestCase):
                             ("{bucket:cause:geo:t} scores dragged it.", ["cause:geo:t"])):
             # The letter sentences are off the fixed opening (LetterFormTests); here only the name check counts.
             reason = self.check(text, cites)
-            self.assertIn(reason, (None, w.LETTER_FORM_REASON) if cites == ["next:geo"] else (None,), text)
+            self.assertIn(reason, (None, w.FORM_REASON) if cites == ["next:geo"] else (None,), text)
 
     def test_the_extra_subject_words_are_another_class(self):
         for word in ("Chem", "Bio", "APUSH", "P.E.", "Yearbook"):
