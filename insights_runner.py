@@ -1,12 +1,15 @@
-"""Nightly grade-insights runner for the Mac mini. One launchd tick every 5 minutes.
+"""Grade-insights runner for the Mac mini. launchd starts it a few minutes after each grade sync.
 
-A tick decides whether tonight's work may run now, then does the next unfinished steps
-until a hard stop, a busy machine, or the end of the plan. Progress is saved after every
-step, so a pause, crash or reboot picks up where it stopped. The work itself (model calls,
-writing, checking) sits behind NightWork; this file never calls a model.
+A start checks that a fresh sync landed (the public freshness stamp), then reads the grades once
+(one unlock, GETs only) and fingerprints what the engine uses, per student. When every fingerprint
+matches the last successful run it logs "skip: no change" and stops: no model, no PUT, the stored
+notes stay. Otherwise the writer (WriterWork) writes each student's write-up and publishes them
+through InsightsPublisher, which sends only with GRADE_INSIGHTS_PUBLISH=1. The fingerprint is saved
+only after a publish or a deliberate no-op, so a failed run tries again on the next start.
 """
 
 import fcntl
+import hashlib
 import importlib
 import json
 import os
@@ -17,9 +20,9 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Callable
 from zoneinfo import ZoneInfo
 
 from class_match import assignments_for_class
@@ -28,20 +31,16 @@ from class_match import assignments_for_class
 PACIFIC = ZoneInfo("America/Los_Angeles")
 FAMILY_DATA_URL = "https://family-data.davidcasas.workers.dev"
 FRESHNESS_URL = f"{FAMILY_DATA_URL}/v1/grades/freshness"
-EVENING_HOUR = 19
 USER_AGENT = "grade-insights-runner/1"
-SUNDAY = 6
-
-# Hard stops: (weekdays or None for every day, start, end). The runner never works inside one.
-# 3:05-4:40 leaves the 3:17 AM backup and the 4:30 AM Photo Drop clear alone.
-# Sunday 1:00-6:30 covers the Amazon Photos window (1:07-5:07) and the 5:37 restart.
-# 6:30-19:00 is daytime: tonight's run is over.
-BLOCKED = (
-    (None, time(3, 5), time(4, 40)),
-    (None, time(6, 30), time(19, 0)),
-    ({SUNDAY}, time(1, 0), time(6, 30)),
-)
-# The parent PIN is a generic password in the mini's login Keychain. Code only for now.
+# A sync is fresh for this long after it lands. launchd starts the runner about 10 and 40 minutes after
+# the 4:45 PM and 8:07 PM PT scrapes (deploy/com.davidcasas.grade-insights.plist), so the 2 AM scrapes
+# are always older than this by then and never start a run.
+FRESH_FOR = timedelta(hours=2)
+CLOCK_SKEW = timedelta(minutes=5)
+# How a start that reached the work can end. Each of these marks the sync handled; anything else
+# (waiting for the machine, a crash) leaves it for the next start.
+HANDLED = ("no_change", "published", "nothing_to_send", "publish_off")
+# The parent PIN is a generic password in the mini's login Keychain.
 PIN_KEYCHAIN_SERVICE = "family-data-parent-pin"
 PIN_KEYCHAIN_ACCOUNT = "aeries"
 # The insights write secret (family-data AERIES_INSIGHTS_SECRET) is a second generic password.
@@ -57,26 +56,12 @@ MODEL_REPOS = {
     "qwen3-8b": "mlx-community/Qwen3-8B-4bit",
     "gemma3-12b": "mlx-community/gemma-3-text-12b-it-4bit",
 }
+# The bake-off's pick (qwen-v11: 30/30 stories) and its settings.
+WRITER_MODEL = "qwen3-8b"
 MIN_FREE_MEMORY_PCT = 35
 BUSY_PROCESSES = ("Blender", "blender", "ffmpeg")
-
-
-class NightWork(Protocol):
-    """The model and writer side. plan() lists step ids; run_step() does one and is safe to repeat."""
-
-    def plan(self, night: str) -> list: ...
-
-    def run_step(self, night: str, step: str) -> None: ...
-
-
-class PendingWork:
-    """Stand-in until the writer is decided: a night with nothing to do."""
-
-    def plan(self, night):
-        return []
-
-    def run_step(self, night, step):
-        raise NotImplementedError("writer not built yet")
+# The engine and writer sources go into every fingerprint, so a code update writes the notes again once.
+FINGERPRINT_CODE = ("insights.py", "insights_writer.py")
 
 
 @dataclass(frozen=True)
@@ -90,33 +75,26 @@ class Machine:
     busy: Callable[[], bool]
 
 
-def blocked(now):
-    """True inside a hard-stop window, on the Pacific clock."""
-    clock = now.timetz().replace(tzinfo=None)
-    for days, start, end in BLOCKED:
-        if days is not None and now.weekday() not in days:
-            continue
-        if start <= clock < end:
-            return True
-    return False
+def fresh_sync(stamp, now, handled=None):
+    """True when stamp is a sync this runner hasn't handled yet and it landed within FRESH_FOR of now."""
+    if not isinstance(stamp, str) or not stamp or stamp == handled:
+        return False
+    try:
+        landed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if landed.tzinfo is None:
+        return False
+    return -CLOCK_SKEW <= now - landed <= FRESH_FOR
 
 
-def evening_night(stamp):
-    """Pacific date of the evening scrape a freshness stamp came from, or None for any other scrape."""
-    landed = datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone(PACIFIC)
-    if landed.hour >= EVENING_HOUR:
-        return landed.date().isoformat()
-    return None
-
-
-def tonight(now):
-    """The night a tick belongs to: before 7 AM is still the previous evening's night."""
-    day = now.date() - timedelta(days=1) if now.hour < 7 else now.date()
-    return day.isoformat()
+def machine_free(machine):
+    """No render running and enough free memory for the model."""
+    return not machine.busy() and machine.free_memory_pct() >= MIN_FREE_MEMORY_PCT
 
 
 class State:
-    """Progress file: which night is in flight and which steps are done. Written atomically."""
+    """The runner's small state file: the last sync handled and how the last start ended. No grades."""
 
     def __init__(self, path):
         self.path = Path(path)
@@ -130,16 +108,8 @@ class State:
     def get(self, key, default=None):
         return self.data.get(key, default)
 
-    def start_night(self, night, stamp):
-        self.data = {"night": night, "stamp": stamp, "status": "running", "done": []}
-        self.save()
-
     def mark(self, **fields):
         self.data.update(fields)
-        self.save()
-
-    def step_done(self, step):
-        self.data.setdefault("done", []).append(step)
         self.save()
 
     def save(self):
@@ -149,44 +119,29 @@ class State:
         os.replace(tmp, self.path)
 
 
-def tick(state, work, machine, log=print):
-    """One launchd tick. Returns the status it left the night in."""
-    now = machine.now()
-    if blocked(now):
-        return "blocked"
-    night = tonight(now)
+def tick(state, machine, run_sync, log=print):
+    """One launchd start. run_sync(stamp) does the work for a fresh sync and returns how it ended.
 
-    if state.get("night") != night or state.get("status") in (None, "waiting_for_scrape"):
-        stamp = machine.freshness()
-        if evening_night(stamp) != night:
-            state.mark(night=night, status="waiting_for_scrape")
-            return "waiting_for_scrape"
-        if not machine.ssd_mounted():
-            state.mark(night=night, stamp=stamp, status="skipped_no_ssd", done=[])
-            log(f"grade-insights: {night} skipped, the SSD is not mounted")
-            return "skipped_no_ssd"
-        state.start_night(night, stamp)
-        log(f"grade-insights: {night} started from the evening scrape")
-
-    if state.get("status") in ("done", "skipped_no_ssd"):
-        return state.get("status")
-
-    done = set(state.get("done") or [])
-    for step in work.plan(night):
-        if step in done:
-            continue
-        if blocked(machine.now()):
-            state.mark(status="paused")
-            return "paused"
-        if machine.busy() or machine.free_memory_pct() < MIN_FREE_MEMORY_PCT:
-            state.mark(status="waiting_for_machine")
-            return "waiting_for_machine"
-        state.mark(status="running")
-        work.run_step(night, step)
-        state.step_done(step)
-    state.mark(status="done")
-    log(f"grade-insights: {night} done, {len(state.get('done') or [])} steps")
-    return "done"
+    A sync that isn't fresh, or was already handled, ends the start quietly. A missing SSD skips the
+    sync with one line and keeps the last good write-up. A busy machine waits for the next start.
+    """
+    stamp = machine.freshness()
+    if not fresh_sync(stamp, machine.now(), state.get("handled")):
+        return "waiting_for_sync"
+    if not machine.ssd_mounted():
+        state.mark(handled=stamp, status="skipped_no_ssd")
+        log("grade-insights: sync skipped, the SSD is not mounted; the last write-up stays")
+        return "skipped_no_ssd"
+    if not machine_free(machine):
+        state.mark(status="waiting_for_machine")
+        return "waiting_for_machine"
+    state.mark(stamp=stamp, status="running")
+    status = run_sync(stamp)
+    if status in HANDLED:
+        state.mark(handled=stamp, status=status)
+    else:
+        state.mark(status=status)
+    return status
 
 
 # ── The real machine ─────────────────────────────────────────────────────────
@@ -233,7 +188,7 @@ def keychain_secret(service, account):
 
 
 def parent_pin():
-    """The parent PIN from the login Keychain. Nothing calls this yet."""
+    """The parent PIN from the login Keychain, for ReadOnlyFamilyData's one unlock. Never printed."""
     return keychain_secret(PIN_KEYCHAIN_SERVICE, PIN_KEYCHAIN_ACCOUNT)
 
 
@@ -531,7 +486,7 @@ def _open_request(request, opener=None):
         return err.code, b""
 
 
-# ── Loading tonight's students ───────────────────────────────────────────────
+# ── Loading the students ─────────────────────────────────────────────────────
 
 
 def class_inputs(student):
@@ -584,7 +539,7 @@ def writer_upcoming(log=print):
 
 
 def load_students(client, upcoming_items=None, log=print):
-    """[{"sn", "insight_facts", "log_items", "upcoming"}] per student with facts, for the writer.
+    """[{"sn", "insight_facts", "log_items", "upcoming", "fingerprint"}] per student with facts, for the writer.
 
     Two GETs on the read-only session: the latest grades and the scored log. Students are
     matched to their log by the same key the scrape writes under; nothing here is logged.
@@ -596,15 +551,18 @@ def load_students(client, upcoming_items=None, log=print):
     log_doc = remote_log.get("doc") if isinstance(remote_log.get("doc"), dict) else {}
     logged = log_doc.get("students") or {}
     build = upcoming_items or writer_upcoming(log)
+    code = code_version()
     students = []
     for student in latest.get("students") or []:
         facts = student.get("insight_facts")
         if not isinstance(facts, dict) or not facts.get("facts"):
             continue
         entry = logged.get(str(student.get("sn"))) or {}
-        upcoming = build(class_inputs(student), facts["as_of"]) if build and facts.get("as_of") else []
-        students.append({"sn": str(student.get("sn") or ""), "insight_facts": facts,
-                         "log_items": entry.get("items") or [], "upcoming": upcoming})
+        classes = class_inputs(student)
+        upcoming = build(classes, facts["as_of"]) if build and facts.get("as_of") else []
+        sn, log_items = str(student.get("sn") or ""), entry.get("items") or []
+        students.append({"sn": sn, "insight_facts": facts, "log_items": log_items, "upcoming": upcoming,
+                         "fingerprint": student_fingerprint(sn, classes, facts, log_items, upcoming, code)})
     return students
 
 
@@ -612,7 +570,7 @@ def writer_work(client, model, store, put=None, env=None, log=print):
     """The writer's nightly steps fed by load_students, or None without a usable writer.
 
     Same import rule as writer_attr: quiet when the writer isn't in the checkout, one
-    type-only warning when it is there but broken. None means the runner keeps PendingWork.
+    type-only warning when it is there but broken. None means there is no writer to run.
     The load is read once per runner process, so a run unlocks at most once.
     """
     work_class = writer_attr("WriterWork", log)
@@ -685,19 +643,187 @@ def real_machine(ssd_path):
     )
 
 
-def main(argv=None):
+# ── Change check ─────────────────────────────────────────────────────────────
+
+
+def code_version(root=None):
+    """sha256 over the engine and writer sources, or "" when they aren't there."""
+    root = Path(root) if root else Path(__file__).resolve().parent
+    digest = hashlib.sha256()
+    for name in FINGERPRINT_CODE:
+        path = root / name
+        digest.update(name.encode() + b"\0" + (path.read_bytes() if path.exists() else b"") + b"\0")
+    return digest.hexdigest()
+
+
+def student_fingerprint(sn, classes, insight_facts, log_items, upcoming, code=""):
+    """sha256 of what the engine and writer use for one student: the student key, every class's scored and
+    unscored assignments, the engine's facts, the scored log and the upcoming items, plus the code version.
+
+    The facts' as_of date is left out, so a new day with nothing new is no change; an item that falls due
+    still changes the upcoming list. Only the hash is kept, never what went into it.
+    """
+    facts = {k: v for k, v in (insight_facts or {}).items() if k != "as_of"}
+    material = {"v": 1, "sn": sn, "classes": classes, "facts": facts, "log_items": log_items,
+                "upcoming": upcoming, "code": code}
+    text = json.dumps(material, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def read_fingerprints(path):
+    """The sorted per-student hashes from the last successful run, or None (no file, or unreadable)."""
+    try:
+        data = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+    hashes = data.get("students") if isinstance(data, dict) else None
+    if not isinstance(hashes, list) or not all(isinstance(h, str) for h in hashes):
+        return None
+    return sorted(hashes)
+
+
+def write_fingerprints(path, hashes):
+    """Save the hashes on the SSD: mode 600 in a 700 folder, written atomically. Hashes only."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    tmp = path.with_suffix(".tmp")
+    tmp.touch(mode=0o600)
+    os.chmod(tmp, 0o600)
+    tmp.write_text(json.dumps({"v": 1, "students": sorted(hashes)}))
+    os.replace(tmp, path)
+
+
+def run_id(stamp):
+    """The WriterWork store folder for one sync: its stamp, letters and digits only."""
+    return "sync-" + re.sub(r"[^0-9A-Za-z]", "", stamp)
+
+
+def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, env=None, log=print):
+    """One fresh sync: the change check, then either a skip or the write-ups and the publish.
+
+    load() is load_students on the read-only session (one unlock, two GETs). Returns one of HANDLED, or
+    "waiting_for_machine" when a render starts or memory runs low between students (the next start picks
+    up from WriterWork's saved steps). Logs carry counts and outcomes only: no names, keys or scores.
+    """
+    students = load()
+    hashes = sorted(s["fingerprint"] for s in students)
+    last = read_fingerprints(prints_path)
+    if hashes == last:
+        log("grade-insights: skip: no change")
+        return "no_change"
+    changed = len(set(hashes) - set(last or []))
+    log(f"grade-insights: {len(hashes)} students, {changed} changed; writing")
+    run = run_id(stamp)
+    work = work_class(lambda: students, model, store, put=put, env=env)
+    for step in work.plan(run):
+        if not machine_free(machine):
+            return "waiting_for_machine"
+        work.run_step(run, step)
+    # WriterWork saves the publish step's result as <store>/<run>/publish.json.
+    published = json.loads((Path(store) / run / "publish.json").read_text()).get("published")
+    if published:
+        write_fingerprints(prints_path, hashes)
+        log("grade-insights: published")
+        return "published"
+    if put is None:
+        log("grade-insights: publish is off, nothing sent")
+        return "publish_off"
+    # The writer left nothing publishable: nothing was sent, the stored notes stay, and that is final for these grades.
+    write_fingerprints(prints_path, hashes)
+    log("grade-insights: nothing to send, the stored notes stay")
+    return "nothing_to_send"
+
+
+# ── The model ────────────────────────────────────────────────────────────────
+
+
+class MlxModel:
+    """The writer's Model on the SSD's Qwen3 8B through mlx-lm, with the bake-off's settings.
+
+    Loaded on the first call only, so a start that skips never touches the model. Offline: the SSD's
+    HF cache with HF_HUB_OFFLINE=1, nothing downloads. Prompts and replies are never logged.
+    """
+
+    MAX_TOKENS = {"draft": 512, "vote": 128}
+
+    def __init__(self, ssd_path, name=WRITER_MODEL):
+        self.ssd_path, self.name = ssd_path, name
+        self._loaded = None
+
+    def _load(self):
+        if self._loaded is None:
+            os.environ.update({k: v for k, v in model_env(self.ssd_path).items() if k.startswith("HF_")})
+            from mlx_lm import load
+            from mlx_lm.sample_utils import make_sampler
+
+            model, tokenizer = load(str(model_link(self.ssd_path, self.name)))
+            self._loaded = (model, tokenizer, make_sampler(temp=0.7, top_p=0.9))
+        return self._loaded
+
+    def complete(self, system, user):
+        from mlx_lm import stream_generate
+
+        model, tokenizer, sampler = self._load()
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        extra = {"enable_thinking": False} if self.name.startswith("qwen") else {}
+        prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, **extra)
+        role = "vote" if system == importlib.import_module(WRITER_MODULE).VOTE_SYSTEM else "draft"
+        text = "".join(part.text for part in stream_generate(model, tokenizer, prompt, max_tokens=self.MAX_TOKENS[role],
+                                                             sampler=sampler))
+        return clean_reply(text)
+
+
+def clean_reply(text):
+    """The JSON object in a model reply: no think block, no code fence, no text around the braces."""
+    text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.S).strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text).strip()
+    if text and not text.startswith("{") and "{" in text and "}" in text:
+        text = text[text.index("{"): text.rindex("}") + 1]
+    return text
+
+
+def main(argv=None, machine=None, client=None, model=None, publisher=None, env=None):
+    """One launchd start. The keyword arguments are for tests; launchd passes none of them."""
     argv = argv if argv is not None else sys.argv[1:]
-    home = Path(os.environ.get("GRADE_INSIGHTS_HOME", "~/Library/Application Support/grade-insights")).expanduser()
-    ssd = os.environ.get("GRADE_INSIGHTS_SSD", DEFAULT_SSD)
+    env = os.environ if env is None else env
+    home = Path(env.get("GRADE_INSIGHTS_HOME", "~/Library/Application Support/grade-insights")).expanduser()
+    ssd = env.get("GRADE_INSIGHTS_SSD", DEFAULT_SSD)
+    os.umask(0o077)  # every file this run makes (state, write-ups, fingerprint) is the owner's only
     home.mkdir(parents=True, exist_ok=True)
     if os.getpriority(os.PRIO_PROCESS, 0) < 10:
         os.setpriority(os.PRIO_PROCESS, 0, 10)
+    machine = machine or real_machine(ssd)
     with open(home / "runner.lock", "w") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return 0
-        status = tick(State(home / "state.json"), PendingWork(), real_machine(ssd))
+        state = State(home / "state.json")
+
+        def sync(stamp):
+            work_class = writer_attr("WriterWork")
+            if work_class is None:
+                return "no_writer"
+            reader = client or ReadOnlyFamilyData()
+            loaded = []
+
+            def load():  # once per process: one unlock, two GETs
+                if not loaded:
+                    loaded.append(load_students(reader))
+                return loaded[0]
+
+            return run_sync(stamp, load, work_class, model or MlxModel(ssd), publisher_put(env, publisher),
+                            machine, model_dir(ssd) / "runs", model_dir(ssd) / "state" / "fingerprint.json",
+                            env=env)
+
+        try:
+            status = tick(state, machine, sync)
+        except Exception as err:  # noqa: BLE001 - the type only, so no grade data can reach the log
+            state.mark(status="failed")
+            print(f"grade-insights: run failed ({type(err).__name__})", file=sys.stderr)
+            return 1
     if "--verbose" in argv:
         print(f"grade-insights: {status}")
     return 0

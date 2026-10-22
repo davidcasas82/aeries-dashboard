@@ -52,6 +52,8 @@ Cloudflare cron on `family-data` dispatches these workflows. The afternoon scrap
 - After school 4:45 PM PT
 - Evening ~8:07pm PT
 
+On the mini, the grade insights runner follows the 4:45 PM and 8:07 PM scrapes on school days (see Grade insights publishing below).
+
 Actions logs print `student 1`, not names or student numbers. The Pages site is public; grades themselves are behind the PIN.
 
 ## Data files
@@ -70,3 +72,22 @@ The mini's runner (`insights_runner.py`) publishes the local write-ups with `PUT
 - read only when a publish is sent, never printed or logged
 
 Publishing is off unless `GRADE_INSIGHTS_PUBLISH=1`. With it unset, the publish step records `{"published": false}` and sends nothing. The dashboard reads the write-ups with `GET /v1/grades/insights` on the same PIN session as the grades and shows them under **Grade notes**, as plain text only. Code, not the model, ends each story with the next named item's move-up step and keep sentence, and tags each kid's easiest win and biggest risk (at most one of each, only on published stories); those classes come first, with an **Easiest win** or **Biggest risk** tag after the class name.
+
+### When it runs (trial)
+
+`deploy/com.davidcasas.grade-insights.plist` starts the runner at 4:55 and 5:25 PM and at 8:20 and 8:50 PM, Monday to Friday, on the mini's Pacific clock. The scrapes themselves run in GitHub Actions and land on family-data (about a minute after the 4:45 PM and 8:07 PM dispatches), so nothing lands on the mini to watch. Instead each start reads the public `GET /v1/grades/freshness` stamp and goes on only for a sync that landed in the last 2 hours and hasn't been handled yet; the second start of each pair is the retry for a late scrape or a busy machine. The 2 AM scrapes are never fresh by then.
+
+For a fresh sync the runner unlocks once with the Keychain PIN, makes its two GETs (latest grades, scored log) and fingerprints, per student, the assignments and scores, the engine's facts, the scored log, the upcoming items and the engine and writer code. If every fingerprint matches the last successful run it logs `skip: no change` and stops: no model, no PUT, the stored notes stay. Otherwise Qwen3 8B writes the write-ups and `InsightsPublisher` sends them (only with `GRADE_INSIGHTS_PUBLISH=1`, which the plist sets). The fingerprint file (`/Volumes/David C SSD/grade-insights/state/fingerprint.json`, mode 600, SHA-256 hashes only) is updated only after a publish or when there was nothing to send; a failed run leaves it alone and the next start tries again. The write-ups stay on the SSD under `grade-insights/runs/`, owner-only. A missing SSD skips the sync with one log line and keeps the last good write-up. Logs carry counts and outcomes only, never names, student numbers or scores.
+
+### Installing the launchd job
+
+Load it only after #57 is merged, both password steps are done (the parent PIN and the insights write secret are in the mini's login Keychain), and the PR that added this section is merged. Then, on the mini:
+
+```bash
+git clone https://github.com/davidcasas82/aeries-dashboard.git ~/code/aeries-dashboard
+cp ~/code/aeries-dashboard/deploy/com.davidcasas.grade-insights.plist ~/Library/LaunchAgents/
+plutil -lint ~/Library/LaunchAgents/com.davidcasas.grade-insights.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.davidcasas.grade-insights.plist
+```
+
+The plist expects the checkout at `~/code/aeries-dashboard` and the venv at `/Volumes/David C SSD/grade-insights/venv`. Logs go to `~/Library/Logs/grade-insights.log` and `grade-insights.err.log`. After the first live run, check both logs for macOS privacy (TCC) blocks on the SSD reads, such as `Operation not permitted` on a `/Volumes/David C SSD` path. If one shows up, give the venv's Python (the Homebrew python3.12 it links to) access to removable volumes, or Full Disk Access, in System Settings → Privacy & Security, and let the next start retry. To stop the trial: `launchctl bootout gui/$(id -u)/com.davidcasas.grade-insights`.

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Grade insights trial: one start about 10 and 40 minutes after each school-day grade sync.
+     The scrapes run in GitHub Actions (dispatched by family-data at 4:45 PM and 8:07 PM PT) and finish
+     in about a minute; nothing lands on the mini, so the runner checks the public freshness stamp and
+     only a sync that landed in the last 2 hours and hasn't been handled starts work. The second start in
+     each pair is the retry for a late scrape or a busy machine. Times are the mini's clock (Pacific).
+     The interpreter is pinned to the SSD venv's full path, never python3 or a PATH lookup.
+     launchd passes each <string> as one argument, so the space in "David C SSD" needs no quoting.
+     The repo checkout and logs sit on the internal disk, so a missing SSD still logs its skip line.
+     Install only as the README says: after #57 and this PR are merged and both password steps are done. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.davidcasas.grade-insights</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/sbin/taskpolicy</string>
+        <string>-b</string>
+        <string>/bin/sh</string>
+        <string>/Users/casasmacmini-server/code/aeries-dashboard/deploy/grade-insights-tick.sh</string>
+        <string>/Volumes/David C SSD/grade-insights/venv/bin/python</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/casasmacmini-server/code/aeries-dashboard</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>GRADE_INSIGHTS_PUBLISH</key>
+        <string>1</string>
+    </dict>
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>55</integer></dict>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>25</integer></dict>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>20</integer></dict>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>50</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>55</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>25</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>20</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>50</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>55</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>25</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>20</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>50</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>55</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>25</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>20</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>50</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>55</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>25</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>20</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>20</integer><key>Minute</key><integer>50</integer></dict>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
+    <key>Nice</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/casasmacmini-server/Library/Logs/grade-insights.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/casasmacmini-server/Library/Logs/grade-insights.err.log</string>
+</dict>
+</plist>
