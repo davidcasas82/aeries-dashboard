@@ -266,43 +266,75 @@ class ReadOnlyClientTests(unittest.TestCase):
         self.assertIn("401", str(caught.exception))
         self.assertEqual([r.get_method() for r in self.sent], ["POST", "GET", "POST", "GET"])
 
-    def test_the_session_opener_refuses_redirects(self):
-        """A redirect to another host must not carry the bearer token there."""
+    def _two_servers(self):
+        """A family-data stand-in that redirects to a second server on another port. Both record hits."""
         import http.server
         import threading
 
-        hits = []
+        servers, threads, hits = [], [], {"origin": [], "elsewhere": []}
 
-        class Handler(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                hits.append((self.path, self.headers.get("Authorization")))
-                if self.path == "/v1/grades/latest":
-                    self.send_response(302)
-                    self.send_header("Location", f"http://127.0.0.1:{self.server.server_port}/elsewhere")
-                    self.end_headers()
-                else:
-                    self.send_response(200)
-                    self.end_headers()
-                    self.wfile.write(b"{}")
+        def handler(name, redirect_to=None):
+            class Handler(http.server.BaseHTTPRequestHandler):
+                def do_GET(self):
+                    hits[name].append((self.path, self.headers.get("Authorization")))
+                    if redirect_to:
+                        self.send_response(302)
+                        self.send_header("Location", f"http://127.0.0.1:{redirect_to()}/collect")
+                        self.end_headers()
+                    else:
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(b"{}")
 
-            def log_message(self, *args):
-                pass
+                def log_message(self, *args):
+                    pass
 
-        server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
+            return Handler
+
+        elsewhere = http.server.HTTPServer(("127.0.0.1", 0), handler("elsewhere"))
+        origin = http.server.HTTPServer(("127.0.0.1", 0), handler("origin", lambda: elsewhere.server_port))
+        for server in (origin, elsewhere):
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            servers.append(server)
+            threads.append(thread)
+
+        def stop():
+            for server, thread in zip(servers, threads):
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+        self.assertNotEqual(origin.server_port, elsewhere.server_port)
+        return origin, hits, stop
+
+    def _token_request(self, origin):
+        return runner.urllib.request.Request(
+            f"http://127.0.0.1:{origin.server_port}/v1/grades/latest",
+            headers={"Authorization": "Bearer synthetic-token"})
+
+    def test_the_session_opener_refuses_redirects(self):
+        """A redirect to another server must not reach it, so the bearer token can't follow."""
+        origin, hits, stop = self._two_servers()
         try:
-            request = runner.urllib.request.Request(
-                f"http://127.0.0.1:{server.server_port}/v1/grades/latest",
-                headers={"Authorization": "Bearer synthetic-token"})
-            status, body = runner._open_request(request)
+            status, body = runner._open_request(self._token_request(origin))
         finally:
-            server.shutdown()
-            server.server_close()
-            thread.join(timeout=5)
+            stop()
         self.assertEqual(status, 302)
         self.assertEqual(body, b"")
-        self.assertEqual([path for path, _ in hits], ["/v1/grades/latest"])
+        self.assertEqual(hits["origin"], [("/v1/grades/latest", "Bearer synthetic-token")])
+        self.assertEqual(hits["elsewhere"], [])
+        self.assertFalse(any(auth for _, auth in hits["elsewhere"]))
+
+    def test_the_two_server_check_would_catch_a_following_opener(self):
+        """Control: urllib's default opener does follow, and the second server sees the request."""
+        origin, hits, stop = self._two_servers()
+        try:
+            with runner.urllib.request.build_opener().open(self._token_request(origin), timeout=10) as response:
+                response.read()
+        finally:
+            stop()
+        self.assertEqual([path for path, _ in hits["elsewhere"]], ["/collect"])
 
     def test_a_redirect_is_an_error_not_a_follow(self):
         client = self.client([(200, b'{"token": "t1"}'), (302, b"")])
