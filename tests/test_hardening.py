@@ -427,6 +427,8 @@ class ViewModelTests(unittest.TestCase):
         self.assertIn("awaiting score", row["snap"])
         self.assertIn("Posted", row["snap"])
         self.assertNotIn("overdue", row["snap"].lower())
+        self.assertNotIn("story", row)
+        self.assertNotIn("headline", view)
         self.assertFalse(view["tonight"])
 
     def test_in_class_work_done_today_is_not_a_to_do(self):

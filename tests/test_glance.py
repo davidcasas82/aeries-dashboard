@@ -1411,23 +1411,12 @@ class LookNextHintTests(unittest.TestCase):
         self.assertNotIn("due today", "\n".join(lines).lower())
         self.assertNotIn("Where to look", "\n".join(lines))
 
-    def test_stored_grok_paragraph_does_not_replace_bullets(self):
+    def test_look_next_is_only_the_bullets(self):
         classes = quiet_tuesday_classes()
-        packet, lines = glance.look_next_for_page(
-            classes, TUESDAY,
-            grok_text="Alg ll Bus Mang still has A2- LT 2.4 Practice due Sep 18.",
-        )
+        packet, lines = glance.look_next_for_page(classes, TUESDAY)
         self.assertEqual(lines, glance.look_next_lines(packet))
         _assert_no_assignment_titles(self, lines, classes)
-        glance_obj = {"look_next": list(lines), "look_next_packet": packet}
-        glance.apply_look_next_grok(
-            glance_obj,
-            "Alg ll Bus Mang still has A2- LT 2.4 Practice due Sep 18.",
-            view_classes=classes,
-            today=TUESDAY,
-        )
-        self.assertEqual(glance_obj["look_next"], lines)
-        _assert_no_assignment_titles(self, glance_obj["look_next"], classes)
+        self.assertFalse(hasattr(glance, "apply_look_next_grok"))
 
     def test_empty_packet_is_the_outside_line(self):
         classes = [{

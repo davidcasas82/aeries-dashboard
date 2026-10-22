@@ -27,9 +27,6 @@ load_dotenv()
 BASE_URL = "https://tustinusd.aeries.net"
 EMAIL = os.getenv("AERIES_EMAIL", "")
 PASSWORD = os.getenv("AERIES_PASSWORD", "")
-GROK_API_KEY = os.getenv("GROK_API_KEY", "")
-GROK_API_URL = "https://api.x.ai/v1/chat/completions"
-GROK_MODEL = "grok-4"
 PACIFIC = ZoneInfo("America/Los_Angeles")
 DEFAULT_HTTP_TIMEOUT = 60
 LOGIN_TIMEOUT_ATTEMPTS = 3
@@ -573,7 +570,7 @@ def is_calendar_summer_break(today=None, calendar=None):
 
 def is_summer_break(previous_data=None):
     """
-    Pause Aeries scraping and Grok API calls during summer (and forced break).
+    Pause Aeries scraping during summer (and forced break).
 
     Priority:
       1. SUMMER_BREAK env (GitHub variable / local) — explicit override
@@ -1059,7 +1056,6 @@ def probe_attendance():
             codes2 = re.findall(r"title=\"[^\"]{0,80}\"", html)
             interesting = [c for c in codes2 if re.search(r"absent|tardy|code", c, re.I)]
             print(f"  interesting titles: {interesting[:15]}")
-
 
 
 def fetch_gradebook_summary(session):
@@ -3441,20 +3437,11 @@ def build_student_snapshot(student_data, class_analytics_list, captured_at=None,
             assignments = assignments_for_class(student_data, class_meta)
             classes[name]["items"] = snapshot_items_for_class(assignments, today, keep_keys=keep)
             classes[name]["scores"] = snapshot_scores_for_class(assignments)
-    prev_brief = None
-    ai = student_data.get("ai_summary") or {}
-    if ai.get("headline") or ai.get("focus_tonight"):
-        prev_brief = {
-            "headline": (ai.get("headline") or "").strip(),
-            "focus_tonight": (ai.get("focus_tonight") or "").strip(),
-        }
     snap = {
         "date": date_str,
         "captured_at": now.isoformat() if hasattr(now, "isoformat") else str(now),
         "classes": classes,
     }
-    if prev_brief:
-        snap["previous_briefing"] = prev_brief
     return snap
 
 
@@ -3559,7 +3546,7 @@ def trend_label_from_delta(delta):
 
 
 def build_history_context(student_sn, student_data, class_analytics_list, history):
-    """Multi-day deltas and chronic missing for Grok + UI."""
+    """Multi-day deltas and chronic missing for the UI."""
     entry = (history.get("students") or {}).get(str(student_sn), {})
     snapshots = list(entry.get("snapshots") or [])
     today = pacific_today()
@@ -3575,25 +3562,10 @@ def build_history_context(student_sn, student_data, class_analytics_list, histor
             "snapshot_count": 0,
             "classes": {},
             "movers": [],
-            "previous_briefing": None,
         }
 
     first_date = _parse_iso_date(snapshots[0]["date"]) if snapshots else today
     span = (today - first_date).days if first_date else 0
-
-    previous_briefing = None
-    for snap in reversed(snapshots):
-        if snap.get("previous_briefing"):
-            previous_briefing = snap["previous_briefing"]
-            break
-    # Prefer last stored ai_summary if regenerating same day without snapshot field
-    if not previous_briefing:
-        ai = student_data.get("ai_summary") or {}
-        if ai.get("headline") or ai.get("focus_tonight"):
-            previous_briefing = {
-                "headline": (ai.get("headline") or "").strip(),
-                "focus_tonight": (ai.get("focus_tonight") or "").strip(),
-            }
 
     target_7 = today.fromordinal(today.toordinal() - 7)
     target_14 = today.fromordinal(today.toordinal() - 14)
@@ -3713,7 +3685,6 @@ def build_history_context(student_sn, student_data, class_analytics_list, histor
         "snapshot_count": len(snapshots),
         "classes": classes_ctx,
         "movers": movers[:6],
-        "previous_briefing": previous_briefing,
     }
 
 
@@ -3851,7 +3822,7 @@ def assignments_for_period(student_data, period):
 
 
 def build_category_breakdown(assignments, totals=None):
-    """Per-category assignment facts for Grok. NOT a class grade.
+    """Per-category assignment facts. NOT a class grade.
 
     Equal-average of assignment % is stored as assignment_avg_pct only.
     Footer weights and the counted rebuild live on counted_insight.
@@ -3882,7 +3853,7 @@ def build_category_breakdown(assignments, totals=None):
             "counts": weight not in (0,) and not footer.get("empty"),
             "not_a_class_grade": True,
         }
-    # Include footer-only categories (empty 0/0, 0% weight) so Grok can see the mix
+    # Include footer-only categories (empty 0/0, 0% weight) so the full mix is visible
     for cat in (totals or {}).get("categories") or []:
         name = (cat.get("name") or "").strip()
         if not name or name in breakdown or _TOTAL_ROW_RE.match(name):
@@ -3933,7 +3904,7 @@ def compute_score_trajectory(assignments):
 
 
 def detect_performance_pattern(grade_pct, missing_count, category_breakdown, score_trajectory):
-    """Rule-based tag for Grok to interpret."""
+    """Rule-based tag for one class."""
     has_missing = missing_count > 0
     low_grade = grade_pct is not None and grade_pct < 80
     strong_grade = grade_pct is not None and grade_pct >= 90 and not has_missing
@@ -3976,7 +3947,7 @@ def detect_performance_pattern(grade_pct, missing_count, category_breakdown, sco
 
 
 def extract_grade_mix_flags(counted_insight, min_high_weight=20):
-    """Empty high-weight buckets and 0% categories for briefing WHY facts."""
+    """Empty high-weight buckets and 0% categories for grade-mix WHY facts."""
     empty_high = []
     zero_weight = []
     for cat in (counted_insight or {}).get("categories") or []:
@@ -4316,7 +4287,6 @@ def attach_classroom_to_analysis(analyzed, student_data, class_meta, assignments
     context = classroom.class_context(student_data, class_meta, today, assignments=assignments)
     if not context:
         return analyzed
-    analyzed["classroom"] = classroom.grok_context(context)
     extra = []
     for pseudo in classroom.pseudo_assignments(context):
         due = parse_due_date(pseudo.get("due_date"))
@@ -4336,7 +4306,7 @@ def attach_classroom_to_analysis(analyzed, student_data, class_meta, assignments
 
 
 def build_class_analytics(student_data, history_context=None):
-    """Pre-compute per-class facts for Grok interpretation."""
+    """Pre-compute per-class facts for the tonight plan and the dashboard view."""
     today = pacific_today_dt()
     student_name = student_data.get("name", "Student")
     class_analytics = []
@@ -4351,7 +4321,7 @@ def build_class_analytics(student_data, history_context=None):
             continue
         analyzed = analyze_class(class_meta, assignments, today)
         attach_classroom_to_analysis(analyzed, student_data, class_meta, assignments, today)
-        # Fold multi-day history onto each class for Grok
+        # Fold multi-day history onto each class
         h = hist_classes.get(analyzed["course_name"]) or {}
         if h:
             analyzed["history"] = {
@@ -4464,7 +4434,6 @@ def build_class_analytics(student_data, history_context=None):
             "history_span_days": history_context.get("history_span_days", 0),
             "snapshot_count": history_context.get("snapshot_count", 0),
             "movers": history_context.get("movers") or [],
-            "previous_briefing": history_context.get("previous_briefing"),
         }
     return result
 
@@ -4532,37 +4501,11 @@ def build_tonight_plan(class_analytics, limit=3):
     return {"items": items, "label": label}
 
 
-def apply_tonight_plan(summary, analytics):
-    """Tonight is computed, not left to the model — yesterday's ungraded work cannot win."""
-    if not isinstance(summary, dict):
-        return summary
-    plan = (analytics or {}).get("tonight_plan") or {}
-    items = plan.get("items") or []
-    summary["focus_tonight"] = (plan.get("label") or "").strip()
-    by_class = {}
-    for item in items:
-        by_class.setdefault(item.get("class_name") or "", []).append(item.get("name") or "")
-    for cls in summary.get("classes") or []:
-        if not isinstance(cls, dict):
-            continue
-        key = (cls.get("class_name") or "").strip()
-        names = by_class.get(key)
-        if not names:
-            kn = _norm_course_name(key)
-            for ck, cn in by_class.items():
-                cn_key = _norm_course_name(ck)
-                if kn and cn_key and (kn in cn_key or cn_key in kn):
-                    names = cn
-                    break
-        cls["do_tonight"] = (names[0] if names else "") or ""
-    return summary
-
-
 def _view_assignment(assignment, today, kind):
     """Assignment dict the dashboard can render without re-deriving rules."""
     entry = dict(assignment or {})
     formatted = format_assignment_entry(assignment, today, kind)
-    # The dashboard gets the full Classroom stamp (link, state); Grok gets the compact one.
+    # The dashboard gets the full Classroom stamp (link, state) from classroom.class_context.
     formatted.pop("classroom", None)
     entry.update(formatted)
     entry["description"] = (
@@ -4601,7 +4544,6 @@ def build_student_view(student_data, history_context=None):
     history_context = history_context or {}
     analytics = build_class_analytics(student_data, history_context=history_context)
     tonight = analytics.get("tonight_plan") or {}
-    ai = student_data.get("ai_summary") or {}
     trends = student_data.get("class_trends") or {}
     analyzed_by = {
         (c.get("period"), _norm_course_name(c.get("course_name"))): c
@@ -4642,16 +4584,6 @@ def build_student_view(student_data, history_context=None):
         recent.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min, reverse=True)
         upcoming.sort(key=lambda a: parse_due_date(a.get("due_date")) or datetime.min)
 
-        ai_cls = None
-        for row in ai.get("classes") or []:
-            if _norm_course_name(row.get("class_name")) == _norm_course_name(name):
-                ai_cls = row
-                break
-            cn = _norm_course_name(name)
-            an = _norm_course_name(row.get("class_name"))
-            if cn and an and (cn in an or an in cn):
-                ai_cls = row
-
         tonight_name = ""
         for item in tonight.get("items") or []:
             if _norm_course_name(item.get("class_name")) == _norm_course_name(name):
@@ -4671,14 +4603,7 @@ def build_student_view(student_data, history_context=None):
 
         trend = trends.get(name) or {}
         analyzed["awaiting_count"] = len(awaiting)
-        computed_snap = _urgency_reason(analyzed)
-        ai_snap = ((ai_cls or {}).get("snap") or "").strip()
-        snap = ai_snap or computed_snap
-        if not missing and awaiting and re.search(r"\boverdue\b|\bmissing\b", snap, re.I):
-            snap = computed_snap
-        story = ((ai_cls or {}).get("story") or "").strip()
-        if not missing and awaiting and re.search(r"\boverdue\b|\bmissing\b", story, re.I):
-            story = "Posted grade may move when the teacher scores this work."
+        snap = _urgency_reason(analyzed)
         classes_out.append({
             "period": class_meta.get("period"),
             "course_name": name,
@@ -4688,7 +4613,6 @@ def build_student_view(student_data, history_context=None):
             "mark": analyzed.get("current_grade_mark") or class_meta.get("mark") or "",
             "urgency": analyzed.get("suggested_urgency") or "ok",
             "snap": snap,
-            "story": story,
             "do_tonight": tonight_name,
             "missing_count": len(missing),
             "missing": [_view_assignment(a, today, "missing") for a in missing],
@@ -4717,306 +4641,37 @@ def build_student_view(student_data, history_context=None):
     return {
         "tonight": tonight.get("items") or [],
         "tonight_label": (tonight.get("label") or "").strip(),
-        "headline": (ai.get("headline") or "").strip(),
-        "wins": list(ai.get("wins") or [])[:2],
         "classes": classes_out,
-        "generated_at": ai.get("generated_at"),
         "classroom_captured_at": classroom_captured,
         "glance": glance_obj,
     }
 
 
-def attach_student_view(student_data, history_context=None):
-    student_data["view"] = build_student_view(student_data, history_context=history_context)
+RETIRED_GROK_FIELDS = ("ai_summary", "look_next_grok")
+RETIRED_VIEW_FIELDS = ("headline", "wins", "generated_at")
+
+
+def drop_retired_grok_fields(student_data):
+    """Strip the retired Grok briefing fields from a stored student so they are never republished."""
+    if not isinstance(student_data, dict):
+        return student_data
+    for key in RETIRED_GROK_FIELDS:
+        student_data.pop(key, None)
+    view = student_data.get("view")
+    if isinstance(view, dict):
+        for key in RETIRED_VIEW_FIELDS:
+            view.pop(key, None)
+        for row in view.get("classes") or []:
+            if isinstance(row, dict):
+                row.pop("story", None)
+        if isinstance(view.get("glance"), dict):
+            view["glance"].pop("look_next_grok", None)
     return student_data
 
 
-def briefing_generated_on_pacific_date(ai, day):
-    raw = (ai or {}).get("generated_at") or ""
-    if not raw:
-        return False
-    try:
-        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-    except ValueError:
-        return False
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(PACIFIC).date() == day
-
-
-def count_graded_classes(student_data):
-    return sum(
-        1
-        for c in student_data.get("classes") or []
-        if class_has_real_grade(c, assignments_for_class(student_data, c))
-    )
-
-
-def count_scheduled_classes(student_data):
-    return sum(
-        1
-        for c in student_data.get("classes") or []
-        if (c.get("course_name") or "").strip()
-    )
-
-
-def empty_term_summary(student_data):
-    """Static briefing when the portal has no meaningful grades (summer or pre-grade week)."""
-    student_name = student_data.get("name", "the student")
-    scheduled = count_scheduled_classes(student_data)
-    if scheduled > 0:
-        headline = (
-            f"Schedules are up for {student_name} ({scheduled} classes) — "
-            f"no grades or missing work posted yet."
-        )
-        theme = "schedule_only"
-    else:
-        headline = (
-            f"School year is out — the portal has no current classes or missing work "
-            f"for {student_name}."
-        )
-        theme = "empty_term"
-    return {
-        "headline": headline,
-        "focus_tonight": "",
-        "wins": [],
-        "classes": [],
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "analytics_snapshot": {
-            "dominant_theme": theme,
-            "total_recoverable_pts": 0,
-            "empty_term": scheduled == 0,
-            "schedule_only": scheduled > 0,
-            "scheduled_classes": scheduled,
-        },
-    }
-
-
-def academic_fingerprint(student_data):
-    """Stable snapshot of grades + assignments (ignores attendance, briefings, timestamps)."""
-    classes = sorted(
-        [
-            {
-                "period": c.get("period"),
-                "course": (c.get("course_name") or "").strip(),
-                "percent": str(c.get("percent") or "").strip(),
-                "mark": str(c.get("mark") or "").strip(),
-                "missing_count": int(c.get("missing_count") or 0),
-            }
-            for c in (student_data or {}).get("classes") or []
-        ],
-        key=lambda row: (row["period"] is None, row["period"], row["course"]),
-    )
-    assignments = []
-    for group in (student_data or {}).get("assignments_by_class") or []:
-        for assignment in group.get("assignments") or []:
-            assignments.append({
-                "period": group.get("period"),
-                "class": group.get("class_name") or "",
-                "number": assignment.get("number") or "",
-                "name": assignment.get("description") or "",
-                "due": assignment.get("due_date") or "",
-                "earned": assignment.get("points_earned"),
-                "pct": assignment.get("percentage"),
-                "score_raw": assignment.get("score_raw") or "",
-                "complete": bool(assignment.get("grading_complete")),
-            })
-    assignments.sort(
-        key=lambda row: (
-            row["period"] is None,
-            row["period"],
-            row["class"],
-            row["number"],
-            row["name"],
-        )
-    )
-    return json.dumps(
-        {"classes": classes, "assignments": assignments},
-        sort_keys=True,
-        default=str,
-    )
-
-
-_DUE_WEEKDAY_RE = re.compile(
-    r"\bdue\s+(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Monday|Tuesday|Wednesday|Thursday|"
-    r"Friday|Saturday|Sunday)\b(?!\s+[A-Za-z]{3}\s+\d)",
-    re.IGNORECASE,
-)
-
-
-def _assignment_display_name(entry):
-    return (entry.get("name") or entry.get("description") or "").strip()
-
-
-def iter_analytics_assignments(class_analytics):
-    for key in ("missing_assignments", "pending_grade", "recent_scores", "upcoming"):
-        for item in (class_analytics or {}).get(key) or []:
-            yield item
-
-
-def rewrite_stale_due_copy(text, assignment_entries):
-    """Replace weekday-only or past-date 'due …' with precomputed due_label."""
-    if not text:
-        return text
-    out = str(text)
-    entries = [
-        a for a in (assignment_entries or [])
-        if _assignment_display_name(a) and a.get("due_label")
-    ]
-    entries.sort(key=lambda a: len(_assignment_display_name(a)), reverse=True)
-    weekday = (
-        r"(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Monday|Tuesday|Wednesday|"
-        r"Thursday|Friday|Saturday|Sunday)"
-    )
-    for a in entries:
-        name = _assignment_display_name(a)
-        label = a.get("due_label")
-        state = a.get("due_state")
-        if name not in out:
-            continue
-        named_weekday = re.compile(
-            re.escape(name) + rf"(\s*[·\-–—:]\s*)due\s+{weekday}\b(?!\s+[A-Za-z]{{3}}\s+\d)",
-            re.IGNORECASE,
-        )
-        if named_weekday.search(out):
-            out = named_weekday.sub(lambda m, n=name, lb=label: n + m.group(1) + lb, out)
-            continue
-        if state in ("completed", "overdue", "pending"):
-            named_due = re.compile(
-                re.escape(name) + r"(\s*[·\-–—:]\s*)due\s+[^\n·]+",
-                re.IGNORECASE,
-            )
-            if named_due.search(out):
-                out = named_due.sub(lambda m, n=name, lb=label: n + m.group(1) + lb, out)
-            named_overdue = re.compile(
-                re.escape(name) + r"(\s*[·\-–—:]\s*)overdue\b[^\n·]*",
-                re.IGNORECASE,
-            )
-            if state == "pending" and named_overdue.search(out):
-                out = named_overdue.sub(lambda m, n=name, lb=label: n + m.group(1) + lb, out)
-    if _DUE_WEEKDAY_RE.search(out):
-        fallback = next(
-            (
-                a for a in entries
-                if a.get("due_state") in ("completed", "overdue", "pending")
-            ),
-            None,
-        )
-        if fallback and fallback.get("due_label"):
-            out = _DUE_WEEKDAY_RE.sub(fallback["due_label"], out)
-        else:
-            upcoming = next(
-                (
-                    a for a in entries
-                    if a.get("due_state") in ("upcoming", "today") and a.get("due_label")
-                ),
-                None,
-            )
-            if upcoming:
-                out = _DUE_WEEKDAY_RE.sub(upcoming["due_label"], out)
-    return out
-
-
-def rewrite_phantom_zero_copy(text):
-    """Parent copy must not call a hidden 0% tile 'at 0%'."""
-    if not text:
-        return text
-    out = str(text)
-    out = re.sub(r"\bGrade at 0%", "No grade yet", out, flags=re.IGNORECASE)
-    out = re.sub(r"\bat 0%", "with no grade yet", out, flags=re.IGNORECASE)
-    out = re.sub(r"\b0%\s+needs attention", "no grade yet needs attention", out, flags=re.IGNORECASE)
-    out = re.sub(r"\bposted grade remains 0%", "no grade posted yet", out, flags=re.IGNORECASE)
-    out = re.sub(r"\bremains 0%", "is not posted yet", out, flags=re.IGNORECASE)
-    out = re.sub(r"(?<![\d.])0%", "no grade yet", out)
-    return out
-
-
-def sanitize_briefing_copy(summary, analytics):
-    """Post-process Grok JSON so leftover due-Tue / at-0% copy cannot ship."""
-    if not isinstance(summary, dict):
-        return summary
-    by_name = {}
-    for ca in (analytics or {}).get("classes") or []:
-        name = (ca.get("course_name") or "").strip()
-        if name:
-            by_name[name] = ca
-
-    def _match_class(class_name):
-        key = (class_name or "").strip()
-        if key in by_name:
-            return by_name[key]
-        kn = _norm_course_name(key)
-        best = None
-        best_len = 0
-        for name, ca in by_name.items():
-            cn = _norm_course_name(name)
-            if kn and cn and (kn in cn or cn in kn) and len(cn) > best_len:
-                best = ca
-                best_len = len(cn)
-        return best
-
-    any_phantom = any(ca.get("phantom_zero") for ca in by_name.values())
-    all_entries = []
-    for ca in by_name.values():
-        all_entries.extend(iter_analytics_assignments(ca))
-
-    headline = summary.get("headline") or ""
-    headline = rewrite_stale_due_copy(headline, all_entries)
-    if any_phantom:
-        headline = rewrite_phantom_zero_copy(headline)
-    pending_only = any(
-        (ca.get("awaiting_count") or 0) > 0 and not (ca.get("missing_assignments") or [])
-        for ca in by_name.values()
-    )
-    missing_any = any(ca.get("missing_assignments") for ca in by_name.values())
-    if pending_only and not missing_any:
-        headline = re.sub(
-            r"\bwith two overdue assignments\b",
-            "with work awaiting a teacher score",
-            headline,
-            flags=re.I,
-        )
-        headline = re.sub(
-            r"\bwith an overdue assignment\b",
-            "with work awaiting a teacher score",
-            headline,
-            flags=re.I,
-        )
-        headline = re.sub(
-            r"\btwo overdue assignments\b",
-            "two assignments awaiting a score",
-            headline,
-            flags=re.I,
-        )
-        headline = re.sub(
-            r"\boverdue assignments\b",
-            "assignments awaiting a score",
-            headline,
-            flags=re.I,
-        )
-    summary["headline"] = headline
-
-    wins = []
-    for win in summary.get("wins") or []:
-        text = rewrite_stale_due_copy(win, all_entries)
-        if any_phantom:
-            text = rewrite_phantom_zero_copy(text)
-        wins.append(text)
-    if "wins" in summary:
-        summary["wins"] = wins
-
-    for cls in summary.get("classes") or []:
-        if not isinstance(cls, dict):
-            continue
-        ca = _match_class(cls.get("class_name"))
-        entries = list(iter_analytics_assignments(ca)) if ca else all_entries
-        for field in ("snap", "story"):
-            text = cls.get(field) or ""
-            text = rewrite_stale_due_copy(text, entries)
-            if ca and ca.get("phantom_zero"):
-                text = rewrite_phantom_zero_copy(text)
-            cls[field] = text
-    return summary
+def attach_student_view(student_data, history_context=None):
+    student_data["view"] = build_student_view(student_data, history_context=history_context)
+    return student_data
 
 
 def annotate_assignment_due_fields(student_data, today=None):
@@ -5056,193 +4711,11 @@ def annotate_assignment_due_fields(student_data, today=None):
 
 
 def annotate_class_truth_flags(student_data):
-    """Mark phantom-0 classes so the dashboard and briefing share one truth."""
+    """Mark phantom-0 classes so every dashboard surface shares one truth."""
     for class_meta in student_data.get("classes") or []:
         assignments = assignments_for_class(student_data, class_meta)
         class_meta["phantom_zero"] = is_phantom_zero_grade(class_meta, assignments)
     return student_data
-
-
-def log_grok_usage(label, result):
-    """One line per Grok call with its token counts, until the local writer replaces them."""
-    usage = result.get("usage") if isinstance(result, dict) else None
-    if not isinstance(usage, dict):
-        usage = {}
-    print(
-        f"  Grok usage ({label}): prompt={usage.get('prompt_tokens', '?')} "
-        f"completion={usage.get('completion_tokens', '?')} total={usage.get('total_tokens', '?')}"
-    )
-
-
-def generate_ai_summary(student_data, history_context=None):
-    """Call Grok API to generate a unified family daily briefing."""
-    # No real grades and no posted work yet — don't invent urgency
-    has_assignments = any(
-        ca.get("assignments")
-        for ca in student_data.get("assignments_by_class") or []
-    )
-    if count_graded_classes(student_data) == 0 and not has_assignments:
-        return empty_term_summary(student_data)
-
-    if not GROK_API_KEY:
-        return None
-
-    student_name = student_data.get("name", "the student")
-    history_context = history_context or {}
-    analytics = build_class_analytics(student_data, history_context=history_context)
-
-    has_history = (history_context.get("snapshot_count") or 0) >= 1 or bool(
-        history_context.get("movers")
-    )
-
-    context = (
-        "PRECOMPUTED_ANALYTICS (source of truth — do not redo arithmetic):\n"
-        f"{json.dumps(analytics, indent=2)}\n\n"
-        "Write one tight briefing from these facts only. "
-        "Name real assignments and scores. Do not invent data. "
-        "Do not restate full assignment lists the dashboard already shows — interpret them."
-    )
-    if has_history:
-        context += (
-            "\n\nHISTORY_CONTEXT is embedded under each class as \"history\" and "
-            "history_meta (multi-day scrape memory). Use it for week-scale movement, "
-            "chronic vs new missing items, and genuine improving/slipping wins. "
-            "If history is thin, do not invent multi-week stories."
-        )
-
-    now_pt = pacific_now()
-    today_label = now_pt.strftime("%A, %B %d, %Y")
-    system_prompt = f"""You write the daily briefing a parent reads in 10 seconds on a phone or car screen. One output. {student_name}'s family may all see it. Facts at a glance — not a coaching script.
-
-Today is {today_label} (Pacific). Due dates in PRECOMPUTED_ANALYTICS already use Pacific time. Trust due_label / due_state / days_overdue / days_until_due. Never call something overdue or "yesterday" unless days_overdue >= 1 or due_state is overdue. Due today is not missing.
-
-DATA SCOPE
-- Facts only from PRECOMPUTED_ANALYTICS (Aeries parent portal). Do not redo math.
-- current_grade_pct / current_grade_mark is the official Aeries ClassSummary Percent / CurrentMark when phantom_zero is false. Never replace a real posted grade with assignment averages, category averages, or counted_insight.rebuild_pct.
-- If phantom_zero is true, Aeries posted 0% with no letter mark — the family tile shows "—" / no grade yet. Never write "at 0%", "0% needs attention", or treat that placeholder as a current grade.
-- You MAY explain WHY using precomputed facts only: phantom_zero, posted_vs_counted (rebuild vs posted), empty_high_weight_categories (e.g. empty 70% Assessments), zero_weight_categories (e.g. 0% Daily Assignments). Do not invent other causes.
-- category_breakdown.*.assignment_avg_pct is the unweighted mean of scored assignment percentages in that bucket — not the class grade and not Aeries' weighted category %. Do not write a class as "at 72%" because seven assignments average 72. You may say scored work averages 73% while no class grade is posted when phantom_zero is true and posted_vs_counted.rebuild_pct is present.
-- If counted_insight is present, you may name which categories count, are 0% weight, or are empty. If rebuild_pct differs from current_grade_pct and the posted grade is real, still use the posted grade.
-- Portal can lag (turned in but not graded, Canvas/paper work). Prefer "portal still shows …" over "never did …".
-- teacher_comment is the teacher's own note on that assignment in Aeries. You may quote or paraphrase it as the WHY for that item (e.g. "teacher noted: no work shown"). documents lists attachment names the teacher posted. Never invent a comment when the field is absent.
-- classroom fields come from the student's own Google Classroom export, not Aeries. An assignment's classroom.state_label says whether it was turned in on Classroom; classroom.instructions is what the teacher asked for (you may name the skill or topic from it in a few words). A class's classroom.classroom_only_upcoming lists work posted in Classroom that Aeries has no row for yet — say "posted in Classroom" for these, never "missing". classroom.turned_in_on_classroom_but_aeries_missing means the student handed it in on Classroom and Aeries has not caught up: say exactly that, do not blame the student, and it is not a to-do (turned_in_classroom true is treated like turned_in). Items with source "classroom" in upcoming/tonight are Classroom-only.
-- Do not invent causes, effort, psychology, or teacher fairness.
-- Do not invent week-scale stories unless history.delta_7d / trend_label is present.
-
-PARENT SKIM (this is the job)
-- Headline: one sentence — what needs attention, plus one real win if there is one. Not a roster of every class. A WHY clause is welcome when a precomputed flag explains it.
-- If coverage.classes_with_portal_work is much smaller than coverage.scheduled_classes, add a short clause that most classes have no work posted yet (normal early in the term). Do not treat silence as all-clear, and do not panic about empty gradebooks.
-- focus_tonight: copy tonight_plan.label exactly (empty if tonight_plan.items is empty). Due today beats missing beats due tomorrow. pending_grade is submitted/awaiting a teacher score — not tonight, not missing. Anything with turned_in true was handed in (usually in class) and is never a to-do.
-- Most of this work happens in class. Missing means only what the Aeries portal itself flags; a blank score is not missing and not homework.
-- Awaiting score is not missing. Never count pending_grade items (awaiting_count) in any missing total or missing points; only missing_assignments are missing. If a pending_grade item is stale (10+ days), at most say it is worth asking the teacher about.
-- wins: 0–2 specifics with evidence (grade + assignment). Skip empty praise.
-
-VOICE
-- Third person with "{student_name}" (never "you", never "as a parent…")
-- Plain English, calm, specific. Short sentences.
-- No jargon: never say completion_gap, performance_pattern, recoverable points, dominant_theme, issue_type, Summatives, or "Pattern suggests"
-- Name the assignment, not the Aeries category — except when empty_high_weight_categories / zero_weight_categories is the WHY
-- No pep talks, conversation openers, or parent tips
-
-Respond ONLY with valid JSON matching this exact schema:
-{{
-  "headline": "ONE sentence a parent can skim",
-  "focus_tonight": "Named assignment(s) + class; empty if nothing due today/tomorrow or Aeries-flagged missing",
-  "wins": ["0–2 short genuine positives with evidence"],
-  "classes": [
-    {{
-      "class_name": "must match course_name from analytics",
-      "urgency": "critical | watch | ok | strong",
-      "snap": "Name the assignment and copy due_label (e.g. Anatomy of a Great Game · 5/5). May be longer than 12 words if needed to tell the truth.",
-      "story": "One sentence of context the closed card does not already say. Do not repeat the missing list. WHY from precomputed flags is allowed.",
-      "do_tonight": "Named assignment if action is needed; else empty"
-    }}
-  ]
-}}
-
-Urgency (match suggested_urgency unless you have a strong reason not to — drives dashboard colors):
-- critical: grade below 70%, OR below 80% WITH missing work
-- watch: missing/due work, or a B with a slipping trend — backlog, not an F
-- ok: solid, or no grade yet without missing work
-- strong: A / 90%+, no missing
-
-Rules:
-- Include EVERY class from analytics.classes (not the full 9-period schedule)
-- If analytics.classes is empty: headline says no posted work yet — do not invent status
-- Order classes: critical → watch → ok → strong
-- ok/strong: leave do_tonight empty
-- critical/watch: do_tonight is that class's tonight_plan item; empty if the class is not in tonight_plan
-- pending_grade: do not tell the family to redo it tonight; portal often lags after turn-in
-- Copy each assignment's due_label (and due_state). Never write weekday-only due lines ("due Tue", "due Wednesday"). Past scored work must not say "due".
-- Do not write "portal shows no missing work" as the story. If the only news is a due-today item, leave story short or empty.
-- wins must be real — skip them if there are none
-- Prefer empty strings over filler
-- Never output parent_tip, ask, parent_support, or similar fields"""
-
-    try:
-        resp = requests.post(
-            GROK_API_URL,
-            headers={
-                "Authorization": f"Bearer {GROK_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": GROK_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": context},
-                ],
-                "response_format": {"type": "json_object"},
-                "temperature": 0.4,
-                "max_tokens": 5000,
-            },
-            timeout=120,
-        )
-
-        if resp.status_code != 200:
-            print(f"  WARNING: Grok API returned {resp.status_code}")
-            return None
-
-        result = resp.json()
-        log_grok_usage("briefing", result)
-        content = result["choices"][0]["message"]["content"]
-        summary = json.loads(content)
-        # Strip any legacy parent/student coaching fields if the model still emits them
-        for cls in summary.get("classes") or []:
-            if isinstance(cls, dict):
-                cls.pop("parent_tip", None)
-                cls.pop("ask", None)
-                cls.pop("parent_support", None)
-                cls.pop("student_action", None)
-        summary["generated_at"] = datetime.now(timezone.utc).isoformat()
-        summary["analytics_snapshot"] = {
-            "dominant_theme": analytics.get("dominant_theme"),
-            "total_recoverable_pts": analytics.get("total_recoverable_pts"),
-            "history_span_days": (history_context or {}).get("history_span_days"),
-        }
-        return sanitize_briefing_copy(apply_tonight_plan(summary, analytics), analytics)
-
-    except requests.exceptions.Timeout:
-        print("  WARNING: Grok API timed out")
-        return None
-    except (json.JSONDecodeError, KeyError, IndexError) as e:
-        print(f"  WARNING: Failed to parse Grok response: {e}")
-        return None
-
-
-LOOK_NEXT_GROK_SYSTEM = """You phrase at most two short sentences for a parent grade dashboard.
-
-LOOK_NEXT_PACKET is the only source. Copy titles and dates exactly as given. Do not add a fact that is not in the packet.
-
-Rules:
-- At most two sentences. Skip a missing fact. If the packet is empty, reply exactly: Nothing else outside this list.
-- Facts only. Do not invent a cause, a skill, effort, psychology, or a lowest-class sentence.
-- Do not repeat a Due soon list. Do not mention work that is not in the packet.
-- If past_due lists a count and date span only, do not name those assignments.
-- Do not name a student. No Classroom or Drive links.
-- Prefer the date_label fields (Sep 18, Oct 2). Do not move a date.
-
-Respond ONLY with JSON: {"sentences": "..."}"""
 
 
 def previous_snapshot(history, student_sn, before_date):
@@ -5370,73 +4843,7 @@ def apply_daily_change_snapshot(history, student_sn, student_name, student_data,
     return snapshot
 
 
-def generate_look_next(packet, today=None):
-    """Phrase the look-next packet with grok-4. Packet only — not the warehouse."""
-    if not GROK_API_KEY:
-        return None
-    packet = packet or {}
-    if not (packet.get("outside") or packet.get("past_due") or packet.get("unscored")):
-        return glance.LOOK_NEXT_EMPTY
-    today_d = glance._as_date(today) if today is not None else pacific_today()
-    today_label = today_d.strftime("%A, %B %d, %Y") if hasattr(today_d, "strftime") else str(today_d)
-    context = (
-        f"Today is {today_label} (Pacific).\n\n"
-        "LOOK_NEXT_PACKET:\n"
-        f"{json.dumps(packet, indent=2)}"
-    )
-    try:
-        resp = requests.post(
-            GROK_API_URL,
-            headers={
-                "Authorization": f"Bearer {GROK_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": GROK_MODEL,
-                "messages": [
-                    {"role": "system", "content": LOOK_NEXT_GROK_SYSTEM},
-                    {"role": "user", "content": context},
-                ],
-                "response_format": {"type": "json_object"},
-                "temperature": 0.2,
-                "max_tokens": 400,
-            },
-            timeout=60,
-        )
-        if resp.status_code != 200:
-            print(f"  WARNING: Grok look-next returned {resp.status_code}")
-            return None
-        result = resp.json()
-        log_grok_usage("look next", result)
-        content = result["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
-        text = (parsed.get("sentences") or parsed.get("paragraph") or "").strip()
-        return text or None
-    except requests.exceptions.Timeout:
-        print("  WARNING: Grok look-next timed out")
-        return None
-    except (json.JSONDecodeError, KeyError, IndexError) as e:
-        print(f"  WARNING: Failed to parse Grok look-next: {e}")
-        return None
-
-
-def attach_look_next_grok(student_data, today=None):
-    """Call grok-4 on the packet and store the phrasing on the payload."""
-    view = student_data.get("view") or {}
-    classes = view.get("classes") or []
-    g = view.get("glance") or {}
-    packet = g.get("look_next_packet")
-    if packet is None:
-        packet = glance.look_next_packet(classes, today or pacific_today_dt())
-    text = generate_look_next(packet, today or pacific_today_dt())
-    if not text:
-        return student_data
-    student_data["look_next_grok"] = text
-    glance.apply_look_next_grok(g, text, view_classes=classes, today=today or pacific_today_dt())
-    return student_data
-
-
-def _prepare_student_for_briefing(student_data, history, aeries_series_by_class=None):
+def _prepare_student_view(student_data, history, aeries_series_by_class=None):
     """Build analytics, history context, UI trend fields; return history_context."""
     attach_gradebook_insights(
         student_data.get("classes") or [],
@@ -5462,52 +4869,6 @@ def _prepare_student_for_briefing(student_data, history, aeries_series_by_class=
     return history_context, class_list
 
 
-def regenerate_grok_summaries():
-    """Re-run Grok briefings against existing grades_data.json (no Aeries scrape)."""
-    if not GROK_API_KEY:
-        raise ScrapeError("GROK_API_KEY must be set")
-
-    if not OUTPUT_FILE.exists():
-        raise ScrapeError(f"{OUTPUT_FILE} not found — run a full scrape first")
-
-    try:
-        data = json.loads(OUTPUT_FILE.read_text())
-    except json.JSONDecodeError as e:
-        raise ScrapeError(f"Could not parse {OUTPUT_FILE}: {e}")
-
-    if is_summer_break(data):
-        print("Summer break mode is active (SUMMER_BREAK) — skipping Grok API calls.")
-        data["summer_break"] = True
-        data["last_updated"] = datetime.now(timezone.utc).isoformat()
-        persist_grades(data)
-        return
-
-    students = data.get("students", [])
-    if not students:
-        raise ScrapeError("No students found in grades_data.json")
-
-    history = load_grade_history()
-    print(f"Regenerating AI briefings for {len(students)} student(s) from {OUTPUT_FILE.name}...")
-
-    for i, student in enumerate(students, start=1):
-        print(f"  {student_log_label(i)}...")
-        # Keep prior briefing for previous_briefing context before overwrite
-        history_context, _ = _prepare_student_for_briefing(student, history)
-        ai_summary = generate_ai_summary(student, history_context=history_context)
-        if ai_summary:
-            student["ai_summary"] = ai_summary
-            print(f"    AI summary generated ({len(ai_summary.get('classes', []))} classes)")
-        else:
-            print("    WARNING: AI summary failed — keeping previous briefing if any")
-        attach_student_view(student, history_context=history_context)
-
-    data["last_updated"] = datetime.now(timezone.utc).isoformat()
-    data["summer_break"] = False
-    persist_grades(data)
-    print(f"\nBriefings written to {OUTPUT_FILE}")
-    print(f"Last updated: {data['last_updated']}")
-
-
 def scrape_all():
     require_scrape_config()
 
@@ -5518,7 +4879,9 @@ def scrape_all():
         except Exception:
             previous_data = {}
 
-    # Preserve prior AI briefings for history "previous_briefing" notes
+    # Retired Grok fields must not ride along when a prior student is carried forward.
+    for prior_student in previous_data.get("students") or []:
+        drop_retired_grok_fields(prior_student)
     previous_by_sn = {
         str(s.get("sn")): s
         for s in (previous_data.get("students") or [])
@@ -5535,8 +4898,8 @@ def scrape_all():
         print(f"School session paused ({reason}).")
         if nxt:
             print(f"Next first day of school: {nxt.isoformat()}")
-        print(f"Skipping grades scrape and Grok; refreshing attendance for {prefer_year} only.")
-        # Preserve classes/AI; only update attendance from portal
+        print(f"Skipping grades scrape; refreshing attendance for {prefer_year} only.")
+        # Preserve classes; only update attendance from portal
         if OUTPUT_FILE.exists() and previous_data.get("students"):
             try:
                 refresh_attendance_only()
@@ -5651,41 +5014,9 @@ def scrape_all():
             elif prior.get("classroom"):
                 print("  Classroom: no fresh export this run; context will be missing until the next one")
 
-            # Carry prior briefing so history_context can reference last focus
-            if prior.get("ai_summary"):
-                student_data["ai_summary"] = prior["ai_summary"]
-
-            history_context, class_list = _prepare_student_for_briefing(
+            history_context, class_list = _prepare_student_view(
                 student_data, history, aeries_series_by_class=aeries_series
             )
-
-            if GROK_API_KEY:
-                portal_changed = academic_fingerprint(student_data) != academic_fingerprint(prior)
-                briefing_today = briefing_generated_on_pacific_date(
-                    prior.get("ai_summary"), pacific_today()
-                )
-                if not portal_changed and briefing_today and prior.get("ai_summary"):
-                    student_data["ai_summary"] = prior["ai_summary"]
-                    print("  AI summary kept (grades/missing unchanged)")
-                else:
-                    print(f"  Generating AI summary ({GROK_MODEL})...")
-                    ai_summary = generate_ai_summary(
-                        student_data, history_context=history_context
-                    )
-                    if ai_summary:
-                        student_data["ai_summary"] = ai_summary
-                        print("  AI summary generated")
-                    else:
-                        print("  AI summary skipped")
-
-            if student_data.get("ai_summary"):
-                analytics = build_class_analytics(
-                    student_data, history_context=history_context
-                )
-                student_data["ai_summary"] = sanitize_briefing_copy(
-                    apply_tonight_plan(student_data["ai_summary"], analytics),
-                    analytics,
-                )
 
             attach_student_view(student_data, history_context=history_context)
             try:
@@ -5697,8 +5028,6 @@ def scrape_all():
             # One snapshot per Pacific day. The evening scrape records the assignment
             # diff and the Since yesterday sentence. Earlier scrapes keep that note.
             snap_source = dict(student_data)
-            if prior.get("ai_summary"):
-                snap_source["ai_summary"] = prior["ai_summary"]
             apply_daily_change_snapshot(
                 history, student["sn"], student["name"], snap_source, class_list
             )
@@ -5927,7 +5256,8 @@ def rebuild_views_only():
     print(f"Rebuilding dashboard views for {len(students)} student(s)...")
     for i, student in enumerate(students, start=1):
         print(f"  {student_log_label(i)}...")
-        history_context, _ = _prepare_student_for_briefing(student, history)
+        drop_retired_grok_fields(student)
+        history_context, _ = _prepare_student_view(student, history)
         attach_student_view(student, history_context=history_context)
     data["last_updated"] = datetime.now(timezone.utc).isoformat()
     persist_grades(data, history)
@@ -5935,12 +5265,7 @@ def rebuild_views_only():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Aeries grade scraper + Grok briefings")
-    parser.add_argument(
-        "--grok-only",
-        action="store_true",
-        help="Regenerate AI briefings from existing grades_data.json (skip Aeries scrape)",
-    )
+    parser = argparse.ArgumentParser(description="Aeries grade scraper")
     parser.add_argument(
         "--probe-attendance",
         action="store_true",
@@ -5960,7 +5285,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--attendance-only",
         action="store_true",
-        help="Refresh absences/tardies only (works during summer; no Grok)",
+        help="Refresh absences/tardies only (works during summer)",
     )
     parser.add_argument(
         "--rebuild-view",
@@ -5985,8 +5310,6 @@ if __name__ == "__main__":
             probe_gradebook()
         elif args.attendance_only:
             refresh_attendance_only()
-        elif args.grok_only:
-            regenerate_grok_summaries()
         elif args.rebuild_view:
             rebuild_views_only()
         else:
