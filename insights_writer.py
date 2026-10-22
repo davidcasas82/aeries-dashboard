@@ -434,16 +434,22 @@ def say_opening(fact):
     "Still" only when the letter the dashboard shows is the one it showed last time: a letter fact the engine
     marks "still": False (the letter changed by less than a grade_move, or there's no earlier letter) opens
     "Now a C, 0.1 points from a B." or "Now an A.", and a grade_move marked so says the crossing.
+    The letter named is the one the dashboard shows: a fact the engine marks "shown" (the Aeries mark's
+    letter isn't the percent's) names that letter, and a letter fact then states no gap, since the percent's
+    gap to the next letter isn't about the letter on the page ("Still an A." at 89.5 marked A).
     """
     kind = fact.get("kind")
     still = "Still" if fact.get("still", True) else "Now"
+    shown = fact.get("shown") if fact.get("shown") in ("A", "B", "C", "D", "F") else None
+    if kind in ("current_letter", "next_letter") and shown:
+        return f"{still} {_article(shown)} {shown}."
     if kind == "current_letter" and fact.get("letter"):
         return f"{still} {_article(fact['letter'])} {fact['letter']}."
     if kind == "next_letter" and fact.get("letter") and fact.get("next_letter") and isinstance(fact.get("gap"), (int, float)):
         letter, nxt = fact["letter"], fact["next_letter"]
         return f"{still} {_article(letter)} {letter}, {fact['gap']:g} points from {_article(nxt)} {nxt}."
     if kind == "grade_move" and all(isinstance(fact.get(k), (int, float)) for k in ("from_pct", "to_pct", "delta")):
-        before, after = insights.letter_for(fact["from_pct"]), insights.letter_for(fact["to_pct"])
+        before, after = insights.letter_for(fact["from_pct"]), shown or insights.letter_for(fact["to_pct"])
         way = "down" if fact["delta"] < 0 else "up"
         since = f" since {fact['since_label']}" if fact.get("since_label") else ""
         if fact.get("still", before == after):
@@ -668,7 +674,8 @@ def _named_buckets(class_facts):
 
 
 def assumed_picks(class_facts):
-    """[(keep or None, step or None)] for the class's assumed next items, heaviest bucket first.
+    """[(keep or None, step or None)] for the class's assumed next items, heaviest bucket first (then bucket
+    name, then id).
 
     Per bucket, at its typical size: the keep_letter fact with a needed score and the what_if that reaches
     the class's next letter, each only when _assumable; a keep only when it needs ASSUMED_KEEP_MIN_PCT or
@@ -682,22 +689,26 @@ def assumed_picks(class_facts):
             continue
         key = (f.get("bucket"), f.get("points"))
         if is_keep(f) and not f.get("cannot_lose") and f.get("letter") and f["needed_pct"] >= ASSUMED_KEEP_MIN_PCT:
-            pairs.setdefault(key, [None, None])[0] = pairs.get(key, [None, None])[0] or f
+            slot = 0
         elif f.get("kind") == "what_if" and f.get("reachable") and _number(f.get("target")) and nxt \
                 and insights.letter_for(f["target"]) == nxt:
-            pairs.setdefault(key, [None, None])[1] = pairs.get(key, [None, None])[1] or f
+            slot = 1
+        else:
+            continue
+        pair = pairs.setdefault(key, [None, None])
+        if pair[slot] is None or str(f.get("id")) < str(pair[slot].get("id")):
+            pair[slot] = f
     # One size per bucket: the engine has one typical size, so two would mean a mixed-up fact list.
     by_bucket = {}
     for (bucket, _points), pair in pairs.items():
         by_bucket.setdefault(bucket, []).append(pair)
-    # Heaviest first. Keep facts carry no weight (the engine lists its typical keeps heaviest first), so a
-    # bucket with no weighted fact goes after the weighted ones, in fact order.
-    position = {f.get("bucket"): i for i, f in reversed(list(enumerate(class_facts)))}
+    # Heaviest first (the engine's live bucket weight, which keep facts carry too), then the bucket name,
+    # then the id: a total order, so the same facts in any order give the same lines.
 
     def order(pr):
         lead = pr[0] or pr[1]
         weight = _weight(pr[1] or lead, class_facts)
-        return (weight is None, -(weight or 0.0), position.get(lead.get("bucket"), 0))
+        return (weight is None, -(weight or 0.0), str(lead.get("bucket")), str(lead.get("id")))
     ordered = sorted((pairs_[0] for pairs_ in by_bucket.values() if len(pairs_) == 1), key=order)
     return [tuple(pr) for pr in ordered[:max(0, ASSUMED_MAX_BUCKETS - len(named))]]
 
@@ -2105,6 +2116,32 @@ def _fit(final):
     return final
 
 
+def _canonical_key(fact):
+    if not isinstance(fact, dict):
+        return ("", "", "", (1, 0.0), "", "", "", json.dumps(fact, sort_keys=True, default=str))
+    weight = fact.get("bucket_weight_pct")
+    return (str(fact.get("kind") or ""), str(fact.get("class") or ""), str(fact.get("bucket") or ""),
+            (0, -float(weight)) if _number(weight) else (1, 0.0), str(fact.get("next_due") or fact.get("due") or ""),
+            str(fact.get("id") or ""), str(fact.get("title") or fact.get("next_title") or ""),
+            json.dumps(fact, sort_keys=True, default=str))
+
+
+def canonical_facts(facts):
+    """The facts in one total, stable order (kind, class, bucket, weight, due date, id, title, then every
+    field), so every picker downstream sees the same list however the facts arrived."""
+    return sorted(facts or [], key=_canonical_key)
+
+
+def canonical_upcoming(upcoming):
+    """Upcoming items in one total order (class, due, bucket, title, points, then every field)."""
+    def key(item):
+        if not isinstance(item, dict):
+            return ("", "", "", "", "", json.dumps(item, sort_keys=True, default=str))
+        return (str(item.get("class") or ""), str(item.get("due") or ""), str(item.get("bucket") or ""),
+                str(item.get("title") or ""), str(item.get("points")), json.dumps(item, sort_keys=True, default=str))
+    return sorted(upcoming or [], key=key)
+
+
 def write_class(model, facts, name, votes=VOTES):
     """{"class", "story", "cites", "keep_sentence", "dropped"}, or None for a class with no letter to open on.
 
@@ -2114,8 +2151,9 @@ def write_class(model, facts, name, votes=VOTES):
     said once and the vote can't remove it. When the model's story fails eval_story, or the model didn't run,
     the story is code's alone: the opening and code_lines. A story over the publish limits sheds its drag
     line, then its second assumed line (_fit). keep_sentence is the keep sentence as published (named or
-    assumed), or None.
+    assumed), or None. The facts are put in canonical order first (canonical_facts).
     """
+    facts = canonical_facts(facts)
     class_facts = facts_for(facts, name)
     opening = opening_fact(class_facts)
     index = fact_index(class_facts)
@@ -2300,7 +2338,8 @@ def write_up(model, insight_facts, log_items=None, votes=VOTES, upcoming=None):
     story that carries its keep sentence. Stories come sorted by class name (story_order), so the same facts
     in any order give the same bytes.
     """
-    facts = attach_next_items(merged_facts(insight_facts, log_items), upcoming)
+    # One canonical order where the facts enter, so every picker below sees the same list.
+    facts = canonical_facts(attach_next_items(merged_facts(insight_facts, log_items), canonical_upcoming(upcoming)))
     # A story over the Worker's limits is dropped alone; the others still publish.
     stories = [s for s in (write_class(model, facts, name, votes) for name in class_names(facts)) if s and story_fits(s)]
     stories.sort(key=story_order)

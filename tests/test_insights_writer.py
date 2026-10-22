@@ -1,5 +1,6 @@
 """The local write-up: synthetic facts only, and a scripted model in place of a real one."""
 
+import copy
 import json
 import random
 import re
@@ -2911,7 +2912,8 @@ def bio_facts(drag_title="Unit 2 Test", order=1):
                  "bucket_weight_pct": weight, "points": points, "target": 90.0, "needed_pct": step,
                  "reachable": step <= 100},
                 {"id": f"keep:bio:{slug}:{points:g}", "kind": "keep_letter", "class": "Bio", "letter": "B",
-                 "bucket": bucket, "points": points, "needed_pct": keep, "cannot_lose": False}]
+                 "bucket": bucket, "points": points, "needed_pct": keep, "cannot_lose": False,
+                 "bucket_weight_pct": weight}]
     buckets = [pair("Tests", 60.0, 50.0, 92.0, 76.0), pair("Homework", 30.0, 10.0, 100.0, 60.0),
                pair("Labs", 10.0, 20.0, 99.0, 70.0)][::order]
     return [{"id": "next:bio", "kind": "next_letter", "class": "Bio", "pct": 84.0, "letter": "B", "next_letter": "A",
@@ -3275,6 +3277,18 @@ class AssumedReviewTests(unittest.TestCase):
         self.assertEqual([l["cites"][0] for l in lines if l["code"] == "assumed"],
                          ["keep:bio:homework:10", "keep:bio:labs:20"])
 
+    def test_a_keep_whose_bucket_sizes_vary_is_never_assumed(self):
+        # GE's must-fix 2: the engine marks keep_fact's typical-size keep in such a bucket, and it's never said.
+        facts = [{**f, "sizes_vary": True} if f["id"] == BIO_KEEP else f for f in bio_facts()]
+        facts = [f for f in facts if f["id"] != BIO_STEP]
+        self.assertFalse(w._assumable(next(f for f in facts if f["id"] == BIO_KEEP)))
+        lines = w.code_lines(w.attach_next_items(facts, []), "Bio")
+        self.assertNotIn(BIO_KEEP, [c for l in lines for c in l["cites"]])
+        # Named at its posted points, the same keep is said.
+        named = w.attach_next_items(facts, [{"class": "Bio", "bucket": "Tests", "title": "Unit 3 Test",
+                                             "due": "2026-10-27", "points": 50.0}])
+        self.assertEqual(w.pick_keep(w.facts_for(named, "Bio"))["id"], BIO_KEEP)
+
     def test_a_category_reads_as_one_item(self):
         for category, start in (("Projects and Presentations", "If the next project or presentation is worth"),
                                 ("Projects & Presentations", "If the next project or presentation is worth"),
@@ -3317,12 +3331,12 @@ class StoryFitTests(unittest.TestCase):
             self.assertEqual(w.write_up(ScriptedModel({}), {"as_of": "2026-10-22", "facts": bio_facts()})["stories"], [])
 
 
-SUBJ_D = "Subj D"
+SUBJ_D = "Subj K"
 
 
 def subj_d_facts():
-    """GE's Subj D Lab Report case, synthetic: an A with two keep facts both named by posted items (the engine's
-    keep on the Lab Report at 20 points, and a typical Tests keep the 50-point Unit 4 Test matches), and its drag."""
+    """A synthetic multi-keep A: two keep facts both named by posted items (a keep on a 20-point Lab Report and a
+    typical Tests keep the 50-point Unit 4 Test matches), an assumed Homework keep, and its drag."""
     return [
         {"id": "letter:subjd", "kind": "current_letter", "class": SUBJ_D, "pct": 91.0, "letter": "A"},
         {"id": "keep:subjd:labs:20", "kind": "keep_letter", "class": SUBJ_D, "letter": "A", "bucket": "Labs",
@@ -3346,23 +3360,97 @@ SUBJ_D_UPCOMING = [
 ]
 
 
+def ge_class(name, items, up=(), weights=(("Tests", 70.0), ("Homework", 30.0))):
+    """GE's probe class shape: a percent-of-grade class from (title, category, earned, possible) rows and
+    (title, category, points, due) upcoming items, posted at its rebuilt grade. Synthetic."""
+    ci = {"layout": "percent_of_grade", "matches_posted": True,
+          "categories": [{"name": n, "weight_pct": wt} for n, wt in weights]}
+    rows = [{"description": t, "category": c, "points_earned": e, "points_possible": p, "due_date": "2026-10-01"}
+            for t, c, e, p in items]
+    rows += [{"description": t, "category": c, "points_earned": None, "points_possible": p, "due_date": d}
+             for t, c, p, d in up]
+    pct = insights.truncated_grade(insights.build_class_model(name, ci, rows))
+    return {"name": name, "pct": pct, "mark": insights.letter_for(pct), "counted_insight": ci, "assignments": rows}
+
+
+def ge_doc(classes, prior=None):
+    prior = prior if prior is not None else {c["name"]: {"pct": c["pct"], "mark": c["mark"]} for c in classes}
+    doc = insights.student_facts(classes, [], {"date": "2026-10-14", "classes": prior}, date(2026, 10, 22))
+    return doc, w.upcoming_items(classes, "2026-10-22")
+
+
+def ge_subj_d():
+    return ge_doc([ge_class("Subj D", [("Unit 1 Test", "Tests", 40, 50), ("Unit 2 Test", "Tests", 36, 50),
+                                       ("HW 1", "Homework", 7, 10), ("HW 2", "Homework", 8, 10)],
+                            up=[("Lab Report", "Homework", 40, "2026-10-28")])])
+
+
 class FactOrderTests(unittest.TestCase):
     """GE's must-fix 3: #57's invariant, the same facts in any order give the same bytes."""
 
     def test_ge_subj_d_lab_report_repro_any_order_same_bytes(self):
-        facts = subj_d_facts()
-        first = json.dumps(w.write_up(ScriptedModel({}), {"as_of": "2026-10-22", "facts": facts},
-                                      upcoming=SUBJ_D_UPCOMING), sort_keys=True)
-        rng = random.Random(60)
-        for _ in range(30):
-            rng.shuffle(facts)
-            upcoming = SUBJ_D_UPCOMING[::rng.choice((1, -1))]
-            got = json.dumps(w.write_up(ScriptedModel({}), {"as_of": "2026-10-22", "facts": facts}, upcoming=upcoming),
-                             sort_keys=True)
-            self.assertEqual(got, first)
-        story = next(s for s in json.loads(first)["stories"] if s["class"] == SUBJ_D)
-        # The heavier-sounding pick is deterministic: no weight on either keep, so the sooner Lab Report wins.
-        self.assertIn("An 85 or better on the Lab Report keeps the A.", story["story"])
+        # GE's exact case: a C (Tests 70 / Homework 30) with a 40-point Homework Lab Report due Oct 28 and three
+        # keep facts from the engine; reversed, and over 30 shuffles.
+        doc, up = ge_subj_d()
+        self.assertEqual([f["id"] for f in doc["facts"] if f["kind"] == "keep_letter"],
+                         ["keep:subjd:homework:40", "keep:subjd:tests:50", "keep:subjd:homework:10"])
+        first = json.dumps(w.write_up(ScriptedModel({}), copy.deepcopy(doc), None, 1, up))
+        story = json.loads(first)["stories"][0]
+        self.assertEqual(story["story"], "Still a C, 4.3 points from a B. The Unit 2 Test (36/50) is what's pulling "
+                                         "it down most. A 47 or better on the Lab Report keeps the C. If the next test "
+                                         "is worth about 50 points like the last ones, a 26 or better keeps the C and a "
+                                         "48 gets it to a B.")
+        backwards = copy.deepcopy(doc)
+        backwards["facts"].reverse()
+        self.assertEqual(json.dumps(w.write_up(ScriptedModel({}), backwards, None, 1, up[::-1])), first)
+        for seed in range(30):
+            shuffled = copy.deepcopy(doc)
+            random.Random(seed).shuffle(shuffled["facts"])
+            self.assertEqual(json.dumps(w.write_up(ScriptedModel({}), shuffled, None, 1, up)), first, seed)
+
+    def test_the_whole_fact_list_in_any_order_gives_the_same_bytes(self):
+        # The CTO's structural fix: write_up puts the facts in one canonical order where they enter, so a full
+        # shuffle of several multi-category classes (keep-only categories, assumed and named items, drags,
+        # moves) never changes a byte.
+        classes = [
+            ge_class("Subj D", [("Unit 1 Test", "Tests", 40, 50), ("Unit 2 Test", "Tests", 36, 50),
+                                ("HW 1", "Homework", 7, 10), ("HW 2", "Homework", 8, 10)],
+                     up=[("Lab Report", "Homework", 40, "2026-10-28")]),
+            ge_class("Subj E", [("Quiz 1", "Quizzes", 18, 20), ("Quiz 2", "Quizzes", 15, 20), ("Lab 1", "Labs", 22, 25),
+                                ("Lab 2", "Labs", 20, 25), ("Essay 1", "Projects", 80, 100)],
+                     weights=(("Quizzes", 40.0), ("Labs", 30.0), ("Projects", 30.0))),
+            ge_class("Subj G", [("Unit 1 Test", "Tests", 47, 50), ("HW 1", "Homework", 9, 10), ("HW 2", "Homework", 6, 10),
+                                ("HW 3", "Homework", 10, 10)], up=[("Unit 2 Test", "Tests", 50, "2026-10-27")]),
+            ge_class("Subj H", [("Test A", "Tests", 30, 50), ("Test B", "Tests", 41, 50), ("HW 1", "Homework", 4, 10),
+                                ("Lab 1", "Labs", 15, 20)], weights=(("Tests", 50.0), ("Homework", 25.0), ("Labs", 25.0))),
+        ]
+        prior = {c["name"]: {"pct": c["pct"] + d, "mark": insights.letter_for(c["pct"] + d)}
+                 for c, d in zip(classes, (0.0, 1.5, -1.2, 0.0))}
+        doc, up = ge_doc(classes, prior)
+        self.assertGreaterEqual(len({f["kind"] for f in doc["facts"]}), 5)
+        first = json.dumps(w.write_up(ScriptedModel({}), copy.deepcopy(doc), None, 1, up))
+        self.assertEqual(len(json.loads(first)["stories"]), 4)
+        rng = random.Random(600)
+        for _ in range(60):
+            shuffled = copy.deepcopy(doc)
+            rng.shuffle(shuffled["facts"])
+            ups = list(up)
+            rng.shuffle(ups)
+            self.assertEqual(json.dumps(w.write_up(ScriptedModel({}), shuffled, None, 1, ups)), first)
+        # The canonical order is total: the same facts sort to the same list from any start.
+        self.assertEqual(w.canonical_facts(doc["facts"]), w.canonical_facts(doc["facts"][::-1]))
+
+    def test_keep_only_categories_order_by_weight_then_name(self):
+        # Two keep-only assumed categories (no what-if carries their weight): the engine's weight on the keep
+        # facts orders them, whatever the fact order.
+        facts = [f for f in bio_facts() if f["kind"] != "what_if"]
+        for order in (facts, facts[::-1]):
+            picks = w.assumed_picks(w.attach_next_items(order, []))
+            self.assertEqual([k["bucket"] for k, _s in picks], ["Tests", "Homework"])
+        unweighted = [{k: v for k, v in f.items() if k != "bucket_weight_pct"} for f in facts]
+        for order in (unweighted, unweighted[::-1]):
+            picks = w.assumed_picks(w.attach_next_items(order, []))
+            self.assertEqual([k["bucket"] for k, _s in picks], ["Homework", "Labs"])
 
     def test_pick_keep_ranks_weight_then_due_then_id(self):
         facts = w.attach_next_items(subj_d_facts(), SUBJ_D_UPCOMING)
@@ -3394,3 +3482,40 @@ class FactOrderTests(unittest.TestCase):
         facts = w.attach_next_items(named + assumed, upcoming)
         self.assertEqual(w.easiest_win(facts), "X")
         self.assertEqual(w.easiest_win(w.attach_next_items(named + assumed, [])), "Y")
+
+
+class ShownLetterTests(unittest.TestCase):
+    """GE's must-fix 3 and the CTO's call: Still/Now and the letter named follow the Aeries mark (the letter the
+    dashboard shows), and no gap is stated when the mark and the percent disagree."""
+
+    def test_ge_repro_last_90_2_marked_a_now_89_5_marked_a_is_still_an_a(self):
+        cls = ge_class("Subj F", [("Unit 1 Test", "Tests", 45, 50), ("Unit 2 Test", "Tests", 46.5, 50),
+                                  ("HW 1", "Homework", 8.5, 10)])
+        self.assertEqual((cls["pct"], cls["mark"]), (89.5, "B"))
+        cls["mark"] = "A"  # Aeries rounds 89.5 up
+        doc, up = ge_doc([cls], {"Subj F": {"pct": 90.2, "mark": "A"}})
+        move = next(f for f in doc["facts"] if f["kind"] == "grade_move")
+        self.assertEqual((move["still"], move["shown"]), (True, "A"))
+        stories = w.write_up(ScriptedModel({}), doc, None, 1, up)["stories"]
+        self.assertEqual([s["story"] for s in stories], ["Still an A, down 0.7 since Oct 14."])
+        # The other way: last 90.2 marked A, now 89.5 marked B is the crossing.
+        cls["mark"] = "B"
+        doc, up = ge_doc([cls], {"Subj F": {"pct": 90.2, "mark": "A"}})
+        stories = w.write_up(ScriptedModel({}), doc, None, 1, up)["stories"]
+        self.assertEqual(len(stories), 1)
+        self.assertTrue(stories[0]["story"].startswith("Slipped to a B since Oct 14, down 0.7. "), stories)
+
+    def test_a_letter_fact_on_a_mismatched_mark_names_the_mark_with_no_gap(self):
+        fact = {"id": "next:art", "kind": "next_letter", "class": "Art", "pct": 89.5, "letter": "B", "next_letter": "A",
+                "threshold": 90.0, "gap": 0.5, "shown": "A"}
+        self.assertEqual(w.say_opening(fact), "Still an A.")
+        self.assertEqual(w.say_opening({**fact, "still": False}), "Now an A.")
+        self.assertIsNone(w.check_sentence("Still an A.", ["next:art"], w.fact_index([fact]), "Art"))
+        self.assertIsNotNone(w.check_sentence("Still a B, 0.5 points from an A.", ["next:art"], w.fact_index([fact]),
+                                              "Art"))
+        at_a = {"id": "letter:art", "kind": "current_letter", "class": "Art", "pct": 90.1, "letter": "A", "shown": "B"}
+        self.assertEqual(w.say_opening(at_a), "Still a B.")
+        # The engine marks it: a percent letter that isn't the mark's.
+        engine = one_test_class("Art", (89.6, "A"), (89.5, "A"))
+        letter = [f for f in engine if f["kind"] in ("next_letter", "current_letter")]
+        self.assertTrue(all(f.get("shown") == "A" for f in letter))

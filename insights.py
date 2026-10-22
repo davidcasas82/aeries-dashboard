@@ -450,8 +450,9 @@ def keep_fact(model, pct, upcoming=(), move=None):
 
     Of the candidates (keep_candidates order) that can keep the letter, one that needs a score comes
     first, else one the next item can't cost. Kind keep_letter, never what_if, so no next-letter rule
-    reads it. Only what the class entry doesn't already say: no threshold (the letter's floor), no
-    bucket weight, no target.
+    reads it. Only what the class entry doesn't already say and the bucket's live weight (so the writer
+    can order keep-only buckets): no threshold (the letter's floor), no target. A typical size in a bucket
+    whose past sizes vary (sizes_vary) is marked so, and the writer never says it as an assumed item.
 
     A can't-cost (cannot_lose) fact only for a named upcoming item, worked out at that item's posted
     points: at a typical size it is false whenever the real next item is bigger, so none is made.
@@ -461,6 +462,7 @@ def keep_fact(model, pct, upcoming=(), move=None):
         return None
     letter, floor = held
     named = {(bucket, points) for _due, _title, bucket, points in upcoming or ()}
+    buckets = {b.name: b for b in model.buckets}
     safe = None
     for bucket, points in keep_candidates(model, upcoming, move):
         result = keep_score(model, bucket, points, floor)
@@ -476,7 +478,10 @@ def keep_fact(model, pct, upcoming=(), move=None):
             "points": points,
             "needed_pct": needed,
             "cannot_lose": cannot_lose,
+            "bucket_weight_pct": live_weight_pct(model, bucket),
         }
+        if (bucket, points) not in named and bucket in buckets and sizes_vary(buckets[bucket]):
+            fact["sizes_vary"] = True
         if needed is not None:
             return fact
         if cannot_lose and safe is None and (bucket, points) in named:
@@ -519,6 +524,7 @@ def typical_keeps(model, pct, have=()):
                 "points": points,
                 "needed_pct": result[0],
                 "cannot_lose": False,
+                "bucket_weight_pct": live_weight_pct(model, bucket.name),
             }
             category = bucket_category(bucket)
             if category and category != bucket.name:
@@ -528,6 +534,8 @@ def typical_keeps(model, pct, have=()):
 
 
 DRAG_MIN_POINTS = MOVE_MIN_POINTS
+# Float slack for the DRAG_MIN_POINTS bar: a cost of exactly 0.5 can come out 0.49999999.
+DRAG_EPSILON = 1e-9
 # An A this far or more above the B line has nothing pulling it down worth a line.
 DRAG_A_MARGIN = 2.0
 
@@ -558,7 +566,7 @@ def biggest_drag(model, name):
     if best is None:
         return None
     _key, bucket, score, cost = best
-    if cost < DRAG_MIN_POINTS or score.earned <= 0 or score.possible <= 0 or not score.title:
+    if cost < DRAG_MIN_POINTS - DRAG_EPSILON or score.earned <= 0 or score.possible <= 0 or not score.title:
         return None
     return {
         "id": f"drag:{slug(name)}:{score.key}",
@@ -831,9 +839,12 @@ def class_facts(cls, snapshots, prior_snapshot, today):
                 cls.get("scores_trimmed", False),
             )
             if move:
-                # The writer reads the letter change from the percents; say so when the shown letters disagree.
+                # The writer reads the letter change from the percents; say so when the shown letters disagree,
+                # and name the shown letter when it isn't the percent's.
                 if (was == shown) != (letter_for(from_pct) == letter_for(pct)):
                     move["still"] = was == shown
+                if shown != letter_for(pct):
+                    move["shown"] = shown
                 facts.append(move)
     if not trusted or broken:
         facts.append({
@@ -849,6 +860,9 @@ def class_facts(cls, snapshots, prior_snapshot, today):
         step = {"id": f"letter:{slug(name)}", "kind": "current_letter", "class": name, "pct": pct, "letter": "A"}
     if step and was != shown:
         step["still"] = False
+    if step and shown != letter_for(pct):
+        # The dashboard shows the mark's letter, not the percent's: the opener names it, with no gap.
+        step["shown"] = shown
     if step:
         facts.append(step)
     if step and step["kind"] == "current_letter":

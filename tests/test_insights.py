@@ -396,9 +396,11 @@ class KeepTheLetterTests(unittest.TestCase):
         # typical_keeps' for the two heaviest buckets at their median size (Tests' is the same id, so only
         # Homework's is added).
         self.assertEqual(keeps, [{"id": "keep:biology:tests:50", "kind": "keep_letter", "class": "Biology", "letter": "B",
-                                  "bucket": "Tests", "points": 50.0, "needed_pct": 53.3, "cannot_lose": False},
+                                  "bucket": "Tests", "points": 50.0, "needed_pct": 53.3, "cannot_lose": False,
+                                  "bucket_weight_pct": 60.0},
                                  {"id": "keep:biology:homework:10", "kind": "keep_letter", "class": "Biology", "letter": "B",
-                                  "bucket": "Homework", "points": 10.0, "needed_pct": 6.7, "cannot_lose": False}])
+                                  "bucket": "Homework", "points": 10.0, "needed_pct": 6.7, "cannot_lose": False,
+                                  "bucket_weight_pct": 30.0}])
         model = insights.build_class_model("Biology", class_input("Biology", POG_TOTALS, POG_ROWS, 85.2, "B")["counted_insight"], POG_ROWS)
         for f in keeps:
             if f["needed_pct"] is not None:
@@ -436,8 +438,10 @@ class KeepFactShapeTests(unittest.TestCase):
         for f in doc["facts"]:
             if f["id"].startswith("keep:"):
                 self.assertEqual(f["kind"], "keep_letter")
-                for dropped in ("target", "threshold", "bucket_weight_pct", "reachable"):
+                for dropped in ("target", "threshold", "reachable"):
                     self.assertNotIn(dropped, f)
+                # The live weight rides along so the writer can order keep-only buckets (PR #60 review).
+                self.assertIsInstance(f["bucket_weight_pct"], float)
 
     def test_order_named_item_then_drop_cause_then_heaviest(self):
         model = keep_model(self.A_CLASS)  # Tests 70%, Classwork 30%: both need a real score to keep the A
@@ -1251,6 +1255,29 @@ class FollowupEngineTests(unittest.TestCase):
                          0.58)
         # Every score perfect: nothing costs anything.
         self.assertIsNone(insights.biggest_drag(keep_model([("Tests", 100.0, [(50, 50), (50, 50)])]), "P"))
+
+    def test_the_half_point_bar_has_float_slack(self):
+        # A cost a hair under 0.5 from float error still counts; one clearly under doesn't.
+        model = keep_model([("Tests", 100.0, [(40, 50), (30, 50)])])
+        for cost, named in ((0.5 - 1e-12, True), (0.5 - 1e-6, False)):
+            def fake(m, cost=cost):
+                return 80.0 if sum(len(b.scores) for b in m.buckets) == 2 else 80.0 + cost
+            with patch.object(insights, "_exact_grade", fake):
+                self.assertEqual(insights.biggest_drag(model, "P") is not None, named, cost)
+
+    def test_a_keep_at_a_typical_size_in_a_bucket_whose_sizes_vary_is_marked(self):
+        # Tests' past items are 10 and 50 points (more than 2x apart): its typical-size keep is marked
+        # sizes_vary. A posted 50-point item is a real size, so its keep isn't. Keep facts carry the bucket's
+        # live weight.
+        model = keep_model([("Tests", 70.0, [(8, 10), (40, 50)]), ("Homework", 30.0, [(9, 10), (8, 10)])])
+        pct = insights.truncated_grade(model)
+        keep = insights.keep_fact(model, pct)
+        self.assertEqual((keep["bucket"], keep["points"], keep.get("sizes_vary")), ("Tests", 50.0, True))
+        self.assertEqual(keep["bucket_weight_pct"], 70.0)
+        named = insights.keep_fact(model, pct, [("2026-10-27", "Unit 3 Test", "Tests", 50.0)])
+        self.assertNotIn("sizes_vary", named)
+        even = keep_model([("Tests", 70.0, [(8, 10), (16, 20)]), ("Homework", 30.0, [(9, 10)])])
+        self.assertNotIn("sizes_vary", insights.keep_fact(even, insights.truncated_grade(even)))
 
     def test_an_a_names_its_drag_only_within_2_points_of_the_b_line(self):
         def drag(pct, rows):
