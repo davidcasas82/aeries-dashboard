@@ -820,8 +820,8 @@ def class_facts(cls, snapshots, prior_snapshot, today):
     broken = scale_break(name, (today.isoformat(), pct, cls.get("mark") or ""), snapshots)
     if broken:
         facts.append(broken)
-    # "Still a B" only when the letter the dashboard showed last time (the Aeries mark, else the percent's
-    # letter) is the one it shows now; with no earlier letter to compare, it isn't said.
+    # The shown letter is the Aeries mark's letter, else the percent's letter. prior_shown (was) and now_shown
+    # (shown) go on the move and letter facts; "Still a B" only when they are equal.
     shown = mark_letter(cls.get("mark")) or letter_for(pct)
     was = None
     if prior_snapshot:
@@ -839,12 +839,9 @@ def class_facts(cls, snapshots, prior_snapshot, today):
                 cls.get("scores_trimmed", False),
             )
             if move:
-                # The writer reads the letter change from the percents; say so when the shown letters disagree,
-                # and name the shown letter when it isn't the percent's.
-                if (was == shown) != (letter_for(from_pct) == letter_for(pct)):
-                    move["still"] = was == shown
-                if shown != letter_for(pct):
-                    move["shown"] = shown
+                # The two shown letters, computed once here: the writer's still/now, opener letter, crossing
+                # wording and checks read only these.
+                move["prior_shown"], move["now_shown"] = was, shown
                 facts.append(move)
     if not trusted or broken:
         facts.append({
@@ -858,11 +855,10 @@ def class_facts(cls, snapshots, prior_snapshot, today):
     if step is None and letter_for(pct) == "A":
         # At an A there's no next letter; the story still opens on the letter it holds.
         step = {"id": f"letter:{slug(name)}", "kind": "current_letter", "class": name, "pct": pct, "letter": "A"}
-    if step and was != shown:
-        step["still"] = False
-    if step and shown != letter_for(pct):
-        # The dashboard shows the mark's letter, not the percent's: the opener names it, with no gap.
-        step["shown"] = shown
+    if step:
+        # "Still" exactly when the shown letter is the one shown last time (no earlier letter: not still).
+        # The opener names now_shown; when that isn't the percent's letter it states no gap.
+        step["prior_shown"], step["now_shown"] = was, shown
     if step:
         facts.append(step)
     if step and step["kind"] == "current_letter":

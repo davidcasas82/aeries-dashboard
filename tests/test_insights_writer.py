@@ -3199,8 +3199,10 @@ class NoFalseStillTests(unittest.TestCase):
 
     def test_a_still_sentence_across_a_letter_change_drops(self):
         changed = {"id": "next:art", "kind": "next_letter", "class": "Art", "pct": 79.9, "letter": "C",
-                   "next_letter": "B", "threshold": 80.0, "gap": 0.1, "still": False}
-        at_a = {"id": "letter:art", "kind": "current_letter", "class": "Art", "pct": 90.1, "letter": "A", "still": False}
+                   "next_letter": "B", "threshold": 80.0, "gap": 0.1,
+                   "prior_shown": "B", "now_shown": "C"}
+        at_a = {"id": "letter:art", "kind": "current_letter", "class": "Art", "pct": 90.1, "letter": "A",
+                "prior_shown": None, "now_shown": "A"}
         idx = w.fact_index([changed])
         self.assertEqual(w.say_opening(changed), "Now a C, 0.1 points from a B.")
         self.assertIsNone(w.check_sentence("Now a C, 0.1 points from a B.", ["next:art"], idx, "Art"))
@@ -3212,7 +3214,8 @@ class NoFalseStillTests(unittest.TestCase):
         self.assertIsNotNone(w.check_sentence("Still an A.", ["letter:art"], idx, "Art"))
         # A move the dashboard shows as a letter change, though the percents' letters agree, says the crossing.
         move = {"id": "move:art:2026-10-21", "kind": "grade_move", "class": "Art", "since": "2026-10-21",
-                "from_pct": 81.0, "to_pct": 80.2, "delta": -0.8, "still": False}
+                "from_pct": 81.0, "to_pct": 80.2, "delta": -0.8,
+                "prior_shown": "A", "now_shown": "B"}
         self.assertTrue(w.say_opening(move).startswith("Slipped to a B"))
 
 
@@ -3348,7 +3351,7 @@ def subj_d_facts():
         {"id": "drag:subjd:quiz2", "kind": "drag", "class": SUBJ_D, "title": "Quiz 2", "category": "Tests",
          "bucket": "Tests", "earned": 30.0, "possible": 50.0, "points": 1.1},
         {"id": "next:art", "kind": "next_letter", "class": "Art", "pct": 84.0, "letter": "B", "next_letter": "A",
-         "threshold": 90.0, "gap": 6.0, "still": False},
+         "threshold": 90.0, "gap": 6.0, "prior_shown": "A", "now_shown": "B"},
         {"id": "keep:art:tests:50", "kind": "keep_letter", "class": "Art", "letter": "B", "bucket": "Tests",
          "points": 50.0, "needed_pct": 99.0, "cannot_lose": False},
     ]
@@ -3495,7 +3498,7 @@ class ShownLetterTests(unittest.TestCase):
         cls["mark"] = "A"  # Aeries rounds 89.5 up
         doc, up = ge_doc([cls], {"Subj F": {"pct": 90.2, "mark": "A"}})
         move = next(f for f in doc["facts"] if f["kind"] == "grade_move")
-        self.assertEqual((move["still"], move["shown"]), (True, "A"))
+        self.assertEqual((move["prior_shown"], move["now_shown"]), ("A", "A"))
         stories = w.write_up(ScriptedModel({}), doc, None, 1, up)["stories"]
         self.assertEqual([s["story"] for s in stories], ["Still an A, down 0.7 since Oct 14."])
         # The other way: last 90.2 marked A, now 89.5 marked B is the crossing.
@@ -3507,15 +3510,98 @@ class ShownLetterTests(unittest.TestCase):
 
     def test_a_letter_fact_on_a_mismatched_mark_names_the_mark_with_no_gap(self):
         fact = {"id": "next:art", "kind": "next_letter", "class": "Art", "pct": 89.5, "letter": "B", "next_letter": "A",
-                "threshold": 90.0, "gap": 0.5, "shown": "A"}
+                "threshold": 90.0, "gap": 0.5, "prior_shown": "A", "now_shown": "A"}
         self.assertEqual(w.say_opening(fact), "Still an A.")
-        self.assertEqual(w.say_opening({**fact, "still": False}), "Now an A.")
+        self.assertEqual(w.say_opening({**fact, "prior_shown": "B"}), "Now an A.")
+        self.assertEqual(w.say_opening({**fact, "prior_shown": None}), "Now an A.")
         self.assertIsNone(w.check_sentence("Still an A.", ["next:art"], w.fact_index([fact]), "Art"))
         self.assertIsNotNone(w.check_sentence("Still a B, 0.5 points from an A.", ["next:art"], w.fact_index([fact]),
                                               "Art"))
-        at_a = {"id": "letter:art", "kind": "current_letter", "class": "Art", "pct": 90.1, "letter": "A", "shown": "B"}
+        at_a = {"id": "letter:art", "kind": "current_letter", "class": "Art", "pct": 90.1, "letter": "A",
+                "prior_shown": "B", "now_shown": "B"}
         self.assertEqual(w.say_opening(at_a), "Still a B.")
-        # The engine marks it: a percent letter that isn't the mark's.
+        # The engine puts both shown letters on the letter fact. A mark that isn't its percent's letter today is
+        # a scale break (gated, no letter fact); last time's mark still decides Still/Now.
         engine = one_test_class("Art", (89.6, "A"), (89.5, "A"))
-        letter = [f for f in engine if f["kind"] in ("next_letter", "current_letter")]
-        self.assertTrue(all(f.get("shown") == "A" for f in letter))
+        self.assertEqual([f["kind"] for f in engine], ["scale_break", "no_raise_math"])
+        cls = ge_class("Art", [("Unit 1 Test", "Tests", 46, 50), ("Unit 2 Test", "Tests", 45, 50),
+                               ("HW 1", "Homework", 9, 10)])
+        self.assertEqual(cls["mark"], "A")
+        for prior_mark, opener in (("A", "Still an A."), ("B", "Now an A.")):
+            doc, up = ge_doc([cls], {"Art": {"pct": cls["pct"] - 0.2, "mark": prior_mark}})
+            letter = [f for f in doc["facts"] if f["kind"] in ("next_letter", "current_letter")]
+            self.assertEqual([(f["prior_shown"], f["now_shown"]) for f in letter], [(prior_mark, "A")])
+            self.assertEqual(w.say_opening(letter[0]), opener)
+
+
+def _shown(pct, mark):
+    return insights.mark_letter(mark) or insights.letter_for(pct)
+
+
+class ShownPairTests(unittest.TestCase):
+    """GE's #60 must-fixes after a5493a0: the engine computes prior_shown and now_shown once, and the opener's
+    still/now, its letter, the crossing and the checks read only those two."""
+
+    @staticmethod
+    def subj_g(mark="B"):
+        # GE's class: 79.5 to 79.9 percent, which the dashboard rounds to a B.
+        for score in (x / 2 for x in range(60, 100)):
+            cls = ge_class("Subj G", [("Unit 1 Test", "Tests", 40, 50), ("Unit 2 Test", "Tests", score, 50),
+                                      ("HW 1", "Homework", 8, 10)])
+            if 79.5 <= cls["pct"] < 80:
+                cls["mark"] = mark
+                return cls
+        raise AssertionError("no 79.5-79.9 grade")
+
+    def stories(self, cls, prior):
+        doc, up = ge_doc([cls], {cls["name"]: prior})
+        return doc, [s["story"] for s in w.write_up(ScriptedModel({}), doc, None, 1, up)["stories"]]
+
+    def test_ge_repro_a_marked_a_to_b_marked_b_is_a_crossing_never_still(self):
+        cls = self.subj_g()
+        doc, stories = self.stories(cls, {"pct": 89.6, "mark": "A"})
+        move = next(f for f in doc["facts"] if f["kind"] == "grade_move")
+        self.assertEqual((move["prior_shown"], move["now_shown"]), ("A", "B"))
+        self.assertEqual(stories, ["Slipped to a B since Oct 14, down 10."])
+        # Last time's mark was already a B: the same move is "Still a B".
+        _doc, stories = self.stories(cls, {"pct": 89.6, "mark": "B"})
+        self.assertEqual(stories, ["Still a B, down 10 since Oct 14."])
+
+    def test_ge_repro_c_to_a_shown_b_gets_its_note(self):
+        cls = self.subj_g()
+        doc, stories = self.stories(cls, {"pct": 70.4, "mark": "C"})
+        move = next(f for f in doc["facts"] if f["kind"] == "grade_move")
+        self.assertEqual((move["prior_shown"], move["now_shown"]), ("C", "B"))
+        self.assertEqual(stories, ["Up to a B since Oct 14, up 9.2."])
+        # The checker takes the opener's letter from now_shown and the crossing from prior_shown != now_shown.
+        idx = w.fact_index([move])
+        self.assertIsNone(w.check_sentence(w.say_opening(w._say_fields(move)), [move["id"]], idx, "Subj G"))
+        self.assertIsNotNone(w.check_sentence("Up to an A since Oct 14, up 9.2.", [move["id"]], idx, "Subj G"))
+
+    def test_property_still_exactly_when_the_shown_letters_match_and_every_opener_gets_a_note(self):
+        rng = random.Random(60)
+        near = {"A": "AB", "B": "ABC", "C": "BCD", "D": "CDF", "F": "DF"}
+        checked = {"still": 0, "not_still": 0}
+        for n in range(400):
+            cls = ge_class(f"Subj {n}", [("Unit 1 Test", "Tests", rng.choice(range(20, 51)), 50),
+                                         ("Unit 2 Test", "Tests", rng.choice(range(20, 51)) / 1, 50),
+                                         ("HW 1", "Homework", rng.choice(range(4, 11)), 10)])
+            if rng.random() < 0.5:
+                cls["mark"] = rng.choice(near[insights.letter_for(cls["pct"])])
+            prior_pct = round(max(0.0, min(100.0, cls["pct"] + rng.choice((-12, -4, -1, -0.2, 0, 0.3, 2, 9)))), 1)
+            prior_mark = rng.choice(near[insights.letter_for(prior_pct)]) if rng.random() < 0.5 \
+                else insights.letter_for(prior_pct)
+            doc, up = ge_doc([cls], {cls["name"]: {"pct": prior_pct, "mark": prior_mark}})
+            stories = {s["class"]: s["story"] for s in w.write_up(ScriptedModel({}), doc, None, 1, up)["stories"]}
+            opening = w.opening_fact(w.facts_for(doc["facts"], cls["name"]))
+            if opening is None:
+                self.assertNotIn(cls["name"], stories, n)
+                continue
+            self.assertIn(cls["name"], stories, (n, opening))
+            prior, now = _shown(prior_pct, prior_mark), _shown(cls["pct"], cls["mark"])
+            self.assertEqual((opening["prior_shown"], opening["now_shown"]), (prior, now), n)
+            first = stories[cls["name"]].split(". ")[0]
+            self.assertEqual(first.startswith("Still "), prior == now, (n, first, prior, now))
+            self.assertRegex(first, rf"^(Still|Now|Slipped to|Up to) an? {now}\b", n)
+            checked["still" if prior == now else "not_still"] += 1
+        self.assertGreater(min(checked.values()), 30, checked)

@@ -125,6 +125,8 @@ class PercentOfGradeGoldenTests(unittest.TestCase):
             "explained": -6.6,
             "coverage": 1.0,
             "coverage_trimmed": False,
+            "prior_shown": "A",
+            "now_shown": "B",
         }])
 
     def test_distance_to_the_next_letter(self):
@@ -137,8 +139,9 @@ class PercentOfGradeGoldenTests(unittest.TestCase):
             "next_letter": "A",
             "threshold": 90.0,
             "gap": 4.8,
-            # An A yesterday: the letter changed, so the note never says "Still".
-            "still": False,
+            # An A yesterday: the shown letter changed, so the note never says "Still".
+            "prior_shown": "A",
+            "now_shown": "B",
         }])
 
     def test_what_if_says_no_single_next_assignment_reaches_an_a(self):
@@ -569,6 +572,8 @@ MAIN_BUSY_NIGHT = {False: 9_251, True: 22_332}
 KEEP_BUDGET_BYTES = 2_000
 # The follow-up's assumed-size keeps (typical_keeps) and one drag fact per class may add at most this.
 FOLLOWUP_BUDGET_BYTES = 2_500
+# Each letter and grade_move fact carries prior_shown and now_shown (#60): +168 bytes quiet, +518 with moves.
+SHOWN_BUDGET_BYTES = 700
 # busy_night(True, new=40), every score new: 30,355 bytes after the causes fold, 81,501 before it; the
 # follow-up's drag and typical keep facts add about 2.4 KB.
 EVERY_SCORE_NEW_BYTES = 33_500
@@ -579,7 +584,8 @@ class InsightFactsSizeTests(unittest.TestCase):
         for moves in (False, True):
             doc = busy_night(moves)
             size = insights.facts_size(doc)
-            self.assertLessEqual(size, MAIN_BUSY_NIGHT[moves] + KEEP_BUDGET_BYTES + FOLLOWUP_BUDGET_BYTES, moves)
+            self.assertLessEqual(size, MAIN_BUSY_NIGHT[moves] + KEEP_BUDGET_BYTES + FOLLOWUP_BUDGET_BYTES + SHOWN_BUDGET_BYTES,
+                                  moves)
             self.assertLessEqual(size, insights.FACTS_CAP_BYTES)
             self.assertNotIn("trimmed", doc)
             # keep_fact's one per class, plus one typical keep where its pick isn't a top-two bucket's.
@@ -1153,7 +1159,8 @@ class FollowupEngineTests(unittest.TestCase):
         facts = insights.class_facts(class_input("Art", A_TOTALS, A_ROWS, 96.4, "A"), [prior], prior, TODAY)
         self.assertEqual(by_kind(facts, "next_letter"), [])
         self.assertEqual(by_kind(facts, "current_letter"),
-                         [{"id": "letter:art", "kind": "current_letter", "class": "Art", "pct": 96.4, "letter": "A"}])
+                         [{"id": "letter:art", "kind": "current_letter", "class": "Art", "pct": 96.4, "letter": "A",
+                       "prior_shown": "A", "now_shown": "A"}])
         self.assertEqual(by_kind(facts, "what_if"), [])
         # Below an A there's a next letter and no current_letter.
         b = insights.class_facts(class_input("Biology", POG_TOTALS, POG_ROWS, 85.2, "B"), [], None, TODAY)
@@ -1175,11 +1182,12 @@ class FollowupEngineTests(unittest.TestCase):
             facts = insights.class_facts(class_input("Art", *one_test(now[0]), *now), [snap], snap, TODAY)
             self.assertEqual([f["kind"] for f in facts if f["kind"] in ("grade_move", "no_raise_math")], [])
             fact = next(f for f in facts if f["kind"] in ("next_letter", "current_letter"))
-            self.assertEqual(fact.get("still", True), still, (prior, now))
+            self.assertEqual((fact["prior_shown"], fact["now_shown"]), (prior[1], now[1]))
+            self.assertEqual(fact["prior_shown"] == fact["now_shown"], still, (prior, now))
         # No earlier letter to compare: not "still" either.
         fact = by_kind(insights.class_facts(class_input("Art", A_TOTALS, A_ROWS, 96.4, "A"), [], None, TODAY),
                        "current_letter")[0]
-        self.assertIs(fact["still"], False)
+        self.assertEqual((fact["prior_shown"], fact["now_shown"]), (None, "A"))
 
     def test_typical_keeps_are_the_two_heaviest_buckets_at_their_median_size(self):
         model = keep_model([("Labs", 20.0, [(9, 10), (8, 10)]), ("Tests", 50.0, [(40, 50), (45, 50), (30, 40)]),

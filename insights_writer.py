@@ -426,36 +426,62 @@ def _article(word):
     return fix_articles(f"a {word}").split(" ")[0]
 
 
-def say_opening(fact):
-    """The story's first sentence, built from one next_letter or grade_move fact, or None.
+_LETTERS = ("A", "B", "C", "D", "F")
 
-    current_letter (a class at an A): "Still an A."  next_letter: "Still a C, 0.5 points from a B."  grade_move: "Still an A, down 1.6 since Oct 14."
-    or, when the move crossed a letter, "Slipped to a C since Oct 14, down 1.6."
-    "Still" only when the letter the dashboard shows is the one it showed last time: a letter fact the engine
-    marks "still": False (the letter changed by less than a grade_move, or there's no earlier letter) opens
-    "Now a C, 0.1 points from a B." or "Now an A.", and a grade_move marked so says the crossing.
-    The letter named is the one the dashboard shows: a fact the engine marks "shown" (the Aeries mark's
-    letter isn't the percent's) names that letter, and a letter fact then states no gap, since the percent's
-    gap to the next letter isn't about the letter on the page ("Still an A." at 89.5 marked A).
+
+def shown_letters(fact):
+    """(prior_shown, now_shown) for a grade_move or letter fact: the letter the dashboard showed at the last
+    snapshot and the one it shows now (the Aeries mark's letter, else the percent's), as the engine computed
+    them once (class_facts). prior_shown is None when there's no earlier letter. Everything about the opener
+    (still or now, the letter named, a crossing) and the checks on it read only these two.
+
+    A fact built without them (no mark known) falls back to the percent's letters: a grade_move's from_pct
+    and to_pct, a letter fact's own letter, unchanged.
+    """
+    now = fact.get("now_shown")
+    if now not in _LETTERS:
+        now = fact.get("letter") if fact.get("kind") in ("next_letter", "current_letter") else (
+            insights.letter_for(fact["to_pct"]) if _number(fact.get("to_pct")) else None)
+    if "prior_shown" in fact:
+        prior = fact["prior_shown"] if fact["prior_shown"] in _LETTERS else None
+    elif fact.get("kind") == "grade_move":
+        prior = insights.letter_for(fact["from_pct"]) if _number(fact.get("from_pct")) else None
+    else:
+        prior = now
+    return prior, now
+
+
+def say_opening(fact):
+    """The story's first sentence, built from one next_letter, current_letter or grade_move fact, or None.
+
+    current_letter (a class at an A): "Still an A."  next_letter: "Still a C, 0.5 points from a B."
+    grade_move: "Still an A, down 1.6 since Oct 14.", or, when the shown letter changed, "Slipped to a C since
+    Oct 14, down 1.6." The letters are the fact's prior_shown and now_shown (shown_letters), nothing else:
+    "Still" exactly when they are equal, otherwise "Now a C, 0.1 points from a B." / "Now an A." or the
+    crossing into now_shown. The letter named is now_shown. When it isn't the percent's letter (the Aeries
+    mark differs), a letter fact states no gap, since the percent's gap isn't about the letter on the page
+    ("Still an A." at 89.5 marked A).
     """
     kind = fact.get("kind")
-    still = "Still" if fact.get("still", True) else "Now"
-    shown = fact.get("shown") if fact.get("shown") in ("A", "B", "C", "D", "F") else None
-    if kind in ("current_letter", "next_letter") and shown:
-        return f"{still} {_article(shown)} {shown}."
+    prior, now = shown_letters(fact)
+    if now is None:
+        return None
+    still = prior is not None and prior == now
+    lead = "Still" if still else "Now"
     if kind == "current_letter" and fact.get("letter"):
-        return f"{still} {_article(fact['letter'])} {fact['letter']}."
-    if kind == "next_letter" and fact.get("letter") and fact.get("next_letter") and isinstance(fact.get("gap"), (int, float)):
-        letter, nxt = fact["letter"], fact["next_letter"]
-        return f"{still} {_article(letter)} {letter}, {fact['gap']:g} points from {_article(nxt)} {nxt}."
-    if kind == "grade_move" and all(isinstance(fact.get(k), (int, float)) for k in ("from_pct", "to_pct", "delta")):
-        before, after = insights.letter_for(fact["from_pct"]), shown or insights.letter_for(fact["to_pct"])
+        return f"{lead} {_article(now)} {now}."
+    if kind == "next_letter" and fact.get("letter") and fact.get("next_letter") and _number(fact.get("gap")):
+        if now != fact["letter"]:
+            return f"{lead} {_article(now)} {now}."
+        nxt = fact["next_letter"]
+        return f"{lead} {_article(now)} {now}, {fact['gap']:g} points from {_article(nxt)} {nxt}."
+    if kind == "grade_move" and all(_number(fact.get(k)) for k in ("from_pct", "to_pct", "delta")):
         way = "down" if fact["delta"] < 0 else "up"
         since = f" since {fact['since_label']}" if fact.get("since_label") else ""
-        if fact.get("still", before == after):
-            return f"Still {_article(after)} {after}, {way} {abs(fact['delta']):g}{since}."
+        if still:
+            return f"Still {_article(now)} {now}, {way} {abs(fact['delta']):g}{since}."
         verb = "Slipped" if fact["delta"] < 0 else "Up"
-        return f"{verb} to {_article(after)} {after}{since}, {way} {abs(fact['delta']):g}."
+        return f"{verb} to {_article(now)} {now}{since}, {way} {abs(fact['delta']):g}."
     return None
 
 
@@ -858,6 +884,8 @@ def _numbers_of(fact, role="general"):
 
 def _letters_of(fact):
     letters = {fact.get("letter"), fact.get("next_letter")}
+    if fact.get("kind") in ("next_letter", "current_letter", "grade_move"):
+        letters.update(shown_letters(fact))
     for key in ("from_pct", "to_pct", "pct", "target", "threshold"):
         if isinstance(fact.get(key), (int, float)):
             letters.add(insights.letter_for(fact[key]))
@@ -1217,10 +1245,8 @@ def _current_letters(index, cited):
     for fact in index.values():
         if fact.get("class") not in classes or fact.get("move"):
             continue
-        if fact.get("kind") in ("next_letter", "current_letter") and fact.get("letter"):
-            out.add(fact["letter"])
-        elif fact.get("kind") == "grade_move" and isinstance(fact.get("to_pct"), (int, float)):
-            out.add(insights.letter_for(fact["to_pct"]))
+        if fact.get("kind") in ("next_letter", "current_letter", "grade_move"):
+            out.add(shown_letters(fact)[1])
     return out
 
 
@@ -1556,14 +1582,11 @@ def _claims_reason(text, cited, index, slotted=None):
         if _class_at_a(index, cited):
             return "claims a next letter for a class at an A"
     if _BACK_RE.search(bare) and said:
-        held = {insights.letter_for(m["from_pct"]) for m in _class_moves(index, cited)
-                if insights.letter_for(m["from_pct"]) != insights.letter_for(m.get("to_pct", m["from_pct"]))}
+        held = {prior for prior, now in map(shown_letters, _class_moves(index, cited)) if prior and prior != now}
         if not set(said) & held:
             return "says back to or again with a letter no move shows the class held"
     for match in _LETTER_MOVE_RE.finditer(bare):
-        crossed = {insights.letter_for(m["to_pct"]) for m in moves
-                   if isinstance(m.get("to_pct"), (int, float)) and isinstance(m.get("from_pct"), (int, float))
-                   and insights.letter_for(m["from_pct"]) != insights.letter_for(m["to_pct"])}
+        crossed = {now for prior, now in map(shown_letters, moves) if prior and now and prior != now}
         if match.group(1) not in crossed:
             return f"says the class moved to {match.group(1)} but no move crossed into that letter"
     for match in _NUMBER_RE.finditer(bare):
