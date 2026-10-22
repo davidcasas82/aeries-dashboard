@@ -12,6 +12,7 @@ import os
 import plistlib
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
@@ -21,7 +22,8 @@ from zoneinfo import ZoneInfo
 
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
-FRESHNESS_URL = "https://family-data.davidcasas.workers.dev/v1/grades/freshness"
+FAMILY_DATA_URL = "https://family-data.davidcasas.workers.dev"
+FRESHNESS_URL = f"{FAMILY_DATA_URL}/v1/grades/freshness"
 EVENING_HOUR = 19
 USER_AGENT = "grade-insights-runner/1"
 SUNDAY = 6
@@ -223,6 +225,78 @@ def keychain_secret(service, account):
 def parent_pin():
     """The parent PIN from the login Keychain. Nothing calls this yet."""
     return keychain_secret(PIN_KEYCHAIN_SERVICE, PIN_KEYCHAIN_ACCOUNT)
+
+
+class FamilyDataError(RuntimeError):
+    """Carries the status and path only, never a PIN or token."""
+
+
+class ReadOnlyFamilyData:
+    """The runner's only family-data client for the PIN session. GET-only by construction.
+
+    The Keychain PIN is the family PIN, so its session has the write role. This client can
+    send exactly one non-GET, the unlock POST, and has no put, post, patch or delete methods.
+    Publishing (PR5) uses the separate AERIES_INSIGHTS_SECRET bearer, never this session.
+    """
+
+    UNLOCK_PATH = "/auth/unlock"
+
+    def __init__(self, pin=parent_pin, base=FAMILY_DATA_URL, opener=None):
+        self._pin = pin
+        self._base = base.rstrip("/")
+        self._open = opener or _open_request
+        self._token = None
+
+    def latest_grades(self):
+        return self._get("/v1/grades/latest")
+
+    def scored_log(self):
+        return self._get("/v1/docs/aeries/scored-log")
+
+    def _get(self, path):
+        if not path.startswith("/v1/"):
+            raise FamilyDataError(f"refusing path {path!r}")
+        for attempt in (0, 1):
+            if self._token is None:
+                self._unlock()
+            status, body = self._send("GET", path, {"Authorization": f"Bearer {self._token}"})
+            if status == 401 and attempt == 0:
+                self._token = None
+                continue
+            if status != 200:
+                raise FamilyDataError(f"GET {path} returned {status}")
+            return json.loads(body.decode("utf-8")) if body else {}
+        raise FamilyDataError(f"GET {path} returned 401 twice")
+
+    def _unlock(self):
+        payload = json.dumps({"pin": self._pin(), "keepUnlocked": False}).encode("utf-8")
+        status, body = self._send("POST", self.UNLOCK_PATH, {"Content-Type": "application/json"}, payload)
+        if status != 200:
+            raise FamilyDataError(f"unlock returned {status}")
+        token = (json.loads(body.decode("utf-8")) if body else {}).get("token")
+        if not token:
+            raise FamilyDataError("unlock returned no token")
+        self._token = token
+
+    def _send(self, method, path, headers, data=None):
+        if method != "GET" and (method, path) != ("POST", self.UNLOCK_PATH):
+            raise FamilyDataError(f"read-only client refuses {method} {path}")
+        request = urllib.request.Request(
+            self._base + path,
+            data=data,
+            method=method,
+            headers={"User-Agent": USER_AGENT, "Accept": "application/json", **headers},
+        )
+        return self._open(request)
+
+
+def _open_request(request):
+    """(status, body bytes). An HTTP error status comes back as a status, not an exception."""
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as err:
+        return err.code, b""
 
 
 def model_dir(ssd_path):
