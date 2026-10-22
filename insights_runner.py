@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 PACIFIC = ZoneInfo("America/Los_Angeles")
 FRESHNESS_URL = "https://family-data.davidcasas.workers.dev/v1/grades/freshness"
 EVENING_HOUR = 19
+USER_AGENT = "grade-insights-runner/1"
 SUNDAY = 6
 
 # Hard stops: (weekdays or None for every day, start, end). The runner never works inside one.
@@ -181,7 +182,9 @@ def tick(state, work, machine, log=print):
 
 def read_freshness(url=FRESHNESS_URL):
     """Stdlib only, so the runner works under the SSD venv (which has no requests)."""
-    with urllib.request.urlopen(url, timeout=20) as response:
+    # Cloudflare answers 403 to urllib's default User-Agent.
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+    with urllib.request.urlopen(request, timeout=20) as response:
         return json.loads(response.read().decode("utf-8"))["updatedAt"]
 
 

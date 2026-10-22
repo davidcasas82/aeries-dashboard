@@ -230,7 +230,9 @@ class FreshnessTests(unittest.TestCase):
         body = io.BytesIO(b'{"ok": true, "updatedAt": "2026-10-22T03:08:36Z"}')
         with mock.patch.object(runner.urllib.request, "urlopen", return_value=body) as urlopen:
             self.assertEqual(runner.read_freshness(), "2026-10-22T03:08:36Z")
-        self.assertEqual(urlopen.call_args.args[0], runner.FRESHNESS_URL)
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, runner.FRESHNESS_URL)
+        self.assertEqual(request.get_header("User-agent"), "grade-insights-runner/1")
 
 
 class SsdMountTests(unittest.TestCase):
