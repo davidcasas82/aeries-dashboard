@@ -371,7 +371,10 @@ class ClassContextTests(unittest.TestCase):
         ticket = next(e for e in ctx["classroom_only"] if e["title"] == "Exit Ticket")
         self.assertEqual(ticket["state"], "TURNED_IN")
         self.assertEqual(ticket["turned_in_on"], "2026-09-14")
-        upcoming = [e["title"] for e in classroom.grok_context(ctx)["classroom_only_upcoming"]]
+        upcoming = [
+            e["title"] for e in ctx["classroom_only"]
+            if (e.get("state") or "").upper() not in classroom.TURNED_IN_STATES
+        ]
         self.assertIn("Unit 3 Quiz Review", upcoming)
         self.assertNotIn("Exit Ticket", upcoming)
         self.assertNotIn("Exit Ticket", [p["description"] for p in classroom.pseudo_assignments(ctx)])
@@ -380,12 +383,13 @@ class ClassContextTests(unittest.TestCase):
         bio = self.student["classes"][2]
         self.assertIsNone(classroom.class_context(self.student, bio, TODAY, assignments=[]))
 
-    def test_grok_context_has_no_links(self):
+    def test_class_context_flags_turned_in_but_aeries_missing(self):
         ctx = classroom.class_context(self.student, self.alg, TODAY, assignments=self.alg_rows)
-        g = classroom.grok_context(ctx)
-        self.assertNotIn("http", json.dumps(g))
-        self.assertEqual(g["turned_in_on_classroom_but_aeries_missing"], ["Section 3.2 Practice"])
-        self.assertEqual(g["classroom_only_upcoming"][0]["title"], "Unit 3 Quiz Review")
+        self.assertEqual(
+            [e.get("title") for e in ctx["turned_in_aeries_missing"]], ["Section 3.2 Practice"]
+        )
+        self.assertEqual(ctx["classroom_only"][0]["title"], "Unit 3 Quiz Review")
+        self.assertFalse(hasattr(classroom, "grok_context"))
 
 
 FIXTURE_V2 = Path(__file__).parent / "fixtures" / "classroom_export_v2_sample.json"
@@ -528,7 +532,7 @@ class ExportV2ShapeTests(unittest.TestCase):
         self.assertNotIn("url", stamp.get("materials", [{}])[0])
         self.assertIn("alternate interior", stamp["instructions"])
 
-    def test_class_context_and_grok_see_rubric_and_teachers(self):
+    def test_class_context_sees_rubric_and_teachers(self):
         geo_meta = self.student["classes"][0]
         rows = scraper.assignments_for_class(self.student, geo_meta)
         ctx = classroom.class_context(self.student, geo_meta, TODAY, assignments=rows)
@@ -537,10 +541,6 @@ class ExportV2ShapeTests(unittest.TestCase):
         self.assertEqual(upcoming["days_until_due"], 1)
         self.assertEqual(upcoming["grade_category"], "Practice")
         self.assertEqual([c["title"] for c in upcoming["rubric"]], ["Angle pairs named", "Work shown"])
-        g = classroom.grok_context(ctx)
-        first = g["classroom_only_upcoming"][0]
-        self.assertEqual(first["rubric_criteria"], ["Angle pairs named", "Work shown"])
-        self.assertNotIn("http", json.dumps(g))
 
     def test_no_student_name_anywhere_in_v2_payload(self):
         dumped = json.dumps(self.student)
@@ -585,8 +585,7 @@ class ScraperIntegrationTests(unittest.TestCase):
         with p1, p2:
             analytics = scraper.build_class_analytics(self.student)
         alg = next(c for c in analytics["classes"] if c["period"] == 5)
-        self.assertIn("classroom", alg)
-        self.assertEqual(alg["classroom"]["turned_in_on_classroom_but_aeries_missing"], ["Section 3.2 Practice"])
+        self.assertNotIn("classroom", alg)  # the compact Grok copy is retired
         quiz = next(u for u in alg["upcoming"] if u["name"] == "Unit 3 Quiz Review")
         self.assertEqual(quiz["source"], "classroom")
         self.assertEqual(quiz["days_until_due"], 1)
@@ -614,7 +613,7 @@ class ScraperIntegrationTests(unittest.TestCase):
         names = [i["name"] for i in analytics["tonight_plan"]["items"]]
         self.assertEqual(names[0], "3.2 Practice")
         alg = next(c for c in analytics["classes"] if c["period"] == 5)
-        self.assertEqual(alg["classroom"]["turned_in_on_classroom_but_aeries_missing"], [])
+        self.assertFalse(alg["missing_assignments"][0].get("turned_in_classroom"))
 
     def test_view_exposes_classroom_block_per_class(self):
         p1, p2 = self._patched()

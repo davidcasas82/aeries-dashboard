@@ -3,10 +3,6 @@ name: Daily Grade Scrape
 on:
   workflow_dispatch:
     inputs:
-      grok_only:
-        description: 'Regenerate AI briefings only (skip Aeries scrape)'
-        type: boolean
-        default: false
       probe_attendance:
         description: 'Debug: dump Attendance page structure only'
         type: boolean
@@ -20,7 +16,7 @@ on:
         type: boolean
         default: false
       attendance_only:
-        description: 'Refresh absences/tardies only (no grades/Grok)'
+        description: 'Refresh absences/tardies only (no grades)'
         type: boolean
         default: false
 
@@ -58,7 +54,6 @@ jobs:
           STUDENT_2_SN: ${{ secrets.STUDENT_2_SN }}
           STUDENT_2_NAME: ${{ secrets.STUDENT_2_NAME }}
           STUDENT_2_SCHOOL_CODE: ${{ secrets.STUDENT_2_SCHOOL_CODE }}
-          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
           FAMILY_PIN: ${{ secrets.FAMILY_PIN }}
           # Read-only Drive access to the kids' classroom_export.json (see docs/proactive-study-plan.md)
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
@@ -66,7 +61,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
           # Optional override only. Leave unset to auto-pause from TUSD school calendar
           # (school_calendar.json / live calendars-school-year page).
-          # true = force pause Aeries + Grok; false = force scrape even in summer
+          # true = force pause Aeries; false = force scrape even in summer
           SUMMER_BREAK: ${{ vars.SUMMER_BREAK }}
         run: |
           if [ "${{ inputs.probe_attendance }}" = "true" ]; then
@@ -77,8 +72,6 @@ jobs:
             python scraper.py --probe-gradebook
           elif [ "${{ inputs.attendance_only }}" = "true" ]; then
             python scraper.py --attendance-only
-          elif [ "${{ inputs.grok_only }}" = "true" ]; then
-            python scraper.py --grok-only
           else
             python scraper.py
           fi

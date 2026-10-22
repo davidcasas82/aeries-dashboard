@@ -397,249 +397,6 @@
         .dashboard { display: none; }
         .dashboard.active { display: block; }
 
-        /* ── Masthead ── */
-        .masthead {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 18px 20px 16px;
-            margin-bottom: 14px;
-            box-shadow: var(--shadow-card);
-        }
-
-        .masthead-kicker {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 6px;
-        }
-
-        .masthead-kicker h2 {
-            font-size: var(--fs-label);
-            font-weight: 650;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            color: var(--text-3);
-        }
-
-        .masthead-date {
-            font-size: var(--fs-small);
-            color: var(--text-3);
-        }
-
-        .masthead-headline {
-            font-size: var(--fs-headline);
-            font-weight: 650;
-            line-height: 1.25;
-            letter-spacing: -0.35px;
-            color: var(--text);
-            max-width: 32em;
-        }
-
-        .masthead-headline.muted {
-            color: var(--text-2);
-            font-weight: 500;
-        }
-
-        .masthead-tonight {
-            margin-top: 12px;
-            padding: 14px 16px;
-            border-left: 4px solid var(--amber);
-            background: var(--amber-soft);
-            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-        }
-
-        .masthead-tonight .label {
-            font-size: var(--fs-label);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            color: var(--amber);
-            margin-bottom: 4px;
-        }
-
-        .masthead-tonight .text {
-            font-size: calc(var(--fs-body) + 2px);
-            font-weight: 600;
-            line-height: 1.35;
-            color: var(--text);
-        }
-
-        .tonight-list {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .tonight-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            width: 100%;
-            min-height: 48px;
-            padding: 6px 4px 6px 0;
-            border: none;
-            background: none;
-            cursor: pointer;
-            text-align: left;
-            color: inherit;
-            font: inherit;
-            border-radius: 8px;
-        }
-
-        .tonight-item:hover .tonight-item-name { text-decoration: underline; }
-
-        .tonight-item-main { min-width: 0; }
-
-        .tonight-item-name {
-            display: block;
-            font-size: calc(var(--fs-body) + 2px);
-            font-weight: 600;
-            line-height: 1.3;
-            color: var(--text);
-        }
-
-        .tonight-item-sub {
-            display: block;
-            font-size: var(--fs-small);
-            color: var(--text-2);
-            margin-top: 2px;
-            line-height: 1.3;
-        }
-
-        .tonight-item-sub .status { font-weight: 650; }
-        .tonight-item-sub .status.overdue { color: var(--red); }
-        .tonight-item-sub .status.today { color: var(--amber); }
-        .tonight-item-sub .status.tomorrow { color: var(--teal); }
-
-        .tonight-item .row-chevron {
-            margin-left: 0;
-            transform: rotate(-90deg);
-        }
-
-        .masthead-wins {
-            margin-top: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .win-line {
-            font-size: var(--fs-meta);
-            color: var(--teal);
-            line-height: 1.35;
-            padding-left: 18px;
-            position: relative;
-        }
-
-        .win-line::before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            font-weight: 700;
-            font-size: var(--fs-label);
-            top: 1px;
-            color: var(--green);
-        }
-
-        .masthead-stats {
-            margin-top: 12px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .masthead-stat {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 7px;
-            min-height: 44px;
-            padding: 0 16px;
-            background: var(--surface-2);
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            box-shadow: var(--shadow-sm);
-            font-size: var(--fs-small);
-            line-height: 1;
-            color: var(--text-2);
-        }
-
-        .masthead-stat .stat-num {
-            font-size: 1.2em;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            color: var(--text);
-            letter-spacing: -0.02em;
-            line-height: 1;
-        }
-
-        .masthead-stat .stat-lbl {
-            line-height: 1;
-            font-weight: 500;
-        }
-
-        .masthead-stat-text {
-            font-weight: 600;
-            color: var(--text);
-        }
-
-        .masthead-stat.warn .stat-num { color: var(--amber); }
-        .masthead-stat.alert .stat-num { color: var(--red); }
-        .masthead-stat.ok .stat-num { color: var(--teal); }
-
-        .masthead-movers {
-            margin-top: 14px;
-            padding-top: 12px;
-            border-top: 1px solid var(--border);
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px 12px;
-            align-items: center;
-        }
-
-        .movers-label {
-            font-size: var(--fs-label);
-            font-weight: 650;
-            letter-spacing: 0.03em;
-            text-transform: uppercase;
-            color: var(--text-3);
-            margin-right: 2px;
-        }
-
-        .mover {
-            display: inline-flex;
-            align-items: baseline;
-            gap: 5px;
-            font-size: var(--fs-small);
-            color: var(--text-2);
-            max-width: 100%;
-        }
-
-        .mover .name {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            max-width: 10em;
-        }
-
-        .mover .delta {
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .mover.up .delta { color: var(--teal); }
-        .mover.down .delta { color: var(--red); }
-        .mover.same .delta { color: var(--text-3); }
-
-        .mover .win {
-            font-size: var(--fs-label);
-            color: var(--text-3);
-        }
-
         /* ── Feed ── */
         .feed-header {
             display: flex;
@@ -997,13 +754,6 @@
             border-color: rgba(166, 124, 26, 0.18);
         }
 
-        .panel-story {
-            font-size: var(--fs-meta);
-            color: var(--text-2);
-            line-height: 1.45;
-            max-width: 60ch;
-        }
-
         .panel-collapse {
             display: flex;
             align-items: center;
@@ -1336,7 +1086,7 @@
             box-shadow: var(--shadow-sm);
         }
 
-        /* Keep masthead + attendance visible; only hide tonight sticky in summer */
+        /* Only hide tonight sticky in summer */
         body.summer-break .tonight-sticky {
             display: none !important;
         }
@@ -1494,41 +1244,6 @@
                 --fs-small: 16px;
                 --fs-label: 14px;
                 --content-max: min(1680px, calc(100vw - 24px));
-            }
-
-            .masthead:has(.masthead-tonight) {
-                display: grid;
-                grid-template-columns: 1fr minmax(280px, 40%);
-                column-gap: 24px;
-                row-gap: 8px;
-                align-items: start;
-            }
-
-            .masthead:has(.masthead-tonight) .masthead-kicker {
-                grid-column: 1 / -1;
-                margin-bottom: 0;
-            }
-
-            .masthead:has(.masthead-tonight) .masthead-headline {
-                grid-column: 1;
-            }
-
-            .masthead:has(.masthead-tonight) .masthead-tonight {
-                grid-column: 2;
-                grid-row: 2 / span 4;
-                margin-top: 0;
-                align-self: stretch;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                padding: 18px 20px;
-            }
-
-            .masthead:has(.masthead-tonight) .masthead-wins,
-            .masthead:has(.masthead-tonight) .masthead-stats,
-            .masthead:has(.masthead-tonight) .masthead-movers {
-                grid-column: 1;
-                margin-top: 6px;
             }
         }
 
@@ -2060,8 +1775,6 @@
         .glance-empty strong { display: block; margin-bottom: 4px; font-size: var(--g-fs-action); letter-spacing: -.02em; }
         .glance-empty span { color: var(--g-muted); font-size: var(--g-fs-sub); }
         body.glance-home .tonight-sticky { display: none !important; }
-        body.glance-home .masthead,
-        body.glance-home .masthead-headline { display: none !important; }
 
         .glance-scrim {
             position: fixed;
@@ -2902,11 +2615,8 @@
         function normalizeAiClass(ai) {
             if (!ai) return null;
             const snap = (ai.snap || ai.urgency_reason || '').trim();
-            const story = (ai.story || '').trim()
-                || (ai.status || '').trim()
-                || [ai.going_well, ai.going_wrong].filter(Boolean).join(' ').trim();
             const doTonight = (ai.do_tonight || ai.student_action || '').trim();
-            return { ...ai, snap, story, do_tonight: doTonight };
+            return { ...ai, snap, do_tonight: doTonight };
         }
 
         function formatTrendDelta(delta) {
@@ -3330,28 +3040,6 @@
             return profiles;
         }
 
-        function findAiClass(student, courseName) {
-            const classes = student.ai_summary?.classes;
-            if (!classes) return null;
-            const cn = normalizeName(courseName);
-            // Exact normalized name first; containment only when no class matches exactly.
-            const exact = cn ? classes.find(cls => normalizeName(cls.class_name) === cn) : null;
-            if (exact) return exact;
-            let best = null;
-            let bestLen = 0;
-            for (const cls of classes) {
-                const an = normalizeName(cls.class_name);
-                if (!an) continue;
-                if (cn.includes(an) || an.includes(cn)) {
-                    if (an.length > bestLen) {
-                        best = cls;
-                        bestLen = an.length;
-                    }
-                }
-            }
-            return best;
-        }
-
         function formatClassesCount(focusCount, total) {
             const parts = [];
             if (focusCount > 0) {
@@ -3387,16 +3075,6 @@
             const mark = (c && c.mark || '').trim();
             const pct = parseFloat(c && c.percent);
             return !mark && !isNaN(pct) && pct === 0 && !hasRealGrade(c, assignments);
-        }
-
-        function assignmentsForClassMeta(student, c) {
-            for (const ca of (student && student.assignments_by_class) || []) {
-                if (ca.period != null && c && ca.period === c.period) return ca.assignments || [];
-                const cn = normalizeName(c && c.course_name);
-                const gn = normalizeName(ca.class_name);
-                if (cn && gn && (cn.includes(gn) || gn.includes(cn))) return ca.assignments || [];
-            }
-            return [];
         }
 
         function formatScorePair(earned, possible) {
@@ -3520,130 +3198,6 @@
             return out;
         }
 
-        function pickTonightItems(profiles) {
-            // Due today, then Aeries-flagged missing, then due tomorrow. Turned-in work never appears.
-            const dueToday = [];
-            const missing = [];
-            const dueTomorrow = [];
-            for (const p of profiles || []) {
-                const className = (p.classMeta && p.classMeta.course_name) || '';
-                const item = (a, status) => ({ name: a.description, className, period: p.period, status, dueDate: a.due_date });
-                for (const a of p.upcoming || []) {
-                    if (!a.description) continue;
-                    if (isDueTodayUngraded(a)) dueToday.push(item(a, 'today'));
-                    else if (isDueInDaysUngraded(a, 1)) dueTomorrow.push(item(a, 'tomorrow'));
-                }
-                for (const a of p.missing || []) {
-                    if (a.description && !isTurnedIn(a)) missing.push(item(a, 'overdue'));
-                }
-            }
-            const seen = new Set();
-            const items = [];
-            for (const item of dueToday.concat(missing, dueTomorrow)) {
-                const key = `${normalizeName(item.className)}|${(item.name || '').toLowerCase()}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                items.push(item);
-                if (items.length >= 3) break;
-            }
-            return items;
-        }
-
-        function mergeTonightItems(primary, extra) {
-            const seen = new Set();
-            const out = [];
-            for (const item of (primary || []).concat(extra || [])) {
-                if (!item || !item.name) continue;
-                const key = `${normalizeName(item.className)}|${item.name.toLowerCase()}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                out.push(item);
-                if (out.length >= 3) break;
-            }
-            return out;
-        }
-
-        function formatTonightLabel(items) {
-            return (items || []).map(i => `${i.name} (${i.className})`).join('; ');
-        }
-
-        function tonightItemStatus(item) {
-            if (item.status === 'overdue') {
-                const due = parseDate(item.dueDate);
-                return { cls: 'overdue', text: due ? `overdue since ${formatShortDate(due)}` : 'overdue' };
-            }
-            if (item.status === 'today') return { cls: 'today', text: 'due today' };
-            if (item.status === 'tomorrow') return { cls: 'tomorrow', text: 'due tomorrow' };
-            return { cls: '', text: '' };
-        }
-
-        function tonightStatusFromReason(reason) {
-            return { due_today: 'today', missing: 'overdue', due_tomorrow: 'tomorrow' }[reason] || '';
-        }
-
-        // Fill in period/status for server-provided tonight rows by matching against the profiles.
-        function resolveTonightItems(items, profiles) {
-            const out = [];
-            for (const item of items || []) {
-                const row = { ...item };
-                let hit = null;
-                let hitProfile = null;
-                for (const p of profiles || []) {
-                    const cn = (p.classMeta && p.classMeta.course_name) || '';
-                    if (item.className && normalizeName(cn) !== normalizeName(item.className)) continue;
-                    // Classroom-only work has no Aeries row; it still belongs to this class's panel.
-                    if (item.source === 'classroom' && row.period == null) row.period = p.period;
-                    hit = (p.assignments || []).find(a => a.description === item.name);
-                    if (!hit) continue;
-                    hitProfile = p;
-                    if (row.period == null) row.period = p.period;
-                    if (!row.dueDate) row.dueDate = hit.due_date;
-                    break;
-                }
-                if (hit) {
-                    // Work Aeries shows as handed in or already scored is not a to-do, whatever the payload said.
-                    if (isTurnedIn(hit) || assignmentHasScoreMark(hit)) continue;
-                    const flagged = (hitProfile.missing || []).includes(hit);
-                    // Past due but not flagged missing is "awaiting score" — not something to do tonight.
-                    if (isPastDueUngraded(hit) && !flagged) continue;
-                    // Re-derive the status from the row itself rather than trusting a stored reason.
-                    row.status = flagged ? 'overdue'
-                        : (isDueTodayUngraded(hit) ? 'today' : (isDueInDaysUngraded(hit, 1) ? 'tomorrow' : row.status || ''));
-                    if (!row.status) continue;
-                }
-                out.push(row);
-            }
-            return out;
-        }
-
-        function renderTonightCard(items, idx) {
-            const chevron = `<svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
-            const rows = items.map(item => {
-                const st = tonightItemStatus(item);
-                const sub = [
-                    st.text ? `<span class="status ${st.cls}">${esc(st.text)}</span>` : '',
-                    item.className ? esc(item.className) : '',
-                    item.source === 'classroom' ? 'posted in Classroom' : '',
-                ].filter(Boolean).join(' · ');
-                const linkable = item.period != null;
-                const tag = linkable ? 'button' : 'div';
-                const attrs = linkable
-                    ? ` type="button" data-jump-student="${idx}" data-jump-period="${item.period}" aria-label="${esc(item.name)} — open ${esc(item.className || 'class')}"`
-                    : '';
-                return `<li><${tag} class="tonight-item"${attrs}>
-                    <span class="tonight-item-main">
-                        <span class="tonight-item-name">${esc(item.name)}</span>
-                        ${sub ? `<span class="tonight-item-sub">${sub}</span>` : ''}
-                    </span>
-                    ${linkable ? chevron : ''}
-                </${tag}></li>`;
-            }).join('');
-            return `<div class="masthead-tonight" id="focus-card-${idx}">
-                <div class="label">Heads up</div>
-                <ul class="tonight-list">${rows}</ul>
-            </div>`;
-        }
-
         function liveDoTonight(profile) {
             const dueToday = (profile.upcoming || []).find(isDueTodayUngraded);
             if (dueToday && dueToday.description) return dueToday.description;
@@ -3711,7 +3265,7 @@
             return '';
         }
 
-        // Apply the truth rules (urgency, snap/story rewrites, heads-up pick) to a base profile.
+        // Apply the truth rules (urgency, snap rewrites, heads-up pick) to a base profile.
         // Used for both the raw-assignment path and the server view payload, so neither path
         // can show copy the current rules would not produce.
         function enrichProfile(p, aiClass) {
@@ -3722,13 +3276,11 @@
                 const fallback = inferUrgencyReason(p, urgency) || '';
                 snap = rewriteStaleCopy(fallback, p) || fallback;
             }
-            const story = rewriteStaleCopy((aiClass?.story || '').trim(), p);
             return {
                 ...p,
-                aiClass: aiClass ? { ...aiClass, snap, story } : aiClass,
+                aiClass: aiClass ? { ...aiClass, snap } : aiClass,
                 urgency,
                 snap,
-                story,
                 liveDoTonight: liveDoTonight(p),
                 urgencyRank: urgencyToRank(urgency),
             };
@@ -3749,10 +3301,7 @@
         }
 
         function enrichProfiles(student, profiles) {
-            return profiles.map(p => {
-                const rawAi = findAiClass(student, p.classMeta.course_name);
-                return enrichProfile(p, normalizeAiClass(rawAi));
-            }).sort((a, b) => a.period - b.period);
+            return profiles.map(p => enrichProfile(p, null)).sort((a, b) => a.period - b.period);
         }
 
         function formatGradeDisplay(c, assignments) {
@@ -3771,247 +3320,12 @@
             return { letter: '—', pct: '' };
         }
 
-        function renderMovers(student) {
-            const summary = (student.trend_summary || []).filter(t => {
-                if (t.delta == null || t.delta === 0) return false;
-                return !isFirstPostedGradeDelta(findClassTrend(student, t.class_name), t.delta);
-            });
-            if (!summary.length) return '';
-            const items = summary.slice(0, 4).map(t => {
-                const dir = t.direction || (t.delta > 0 ? 'up' : (t.delta < 0 ? 'down' : 'same'));
-                const deltaStr = formatTrendDelta(t.delta);
-                return `<span class="mover ${dir}">
-                    <span class="name">${esc(t.class_name || '')}</span>
-                    <span class="delta">${deltaStr}</span>
-                    <span class="win">${t.window || ''}</span>
-                </span>`;
-            }).join('');
-            return `<div class="masthead-movers">
-                <span class="movers-label">Trend</span>
-                ${items}
-            </div>`;
-        }
-
-        function renderAttendanceStats(student) {
-            const a = student.attendance;
-            if (!a || a.parse_failed) return '';
-            const chips = [];
-            const notStarted = !!(a.not_started || ((a.days_enrolled == null || a.days_enrolled === 0) && a.absences === 0 && a.tardies === 0));
-            const plural = (n, one, many) => (n === 1 ? one : many);
-            if (a.absences != null) {
-                const cls = a.absences >= 5 ? 'alert' : (a.absences > 0 ? 'warn' : 'ok');
-                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.absences}</span><span class="stat-lbl">${plural(a.absences, 'absence', 'absences')}</span></span>`);
-            }
-            if (a.tardies != null) {
-                const cls = a.tardies >= 5 ? 'alert' : (a.tardies > 0 ? 'warn' : 'ok');
-                chips.push(`<span class="masthead-stat ${cls}"><span class="stat-num">${a.tardies}</span><span class="stat-lbl">${plural(a.tardies, 'tardy', 'tardies')}</span></span>`);
-            }
-            if (a.unexcused != null && a.unexcused > 0) {
-                chips.push(`<span class="masthead-stat alert"><span class="stat-num">${a.unexcused}</span><span class="stat-lbl">unexcused</span></span>`);
-            }
-            if (a.days_present != null && a.days_enrolled != null && a.days_enrolled > 0) {
-                chips.push(`<span class="masthead-stat ok"><span class="stat-num">${a.days_present}/${a.days_enrolled}</span><span class="stat-lbl">present</span></span>`);
-            } else if (notStarted) {
-                chips.push(`<span class="masthead-stat ok masthead-stat-text">year not started</span>`);
-            }
-            if (a.year) {
-                // Normalize 2025-2026 → “2025–26 school year”
-                let yearLabel = String(a.year);
-                const ym = yearLabel.match(/^(20\d{2})-20(\d{2})$/);
-                if (ym) yearLabel = `${ym[1]}–${ym[2]} school year`;
-                chips.push(`<span class="masthead-stat masthead-stat-text">${yearLabel}</span>`);
-            }
-            if (!chips.length) return '';
-            return `<div class="masthead-stats">${chips.join('')}</div>`;
-        }
-
-        function hasGradedClasses(student) {
-            return (student.classes || []).some(c => hasRealGrade(c, assignmentsForClassMeta(student, c)));
-        }
-
         function hasScheduledClasses(student) {
             return (student.classes || []).some(c => (c.course_name || '').trim());
         }
 
-        function hasPostedWork(student) {
-            if (hasGradedClasses(student)) return true;
-            if ((student.assignments_by_class || []).some(ca => (ca.assignments || []).length)) return true;
-            const ai = student.ai_summary;
-            if (ai && ((ai.focus_tonight || '').trim() || (ai.classes || []).length)) return true;
-            return false;
-        }
-
         function isSummerMode() {
             return !!(currentData && currentData.summer_break) || document.body.classList.contains('summer-break');
-        }
-
-        function isScheduleOnly(student) {
-            return hasScheduledClasses(student) && !hasPostedWork(student);
-        }
-
-        function renderMasthead(student, idx, profiles) {
-            const s = student.ai_summary;
-            const scheduleOnly = isScheduleOnly(student);
-            const emptyTerm = !hasScheduledClasses(student);
-            const summer = isSummerMode() && emptyTerm;
-            const viewTonight = (!summer && !scheduleOnly && student.view && Array.isArray(student.view.tonight))
-                ? student.view.tonight.map(i => ({
-                    name: i.name,
-                    className: i.class_name || i.className,
-                    period: i.period,
-                    status: i.status || tonightStatusFromReason(i.reason),
-                    dueDate: i.due_date,
-                    source: i.source || '',
-                }))
-                : null;
-            // The live pick from the (already rule-checked) profiles is the source of truth; payload
-            // rows only supplement it, and go through the same guards so stale ones drop out.
-            const tonightItems = (!summer && !scheduleOnly)
-                ? mergeTonightItems(
-                    pickTonightItems(profiles || []),
-                    resolveTonightItems(viewTonight || [], profiles),
-                )
-                : [];
-            // Build the label from the resolved items so a dropped (turned-in) item can't linger in it.
-            const focus = formatTonightLabel(tonightItems);
-            studentFocusMap[idx] = focus;
-            studentTonightMap[idx] = tonightItems;
-            const attendanceHtml = renderAttendanceStats(student);
-
-            // True summer with no schedule: clear empty-state message
-            if (summer || (emptyTerm && isSummerMode())) {
-                const dateStr = (s && s.generated_at)
-                    ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-                    : '';
-                let html = `<div class="masthead" id="hero-card-${idx}">`;
-                html += `<div class="masthead-kicker"><h2>Briefing</h2>`;
-                if (dateStr) html += `<span class="masthead-date">${dateStr}</span>`;
-                html += `</div>`;
-                html += `<div class="masthead-headline">School year is out — no current classes or missing work in the portal.</div>`;
-                html += attendanceHtml;
-                html += `</div>`;
-                return html;
-            }
-
-            // Schedules posted, no real grades yet
-            if (scheduleOnly) {
-                const dateStr = (s && s.generated_at)
-                    ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-                    : '';
-                const n = (student.classes || []).filter(c => (c.course_name || '').trim()).length;
-                let headline = (s && s.headline) ? String(s.headline).trim() : '';
-                if (!headline || /school year is out|no current classes or missing work/i.test(headline)) {
-                    headline = `Schedules are up (${n} classes) — no grades posted yet.`;
-                }
-                let html = `<div class="masthead" id="hero-card-${idx}">`;
-                html += `<div class="masthead-kicker"><h2>Briefing</h2>`;
-                if (dateStr) html += `<span class="masthead-date">${dateStr}</span>`;
-                html += `</div>`;
-                html += `<div class="masthead-headline">${esc(headline)}</div>`;
-                html += attendanceHtml;
-                html += `</div>`;
-                return html;
-            }
-
-            if (!s) {
-                return `<div class="masthead" id="hero-card-${idx}">
-                    <div class="masthead-kicker"><h2>Briefing</h2></div>
-                    <div class="masthead-headline muted">No briefing yet</div>
-                    ${attendanceHtml}
-                    ${renderMovers(student)}
-                </div>`;
-            }
-
-            const dateStr = s.generated_at
-                ? new Date(s.generated_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-                : '';
-            let headline = (s.headline || s.status || '').trim();
-            // Guard against old bad empty-term headlines once grades exist
-            if (/no classes or missing work listed|mixed or stable performance/i.test(headline) && emptyTerm) {
-                headline = 'School year is out — no current classes or missing work in the portal.';
-            }
-            const headlineNamesStaleTonight = (profiles || []).some(p =>
-                (p.assignments || []).some(a =>
-                    a.description && headline.indexOf(a.description) !== -1
-                    && isPastDueUngraded(a)
-                    && !tonightItems.some(i => i.name === a.description)
-                )
-            );
-            if (headlineNamesStaleTonight) {
-                const first = tonightItems[0];
-                const phrase = first && first.status === 'tomorrow' ? 'is due tomorrow'
-                    : first && first.status === 'overdue' ? 'is still missing'
-                    : 'is due today';
-                if (tonightItems.length === 1) {
-                    headline = `${first.name} ${phrase} in ${first.className}.`;
-                } else if (tonightItems.length > 1) {
-                    headline = `Heads up: ${focus}.`;
-                } else if (s.wins && s.wins[0]) {
-                    headline = s.wins[0];
-                } else {
-                    headline = '';
-                }
-            }
-            const allAssignments = [];
-            for (const p of profiles || []) {
-                allAssignments.push(...(p.assignments || []));
-            }
-            headline = rewriteStaleDueCopy(headline, { assignments: allAssignments, missing: (profiles || []).flatMap(p => p.missing || []) });
-            if ((profiles || []).some(p => isPhantomZero(p.classMeta, p.assignments))) {
-                headline = rewritePhantomZeroCopy(headline);
-            }
-            const awaitingOnly = (profiles || []).some(p => (p.awaitingCount || (p.awaiting || []).length) > 0 && !p.missingCount);
-            const anyMissing = (profiles || []).some(p => p.missingCount > 0);
-            if (awaitingOnly && !anyMissing) {
-                headline = headline
-                    .replace(/\bwith two overdue assignments\b/i, 'with work awaiting a teacher score')
-                    .replace(/\bwith an overdue assignment\b/i, 'with work awaiting a teacher score')
-                    .replace(/\btwo overdue assignments\b/i, 'two assignments awaiting a score')
-                    .replace(/\boverdue assignments\b/i, 'assignments awaiting a score');
-            }
-
-            let html = `<div class="masthead" id="hero-card-${idx}">`;
-            html += `<div class="masthead-kicker"><h2>Briefing</h2>`;
-            if (dateStr) html += `<span class="masthead-date">${dateStr}</span>`;
-            html += `</div>`;
-            if (headline) html += `<div class="masthead-headline">${esc(headline)}</div>`;
-
-            if (tonightItems.length) {
-                html += renderTonightCard(tonightItems, idx);
-            } else if (focus) {
-                html += `<div class="masthead-tonight" id="focus-card-${idx}">
-                    <div class="label">Heads up</div>
-                    <div class="text">${esc(focus)}</div>
-                </div>`;
-            }
-
-            const wins = (student.view && student.view.wins && student.view.wins.length)
-                ? student.view.wins
-                : (s.wins || []);
-            if (wins.length) {
-                html += `<div class="masthead-wins">`;
-                wins.slice(0, 2).forEach(win => {
-                    html += `<div class="win-line">${esc(win)}</div>`;
-                });
-                html += `</div>`;
-            }
-
-            // Legacy schemas
-            if (!s.classes) {
-                if (s.whats_happened && s.whats_happened.length) {
-                    html += `<div class="masthead-wins" style="margin-top:10px">`;
-                    s.whats_happened.slice(0, 3).forEach(item => {
-                        const event = (typeof item === 'string') ? item : (item.event || '');
-                        html += `<div class="win-line" style="color:var(--text-2)">${esc(event)}</div>`;
-                    });
-                    html += `</div>`;
-                }
-            }
-
-            html += attendanceHtml;
-            html += renderMovers(student);
-            html += `</div>`;
-            return html;
         }
 
         function formatSessionDay(iso) {
@@ -4291,14 +3605,7 @@
 
         function renderClassPanel(profile, student) {
             const c = profile.classMeta;
-            const ai = normalizeAiClass(profile.aiClass);
-            const story = (profile.story || ai?.story || '').trim();
             const doTonight = (profile.liveDoTonight || '').trim();
-            const snap = (profile.snap || '').trim();
-            // The snap already shows on the collapsed row; only repeat it here when there is no real story.
-            // A briefing written under older rules may still claim missing work the portal doesn't flag.
-            const storyClaimsMissing = /\bmissing\b/i.test(story) && (profile.missingCount || 0) === 0;
-            const storyText = story && !storyClaimsMissing && normalizeName(story) !== normalizeName(snap) ? story : '';
             const realGrade = hasRealGrade(c, profile.assignments);
             const phantomZero = isPhantomZero(c, profile.assignments);
             const gradeClass = realGrade ? getGradeClass(c.percent) : 'grade-none';
@@ -4364,13 +3671,6 @@
                 blocks += `<div class="panel-block panel-block-tonight">
                     <div class="panel-block-label tonight">Heads up</div>
                     <div class="panel-tonight-text">${esc(doTonight)}</div>
-                </div>`;
-            }
-
-            if (storyText) {
-                blocks += `<div class="panel-block">
-                    <div class="panel-block-label">Summary</div>
-                    <div class="panel-story">${esc(storyText)}</div>
                 </div>`;
             }
 
@@ -4446,7 +3746,7 @@
                 blocks += `<div class="panel-lists ${twoCol ? 'two-col' : ''}">${listBlocks.join('')}</div>`;
             }
 
-            if (!doTonight && !storyText && !spark && !listBlocks.length) {
+            if (!doTonight && !spark && !listBlocks.length) {
                 blocks += `<div class="panel-block"><p class="panel-empty">No extra detail for this class yet.</p></div>`;
             }
 
@@ -4659,7 +3959,6 @@
                 };
                 const aiClass = normalizeAiClass({
                     snap: row.snap,
-                    story: row.story,
                     do_tonight: row.do_tonight,
                     class_name: row.course_name,
                 });
@@ -5403,7 +4702,7 @@
         }
 
         function glanceLookNext(profiles) {
-            // Always the class-count bullets. Never a stored Grok paragraph.
+            // Always the class-count bullets.
             return glanceLookNextLines(glanceLookNextPacket(profiles));
         }
 
@@ -5982,7 +5281,7 @@
                     const resume = formatSessionDay(currentData && currentData.school_session && currentData.school_session.next_first_day)
                         || formatSessionDay(currentData && currentData.school_session && currentData.school_session.first_day)
                         || 'on the first instructional day';
-                    banner.textContent = `School is out — Aeries scrape and Grok are paused (TUSD calendar). Showing last school-year grades and attendance. Resumes ${resume}.`;
+                    banner.textContent = `School is out — Aeries scrape is paused (TUSD calendar). Showing last school-year grades and attendance. Resumes ${resume}.`;
                     const header = document.querySelector('.top-bar');
                     header.parentNode.insertBefore(banner, header.nextSibling);
                 }

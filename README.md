@@ -2,7 +2,7 @@
 
 A static parent dashboard for Tustin USD Aeries grades, live at [the same URL](https://davidcasas82.github.io/aeries-dashboard/). A GitHub Action logs into the parent portal, then POSTs `grades_data.json` / history to `family-data`. The page unlocks with the household PIN.
 
-Python precomputes facts (missing work, tonight’s list, urgency, trends). Official v1 glance is standing (mark / % / 7-day trend) plus Tonight as 0–3 class-level bullets; Grok only writes the per-class lines.
+Python precomputes facts (missing work, tonight’s list, urgency, trends). Official v1 glance is standing (mark / % / 7-day trend) plus Tonight as 0–3 class-level bullets. The scraper does not call xAI; the old Grok briefing is retired.
 
 ## Local preview
 
@@ -24,8 +24,7 @@ Open http://localhost:8765/ and use the local family-data PIN (`.dev.vars`). Bro
 Copy `.env.example` to `.env` and fill in the Aeries login plus each student’s SN. To publish to the Worker, also set `FAMILY_DATA_URL` and `FAMILY_PIN`.
 
 ```bash
-python scraper.py                 # full scrape + briefing
-python scraper.py --grok-only     # rewrite briefings from existing JSON
+python scraper.py                 # full scrape + dashboard view
 python scraper.py --attendance-only
 python scraper.py --rebuild-view  # dashboard view payload only
 python scraper.py --publish-only  # POST existing local JSON to family-data
@@ -36,7 +35,7 @@ python scraper.py --probe-attendance
 
 In CI, run the footer probe from Actions → Daily Grade Scrape → Run workflow with `probe_gradebook_totals` checked.
 
-`SUMMER_BREAK=true` pauses grades and Grok (attendance can still refresh). Leave it unset to follow `school_calendar.json`.
+`SUMMER_BREAK=true` pauses grades (attendance can still refresh). Leave it unset to follow `school_calendar.json`.
 
 ## Tests
 
