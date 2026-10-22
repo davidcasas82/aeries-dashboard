@@ -61,6 +61,15 @@ class GrokUsageTests(unittest.TestCase):
             "  Grok usage (look next): prompt=? completion=? total=?",
         ])
 
+    def test_a_malformed_usage_never_raises(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            for result in (None, [], "text", {"usage": None}, {"usage": "12 tokens"}, {"usage": [1, 2]}, {"usage": 7}):
+                scraper.log_grok_usage("briefing", result)
+        lines = buf.getvalue().splitlines()
+        self.assertEqual(len(lines), 7)
+        self.assertEqual(set(lines), {"  Grok usage (briefing): prompt=? completion=? total=?"})
+
     def test_briefing_call_logs_its_usage(self):
         response = mock.Mock(status_code=200)
         response.json.return_value = {
