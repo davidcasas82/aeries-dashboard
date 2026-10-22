@@ -3984,9 +3984,10 @@ def _warn_match_once(student_data, class_meta, kind, message):
 def assignments_for_class(student_data, class_meta):
     """Every assignment in the GradebookDetails groups matching a ClassSummary row.
 
-    The rule is match_class_groups. No silent zeros: one warning per class (name and
-    periods only, never scores) when a same-name group sits in a different period, and
-    when a class that has a gradebook group ends up with zero assignments.
+    The rule is match_class_groups. No silent zeros: at most one warning per class per run
+    (name and periods only, never scores). A same-name group in a different period gets
+    the period warning; otherwise a class that has a gradebook group but matched none gets
+    the no-match warning. A matched group that is simply empty (early in a term) is quiet.
     """
     groups = student_data.get("assignments_by_class") or []
     matched, other_periods = match_class_groups(groups, class_meta, student_data.get("classes"))
@@ -4002,10 +4003,10 @@ def assignments_for_class(student_data, class_meta):
                 f"{name!r} is period {period} but its same-name gradebook group is period "
                 f"{', '.join(str(p) for p in other_periods)}; not matched",
             )
-        if not assignments and _has_gradebook_group(groups, class_meta):
+        elif not matched and _has_gradebook_group(groups, class_meta):
             _warn_match_once(
                 student_data, class_meta, "zero",
-                f"{name!r} (period {period}) has a gradebook group but 0 assignments matched",
+                f"{name!r} (period {period}) has a gradebook group but matched none",
             )
     return assignments
 

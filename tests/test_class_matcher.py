@@ -183,33 +183,38 @@ class NoSilentZeros(unittest.TestCase):
         for score in ("87.4", "9", "10", "HW 12"):
             self.assertNotIn(score, log)
 
-    def test_class_with_a_group_but_zero_assignments_warns_once(self):
+    def test_empty_matched_group_is_quiet(self):
         pe = {"course_name": "PE Course 1", "period": 7}
         student = {"sn": "1", "classes": [pe], "assignments_by_class": [_group("PE Course 1", 7, [])]}
         rows, log = self._run(student, pe)
         self.assertEqual(rows, [])
-        zero = [line for line in log.splitlines() if "0 assignments matched" in line]
-        self.assertEqual(len(zero), 1)
-        self.assertIn("'PE Course 1' (period 7)", zero[0])
+        self.assertEqual(log, "")
 
-    def test_ambiguous_name_that_lands_nowhere_warns(self):
+    def test_period_mismatch_prints_exactly_one_warning(self):
+        math = {"course_name": "Math", "period": 3}
+        rows, log = self._run({"sn": "1", "classes": [math], "assignments_by_class": [_group("Math", 4, ["HW"])]}, math)
+        self.assertEqual(rows, [])
+        self.assertEqual(len([l for l in log.splitlines() if "::warning::" in l]), 1)
+        self.assertIn("same-name gradebook group", log)
+
+    def test_group_but_no_match_warns_once(self):
+        # Without periods, "Math" partly matches two groups, so it lands nowhere.
         math = {"course_name": "Math", "period": None}
-        student = {
-            "sn": "1",
-            "classes": [math],
-            "assignments_by_class": [_group("AP Math Analysis", None, ["Unit 2 Test"]), _group("Applied Math", None, ["Lab 1"])],
-        }
+        student = {"sn": "1", "classes": [math], "assignments_by_class": [
+            _group("AP Math Analysis", None, ["Unit 2 Test"]), _group("Applied Math", None, ["Lab 1"])]}
         rows, log = self._run(student, math)
         self.assertEqual(rows, [])
-        self.assertEqual(log.count("0 assignments matched"), 1)
+        lines = [l for l in log.splitlines() if "::warning::" in l]
+        self.assertEqual(len(lines), 1)
+        self.assertIn("'Math' (period None) has a gradebook group but matched none", lines[0])
 
     def test_each_kid_gets_its_own_warning(self):
-        pe = {"course_name": "PE Course 1", "period": 7}
+        math = {"course_name": "Math", "period": 3}
         log = ""
         for sn in ("1", "2"):
-            _, out = self._run({"sn": sn, "classes": [pe], "assignments_by_class": [_group("PE Course 1", 7, [])]}, pe)
+            _, out = self._run({"sn": sn, "classes": [math], "assignments_by_class": [_group("Math", 4, ["HW"])]}, math)
             log += out
-        self.assertEqual(log.count("0 assignments matched"), 2)
+        self.assertEqual(log.count("same-name gradebook group"), 2)
 
     def test_class_without_any_group_is_quiet(self):
         art = {"course_name": "Art", "period": 2}
