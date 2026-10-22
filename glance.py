@@ -13,8 +13,8 @@ past due. No fact-line strip, no Later, no Today, no Done today.
 Under Due soon, no extra heading: a quiet bullet list of class
 highlights the list does not show (most past due, work after the
 window grouped by class and date, turned-in unscored counts). Count
-and date only — never assignment titles. The page always renders those
-bullets. Never the
+and date only — never assignment titles. The page no longer
+renders them; the data stays in the view. Never the
 sentence “X is the lowest class, at N%.” Empty Due soon: “Nothing due in the next 5 school days.”
 Empty packet: “Nothing else outside this list.”
 
