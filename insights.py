@@ -18,6 +18,7 @@ MATCH_TOLERANCE = 0.51
 MOVE_MIN_POINTS = 0.5
 CAUSE_MIN_POINTS = 0.05
 SHARE_MAX_CAUSES = 10
+CAUSES_MAX = 8  # a move keeps its top causes; the rest fold into other_share
 PATTERN_WINDOW_DAYS = 28
 PATTERN_MIN_SCORES = 8
 PATTERN_MIN_SHARE = 0.6
@@ -614,7 +615,26 @@ def explain_move(model, name, from_pct, to_pct, since, new_keys, prior_scores=No
     if before_all is not None:
         fact["explained"] = round(now - before_all, 2)
         fact["coverage"] = round(fact["explained"] / delta, 2)
-    return fact
+    return fold_causes(fact)
+
+
+def fold_causes(move, keep=None):
+    """Keep a move's top `keep` causes (by share, or points with no shares); fold the rest.
+
+    Folded causes leave nothing behind, not even a title or id, so no sentence can name them.
+    other_share is the part of `explained` the kept causes don't carry (kept shares + other_share
+    == explained, to the cent), and other_causes counts what was folded. Coverage doesn't change.
+    """
+    keep = CAUSES_MAX if keep is None else keep
+    causes = move.get("causes") or []
+    if len(causes) <= keep:
+        return move
+    kept = causes[:keep]
+    out = {**move, "causes": kept, "other_causes": len(causes) - keep, "other_share": None}
+    if isinstance(move.get("explained"), (int, float)):
+        carried = sum(c["share"] if c["share"] is not None else c["points"] for c in kept)
+        out["other_share"] = round(move["explained"] - carried, 2)
+    return out
 
 
 def find_patterns(log_items, today, window_days=PATTERN_WINDOW_DAYS):
@@ -757,7 +777,8 @@ def _kept_what_ifs(facts):
 def fit_facts(doc, log_items=None, cap=FACTS_CAP_BYTES):
     """Trim insight_facts to `cap` bytes: keep facts first (last class first), then what-ifs past
     the next item, then the oldest patterns. grade_move facts and their causes are never trimmed,
-    nor next_letter, scale_break or gate facts. doc["trimmed"] lists the steps that ran."""
+    nor next_letter, scale_break or gate facts. doc["trimmed"] lists the steps that ran. If what's
+    left is still over the cap, one ::warning:: line gives the size and the cap, nothing else."""
     if facts_size(doc) <= cap:
         return doc
     facts = list(doc["facts"])
@@ -780,4 +801,8 @@ def fit_facts(doc, log_items=None, cap=FACTS_CAP_BYTES):
                 out["trimmed"] = trimmed
             facts = [f for f in facts if f["id"] != fid]
             out["facts"] = facts
+    size = facts_size(out)
+    if size > cap:
+        # Only moves, causes and the per-class lines are left. Numbers only: no class or item names.
+        print(f"::warning::insight_facts is {size} bytes after every trim step, over the {cap}-byte cap")
     return out
