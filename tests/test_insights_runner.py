@@ -672,8 +672,21 @@ class TickScriptTests(unittest.TestCase):
         self.fake = self.mount / "grade-insights" / "venv" / "bin" / "python"
         (self.tmp / "repo" / "deploy").mkdir(parents=True)
         self.script = self.tmp / "repo" / "deploy" / "grade-insights-tick.sh"
-        self.script.write_text(TICK.read_text().replace(PINNED, str(self.fake)))
+        # The mount list is a stub: it prints mounts.txt, so a test mounts the fake SSD by writing a line.
+        self.mounts = self.tmp / "mounts.txt"
+        self.mounts.write_text("/dev/disk1s1 on / (apfs, local, journaled)\n")
+        stub = self.tmp / "fake mount"
+        stub.write_text(f"#!/bin/sh\n/bin/cat '{self.mounts}'\n")
+        stub.chmod(0o755)
+        text = TICK.read_text()
+        self.assertEqual(text.count("MOUNT_LIST='/sbin/mount'"), 1)
+        text = text.replace(PINNED, str(self.fake)).replace("MOUNT_LIST='/sbin/mount'", f"MOUNT_LIST='{stub}'")
+        self.script.write_text(text)
         self.home = self.tmp / "state dir"
+
+    def mount_ssd(self):
+        with self.mounts.open("a") as f:
+            f.write(f"/dev/disk4s1 on {self.mount} (apfs, local, nodev, nosuid, journaled, noowners)\n")
 
     def tick(self, *args):
         env = {"HOME": str(self.tmp), "GRADE_INSIGHTS_HOME": str(self.home)}
@@ -725,6 +738,7 @@ class TickScriptTests(unittest.TestCase):
         self.fake.parent.mkdir(parents=True)
         self.fake.symlink_to(self.tmp / "opt" / "homebrew" / "python3.12")
         self.assertTrue(self.fake.is_symlink() and not self.fake.exists())
+        self.mount_ssd()
         first = self.tick(str(self.fake))
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertRegex(first.stdout, r"^grade-insights: \d{4}-\d{2}-\d{2} skipped, the venv Python is missing\n$")
@@ -733,7 +747,46 @@ class TickScriptTests(unittest.TestCase):
         # Unplugged (no mount point): back to the SSD message.
         import shutil
         shutil.rmtree(self.mount)
+        self.mounts.write_text("/dev/disk1s1 on / (apfs, local, journaled)\n")
         self.assertRegex(self.tick(str(self.fake)).stdout, r"skipped, the SSD is not mounted\n$")
+
+    def test_a_leftover_empty_folder_is_not_a_mounted_ssd(self):
+        # Unplugged uncleanly: /Volumes/<name> is left behind, empty. Not mounted, so the SSD message.
+        self.mount.mkdir()
+        first = self.tick(str(self.fake))
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertRegex(first.stdout, r"^grade-insights: \d{4}-\d{2}-\d{2} skipped, the SSD is not mounted\n$")
+        self.assertEqual(self.tick(str(self.fake)).stdout, "")  # once a day
+        self.assertFalse((self.home / "no-venv.day").exists())
+        # A mount whose path only starts with the SSD's name ("Fake C SSD 1") doesn't count either.
+        with self.mounts.open("a") as f:
+            f.write(f"/dev/disk5s1 on {self.mount} 1 (apfs, local)\n")
+        (self.home / "no-ssd.day").unlink()
+        self.assertRegex(self.tick(str(self.fake)).stdout, r"skipped, the SSD is not mounted\n$")
+
+    def test_mounted_without_the_venv_python_says_so(self):
+        self.mount.mkdir()
+        self.mount_ssd()
+        first = self.tick(str(self.fake))
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertRegex(first.stdout, r"^grade-insights: \d{4}-\d{2}-\d{2} skipped, the venv Python is missing\n$")
+        self.assertEqual(self.tick(str(self.fake)).stdout, "")
+
+    def test_mounted_and_present_runs(self):
+        self.mount_ssd()
+        self.fake.parent.mkdir(parents=True)
+        self.fake.write_text('#!/bin/sh\nprintf "%s|" "$0" "$@"\n')
+        self.fake.chmod(0o755)
+        out = self.tick(str(self.fake))
+        self.assertEqual((out.returncode, out.stderr), (0, ""))
+        self.assertEqual(out.stdout, f"{self.fake}|{(self.tmp / 'repo').resolve()}/insights_runner.py|")
+        self.assertFalse((self.home / "no-ssd.day").exists() or (self.home / "no-venv.day").exists())
+
+    def test_the_real_script_uses_absolute_mount_and_grep(self):
+        text = TICK.read_text()
+        self.assertIn("MOUNT_LIST='/sbin/mount'", text)
+        self.assertIn('"$MOUNT_LIST" 2>/dev/null | /usr/bin/grep -qF " on $MOUNT ("', text)
+        self.assertNotIn('[ -d "$MOUNT" ]', text)
 
 
 if __name__ == "__main__":
