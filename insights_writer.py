@@ -28,7 +28,8 @@ import insights
 
 INSIGHT_KINDS = ("grade_move", "what_if", "posting_day")
 # Story order: letter and distance, then the cause, then the what-if, then a pattern.
-ORDER = {"next_letter": 0, "scale_break": 0, "grade_move": 1, "what_if": 2, "posting_day": 3}
+# Story order: the letter, then why it moved, then the pattern, then the one next step.
+ORDER = {"next_letter": 0, "scale_break": 0, "grade_move": 1, "posting_day": 2, "what_if": 3}
 VOTES = 3
 # A move's causes may be stated only when they explain it: same sign, within 20% of delta.
 # The engine's coverage field (explained / delta) carries both: 0.8 <= coverage <= 1.2.
@@ -138,6 +139,17 @@ _ECHO_RE = re.compile(
 _LETTER_MOVE_RE = re.compile(
     r"\b(?i:moved|went|slipped|slid|dropped|fell|rose|climbed|jumped|dipped|changed|fallen|risen|is down|is up)"
     r" (?i:up |down |back )?to (?:an? )?([A-F])\b(?!\w)")
+# Advice the facts can't back. A next step comes only from a cited what_if ("an 85 or better on ...").
+_ADVICE_RE = re.compile(
+    r"\b(?:re-?do(?:ing)?|re-?take|re-?submit|make up|makeup|focus(?:es|ing)? on|work(?:ing)? on|study|studying|"
+    r"review(?:ing)?|practi[cs]e|ask (?:the|a|for|about)|talk(?:ing)? to|reach out|should|ought|needs? to|try(?:ing)? to|"
+    r"aim(?:ing)? (?:for|to|at)|keep up|stay on top|turn(?:ing)? (?:it |them )?in|improve[ds]?|improving|get help|"
+    r"catch(?:ing)? up|bring (?:it|the grade) up)\b", re.I)
+# "a"/"an" before a number or a letter, fixed by how it's spoken: "an 85", "an 11", "an A", "a 97", "a B".
+# A capital "A"/"An" counts as the article only at the start of a sentence, so the letter A stays put.
+_ARTICLE_RE = re.compile(
+    r"(?:(?<=^)|(?<=[.!?:;\"“(] )|(?<=[.!?:;]  ))(A|An)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))"
+    r"|\b(a|an)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))")
 _SAME_LETTER_MOVE_RE = re.compile(r"\b(?:moved|went|changed|dropped|fell|rose) from (?:an? )?([A-F]) to (?:an? )?\1\b")
 ROLE_FIELDS = {
     "move": ("delta", "explained", "points", "share"),
@@ -167,9 +179,8 @@ EXAMPLE_FACTS = [
 EXAMPLE_NOTE = [
     {"text": "Slipped to a D since Sep 9, 1.2 points from a C.", "cites": ["next:ceramics", "move:ceramics:2026-09-09"]},
     {"text": "The Glaze Test (11/20) did most of the damage.", "cites": ["cause:ceramics:2026-09-09:glazetest"]},
-    {"text": "A 74 or better on the next project gets it to a C.",
-     "cites": ["whatif:ceramics:projects:20", "move:ceramics:2026-09-09"]},
     {"text": "Scores usually post Tuesdays.", "cites": ["pattern:posting_day:ceramics"]},
+    {"text": "A 74 or better on the next project gets it to a C.", "cites": ["whatif:ceramics:projects:20"]},
 ]
 # A sentence carrying any of these copied the example rather than the facts.
 EXAMPLE_MARKERS = ("ceramics", "glaze", "kiln", "sep 9", "74 or better", "73.4", "68.8", "71.1")
@@ -178,14 +189,15 @@ DRAFT_SYSTEM = """You write a short note to a parent about one class, the way a 
 You get FACTS as JSON. Every fact has an id. Use only those facts.
 
 Write 1 to 4 short, plain sentences:
-- Lead with what's happening, then what to do about it.
-- Name the real assignment when a fact names it, with its score as earned/possible (4/10) or a percent.
-- If the grade moved but kept its letter, say it's still that letter, how much it moved, and why: "Still a B, down 1.4 since Mar 3, mostly from the Lab Report (6/10)."
-- If there's a next_letter fact, say how close the next letter is, then the score that gets there, using say_needed from the what_if fact.
-- A pattern only from a posting_day fact, naming its weekday.
+- Open with the letter and the gap, or the letter and the move, citing the next_letter or grade_move: "Still a B, down 1.4 since Mar 3." or "Half a point from a B."
+- Then why it moved, naming the real assignment with its score as earned/possible (4/10) or a percent: "Mostly the Lab Report (6/10)."
+- Then a pattern, only from a posting_day fact, naming its weekday.
+- End with one next step, only from a what_if fact, using its say_needed: "An 85 or better on the next test gets it to a B."
+- With no what_if fact, end without a next step. Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
 
 Rules:
 - Every sentence cites the ids it uses. A cause cites its own cause id. Name causes largest share first.
+- Order: letter, cause, pattern, next step.
 - "Because", "mainly", "mostly", "due to" or "driven by" only with a cited grade_move or cause.
 - If a grade_move has causes_withheld, say how much it moved but not why.
 - With no grade_move, the grade didn't move: say "Still a C", never "moved to a C".
@@ -215,6 +227,7 @@ Reply with JSON only: {"backed": [true or false, one per sentence, in order]}"""
 HEADLINE_SYSTEM = """You write the one-line headline of a parent's grade briefing from the class STORIES (JSON).
 Pick the single most useful insight. One sentence, under 120 characters.
 Use only numbers, letters and classes in the stories, and cite the fact ids of the story you use.
+Say something concrete: a number, a letter or an assignment name from the story. No vague lines like "Next scores matter".
 Don't mention missing, late, past-due, turned-in or awaiting work. No dates, weekdays or relative days ("tomorrow", "next Friday").
 Reply with JSON only: {"text": "...", "cites": ["fact id", ...]}"""
 
@@ -663,6 +676,8 @@ def _claims_reason(text, cited, index):
         day = next((d for d in WEEKDAY_NAMES if d.startswith(match.group(1).lower()[:3])), None)
         if day not in pattern_days:
             return f"names a weekday ({match.group(0)}) no pattern backs"
+    if _ADVICE_RE.search(_strip_names(masked, cited)) and not any(f.get("kind") == "what_if" for f in cited):
+        return "gives advice no what_if backs"
     move_ids = [f["move"] if f.get("move") else f["id"] for f in cited if f.get("kind") == "grade_move"]
     moves = [index.get(m) or {} for m in dict.fromkeys(move_ids)]
     cause_words = _CAUSE_CLAIM_RE.search(masked) or (_BARE_CAUSE_RE.search(masked) and _GRADE_WORDS_RE.search(masked))
@@ -733,8 +748,26 @@ def eval_story(sentences, index):
     """None if the story passes the acceptance bar, else why it fails.
 
     Fails a story that cites no grade_move, what_if or pattern fact (a bare next_letter is
-    not an insight), that restates past-due or missing work, or that's out of order.
+    not an insight), that restates past-due or missing work, or that's out of order
+    (letter, cause, pattern, next step). The first sentence must state the letter with the
+    gap or the move, backed by a cited next_letter or grade_move. A story about a drop must
+    end on the class's what_if step when the class has one.
     """
+    reason = _story_basics(sentences, index)
+    if reason:
+        return reason
+    if not _opens_with_letter(sentences[0], index):
+        return "doesn't open with the letter and the gap or move"
+    drops = [f for f in index.values() if f.get("kind") == "grade_move" and not f.get("move")
+             and isinstance(f.get("delta"), (int, float)) and f["delta"] < 0]
+    steps = {fid for fid, f in index.items() if f.get("kind") == "what_if" and f.get("reachable")
+             and isinstance(f.get("needed_pct"), (int, float))}
+    if drops and steps and not set(sentences[-1].get("cites") or []) & steps:
+        return "a drop story must end on its what-if step"
+    return None
+
+
+def _story_basics(sentences, index):
     if not sentences:
         return "no story"
     kinds = []
@@ -744,13 +777,57 @@ def eval_story(sentences, index):
             return "restates past-due or missing work"
         ranks = [ORDER.get((index.get(fid) or {}).get("kind"), 9) for fid in sentence.get("cites") or []]
         kinds.extend((index.get(fid) or {}).get("kind") for fid in sentence.get("cites") or [])
-        sentence["_rank"] = min(ranks) if ranks else 9
+        # A sentence sits where its latest kind goes: a what-if that also cites the move is a next step.
+        sentence["_rank"] = max(ranks) if ranks else 9
+    order = [s.pop("_rank") for s in sentences]
     if not any(kind in INSIGHT_KINDS for kind in kinds):
         return "cites no grade_move, what_if or pattern fact"
-    order = [s.pop("_rank") for s in sentences]
     if order != sorted(order):
-        return "out of order (letter, cause, what-if, pattern)"
+        return "out of order (letter, cause, pattern, next step)"
     return None
+
+
+def _opens_with_letter(sentence, index):
+    """The first sentence states a letter and a gap or move from a cited next_letter or grade_move."""
+    cited = [index[fid] for fid in sentence.get("cites") or [] if fid in index]
+    backers = [f for f in cited if f.get("kind") == "next_letter" or (f.get("kind") == "grade_move" and not f.get("move"))]
+    if not backers:
+        return False
+    masked, _, _ = _mask_allowed_dates(spelled_to_digits(sentence.get("text") or ""), cited)
+    bare = _strip_names(masked, cited)
+    if not _said_letters(bare):
+        return False
+    sizes = [abs(f[k]) for f in backers for k in ("gap", "delta") if isinstance(f.get(k), (int, float))]
+    said = [float(m.group(0)) for m in _NUMBER_RE.finditer(bare)]
+    return any(abs(n - size) <= 0.051 for n in said for size in sizes)
+
+
+def fix_articles(text):
+    """ "a 85" -> "an 85", "A 11" -> "An 11", "a A" -> "an A", "an 97" -> "a 97". Only the article changes."""
+    def wants_an(token):
+        if not token[0].isdigit():
+            return token in ("A", "E", "F")
+        whole = token.split(".")[0]
+        return whole.startswith("8") or whole in ("11", "18") or (len(whole) == 5 and whole[:2] in ("11", "18"))
+
+    def swap(match):
+        article, space, token = (match.group(1), match.group(2), match.group(3)) if match.group(1) else \
+            (match.group(4), match.group(5), match.group(6))
+        word = "an" if wants_an(token) else "a"
+        return (word.capitalize() if article[0].isupper() else word) + space + token
+
+    return _ARTICLE_RE.sub(swap, text or "")
+
+
+def _concrete_headline(text, cites, index):
+    """A headline names a number, a letter or a cited item; class names don't count."""
+    cited = [index[fid] for fid in cites if fid in index]
+    titles = [str(f.get(k)) for f in cited for k in ("title", "next_title") if f.get(k)]
+    if any(t.lower() in text.lower() or re.sub(r"\s*\([^)]*\)\s*$", "", t).lower() in text.lower() for t in titles):
+        return True
+    masked, _, _ = _mask_allowed_dates(spelled_to_digits(text), cited)
+    bare = _strip_names(masked, cited)
+    return bool(_NUMBER_RE.search(bare) or _said_letters(bare))
 
 
 # ── Model steps ──────────────────────────────────────────────────────────────
@@ -781,7 +858,7 @@ def _sentences(raw):
     for item in parsed.get("sentences") or []:
         if isinstance(item, dict) and isinstance(item.get("text"), str):
             cites = [c for c in item.get("cites") or [] if isinstance(c, str)]
-            out.append({"text": item["text"].strip(), "cites": cites})
+            out.append({"text": fix_articles(item["text"].strip()), "cites": cites})
     return out
 
 
@@ -831,12 +908,13 @@ def write_headline(model, facts, stories):
     index = fact_index(facts)
     user = json.dumps([{"class": s["class"], "story": s["story"], "cites": s["cites"]} for s in stories], indent=1)
     parsed = _json(model.complete(HEADLINE_SYSTEM, user)) or {}
-    text = (parsed.get("text") or "").strip() if isinstance(parsed.get("text"), str) else ""
+    text = fix_articles((parsed.get("text") or "").strip()) if isinstance(parsed.get("text"), str) else ""
     cites = [c for c in parsed.get("cites") or [] if isinstance(c, str)]
     used = {c for s in stories for c in s["cites"]}
-    if not text or not set(cites) <= used or check_sentence(text, cites, index):
+    # A headline cites a fact from the stories and says something concrete, or there is none.
+    if not text or not cites or not set(cites) <= used or check_sentence(text, cites, index):
         return None
-    if eval_story([{"text": text, "cites": cites}], index):
+    if _story_basics([{"text": text, "cites": cites}], index) or not _concrete_headline(text, cites, index):
         return None
     return {"text": text, "cites": cites}
 
@@ -861,13 +939,16 @@ def write_up(model, insight_facts, log_items=None, votes=VOTES, upcoming=None):
 def apply_write_up(ai_summary, local):
     """The local write-up takes the headline and every class's story slot.
 
-    A class with no local story gets an empty story rather than the model's. The headline
-    is replaced only when the write-up has one.
+    A class with no local story gets an empty story rather than the model's. With no local
+    headline the masthead shows none: the model's headline (and the status line the page
+    falls back to) is cleared, never kept.
     """
     summary = dict(ai_summary or {})
     stories = (local or {}).get("stories") or []
-    if (local or {}).get("headline"):
-        summary["headline"] = local["headline"]["text"]
+    headline = (local or {}).get("headline")
+    summary["headline"] = headline["text"] if headline else ""
+    if not headline:
+        summary.pop("status", None)
     rows = summary.get("classes") or []
     picks = match_stories(stories, [cls.get("class_name") for cls in rows])
     summary["classes"] = [{**cls, "story": pick["story"] if pick else ""} for cls, pick in zip(rows, picks)]

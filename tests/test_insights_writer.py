@@ -57,8 +57,8 @@ def insight_facts():
 GOOD = [
     {"text": "Math: B, 2.1 pts from an A.", "cites": [NEXT]},
     {"text": "Down mainly from a 62% on the Ch.4 Quiz (tests are 60% of the grade).", "cites": [CAUSE]},
-    {"text": "An 88% on the next test gets the A back.", "cites": [WHATIF]},
     {"text": "Scores mostly post on Fridays.", "cites": [PATTERN]},
+    {"text": "An 88% on the next test gets the A back.", "cites": [WHATIF]},
 ]
 
 
@@ -88,7 +88,7 @@ class AcceptanceBarTests(unittest.TestCase):
     def test_a_good_story_passes(self):
         story = w.write_class(ScriptedModel({"Math": GOOD}), math_facts(), "Math")
         self.assertEqual(story["story"], " ".join(s["text"] for s in GOOD))
-        self.assertEqual(story["cites"], [NEXT, CAUSE, WHATIF, PATTERN])
+        self.assertEqual(story["cites"], [NEXT, CAUSE, PATTERN, WHATIF])
         self.assertEqual(story["dropped"], [])
 
     def test_a_past_due_only_story_fails(self):
@@ -106,9 +106,9 @@ class AcceptanceBarTests(unittest.TestCase):
         self.assertEqual(w.eval_story([dict(s) for s in mixed], index()), "restates past-due or missing work")
 
     def test_the_insight_comes_in_order(self):
-        backwards = [GOOD[2], GOOD[0]]
+        backwards = [GOOD[0], GOOD[3], GOOD[2]]
         self.assertEqual(w.eval_story([dict(s) for s in backwards], index()),
-                         "out of order (letter, cause, what-if, pattern)")
+                         "out of order (letter, cause, pattern, next step)")
 
     def test_no_filler_a_quiet_class_gets_no_story_and_no_model_call(self):
         model = ScriptedModel({"Biology": [{"text": "Biology: B, 6 pts from an A.", "cites": ["next:biology"]}]})
@@ -333,7 +333,7 @@ class WeekdayRuleTests(unittest.TestCase):
         self.assertEqual(idx[WHATIF]["next_due_label"], "Oct 30")
         line = "An 88% on the Ch. 5 Test, due Oct 30, gets the A back."
         self.assertIsNone(w.check_sentence(line, [WHATIF], idx))
-        self.assertIsNone(w.eval_story([{"text": line, "cites": [WHATIF]}], idx))
+        self.assertIsNone(w.eval_story([dict(GOOD[0]), {"text": line, "cites": [WHATIF]}], idx))
 
     def test_the_wrong_date_is_dropped(self):
         idx = self.facts_with_item([ch5()])
@@ -515,7 +515,7 @@ class BakeoffFindingTests(unittest.TestCase):
         self.assertEqual(w.check_sentence("A B again with an 85 or better on the next test.", [GEO_WHATIF],
                                           w.fact_index(geometry_facts())),
                          "says back to or again with a letter no move shows the class held")
-        self.assertEqual(w.check_sentence("Down 1.6, so it needs to regain the A.", [CHEM_MOVE], w.fact_index(chem_facts())),
+        self.assertEqual(w.check_sentence("Down 1.6, so it has to regain the A.", [CHEM_MOVE], w.fact_index(chem_facts())),
                          "says back to or again with a letter no move shows the class held")
 
     def test_moved_to_a_letter_needs_a_move_that_crossed_into_it(self):
@@ -634,6 +634,81 @@ class NoteStyleTests(unittest.TestCase):
         self.assertEqual(w.model_facts(chem_facts())[0]["since_label"], "Oct 14")
 
 
+class PolishPassTests(unittest.TestCase):
+    """The Oct 22 polish pass: the opening, the one next step, a/an, and concrete headlines."""
+
+    def test_a_story_opens_with_the_letter_and_the_gap_or_move(self):
+        geo = w.fact_index(geometry_facts())
+        step = {"text": "An 85 or better on the next test gets there.", "cites": [GEO_WHATIF]}
+        self.assertEqual(w.eval_story([dict(step)], geo), "doesn't open with the letter and the gap or move")
+        self.assertIsNone(w.eval_story([{"text": "Half a point from a B.", "cites": [GEO_NEXT]}, dict(step)], geo))
+        self.assertIsNone(w.eval_story([{"text": "Still a C, 0.5 from a B.", "cites": [GEO_NEXT]}, dict(step)], geo))
+        # A letter with no gap, or a gap with no letter, isn't the opening.
+        self.assertEqual(w.eval_story([{"text": "Still a C.", "cites": [GEO_NEXT]}, dict(step)], geo),
+                         "doesn't open with the letter and the gap or move")
+        chem = w.fact_index(chem_facts())
+        self.assertEqual(w.eval_story([{"text": "Slipped to a 96.3% since Oct 14, down 1.6 points from a 97.9%.",
+                                        "cites": [CHEM_MOVE]}], chem),
+                         "doesn't open with the letter and the gap or move")
+        self.assertIsNone(w.eval_story([{"text": "Still an A, down 1.6 since Oct 14.", "cites": [CHEM_MOVE]}], chem))
+        # The opening is backed by a next_letter or the move itself, not by a cause.
+        self.assertEqual(w.eval_story([{"text": "Still an A, down 1.6, mostly from the Lab 3 Packet (4/10).",
+                                        "cites": [CHEM_C1]}], chem),
+                         "doesn't open with the letter and the gap or move")
+
+    def test_a_drop_story_ends_on_its_what_if_step_and_never_invents_one(self):
+        self.assertEqual(w.eval_story([dict(GOOD[0]), dict(GOOD[1])], index()),
+                         "a drop story must end on its what-if step")
+        self.assertIsNone(w.eval_story([dict(s) for s in GOOD], index()))
+        # An A has no what-if: the story ends after the cause, with no advice.
+        chem = w.fact_index(chem_facts())
+        self.assertIsNone(w.eval_story([{"text": "Still an A, down 1.6 since Oct 14, mostly from the Lab 3 Packet (4/10).",
+                                         "cites": [CHEM_MOVE, CHEM_C1]}], chem))
+        for advice in ("Redoing the Lab 3 Packet would help.", "Focus on the next lab.",
+                       "It should come back with steady work.", "Kid A needs to turn in cleaner Warm Ups."):
+            self.assertEqual(w.check_sentence(advice, [CHEM_C1], chem), "gives advice no what_if backs", advice)
+        self.assertIsNone(w.check_sentence("Aim for an 88% on the next test to get the A back.", [WHATIF], index()))
+
+    def test_a_and_an_follow_how_the_number_or_letter_is_said(self):
+        cases = {
+            "A 85 or better on the next test gets there.": "An 85 or better on the next test gets there.",
+            "It needs a 80 on the quiz.": "It needs an 80 on the quiz.",
+            "a 8/10, a 11/20 and a 18.5% so far": "an 8/10, an 11/20 and an 18.5% so far",
+            "Still a A, an 97 gets a B back.": "Still an A, a 97 gets a B back.",
+            "A F on the quiz.": "An F on the quiz.",
+            "a 110 and a 1.5 and a 4": "a 110 and a 1.5 and a 4",
+            "Down 1.6. A 11 on the lab helps.": "Down 1.6. An 11 on the lab helps.",
+            # The letter A mid-sentence is never read as the article.
+            "Still an A 1.6 points down.": "Still an A 1.6 points down.",
+            "A B again with an 85 or better.": "A B again with an 85 or better.",
+        }
+        for raw, fixed in cases.items():
+            self.assertEqual(w.fix_articles(raw), fixed, raw)
+        drafted = w._sentences(json.dumps({"sentences": [
+            {"text": "A 85 or better on the next test gets there.", "cites": [GEO_WHATIF]}]}))
+        self.assertEqual(drafted[0]["text"], "An 85 or better on the next test gets there.")
+        geo = w.fact_index(geometry_facts())
+        self.assertIsNone(w.check_sentence(drafted[0]["text"], drafted[0]["cites"], geo))
+        self.assertEqual(w.check_sentence(w.fix_articles("A 84 or better on the next test gets there."), [GEO_WHATIF], geo),
+                         "number 84 isn't the needed score or a round-up of it")
+
+    def test_a_headline_cites_a_fact_and_says_something_concrete_or_there_is_none(self):
+        vague = ({"text": "Next test scores impact Math significantly.", "cites": [WHATIF]},
+                 {"text": "Math: B, 2.1 pts from an A.", "cites": []},
+                 {"text": "Math needs the Ch.4 Quiz improved.", "cites": [CAUSE]})
+        for headline in vague:
+            up = w.write_up(ScriptedModel({"Math": GOOD}, headline=headline), insight_facts())
+            self.assertIsNone(up["headline"], headline["text"])
+            self.assertEqual(w.apply_write_up({"headline": "Grok headline"}, up)["headline"], "")
+        for text, cites in (("Math: an 88% on the next test gets the A back.", [WHATIF]),
+                            ("The Ch.4 Quiz pulled Math down.", [CAUSE])):
+            up = w.write_up(ScriptedModel({"Math": GOOD}, headline={"text": text, "cites": cites}), insight_facts())
+            self.assertEqual(up["headline"], {"text": text, "cites": cites})
+        fixed = w.write_up(ScriptedModel({"Math": GOOD}, headline={
+            "text": "Math: a 88% on the next test gets the A back.", "cites": [WHATIF]}), insight_facts())
+        self.assertEqual(fixed["headline"]["text"], "Math: an 88% on the next test gets the A back.")
+
+
 class HeadlineAndTakeoverTests(unittest.TestCase):
     def test_write_up_headline_and_stories(self):
         model = ScriptedModel({"Math": GOOD}, headline={
@@ -662,7 +737,10 @@ class HeadlineAndTakeoverTests(unittest.TestCase):
         self.assertEqual([c["story"] for c in out["classes"]], ["Local story", ""])
         self.assertEqual(out["focus_tonight"], "Math: Worksheet")
         self.assertEqual(summary["headline"], "Grok headline")
-        self.assertEqual(w.apply_write_up(summary, {"headline": None, "stories": []})["headline"], "Grok headline")
+        # No local headline means no headline at all: never the model's, never its status line.
+        bare = w.apply_write_up({**summary, "status": "Grok status"}, {"headline": None, "stories": []})
+        self.assertEqual(bare["headline"], "")
+        self.assertNotIn("status", bare)
 
 
 class PatternFromLogTests(unittest.TestCase):
