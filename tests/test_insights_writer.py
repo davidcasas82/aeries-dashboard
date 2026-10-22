@@ -601,6 +601,74 @@ class BakeoffFindingTests(unittest.TestCase):
         self.assertEqual(w._json('```json\n{"a":"x <think> y"}\n```'), {"a": "x <think> y"})
         self.assertIsNone(w._json("<think>x"))
 
+    def test_names_must_match_a_cited_fact(self):
+        # Review repro: Geo's only cause is the Unit Test (20/40), and its scores post Thursdays.
+        geo = [{"id": "next:g", "kind": "next_letter", "class": "Geo", "pct": 69.0, "letter": "D", "next_letter": "C",
+                "threshold": 70.0, "gap": 1.0},
+               {"id": "move:g", "kind": "grade_move", "class": "Geo", "since": "2026-10-14", "from_pct": 71.5,
+                "to_pct": 69.0, "delta": -2.5, "explained": -2.5, "coverage": 1.0, "coverage_trimmed": False,
+                "causes": [{"id": "cause:g:t", "title": "Unit Test", "bucket": "Tests", "bucket_weight_pct": 50.0,
+                            "earned": 20.0, "possible": 40.0, "points": -2.5, "share": -2.5}]},
+               {"id": "pat:g", "kind": "posting_day", "class": "Geo", "weekday": "Thursday", "share": 0.8,
+                "scores": 10, "window_days": 28}]
+        idx = w.fact_index(geo)
+        for text, cites in (("The Glaze Test did most of the damage.", ["cause:g:t"]),
+                            ("The Clay Sketch helped.", ["cause:g:t"]),
+                            ("Ceramics scores usually post Thursdays.", ["pat:g"]),
+                            ("The Final Exam did most of the damage.", ["cause:g:t"]),
+                            ("Mostly the Final Exam.", ["cause:g:t"]),
+                            ("Mostly Final Exam (20/40).", ["cause:g:t"])):
+            self.assertIn("which no cited fact has", w.check_sentence(text, cites, idx, "Geo") or "", text)
+        for text, cites in (("The Unit Test (20/40) did most of the damage.", ["cause:g:t"]),
+                            ("Mostly the Unit Test.", ["cause:g:t"]),
+                            ("Geo scores usually post Thursdays.", ["pat:g"]),
+                            ("Scores usually post Thursdays.", ["pat:g"])):
+            self.assertIsNone(w.check_sentence(text, cites, idx, "Geo"), text)
+        self.assertEqual(w._named_items("Mostly the Unit 2 Warm Ups (wk9-10), then the Ch. 5 Test (8/10)."),
+                         ["Unit 2 Warm Ups (wk9-10)", "Ch. 5 Test"])
+        self.assertEqual(w._named_items("A 75 or better on the next assessment keeps the A. Scores post Fridays."), [])
+
+    def test_physics_bar_sentences_pass_the_names_check(self):
+        phys = [{"id": "move:p", "kind": "grade_move", "class": "Physics & Eng", "since": "2026-10-14",
+                 "from_pct": 98.1, "to_pct": 96.5, "delta": -1.6, "explained": -1.73, "coverage": 1.08,
+                 "coverage_trimmed": False, "causes": [
+                     {"id": "cause:p:packet", "title": "Unit 2 Packet", "bucket": "Coursework", "bucket_weight_pct": 5.0,
+                      "change": "new", "earned": 4.0, "possible": 10.0, "points": -0.79, "share": -1.36},
+                     {"id": "cause:p:warmups", "title": "Unit 2 Warm Ups (wk9-10)", "bucket": "Coursework",
+                      "bucket_weight_pct": 5.0, "change": "new", "earned": 1.0, "possible": 3.0, "points": -0.21,
+                      "share": -0.75},
+                     {"id": "cause:p:lab", "title": "Balloon Rocket Lab", "bucket": "Coursework", "bucket_weight_pct": 5.0,
+                      "change": "new", "earned": 9.0, "possible": 10.0, "points": 0.77, "share": 0.38}]},
+                {"id": "whatif:p:assessments:10", "kind": "what_if", "class": "Physics & Eng", "bucket": "Assessments",
+                 "bucket_weight_pct": 95.0, "points": 10.0, "target": 90.0, "needed_pct": 74.6, "reachable": True}]
+        idx = w.fact_index(phys)
+        for text, cites in (("Still an A, down 1.6 since Oct 14.", ["move:p"]),
+                            ("The Unit 2 Packet (4/10) did most of the damage.", ["cause:p:packet"]),
+                            ("Mostly the Unit 2 Packet (4/10) and the Unit 2 Warm Ups (1/3).",
+                             ["cause:p:packet", "cause:p:warmups"]),
+                            ("The Balloon Rocket Lab (9/10) helped.", ["cause:p:lab"]),
+                            ("Physics & Eng scores dropped 1.6.", ["move:p"])):
+            self.assertIsNone(w.check_sentence(text, cites, idx, "Physics & Eng"), text)
+        self.assertEqual(w._named_items("A 75 or better on the next assessment keeps the A."), [])
+
+    def test_review_nits_scores_quarters_and_dashes(self):
+        clay = [{"id": "move:c", "kind": "grade_move", "class": "Clay", "since": "2026-10-14", "from_pct": 71.0,
+                 "to_pct": 69.0, "delta": -2.0, "explained": -2.0, "coverage": 1.0, "coverage_trimmed": False,
+                 "causes": [{"id": "cause:c:glaze", "title": "Glaze Test", "bucket": "Projects", "bucket_weight_pct": 40.0,
+                             "earned": 11.0, "possible": 20.0, "points": -2.0, "share": -2.0}]}]
+        idx = w.fact_index(clay)
+        # "(11/20)" is a score in parentheses, never Nov 20.
+        self.assertIsNone(w.check_sentence("The Glaze Test (11/20) did most of the damage.", ["cause:c:glaze"], idx))
+        self.assertEqual(w.check_sentence("The Glaze Test (12/20) did most of the damage.", ["cause:c:glaze"], idx),
+                         "score 12/20 isn't in the cited facts")
+        self.assertEqual(w.spelled_to_digits("three-quarters of a point"), "0.75 point")
+        near = [{"id": "next:q", "kind": "next_letter", "class": "Q", "pct": 69.25, "letter": "D", "next_letter": "C",
+                 "threshold": 70.0, "gap": 0.75}]
+        self.assertIsNone(w.check_sentence("Still a D, three-quarters of a point from a C.", ["next:q"], w.fact_index(near)))
+        dash = [dict(near[0], pct=68.6, gap=1.4)]
+        self.assertIsNone(w.check_sentence("Still a D, 1.4 points from a C--one more test.", ["next:q"], w.fact_index(dash)))
+        self.assertIn("whole-letter", w.check_sentence("Still a D, 1.4 points from a C-.", ["next:q"], w.fact_index(dash)))
+
     def test_example_wording_on_real_facts_passes(self):
         # Review repros: the example-copy check is gone, so real lines that match the example pass.
         facts = [{"id": "move:art:2026-09-09", "kind": "grade_move", "class": "Art", "since": "2026-09-09",

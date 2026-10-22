@@ -70,7 +70,8 @@ _ZERO_GRADE_RE = re.compile(r"(?<![\d.])0(?:\.0+)?\s?%")
 _NUMBER_RE = re.compile(r"(?<!\w)(?<!\d\.)\d+(?:\.\d+)?")
 _LETTER_RE = re.compile(r"(?<![\w'’])([A-DF])(?![\w'’+-])")
 # The scale is whole letters only, so any plus or minus letter is wrong on its face.
-_PLUS_MINUS_RE = re.compile(r"(?<![\w'’])([A-DF])(?:[+−–]|-(?![A-Za-z0-9])| ?-?(?:plus|minus)\b)", re.I)
+# "C--one more test" is a dash, not a C-.
+_PLUS_MINUS_RE = re.compile(r"(?<![\w'’])([A-DF])(?:[+−–](?![-−–])|-(?![A-Za-z0-9-])| ?-?(?:plus|minus)\b)", re.I)
 
 _ONES = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen "
          "sixteen seventeen eighteen nineteen").split()
@@ -113,6 +114,7 @@ _FRACTION_WORDS = (
     (re.compile(r"\b(?:a )?tenth of a (point|percent)\b", re.I), r"0.1 \1"),
     (re.compile(r"\b(?:a|one) (point|percent|percentage point)(?! (?:five|\d))\b", re.I), r"1 \1"),
 )
+_QUARTERS_RE = re.compile(r"\b(one|two|three|1|2|3) quarters? of (?:a|one) (point|percent)\b", re.I)
 _AND_A_HALF_RE = re.compile(rf"\b(\d+(?:\.\d+)?|{_W}(?: {_W})?) and a half\b", re.I)
 # Hyphens inside a spoken number ("one-and-a-half", "a half-point", "twenty-one") read as spaces.
 _NUMBER_PARTS = set(_WORD_VALUE) | {"a", "and", "half", "halves", "quarter", "quarters", "third", "thirds",
@@ -645,6 +647,8 @@ def spelled_to_digits(text):
         return f"{value + 0.5:g}"
 
     text = _unhyphen_numbers(text)
+    text = _QUARTERS_RE.sub(lambda m: f"{({'one': 1, 'two': 2, 'three': 3}.get(m.group(1).lower()) or int(m.group(1))) * 0.25:g} "
+                                      f"{m.group(2)}", text)
     text = _AND_A_HALF_RE.sub(half, text)
     text = _SPELLED_RE.sub(swap, text)
     for pattern, value in _FRACTION_WORDS:
@@ -687,8 +691,12 @@ def _dates_in(text, cited):
     scores = _score_pairs(cited)
     for match in _SLASH_RE.finditer(text):
         n, m = float(match.group(1)), float(match.group(2))
+        in_parens = text[: match.start()].endswith("(") and text[match.end():].startswith(")")
         if (n, m) in scores:
             spans.append((match.start(), match.end(), None))
+        elif in_parens:
+            # "Glaze Test (11/20)" is a score in parentheses, never a date; the score check judges it.
+            spans.append((match.start(), match.end(), "score"))
         elif n == int(n) and m == int(m) and 1 <= n <= 12 and 1 <= m <= 31:
             spans.append((match.start(), match.end(), (int(n), int(m))))
         else:
@@ -758,7 +766,72 @@ def check_sentence(text, cites, index, name=None):
     echo = _ECHO_RE.search(text) or _SAME_LETTER_MOVE_RE.search(text)
     if echo:
         return f"echoes the prompt ({echo.group(0)})"
-    return _claims_reason(text, cited, index)
+    reason = _claims_reason(text, cited, index)
+    if reason:
+        return reason
+    unbacked = _unbacked_name(text, cited)
+    return f"names {unbacked}, which no cited fact has" if unbacked else None
+
+
+# Named items and classes: "the Unit Test", "Unit Test (20/40)", "Geo scores ...". A run of capitalized
+# words (digits, "&" and short joiners allowed inside), with a trailing "(wk9-10)" but never a "(20/40)".
+_CAP = r"(?:[A-Z][\w'’.&-]*|\d[\w.-]*|&)"
+_NAME_RUN = rf"[A-Z][\w'’.&-]*(?:\s+(?:(?:of|and|for|to|in|on)\s+)?{_CAP})*(?:\s*\((?!\s*\d+(?:\.\d+)?\s*/)[^)]*\))?"
+_NAMED_RES = (
+    re.compile(rf"\b(?i:the)\s+({_NAME_RUN})"),
+    re.compile(rf"({_NAME_RUN})\s*\(\s*\d+(?:\.\d+)?\s*/\s*\d+"),
+    re.compile(rf"(?:^|[.!?;:]\s+|\b(?i:mostly|mainly|largely|partly|because of|from|after)\s+)({_NAME_RUN})"
+               r"(?=\s+(?i:scores?|grades?|class|did|helped|hurt|pulled|dragged|lifted|cost|knocked|brought)\b|\s*[.!?]?$)"),
+)
+_NAME_STARTERS = {"mostly", "mainly", "largely", "partly", "still", "slipped", "up", "down", "scores", "score", "a", "an",
+                  "the", "it", "its", "that", "this", "and", "but", "then", "because", "after", "from", "with", "most",
+                  "biggest", "only", "next", "both", "his", "her", "their", "grades", "grade"}
+_NOT_NAMES = set(WEEKDAY_NAMES) | {w + "s" for w in WEEKDAY_NAMES} | set(MONTHS)
+
+
+def _named_items(text):
+    """Item and class names a sentence uses, however written: "the X", "X (a/b)", "Mostly the X",
+    "Mostly X", "Ceramics scores ...". Letters, weekdays and months aren't names."""
+    out = []
+    for pattern in _NAMED_RES:
+        for match in pattern.finditer(text):
+            words = match.group(1).rstrip(".,;:!?").split()
+            while words and words[0].lower().rstrip(".,") in _NAME_STARTERS:
+                words = words[1:]
+            if not words:
+                continue
+            first = words[0].lower().rstrip(".,'’s")
+            if re.fullmatch(r"[A-F](?:['’]s)?[+-]?", words[0]) or first[:3] in _NOT_NAMES or first in _NOT_NAMES \
+                    or words[0][0].isdigit():
+                continue
+            out.append(" ".join(words))
+    return list(dict.fromkeys(out))
+
+
+def _name_key(text):
+    return " " + re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip() + " "
+
+
+def _unbacked_name(text, cited):
+    """The first named item or class no cited fact carries, or None. Names only, never numbers or dates.
+
+    Matched like _concrete_headline: a cited cause title, next_title, bucket or class name, with or
+    without its trailing parenthetical; a shortened name ("the Packet") counts when a title holds it."""
+    allowed = set()
+    for fact in cited:
+        causes = fact.get("causes") if fact.get("kind") == "grade_move" else []
+        for item in [fact] + list(causes or []):
+            for key in ("title", "next_title", "class", "bucket", "category"):
+                if item.get(key):
+                    allowed.add(str(item[key]))
+                    allowed.add(re.sub(r"\s*\([^)]*\)\s*$", "", str(item[key])))
+    keys = {_name_key(a) for a in allowed if a.strip()}
+    for name in _named_items(text):
+        said = _name_key(name)
+        short = _name_key(re.sub(r"\s*\([^)]*\)\s*$", "", name))
+        if not any(said in k or short in k or k in said for k in keys):
+            return name
+    return None
 
 
 def _class_moves(index, cited):
