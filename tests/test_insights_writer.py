@@ -1,10 +1,12 @@
 """The local write-up: synthetic facts only, and a scripted model in place of a real one."""
 
 import json
+import random
 import re
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -1083,13 +1085,18 @@ class CtoRoundFourTests(unittest.TestCase):
 KEEP_LAB, KEEP_TEST = "keep:chem:coursework:10", "keep:chem:tests:50"
 
 
-def chem_keep_facts(cannot_lose=False, keep_id=KEEP_LAB):
-    """Chem (an A that dropped 1.6, mostly on Coursework) plus the engine's one keep_letter fact."""
+def chem_keep_facts(cannot_lose=False, keep_id=KEEP_LAB, named=True):
+    """Chem (an A that dropped 1.6, mostly on Coursework) plus the engine's one keep_letter fact.
+
+    A can't-drop fact is about a named upcoming item at its posted points (attach_next_items names it);
+    named=False leaves it at a typical size with no name, which the writer must not say."""
     bucket, points, needed = ("Coursework", 10.0, 61.3) if keep_id == KEEP_LAB else ("Tests", 50.0, 72.0)
     keep = {"id": keep_id, "kind": "keep_letter", "class": "Chem", "letter": "A", "bucket": bucket,
             "points": points, "needed_pct": needed, "cannot_lose": False}
     if cannot_lose:
         keep.update(needed_pct=None, cannot_lose=True)
+        if named:
+            keep.update(next_title="Lab 9", next_due="2026-10-23", next_due_label="Fri Oct 23")
     return chem_facts() + [keep]
 
 
@@ -1132,7 +1139,8 @@ class KeepTheLetterWriterTests(unittest.TestCase):
         self.assertEqual(w.fill_slots(seen[0]["say_keep"], idx), "A 62 or better on the next coursework assignment keeps the A.")
         safe = [f for f in w.model_facts(chem_keep_facts(cannot_lose=True)) if w.is_keep(f)]
         self.assertEqual(safe[0]["say_keep"], "The {next:%s} can't drop it below an A." % KEEP_LAB)
-        self.assertEqual(w.fill_slots(safe[0]["say_keep"], idx), "The next coursework assignment can't drop it below an A.")
+        self.assertEqual(w.fill_slots(safe[0]["say_keep"], w.fact_index(chem_keep_facts(cannot_lose=True))),
+                         "The Lab 9 can't drop it below an A.")
         tests = [f for f in w.model_facts(chem_keep_facts(keep_id=KEEP_TEST)) if w.is_keep(f)]
         self.assertEqual(w.fill_slots(tests[0]["say_keep"], w.fact_index(chem_keep_facts(keep_id=KEEP_TEST))),
                          "A 72 or better on the next test keeps the A.")
@@ -2415,6 +2423,79 @@ class HostileTitleFillTests(unittest.TestCase):
                       "cause:g:b", "move:g", "pattern:posting_day:geo"):
             reason, out = self.check(title)
             self.assertIsNotNone(reason, (title, out))
+
+
+
+class CannotDropWriterTests(unittest.TestCase):
+    """GE's #55 finding, writer side: the can't-drop form only for a named next item at its posted points."""
+
+    LINE = "The {next:%s} can't drop it below an A." % KEEP_LAB
+
+    def test_an_unnamed_cannot_drop_fact_is_never_said(self):
+        facts = chem_keep_facts(cannot_lose=True, named=False)
+        keep = [f for f in facts if w.is_keep(f)][0]
+        self.assertIsNone(w.say_keep(keep))
+        self.assertIsNone(w.pick_keep(facts))
+        self.assertEqual([f for f in w.model_facts(facts) if w.is_keep(f)], [])
+        idx = w.fact_index(facts)
+        self.assertEqual(w.check_sentence(self.LINE, [KEEP_LAB], idx, "Chem"), w.FORM_REASON)
+        story = w.write_class(ScriptedModel({"Chem": [KeepTheLetterWriterTests.OPEN, KeepTheLetterWriterTests.CAUSE,
+                                                       {"text": self.LINE, "cites": [KEEP_LAB]}]}), facts, "Chem")
+        self.assertEqual(len(story["dropped"]), 1)
+
+    def test_the_cannot_drop_form_on_a_needed_score_fact_drops(self):
+        idx = w.fact_index(chem_keep_facts())
+        self.assertIsNotNone(w.check_sentence(self.LINE, [KEEP_LAB], idx, "Chem"))
+        named = chem_keep_facts()
+        named[-1] = {**named[-1], "next_title": "Lab 9"}
+        self.assertIsNotNone(w.check_sentence(self.LINE, [KEEP_LAB], w.fact_index(named), "Chem"))
+
+    def test_a_named_cannot_drop_fact_passes_and_the_score_form_stays(self):
+        facts = chem_keep_facts(cannot_lose=True)
+        idx = w.fact_index(facts)
+        self.assertIsNone(w.check_sentence(self.LINE, [KEEP_LAB], idx, "Chem"))
+        self.assertEqual(w.fill_slots(self.LINE, idx), "The Lab 9 can't drop it below an A.")
+        self.assertIsNone(w.check_sentence(KeepTheLetterWriterTests.KEEP["text"], [KEEP_LAB], w.fact_index(chem_keep_facts()), "Chem"))
+
+    def test_every_emitted_cannot_drop_sentence_is_true(self):
+        # Brute force through the engine and the writer: random A-to-D classes, a next item of the usual size or
+        # bigger, named on the page or not. Every can't-drop sentence the writer would allow must hold at the
+        # lowest score the class allows, on the points of the item it names.
+        rng = random.Random(55)
+        emitted = 0
+        for _ in range(1500):
+            buckets = []
+            for i in range(rng.choice([1, 2, 3])):
+                rows = []
+                for j in range(rng.randint(1, 10)):
+                    p = float(rng.choice([5, 10, 20, 25, 40, 50, 100]))
+                    rows.append(insights.Score(f"B{i}{j}", "", f"B{i}", round(rng.uniform(0.8, 1.0) * p, 1), p))
+                buckets.append(insights.Bucket(f"B{i}", rng.randint(5, 70), tuple(rows)))
+            m = insights.ClassModel("X", "percent_of_grade", tuple(buckets), None, rng.choice([None, 100.0]))
+            g = insights.truncated_grade(m)
+            if g is None or insights.letter_floor(g) is None:
+                continue
+            floor = insights.letter_floor(g)[1]
+            b = rng.choice(m.buckets)
+            real = sorted(s.possible for s in b.scores)[len(b.scores) // 2] * rng.choice([1, 1, 2, 3, 5])
+            named = rng.random() < 0.5
+            ups = [(date(2026, 10, 27), "Next One", b.name, float(real))] if named else []
+            keep = insights.keep_fact(m, g, ups, {"delta": -1.0, "causes": []})
+            if not keep:
+                continue
+            move = {"id": "move:x", "kind": "grade_move", "class": "X", "delta": -1.0, "from_pct": g + 1, "to_pct": g,
+                    "causes": []}
+            facts = w.attach_next_items([move, keep], [{"class": "X", "bucket": b.name, "points": float(real),
+                                                        "title": "Next One", "due": "2026-10-27"}] if named else [])
+            line = "The {next:%s} can't drop it below %s %s." % (keep["id"], "an" if keep["letter"] in "AF" else "a",
+                                                                   keep["letter"])
+            if w.check_sentence(line, [keep["id"]], w.fact_index(facts), "X", ["X"]) is not None:
+                continue
+            emitted += 1
+            self.assertEqual(facts[1].get("next_title"), "Next One")
+            self.assertTrue(insights.holds(m, keep["bucket"], insights._score_range(m)[0], float(real), floor),
+                            (keep, real))
+        self.assertGreater(emitted, 50)
 
 
 if __name__ == "__main__":

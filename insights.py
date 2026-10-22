@@ -437,11 +437,15 @@ def keep_fact(model, pct, upcoming=(), move=None):
     first, else one the next item can't cost. Kind keep_letter, never what_if, so no next-letter rule
     reads it. Only what the class entry doesn't already say: no threshold (the letter's floor), no
     bucket weight, no target.
+
+    A can't-cost (cannot_lose) fact only for a named upcoming item, worked out at that item's posted
+    points: at a typical size it is false whenever the real next item is bigger, so none is made.
     """
     held = letter_floor(pct)
     if held is None:
         return None
     letter, floor = held
+    named = {(bucket, points) for _due, _title, bucket, points in upcoming or ()}
     safe = None
     for bucket, points in keep_candidates(model, upcoming, move):
         result = keep_score(model, bucket, points, floor)
@@ -460,7 +464,7 @@ def keep_fact(model, pct, upcoming=(), move=None):
         }
         if needed is not None:
             return fact
-        if cannot_lose and safe is None:
+        if cannot_lose and safe is None and (bucket, points) in named:
             safe = fact
     return safe
 

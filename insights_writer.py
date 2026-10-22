@@ -563,20 +563,31 @@ def pick_keep(class_facts):
     keep = next((f for f in facts if is_keep(f)), None)
     if not dropped or keep is None:
         return None
-    if not isinstance(keep.get("needed_pct"), (int, float)) and not keep.get("cannot_lose"):
+    if not isinstance(keep.get("needed_pct"), (int, float)) and not _named_cannot_lose(keep):
         return None
     return keep
 
 
+def _named_cannot_lose(fact):
+    """A can't-drop keep fact is only true about a named upcoming item at its posted points: the engine works
+    it out at fact["points"], and attach_next_items names it only when an upcoming item in that class and
+    bucket has exactly those points. Without that name (a typical size) it can be false, so it isn't one."""
+    return bool(fact.get("cannot_lose")) and not isinstance(fact.get("needed_pct"), (int, float)) \
+        and bool(fact.get("next_title")) and isinstance(fact.get("points"), (int, float)) and fact["points"] > 0
+
+
 def say_keep(fact):
     """How a note says a keep_letter fact, in slot form: "A 62 or better on the {next:<id>} keeps the A." or,
-    when the next item can't cost the letter, "The {next:<id>} can't drop it below an A." Code fills the slot
-    with the next item's title or "next <bucket>" after the checks."""
+    when the named next item can't cost the letter, "The {next:<id>} can't drop it below an A." (only with a
+    named upcoming item at its posted points, see _named_cannot_lose). Code fills the slot with the next
+    item's title or "next <bucket>" after the checks."""
     letter = fact.get("letter")
     if not letter or not fact.get("id"):
         return None
     where = f"the {{next:{fact['id']}}}"
     if fact.get("cannot_lose"):
+        if not _named_cannot_lose(fact):
+            return None
         return f"The {{next:{fact['id']}}} can't drop it below {_article(letter)} {letter}."
     if isinstance(fact.get("needed_pct"), (int, float)):
         return fix_articles(f"A {say_needed(fact['needed_pct'])} on {where} keeps the {letter}.")
