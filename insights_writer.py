@@ -4,20 +4,15 @@ The writer reads only a student's insight_facts (from the scrape) and the scored
 log (for posting-day patterns). It never sees the analytics dump, so it can't restate
 the past-due list, which stays a plain code list on the page.
 
-Every class with a letter to open on gets a story. Each class runs as a pipeline:
-  1. The model runs only when there's something worth saying (worth_saying: a grade move,
-     a reachable what-if or a pattern). Otherwise the story is code's alone.
-  2. The model drafts sentences, and each sentence cites fact ids.
-  3. check_sentence (code) drops any sentence whose numbers, letters, dates, weekdays or wording
-     aren't backed by the facts it cites. Spelled-out numbers are read as numbers first.
-  4. A vote pass asks the model, several times, whether each surviving sentence is backed;
-     a sentence needs a majority.
-  5. code_lines (code, no model) adds the biggest drag on a class with no recent move, the next
-     named item's move-up step and keep sentence, and, for buckets with nothing posted, the
-     same at the size of past items, saying so. The model never writes, votes on or trims them.
-  6. eval_story (code) rejects the model's story unless it cites a grade_move, what_if or
-     pattern fact, keeps the insight order, and never restates past-due or missing work. A
-     rejected story falls back to code's own: the letter, then the code lines.
+Every class with a letter to open on gets a story, and code writes every sentence of it:
+  1. The opening (say_opening): the letter with the move or the gap.
+  2. code_lines adds the biggest drag on a class with no recent move, the next named item's move-up
+     step and keep sentence, and, for buckets with nothing posted, the same at the size of past items,
+     saying so.
+  3. check_sentence holds each sentence to the facts it cites and to its exact form (form_reason); a
+     sentence that fails isn't written.
+  4. eval_story checks the story opens on the letter, keeps the story order and never restates
+     past-due or missing work.
 Then story_tags (code, no model) marks the student's easiest win and biggest risk, from what
 the published stories say.
 """
@@ -28,15 +23,12 @@ import os
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import Protocol
 
 import insights
 
-INSIGHT_KINDS = ("grade_move", "what_if", "posting_day")
 # Story order: the letter, then why it moved (or the biggest drag), then the pattern, then the next steps.
 ORDER = {"next_letter": 0, "current_letter": 0, "scale_break": 0, "grade_move": 1, "drag": 1, "posting_day": 2,
          "what_if": 3, "keep_letter": 3}
-VOTES = 3
 # A move's causes may be stated only when they explain it: same sign, within 20% of delta.
 # The engine's coverage field (explained / delta) carries both: 0.8 <= coverage <= 1.2.
 CAUSE_TOLERANCE = 0.20
@@ -118,7 +110,7 @@ _NEEDED_BEFORE_RE = re.compile(
 # points-earned like "a 4.0 on the Unit 2 Packet", which reads as 4%.
 _SCORE_BEFORE_RE = re.compile(r"\b(?:an?|scored|scoring|got|getting|earned|earning)\s+$", re.I)
 _SCORE_AFTER_RE = re.compile(r"^\s*(?:%|percent)?\s+(?:on|in|for)\b", re.I)
-# Spoken fractions the model uses for small gaps: "half a point", "a quarter point".
+# Spoken fractions for small gaps: "half a point", "a quarter point".
 _FRACTION_WORDS = (
     (re.compile(r"\ba point and a half\b", re.I), "1.5 points"),
     (re.compile(r"\bhalf (?:a|of a|a single) (point|percent|percentage point)\b", re.I), r"0.5 \1"),
@@ -175,7 +167,7 @@ _BARE_CAUSE_RE = re.compile(r"\b(?:mainly|mostly|largely|primarily|chiefly)\b", 
 # Wording that ranks a cause first. Only then must the named cause be the top share; a plain list of causes
 # ("Down from HW 3 and the Ch.4 Quiz.") may come in any order.
 _MOST_RE = re.compile(r"\b(?:most|mostly|mainly|main|largely|primarily|chiefly|biggest|largest|bulk|chief)\b", re.I)
-# Prompt wording the models echoed back. A note never talks like this.
+# Wording a note never uses (from the old model prompts).
 _ECHO_RE = re.compile(
     r"distance to the next letter|\bnext letter\b|\bstudents?\b|\bthe letter is\b|\bwhat[- ]if\b|"
     r"\bwhat moved\b|\bof that size\b|\bnext item of\b|\bitem of similar size\b|\bthe next item\b",
@@ -224,7 +216,7 @@ _ADVICE_RE = re.compile(
 _ARTICLE_RE = re.compile(
     r"(?:(?<=^)|(?<=[.!?:;\"“(] )|(?<=[.!?:;]  ))(A|An)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))"
     r"|\b(a|an)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))")
-# Belt and braces behind the cause-sentence gate: words that say which way a cause pushed the grade.
+# Words that say which way a cause pushed the grade (form_reason drops any sentence citing a cause).
 # A cause that "helped" has a positive share; one that "hurt" a negative one.
 _UP_VERB_RE = re.compile(
     r"\b(?:help(?:s|ed|ing)?|lift(?:s|ed|ing)?|boost(?:s|ed|ing)?|rais(?:e|es|ed|ing)|sav(?:e|es|ed|ing)|"
@@ -260,94 +252,6 @@ ROLE_FIELDS = {
 # other_share/other_causes (#54) describe causes folded away; no sentence can name or count them.
 _NOT_GENERAL = ("bucket_weight_pct", "coverage", "needed_pct", "other_share", "other_causes")
 
-# The made-up example: a class, items and numbers no real class can have, so a note that copies them can't be
-# true and a real fact never matches an example word for word (test: ExampleNumbersTests). On the 90/80/70/60
-# scale a D is never more than 10 points from a C, a move that stays a D is under 10, a needed score is at most
-# 100 and a bucket is at most 100% of the grade. It has no posting_day fact, so it shows no weekday to copy.
-EXAMPLE_FACTS = [
-    {"id": "next:ceramics", "kind": "next_letter", "class": "Ceramics", "pct": 66.1, "letter": "D",
-     "next_letter": "C", "threshold": 70.0, "gap": 13.9, "say_opening": "Still a D, 13.9 points from a C."},
-    {"id": "move:ceramics:2026-09-09", "kind": "grade_move", "class": "Ceramics", "since": "2026-09-09",
-     "since_label": "Sep 9", "from_pct": 69.4, "to_pct": 66.1, "delta": -12.5, "explained": -12.5, "coverage": 1.0,
-     "coverage_trimmed": False, "say_opening": "Still a D, down 12.5 since Sep 9.", "causes": [
-         {"id": "cause:ceramics:2026-09-09:glazetest", "title": "Glaze Test", "category": "Projects",
-          "bucket": "Projects", "bucket_weight_pct": 140.0, "change": "new", "earned": 3.0, "possible": 20.0,
-          "points": -12.9, "share": -12.9, "effect": "hurt"},
-         {"id": "cause:ceramics:2026-09-09:claysketch", "title": "Clay Sketch", "category": "Projects",
-          "bucket": "Projects", "bucket_weight_pct": 140.0, "change": "new", "earned": 19.0, "possible": 20.0,
-          "points": 0.4, "share": 0.4, "effect": "helped"}]},
-    {"id": "whatif:ceramics:projects:20", "kind": "what_if", "class": "Ceramics", "bucket": "Projects",
-     "bucket_weight_pct": 140.0, "points": 20.0, "target": 70.0, "needed_pct": 103.4, "say_needed": "104 or better",
-     "reachable": True, "say_step": "A 104 or better on the {next:whatif:ceramics:projects:20} gets it to a C."},
-]
-EXAMPLE_NOTE = [
-    {"text": "Still a D, down 12.5 since Sep 9.", "cites": ["move:ceramics:2026-09-09"]},
-    {"text": "The {item:cause:ceramics:2026-09-09:glazetest} did most of the damage.",
-     "cites": ["cause:ceramics:2026-09-09:glazetest"]},
-    {"text": "The {item:cause:ceramics:2026-09-09:claysketch} helped.", "cites": ["cause:ceramics:2026-09-09:claysketch"]},
-    {"text": "A 104 or better on the {next:whatif:ceramics:projects:20} gets it to a C.",
-     "cites": ["whatif:ceramics:projects:20"]},
-]
-DRAFT_SYSTEM = """You write a short note to a parent about one class (the class story), the way a sharp teacher would.
-You get FACTS as JSON. Every fact has an id. Use only those facts.
-
-Name assignments and classes ONLY with slots, which code fills in with the real name:
-- {item:<cause id>} ONLY for a cause inside a grade_move's causes (it has a title). Code adds its score, like "(6/10)"; don't write the score yourself.
-- {next:<what_if id>} for the coming item a what_if fact is about. Code writes "next test", "next assessment" or the item's title.
-- {bucket:<fact id>} for the bucket or category of a cause or what_if fact ("{bucket:<cause id>} scores dragged it."). Code writes the name, like "Homework".
-- {class:<fact id>} for the class name. You may also write the class's own name as FACTS gives it; never another class.
-A what_if id goes in a {next:} slot, never in an {item:} slot: the next item has no title yet.
-  Right: "A 107 or better on the {next:whatif:art:projects:20} gets it to a B."
-  Wrong: "A 107 or better on the {item:whatif:art:projects:20} gets it to a B."
-Never write an assignment word yourself (test, quiz, exam, lab, project, packet, homework, essay, report, assessment, ...), not even "the next test": use {next:<id>} or {bucket:<id>}. Never write a fact id outside the braces, and nothing but these slots in braces. A sentence that does is thrown away.
-
-Write 1 to 4 short sentences, in this order: letter, cause, pattern, next step.
-Every sentence cites at least one fact and is one of these forms, word for word. Any other sentence is thrown away.
-- Opening: say_opening, from the grade_move if there is one, else from the next_letter. Cite that fact.
-- Cause, citing the cause id (and its grade_move if you like):
-  "Mostly the {item:<cause id>}." for the largest cause whose effect matches the move.
-  "The {item:<cause id>} did most of the damage." for the largest cause whose effect is "hurt".
-  "The {item:<cause id>} hurt." or "The {item:<cause id>} dragged it down." for a cause whose effect is "hurt".
-  "The {item:<cause id>} helped." for a cause whose effect is "helped" (against a drop, only as a contrast).
-  The same with "{bucket:<cause id>} scores" in place of "The {item:<cause id>}". Two or three causes with the same effect may share one form, joined with "and".
-- Weight: "{bucket:<cause id>} is 140% of the grade.", with that bucket's bucket_weight_pct.
-- Pattern: only if FACTS has a posting_day fact, its say_pattern, citing it. Never write a weekday any other way.
-- Next step: the what_if fact's say_step ("A 107 or better on the {next:<what_if id>} gets it to a B."). With no what_if fact, no next step. Code adds the step for a named next item, and what it takes to keep the letter, itself.
-  Right: "The {item:cause:ceramics:2026-09-09:glazetest} hurt."
-  Wrong: "Still a D, 13.9 points from a C, and slipping." (cites a fact but isn't its say_opening, word for word)
-Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
-
-Rules:
-- Every sentence cites the ids it uses. A cause cites its own cause id. Name causes largest share first; "mostly", "mainly" or "most of" always names the largest-share cause.
-- Order: letter, cause, pattern, next step.
-- "Because", "mainly", "mostly", "due to" or "driven by" only with a cited grade_move or cause.
-- If a grade_move has causes_withheld, say how much it moved but not why.
-- With no grade_move, the grade didn't move: open with the letter fact's say_opening ("Still a C, ..." or, when the letter changed, "Now a C, ..."), never "moved to a C".
-- No talk of the next letter without a next_letter fact. A class at an A has no next letter.
-- "Back to" or "again" only when a grade_move shows the class had that letter before.
-- Never say what isn't there ("no major assignments", "no pattern").
-- Say "since" only with since_label; never "since last report".
-- Numbers come from the cited facts, written as digits. A needed score is say_needed ("104 or better"), never rounded down.
-- Whole letters only: A, B, C, D, F. Never a plus or minus.
-- Don't mention missing, late, past-due, turned-in or awaiting work. The dashboard lists that.
-- No dates or relative days ("today", "tomorrow", "this week", "next Friday"), except inside a say_opening.
-- A weekday only in a posting_day pattern, citing that fact.
-- Never call a 0% a grade.
-- Never write "the student", "the letter is", "next letter", "distance", "what-if", "what moved", or "moved from A to A".
-- If nothing here is worth saying, return {"sentences": []}.
-
-MADE-UP EXAMPLE. This class doesn't exist; it shows the style only. Never copy its class, titles, numbers, letters or dates.
-FACTS: """ + json.dumps(EXAMPLE_FACTS, separators=(",", ":")) + """
-NOTE: """ + json.dumps({"sentences": EXAMPLE_NOTE}, separators=(",", ":")) + """
-
-Reply with JSON only: {"sentences": [{"text": "...", "cites": ["fact id", ...]}]}"""
-
-VOTE_SYSTEM = """You check sentences against FACTS (JSON, each with an id).
-A sentence is backed only if every claim in it follows from the facts it cites.
-Reply with JSON only: {"backed": [true or false, one per sentence, in order]}"""
-
-class Model(Protocol):
-    def complete(self, system: str, user: str) -> str: ...
 
 
 # ── Facts ────────────────────────────────────────────────────────────────────
@@ -409,27 +313,6 @@ def ranked_causes(move):
         return -abs(value or 0.0)
 
     return sorted(move.get("causes") or [], key=lambda c: (size(c), c.get("id", "")))
-
-
-def model_facts(class_facts):
-    """What the model sees: a move whose causes don't explain it is sent without them, and no keep_letter
-    or drag fact (code writes those sentences itself, see code_lines)."""
-    out = []
-    for fact in class_facts:
-        if is_keep(fact) or fact.get("kind") == "drag":
-            continue
-        # A scale break or a no-raise-math gate has no sentence of its own (form_reason): the model never sees it.
-        if fact.get("kind") in UNSAYABLE_KINDS:
-            continue
-        if fact.get("kind") == "grade_move" and fact.get("coverage_trimmed"):
-            fact = {**fact, "causes": [], "causes_withheld": "the earlier scores were trimmed, so the cause is unknown"}
-        elif fact.get("kind") == "grade_move" and fact.get("causes"):
-            if cause_allowed(fact):
-                fact = {**fact, "causes": ranked_causes(fact)}
-            else:
-                fact = {**fact, "causes": [], "causes_withheld": "they don't explain the move"}
-        out.append(_say_fields(fact))
-    return out
 
 
 def say_needed(needed_pct):
@@ -518,8 +401,8 @@ def say_opening(fact):
 
 
 def _say_fields(fact):
-    """Ready-to-say wording the model copies instead of rounding: say_needed, since_label,
-    say_opening, and each cause's effect ("hurt" or "helped") on the grade."""
+    """The fact with the wording code says it in: a what_if's say_needed and say_step, a grade_move's
+    since_label (which say_opening uses)."""
     if fact.get("kind") == "what_if" and isinstance(fact.get("needed_pct"), (int, float)) and fact.get("reachable"):
         fact = {**fact, "say_needed": say_needed(fact["needed_pct"])}
         if isinstance(fact.get("target"), (int, float)):
@@ -530,17 +413,6 @@ def _say_fields(fact):
             fact = {**fact, "since_label": due_label(fact["since"])}
         except ValueError:
             pass
-    if fact.get("kind") == "grade_move" and fact.get("causes"):
-        def effect(cause):
-            size = cause.get("share") if cause.get("share") is not None else cause.get("points")
-            return "hurt" if (size or 0) < 0 else "helped"
-        fact = {**fact, "causes": [{**c, "effect": effect(c), "slot": f"{{item:{c['id']}}}"} for c in fact["causes"]]}
-    opening = say_opening(fact)
-    if opening:
-        fact = {**fact, "say_opening": opening}
-    pattern = say_pattern(fact)
-    if pattern:
-        fact = {**fact, "say_pattern": pattern}
     return fact
 
 
@@ -666,7 +538,7 @@ def say_keep(fact):
     when the named next item can't cost the letter, "The {next:<id>} can't drop it below an A." (only with a
     named upcoming item at its posted points, see _named_cannot_lose). Code fills the slot with the next
     item's title or "next <bucket>" after the checks. Only code says it (code_lines), and only for
-    pick_keep's fact: a named item at its posted points; a drafted sentence citing a keep fact is dropped."""
+    pick_keep's fact: a named item at its posted points."""
     letter = fact.get("letter")
     if not letter or not fact.get("id"):
         return None
@@ -839,22 +711,6 @@ def opening_fact(class_facts):
         if fact:
             return fact
     return None
-
-
-def worth_saying(class_facts):
-    """Whether the model runs: an explained move, a reachable what-if or a pattern. A keep_letter fact alone isn't one;
-    without these the class still gets code's story (write_class)."""
-    for fact in class_facts:
-        if is_keep(fact):
-            continue
-        kind = fact.get("kind")
-        if kind == "grade_move" and fact.get("causes") and cause_allowed(fact):
-            return True
-        if kind == "what_if" and fact.get("reachable"):
-            return True
-        if kind == "posting_day":
-            return True
-    return False
 
 
 # ── Code checks ──────────────────────────────────────────────────────────────
@@ -1105,7 +961,7 @@ def check_sentence(text, cites, index, name=None, classes=None):
     if reason:
         return reason
     # The claim checks read each slot as a neutral token plus its score, so a title's own dates,
-    # letters or "B+" never trip them; what the model wrote outside the slots is checked as usual.
+    # letters or "B+" never trip them; the text outside the slots is checked as usual.
     neutral = neutral_slots(text, index)
     echo = _ECHO_RE.search(neutral) or _SAME_LETTER_MOVE_RE.search(neutral)
     if echo:
@@ -1128,8 +984,8 @@ def check_sentence(text, cites, index, name=None, classes=None):
 
 
 # ── Slots ─────────────────────────────────────────────────────────────────────
-# The model names items, buckets and classes only through slots, which code fills after the checks:
-#   {item:<cause id>}     the cause's title, plus "(earned/possible)" unless the model wrote a "(...)" after it
+# Code writes items, buckets and classes only as slots, which it fills after the checks:
+#   {item:<cause id>}     the cause's title, plus "(earned/possible)" unless the sentence has a "(...)" after it
 #   {next:<what_if id>}   the named next item's title, else "next <bucket>" ("next test", "next assessment",
 #                         "next coursework item")
 #   {bucket:<fact id>}    the bucket or category name of a cause, what_if or keep fact ("Homework")
@@ -1293,7 +1149,7 @@ def leak_reason(text, index, filled=False):
         if ":" in fid and fid in bare:
             return "leaks a raw fact id"
     if filled:
-        # The id and slot-debris filters ran on the model's raw text (below). A fill only adds names from
+        # The id and slot-debris filters ran on the slot form (below). A fill only adds names from
         # the facts, so here only what a slot-shaped title could smuggle in counts: a brace, a real fact id,
         # or a slot word followed by an id-like token ("{item:cause:g:h}" fills as "item:cause:g:h").
         # "Next: Chapter 5", "Class: Notes Check" and "Ratio a:b Practice" are titles, not slots.
@@ -1468,7 +1324,7 @@ def _direction_reason(slotted, cited, index):
     cause named by the nearest {item:} or {bucket:} slot before it (after it when none comes before:
     "Lifted by the {item:...}."); an adjective ("a low {item:...}", "a strong {item:...}") against the slot
     right after it. With no cause slot, every cited cause must match. "Didn't", "hardly" or "barely" turn a
-    word around. This backs up the cause-sentence gate; it is not the main check.
+    word around. form_reason drops any sentence that cites a cause; this is not the main check.
     """
     causes = [f for f in cited if f.get("move")]
     if not causes:
@@ -1555,11 +1411,11 @@ def _claims_reason(text, cited, index, slotted=None):
         return "states a cause without citing a grade_move or cause"
     if _MOVE_REF_RE.search(masked) and not moves:
         return "talks about a move with no grade_move cited"
-    # The exact contrast forms ("The {item:...} helped." on a drop, "... hurt." on a rise) are judged by the
-    # cause-sentence gate on the cause's own share, never as the reason for the move.
+    # The exact contrast forms ("The {item:...} helped." on a drop, "... hurt." on a rise) are never read as the
+    # reason for the move (and form_reason drops any sentence that cites a cause).
     # The exact contrast forms, and a bucket's weight (no direction at all), may name an offsetting cause.
     contrast_form = bool(form and (_FORM_CONTRAST_RE.match(form) or _FORM_WEIGHT_RE.match(form)))
-    # "Mostly {bucket:...} scores." ranks buckets by net share; the cause-sentence gate checks it.
+    # "Mostly {bucket:...} scores." ranks buckets by net share (and form_reason drops it: it cites a cause).
     bucket_most = bool(slotted and re.match(r"^(?:Mostly (?:from )?(?:one )?\{bucket:|\{bucket:[^{}\s]+\}(?: scores?)? did most)",
                                             slotted.strip()))
     claims_cause = any(f.get("move") for f in cited) or (moves and cause_words)
@@ -1655,60 +1511,21 @@ def _claims_reason(text, cited, index, slotted=None):
     return _direction_reason(slotted if slotted is not None else text, cited, index)
 
 
-# ── Cause-sentence gate ──────────────────────────────────────────────────────
-# A sentence that names a cause ({item:} or {bucket:} on a cause), cites a cause, or cites a grade_move
-# with direction wording must be one of these forms, or it is dropped. This is the main direction check;
-# _direction_reason's word lists only back it up.
-#   "The {item:<cause>} helped."                 share > 0
-#   "The {item:<cause>} hurt." / "... dragged it down."   share < 0
-#   "The {item:<cause>} did most of the damage." share < 0 and the move's largest negative share
-#   "Mostly the {item:<cause>}." / "Mostly from the {item:<cause>}."  the largest share in the move's direction
-#   the same with "{bucket:<cause>} scores" ("Mostly one {bucket:<cause>} score." too)
-#   helped / hurt / dragged it down may name 2 or 3 causes joined with "and", all of one sign
-#   the cited move's say_opening, word for word ("{class:<id>} slipped to a D since Oct 14, down 2.5." too)
-# The item form may carry " score" and the "(n/m)" score the fill adds.
+# ── Cause wording read by the claim checks ───────────────────────────────────
+# Code writes no cause sentence, and form_reason drops any sentence that cites a cause. _claims_reason still
+# reads these shapes on every sentence it checks: the contrast forms ("The {item:<cause>} helped.") and a
+# bucket's weight ("{bucket:<cause>} is 50% of the grade."). The item form may carry " score" and the
+# "(n/m)" score the fill adds.
 _FORM_ITEM = r"(?i:the) \{item:([^{}\s]+)\}(?: score)?(?: \(\d+(?:\.\d+)?/\d+(?:\.\d+)?\))?"
 _FORM_BUCKET = r"\{bucket:([^{}\s]+)\}(?: scores?)?"
 _FORM_ONE = rf"(?:{_FORM_ITEM}|{_FORM_BUCKET})"
-_FORM_SLOT_RE = re.compile(r"\{(item|bucket):([^{}\s]+)\}")
 _FORM_LIST = rf"{_FORM_ONE}(?:(?:, {_FORM_ONE})?,? and {_FORM_ONE})?"
-_FORM_SIGNED_RE = re.compile(rf"^(?P<who>{_FORM_LIST}) (?P<verb>helped|hurt|dragged it(?: down)?)\.$")
-_FORM_DAMAGE_RE = re.compile(rf"^(?P<who>{_FORM_ONE}) did most of the damage\.$")
-_FORM_MOSTLY_RE = re.compile(
-    rf"^Mostly (?:from )?(?P<who>{_FORM_ITEM}|(?:one )?\{{bucket:[^{{}}\s]+\}}(?: scores?)?)\.$")
 _FORM_CONTRAST_RE = re.compile(rf"^(?P<who>{_FORM_LIST}) (?:helped|hurt)\.$")
 # A bucket's weight with no direction in it: "{bucket:<cause>} is 50% of the grade."
 _FORM_WEIGHT_RE = re.compile(r"^\{bucket:[^{}\s]+\}(?: scores)? (?:is|are|counts? for) \d+(?:\.\d+)?% of the grade\.$")
-_DIRECTION_WORDS_RE = re.compile(
-    rf"\b(?:{_UP_WORD}|{_DOWN_WORD}|rose|rise[sn]?|fell|fall(?:s|en)?|drop\w*|dip\w*|slip\w*|slid\w*|climb\w*|"
-    r"jump\w*|gain\w*|"
-    r"lost|los(?:e|es|ing)|moved?|moving|went|cost\w*|pull\w*|push\w*|drag\w*|hurt\w*|help\w*|lift\w*|boost\w*|"
-    r"rais\w*|sav\w*|damag\w*|because|due|thanks|driv\w*|caus\w*|mostly|mainly|largely|primarily|chiefly|"
-    r"higher|lower|better|worse|back|again)\b", re.I)
-# Direction wording that sends any sentence with an {item:} or {bucket:} slot through the gate, whatever fact
-# the slot names. "Better", "back" and "again" are left out: "A 74 or better on the next {bucket:...} score".
-_SLOT_DIRECTION_RE = re.compile(
-    rf"\b(?:{_UP_WORD}|{_DOWN_WORD}|rose|rise[sn]?|risen|fell|fall(?:s|en)?|drop\w*|dip\w*|slip\w*|slid\w*|"
-    r"climb\w*|jump\w*|"
-    r"gain\w*|lost|los(?:e|es|ing)|moved|cost\w*|pull\w*|push\w*|drag\w*|hurt\w*|help\w*|lift\w*|boost\w*|"
-    r"rais\w*|sav\w*|damag\w*|because|due to|thanks|driv\w*|caus\w*|mostly|mainly|largely|primarily|chiefly|"
-    r"carr\w*|rescu\w*|improv\w*|tank\w*|cut\w*|dent\w*|slash\w*|blam\w*|sank|sunk)\b", re.I)
-CAUSE_FORM_REASON = "cited sentence not in an allowed form"
+FORM_REASON = "cited sentence not in an allowed form"  # one reason for every fixed-form gate
 # A bucket whose causes net to less than this, either way, has no direction to claim.
 BUCKET_MIN_NET = 0.1
-
-
-# Two shares within this of each other tie: neither is "most of" the move.
-TOP_TIE = 1e-6
-
-
-def _top_cause(move, sign):
-    """The move's cause with the largest share of the given sign, or None (also on a tie for the top)."""
-    # Safe under #54's fold: it sorts causes by |share| before folding, so no folded cause outranks the top one.
-    signed = [c for c in ranked_causes(move) if (_cause_share(c) or 0) * sign > 0]
-    if len(signed) > 1 and abs(_cause_share(signed[0]) - _cause_share(signed[1])) <= TOP_TIE:
-        return None
-    return signed[0] if signed else None
 
 
 def _folded(move):
@@ -1738,19 +1555,6 @@ def _bucket_net(index, cause):
     return net if abs(net) >= BUCKET_MIN_NET - 1e-9 else 0.0
 
 
-def _top_bucket(move, sign):
-    """The move's bucket with the largest net in the given direction (|net| >= BUCKET_MIN_NET), or None.
-
-    None too on a tie for the top, or when the move has folded causes (no bucket net is known).
-    """
-    if _folded(move):
-        return None
-    nets = sorted((abs(v), b) for b, v in _bucket_nets(move).items() if v * sign >= BUCKET_MIN_NET - 1e-9)
-    if len(nets) > 1 and nets[-1][0] - nets[-2][0] <= TOP_TIE:
-        return None
-    return nets[-1][1] if nets else None
-
-
 def _opening_forms(move):
     opening = say_opening(_say_fields(move)) if move else None
     if not opening:
@@ -1759,81 +1563,7 @@ def _opening_forms(move):
     return {opening, fix_articles(opening), f"{{class:{move['id']}}} {lower}"}
 
 
-def cause_form_reason(text, cites, index):
-    """None if the sentence is no cause sentence or is one of the fixed forms, else CAUSE_FORM_REASON.
-
-    A cause sentence slots a cause, cites a cause, cites a grade_move with direction wording, or has any
-    {item:} or {bucket:} slot plus a direction word. In the forms every slot names a cause; an item slot is
-    read by its own share, a bucket slot by its bucket's net share in the move (|net| < 0.1 has no direction).
-    """
-    text = (text or "").strip()
-    cited = _cited_facts(cites, index)
-    slots = _FORM_SLOT_RE.findall(text)
-    cause_slots = [(kind, fid) for kind, fid in slots if (index.get(fid) or {}).get("move")]
-    cited_causes = [f for f in cited if f.get("move")]
-    moves = [f for f in cited if f.get("kind") == "grade_move" and not f.get("move")]
-    bare = SLOT_RE.sub(" ", text)
-    worded = bool(_DIRECTION_WORDS_RE.search(bare))
-    slot_worded = bool(slots) and bool(_SLOT_DIRECTION_RE.search(bare))
-    if not cause_slots and not cited_causes and not (moves and worded) and not slot_worded:
-        return None
-    if not slots and not cited_causes:
-        # Only the move itself: its say_opening, word for word.
-        return None if any(text in _opening_forms(m) for m in moves) else CAUSE_FORM_REASON
-    # Every slot names a cause, every cited cause is slotted, and nothing else is cited but the move.
-    named = list(dict.fromkeys(fid for _, fid in cause_slots))
-    if len(cause_slots) != len(slots) or set(named) != {f["id"] for f in cited_causes} or \
-            len(cited_causes) + len(moves) != len(cited):
-        return CAUSE_FORM_REASON
-    if _FORM_WEIGHT_RE.match(text) and len(slots) == 1:
-        return None
-    # One reading per slot: (move id, the item or bucket it names) and its signed value.
-    readings = []
-    for kind, fid in cause_slots:
-        cause = index[fid]
-        if kind == "bucket":
-            readings.append(((cause.get("move"), "bucket", _bucket_of(cause)), _bucket_net(index, cause)))
-        else:
-            readings.append(((cause.get("move"), "item", fid), _cause_share(cause) or 0))
-    if len({key for key, _ in readings}) != len(readings):
-        return CAUSE_FORM_REASON
-    match = _FORM_SIGNED_RE.match(text)
-    if match and len(_FORM_SLOT_RE.findall(match.group("who"))) == len(slots):
-        sign = 1 if match.group("verb") == "helped" else -1
-        return None if all(v * sign > 0 for _, v in readings) else CAUSE_FORM_REASON
-    if len(readings) != 1:
-        return CAUSE_FORM_REASON
-    (move_id, kind, what), value = readings[0]
-    move = index.get(move_id) or {}
-    if _FORM_DAMAGE_RE.match(text):
-        top = _top_cause(move, -1)["id"] if kind == "item" and _top_cause(move, -1) else _top_bucket(move, -1)
-        return None if value < 0 and top == what else CAUSE_FORM_REASON
-    if _FORM_MOSTLY_RE.match(text):
-        sign = 1 if (move.get("delta") or 0) >= 0 else -1
-        if kind == "item":
-            top = _top_cause(move, sign)
-            top = top["id"] if top else None
-        else:
-            top = _top_bucket(move, sign)
-        return None if value * sign > 0 and top == what else CAUSE_FORM_REASON
-    return CAUSE_FORM_REASON
-
-
-FORM_REASON = CAUSE_FORM_REASON  # one reason for every fixed-form gate
 UNCITED_REASON = "cites nothing"  # every sentence cites at least one fact
-# Kinds no sentence may cite: the model never sees them (model_facts leaves them out).
-UNSAYABLE_KINDS = ("scale_break", "no_raise_math")
-
-
-def say_pattern(fact):
-    """A posting_day fact's one sentence: "Scores usually post Thursdays." """
-    day = fact.get("weekday")
-    return f"Scores usually post {day}s." if fact.get("kind") == "posting_day" and day else None
-
-
-def _prefixed(sentence, fact):
-    """The sentence, and the same led by the fact's {class:} slot ("{class:<id>} scores usually post ...")."""
-    return {sentence, f"{{class:{fact['id']}}} {sentence[0].lower()}{sentence[1:]}"}
 
 
 def _step(fact):
@@ -1845,14 +1575,11 @@ def form_reason(text, cites, index):
 
       grade_move                 its say_opening ({class:} prefix allowed)
       next_letter                its say_opening ({class:} prefix allowed)
-      cause, with or without its grade_move   the cause forms (cause_form_reason), the weight sentence among them
       what_if, with or without the next_letter   its say_step, word for word (not on a bucket_posted one)
-      what_if alone              or the weight sentence on its bucket: "{bucket:<what_if id>} is 50% of the grade."
-      posting_day                say_pattern ({class:} prefix allowed): "Scores usually post Thursdays."
-      keep_letter                its say_keep, word for word (code_lines writes it; a drafted one is dropped)
-      keep_letter and/or what_if at the assumed size   say_assumed, word for word (code writes it)
-      drag                       say_drag, word for word (code writes it)
-      scale_break, no_raise_math, any other kind or mix: no sentence.
+      keep_letter                its say_keep, word for word
+      keep_letter and/or what_if at the assumed size   say_assumed, word for word
+      drag                       say_drag, word for word
+      a cause, posting_day, scale_break, no_raise_math, any other kind or mix: no sentence (code writes none).
     """
     text = (text or "").strip()
     cited = _cited_facts(cites, index)
@@ -1863,9 +1590,7 @@ def form_reason(text, cites, index):
         return None if len(cited) == 1 and text == say_drag(cited[0]) else FORM_REASON
     if _ASSUMED_RE.match(text) and kinds <= {"keep_letter", "what_if"}:
         return None if text in _assumed_forms(cited) else FORM_REASON
-    if "cause" in kinds:
-        ok = kinds <= {"cause", "grade_move"} and cause_form_reason(text, cites, index) is None
-    elif kinds == {"grade_move"}:
+    if kinds == {"grade_move"}:
         ok = any(text in _opening_forms(f) for f in cited)
     elif kinds == {"next_letter"}:
         ok = any(text in _opening_forms(f) for f in cited)
@@ -1874,10 +1599,6 @@ def form_reason(text, cites, index):
     elif kinds in ({"what_if"}, {"what_if", "next_letter"}):
         # Never about "the next test" at a typical size when that bucket has a posted item: the posted one wins.
         ok = any(text == _step(f) for f in cited if f.get("kind") == "what_if" and not f.get("bucket_posted"))
-        if not ok and kinds == {"what_if"} and len(cited) == 1 and _FORM_WEIGHT_RE.match(text):
-            ok = _FORM_SLOT_RE.findall(text) == [("bucket", cited[0]["id"])]
-    elif kinds == {"posting_day"}:
-        ok = any(say_pattern(f) and text in _prefixed(say_pattern(f), f) for f in cited)
     elif kinds == {"keep_letter"}:
         ok = any(text in _keep_forms(f) for f in cited)
     else:
@@ -1891,43 +1612,26 @@ def _keep_forms(fact):
     return {say} if say else set()
 
 
-def eval_story(sentences, index, code_only=False):
+def eval_story(sentences, index):
     """None if the story passes the acceptance bar, else why it fails.
 
-    Fails a story that cites no grade_move, what_if or pattern fact (a bare next_letter is
-    not an insight), that restates past-due or missing work, or that's out of order
-    (letter, cause, pattern, next step). The first sentence must state the letter with the
-    gap or the move, backed by a cited next_letter or grade_move. A story about a drop must
-    end on the class's what_if or keep step when the class has one; a can't-drop keep line may follow it.
-
-    code_only is a story code built alone (no model run, or the model's failed): its opening, the drag line,
-    the keep and step lines. It needs no insight kind (every class gets a story) and code sets its order.
+    Fails a story that restates past-due or missing work or that's out of order (letter, cause,
+    pattern, next step). The first sentence must state the letter with the gap or the move, backed
+    by a cited next_letter or grade_move. Code builds every story (its opening, the drag line, the
+    keep and step lines) and sets its order.
     """
-    reason = _story_basics(sentences, index, code_only)
+    reason = _story_basics(sentences, index)
     if reason:
         return reason
     if not _opens_with_letter(sentences[0], index):
         return "doesn't open with the letter and the gap or move"
-    if code_only:
-        return None
-    drops = [f for f in index.values() if f.get("kind") == "grade_move" and not f.get("move")
-             and isinstance(f.get("delta"), (int, float)) and f["delta"] < 0]
-    steps = {fid for fid, f in index.items() if f.get("kind") == "what_if" and f.get("reachable")
-             and isinstance(f.get("needed_pct"), (int, float))}
-    keep = pick_keep(list(index.values()))
-    if keep and isinstance(keep.get("needed_pct"), (int, float)):
-        steps.add(keep["id"])
-    # A can't-drop keep sentence (code puts it last) is no step; the story must end on a step before it.
-    tail = [s for s in sentences if not (keep and keep.get("cannot_lose") and (s.get("cites") or []) == [keep["id"]])]
-    if drops and steps and not (tail and set(tail[-1].get("cites") or []) & steps):
-        return "a drop story must end on its what-if step"
     return None
 
 
-def _story_basics(sentences, index, code_only=False):
+def _story_basics(sentences, index):
     if not sentences:
         return "no story"
-    kinds = []
+    order = []
     for sentence in sentences:
         cited = _cited_facts(sentence.get("cites"), index)
         masked, _, _ = _mask_allowed_dates(sentence.get("text") or "", cited)
@@ -1936,12 +1640,8 @@ def _story_basics(sentences, index, code_only=False):
         if _RESTATE_RE.search(masked):
             return "restates past-due or missing work"
         ranks = [ORDER.get((index.get(fid) or {}).get("kind"), 9) for fid in sentence.get("cites") or []]
-        kinds.extend((index.get(fid) or {}).get("kind") for fid in sentence.get("cites") or [])
         # A sentence sits where its latest kind goes: a what-if that also cites the move is a next step.
-        sentence["_rank"] = max(ranks) if ranks else 9
-    order = [s.pop("_rank") for s in sentences]
-    if not code_only and not any(kind in INSIGHT_KINDS for kind in kinds):
-        return "cites no grade_move, what_if or pattern fact"
+        order.append(max(ranks) if ranks else 9)
     if order != sorted(order):
         return "out of order (letter, cause, pattern, next step)"
     return None
@@ -1991,46 +1691,6 @@ def fix_articles(text):
     return _ARTICLE_RE.sub(swap, text or "")
 
 
-# ── Model steps ──────────────────────────────────────────────────────────────
-
-
-_THINK_RE = re.compile(r"<think>.*?</think>|^.*?</think>", re.S | re.I)
-_FENCE_RE = re.compile(r"^\s*```[a-zA-Z]*\s*|\s*```\s*$")
-
-
-def _json(raw):
-    """A JSON object from a model reply, after dropping <think> blocks and a ```json fence."""
-    if not isinstance(raw, str):
-        return None
-    # A reply that is already clean JSON keeps every string as is, even one holding "<think>".
-    try:
-        value = json.loads(_FENCE_RE.sub("", raw.strip()).strip())
-        if isinstance(value, dict):
-            return value
-    except (TypeError, ValueError):
-        pass
-    text = _THINK_RE.sub("", raw)
-    # An unclosed <think> runs to the end: nothing after it is the answer.
-    text = re.split(r"<think>", text, maxsplit=1, flags=re.I)[0]
-    text = _FENCE_RE.sub("", text.strip()).strip()
-    for candidate in (text, text[text.find("{"): text.rfind("}") + 1] if "{" in text else ""):
-        try:
-            value = json.loads(candidate)
-        except (TypeError, ValueError):
-            continue
-        if isinstance(value, dict):
-            return value
-    # The one leniency: extra closing braces at the very end ('...]}}'). Strip the excess, retry once.
-    excess = text.count("}") - text.count("{")
-    if excess > 0 and text.endswith("}" * excess):
-        try:
-            value = json.loads(text[:-excess])
-        except (TypeError, ValueError):
-            return None
-        return value if isinstance(value, dict) else None
-    return None
-
-
 def _unique(items):
     """Items with repeats removed, first occurrence kept, order kept."""
     seen = set()
@@ -2076,51 +1736,8 @@ def story_fits(story):
     return within_publish_limits((story or {}).get("story"), (story or {}).get("cites"), (story or {}).get("class"))
 
 
-def _sentences(raw):
-    parsed = _json(raw) or {}
-    out = []
-    for item in parsed.get("sentences") or []:
-        if isinstance(item, dict) and isinstance(item.get("text"), str):
-            cites = _unique([c for c in item.get("cites") or [] if isinstance(c, str)])
-            out.append({"text": fix_articles(item["text"].strip()), "cites": cites})
-    return out
-
-
-def vote(model, sentences, class_facts, votes=VOTES):
-    """Keep the sentences a majority of votes call backed."""
-    if not sentences:
-        return []
-    user = json.dumps({"facts": model_facts(class_facts), "sentences": [s["text"] for s in sentences]}, indent=1)
-    tally = [0] * len(sentences)
-    for _ in range(votes):
-        backed = (_json(model.complete(VOTE_SYSTEM, user)) or {}).get("backed")
-        if not isinstance(backed, list) or len(backed) != len(sentences):
-            continue
-        for i, ok in enumerate(backed):
-            tally[i] += ok is True
-    return [s for s, n in zip(sentences, tally) if n * 2 > votes]
-
-
-_CODE_LETTER_RE = re.compile(r"(?<![\w'’])[A-F](?:\+|-|−|–)?(?![\w'’])")
-_CODE_DAY_RE = re.compile(r"\b(?:mon|tues|wednes|thurs|fri|satur|sun)days?\b", re.I)
-
-
-def reason_code(reason):
-    """A drop reason without its numbers, ids, quotes, letters, weekdays or words: safe to log or store
-    ("number # isn't in the cited facts", "letter <letter> isn't in the cited facts")."""
-    code = re.sub(r"\{[^}]*\}|\([^)]*\)|\"[^\"]*\"", "", str(reason or ""))
-    code = re.sub(r"\b[\w.-]*:[\w:.-]+", "<id>", code)
-    code = re.sub(r"\d+(?:[./]\d+)?", "#", code)
-    code = _CODE_LETTER_RE.sub("<letter>", code)
-    code = _CODE_DAY_RE.sub("<day>", code)
-    return re.sub(r"\s+", " ", code).strip()
-
-
-CODE_STEP_REASON = "code writes this step"
-
-
 def code_lines(class_facts, name, classes=None):
-    """The sentences code writes for a class, in slot form, after the model's, in story order:
+    """The sentences code writes for a class after its opening, in slot form, in story order:
       drag      on a class with no recent move, its costliest past item (say_drag):
                 "The {item:<drag id>} is what's pulling it down most."
       move_up   the next named item's step (say_step of move_up_step): "A 90 or better on the {next:<id>} gets
@@ -2129,8 +1746,7 @@ def code_lines(class_facts, name, classes=None):
       assumed   for up to ASSUMED_MAX_BUCKETS buckets with nothing posted, heaviest first (assumed_picks):
                 "If the {next:<id>} is worth about 50 points like the last ones, a 38 or better keeps the B
                 and a 46 gets it to an A."
-    Each passes check_sentence like a model sentence, or it isn't written. No model writes, votes on or
-    trims them."""
+    Each passes check_sentence, or it isn't written."""
     index = fact_index(class_facts)
     step, keep, drag = move_up_step(class_facts), pick_keep(class_facts), drag_fact(class_facts)
     candidates = [("drag", [drag], say_drag(drag) if drag else None),
@@ -2202,55 +1818,28 @@ def canonical_upcoming(upcoming):
     return sorted(upcoming or [], key=key)
 
 
-def write_class(model, facts, name, votes=VOTES):
-    """{"class", "story", "cites", "keep_sentence", "dropped"}, or None for a class with no letter to open on.
+def write_class(facts, name):
+    """{"class", "story", "slotted", "cites", "keep_sentence"}, or None for a class with no letter to open on.
 
-    Every class with an opening fact (opening_fact) gets a story. The model runs only when the class is
-    worth_saying; its checked, voted sentences go first, then code_lines, in story order. A drafted sentence
-    citing a keep fact, or any what_if when a code line says one, is dropped: code owns those, so each is
-    said once and the vote can't remove it. When the model's story fails eval_story, or the model didn't run,
-    the story is code's alone: the opening and code_lines. A story over the publish limits sheds its drag
-    line, then its second assumed line (_fit). keep_sentence is the keep sentence as published (named or
-    assumed), or None. The facts are put in canonical order first (canonical_facts).
+    Every class with an opening fact (opening_fact) gets a story: the opening, then code_lines, in story
+    order. A story over the publish limits sheds its drag line, then its second assumed line (_fit).
+    keep_sentence is the keep sentence as published (named or assumed), or None. The facts are put in
+    canonical order first (canonical_facts).
     """
     facts = canonical_facts(facts)
     class_facts = facts_for(facts, name)
     opening = opening_fact(class_facts)
+    if opening is None:
+        return None
     index = fact_index(class_facts)
     classes = class_names(facts)
     code = code_lines(class_facts, name, classes)
-    owns_step = any((index.get(c) or {}).get("kind") == "what_if" for line in code for c in line["cites"])
-    dropped, final = [], None
-    if worth_saying(class_facts):
-        user = json.dumps({"class": name, "scale": insights.SCALE_LABEL, "facts": model_facts(class_facts)}, indent=1)
-        drafted = _sentences(model.complete(DRAFT_SYSTEM, user))
-        kept = []
-        for sentence in drafted:
-            kinds = {(index.get(c) or {}).get("kind") for c in sentence["cites"]}
-            if "keep_letter" in kinds or "drag" in kinds or (owns_step and "what_if" in kinds):
-                dropped.append({**sentence, "reason": CODE_STEP_REASON})
-                continue
-            reason = check_sentence(sentence["text"], sentence["cites"], index, name, classes)
-            if reason:
-                dropped.append({**sentence, "reason": reason})
-            else:
-                kept.append(_filled(sentence, index))
-        voted = vote(model, kept, class_facts, votes)
-        dropped += [{**s, "reason": "vote"} for s in kept if s not in voted]
-        final = _ranked(voted + [_filled(line, index) for line in code], index)
-        if not final or eval_story([{"text": s["text"], "cites": s["cites"]} for s in final], index):
-            if final:
-                dropped += [{**s, "reason": "story failed"} for s in voted]
-            final = None
-    if final is None:
-        if opening is None:
-            return None
-        first = {"text": say_opening(_say_fields(opening)), "cites": [opening["id"]], "code": "opening"}
-        if check_sentence(first["text"], first["cites"], index, name, classes) is not None:
-            return None
-        final = _ranked([_filled(first, index)] + [_filled(line, index) for line in code], index)
-        if eval_story([{"text": s["text"], "cites": s["cites"]} for s in final], index, code_only=True):
-            return None
+    first = {"text": say_opening(_say_fields(opening)), "cites": [opening["id"]], "code": "opening"}
+    if check_sentence(first["text"], first["cites"], index, name, classes) is not None:
+        return None
+    final = _ranked([_filled(first, index)] + [_filled(line, index) for line in code], index)
+    if eval_story([{"text": s["text"], "cites": s["cites"]} for s in final], index):
+        return None
     final = _fit(final)
     return {
         "class": name,
@@ -2260,8 +1849,6 @@ def write_class(model, facts, name, votes=VOTES):
         "keep_sentence": next((s["text"] for s in final if s.get("code") == "keep"
                                or (s.get("code") == "assumed" and any(is_keep(index.get(c) or {}) for c in s["cites"]))),
                               None),
-        # Reason codes only: the full reasons quote grade numbers, so they stay out of stores and logs.
-        "dropped": [reason_code(d["reason"]) for d in dropped],
     }
 
 
@@ -2390,7 +1977,7 @@ def story_tags(facts, classes=None, risk_classes=None, said=None):
     return tags
 
 
-def write_up(model, insight_facts, log_items=None, votes=VOTES, upcoming=None):
+def write_up(insight_facts, log_items=None, upcoming=None):
     """The whole write-up for one student: {"as_of", "stories"}, each story with its tags (story_tags) if any.
 
     upcoming (from upcoming_items) lets a what-if name the real next item and its due date. Tags are worked
@@ -2401,7 +1988,7 @@ def write_up(model, insight_facts, log_items=None, votes=VOTES, upcoming=None):
     # One canonical order where the facts enter, so every picker below sees the same list.
     facts = canonical_facts(attach_next_items(merged_facts(insight_facts, log_items), canonical_upcoming(upcoming)))
     # A story over the Worker's limits is dropped alone; the others still publish.
-    stories = [s for s in (write_class(model, facts, name, votes) for name in class_names(facts)) if s and story_fits(s)]
+    stories = [s for s in (write_class(facts, name) for name in class_names(facts)) if s and story_fits(s)]
     stories.sort(key=story_order)
     tags = story_tags(facts, [s["class"] for s in stories], [s["class"] for s in stories if s.get("keep_sentence")],
                       {c for s in stories for c in s.get("cites") or []})
@@ -2514,9 +2101,9 @@ class WriterWork:
     saved under store/<night>/ by step, so a repeated step does nothing.
     """
 
-    def __init__(self, load, model, store, put=None, env=None, votes=VOTES):
-        self.load, self.model, self.store = load, model, Path(store)
-        self.put, self.env, self.votes = put, env, votes
+    def __init__(self, load, store, put=None, env=None):
+        self.load, self.store = load, Path(store)
+        self.put, self.env = put, env
 
     def plan(self, night):
         return [f"student:{i}" for i in range(len(self.load()))] + ["publish"]
@@ -2536,8 +2123,7 @@ class WriterWork:
             result = {"published": published}
         else:
             student = self.load()[int(step.split(":")[1])]
-            result = write_up(self.model, student.get("insight_facts"), student.get("log_items"), self.votes,
-                              student.get("upcoming"))
+            result = write_up(student.get("insight_facts"), student.get("log_items"), student.get("upcoming"))
             if student.get("sn"):
                 result["sn"] = str(student["sn"])
         tmp = path.with_suffix(".tmp")

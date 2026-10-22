@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import re
@@ -25,20 +26,16 @@ def at(day, hour, minute=0):
 
 
 class FakeMachine:
-    def __init__(self, now, stamp=AFTERNOON_STAMP, ssd=True, memory=80, busy=False):
+    def __init__(self, now, stamp=AFTERNOON_STAMP, ssd=True):
         self.clock = now
         self.stamp = stamp
         self.ssd = ssd
-        self.memory = memory
-        self.is_busy = busy
 
     def machine(self):
         return runner.Machine(
             now=lambda: self.clock,
             freshness=lambda: self.stamp,
             ssd_mounted=lambda: self.ssd,
-            free_memory_pct=lambda: self.memory,
-            busy=lambda: self.is_busy,
         )
 
 
@@ -136,25 +133,14 @@ class TickTests(unittest.TestCase):
         self.assertEqual(self.tick(fake), "published")
         self.assertEqual(self.runs, [EVENING_STAMP])
 
-    def test_waits_for_a_render_or_low_memory(self):
-        fake = FakeMachine(at(22, 16, 55), busy=True)
-        self.assertEqual(self.tick(fake), "waiting_for_machine")
-        fake.is_busy, fake.memory = False, 20
-        fake.clock = at(22, 17, 25)
-        self.assertEqual(self.tick(fake), "waiting_for_machine")
-        fake.memory = 60
-        self.assertEqual(self.tick(fake), "published")
-        self.assertEqual(self.runs, [AFTERNOON_STAMP])
-
-    def test_waiting_mid_run_or_a_crash_leaves_the_sync_for_the_next_start(self):
+    def test_a_crash_leaves_the_sync_for_the_next_start(self):
         fake = FakeMachine(at(22, 16, 55))
-        self.assertEqual(self.tick(fake, "waiting_for_machine"), "waiting_for_machine")
         with self.assertRaises(RuntimeError):
-            self.tick(fake, RuntimeError("model crashed"))
+            self.tick(fake, RuntimeError("writer crashed"))
         self.assertIsNone(runner.State(self.path).get("handled"))
         fake.clock = at(22, 17, 25)
         self.assertEqual(self.tick(fake), "published")
-        self.assertEqual(self.runs, [AFTERNOON_STAMP] * 3)
+        self.assertEqual(self.runs, [AFTERNOON_STAMP] * 2)
 
 
 class KeychainTests(unittest.TestCase):
@@ -193,22 +179,11 @@ class KeychainTests(unittest.TestCase):
         secret.assert_not_called()
 
 
-class ModelPathTests(unittest.TestCase):
-    def test_models_and_hf_cache_sit_on_the_ssd(self):
-        self.assertEqual(runner.model_dir(runner.DEFAULT_SSD), Path("/Volumes/David C SSD/grade-insights"))
-        env = runner.model_env(runner.DEFAULT_SSD, base={"PATH": "/usr/bin", "HF_HOME": "/Users/x/.cache"})
-        self.assertEqual(env, {
-            "PATH": "/usr/bin",
-            "HF_HOME": "/Volumes/David C SSD/grade-insights/hf-cache",
-            "HF_HUB_OFFLINE": "1",
-        })
+class SsdPathTests(unittest.TestCase):
+    def test_runs_state_and_the_venv_sit_on_the_ssd(self):
+        self.assertEqual(runner.ssd_dir(runner.DEFAULT_SSD), Path("/Volumes/David C SSD/grade-insights"))
         self.assertEqual(runner.venv_python(runner.DEFAULT_SSD),
                          Path("/Volumes/David C SSD/grade-insights/venv/bin/python"))
-        self.assertEqual(runner.model_link(runner.DEFAULT_SSD, "qwen3-8b"),
-                         Path("/Volumes/David C SSD/grade-insights/models/Qwen3-8B-4bit"))
-        self.assertEqual(runner.model_link(runner.DEFAULT_SSD, "gemma3-12b").name, "gemma-3-text-12b-it-4bit")
-        self.assertEqual(sorted(runner.MODEL_REPOS.values()),
-                         ["mlx-community/Qwen3-8B-4bit", "mlx-community/gemma-3-text-12b-it-4bit"])
 
 
 class ReadOnlyClientTests(unittest.TestCase):
@@ -395,7 +370,7 @@ class ReadOnlyClientTests(unittest.TestCase):
 
         fake = FakeMachine(at(22, 16, 55))
         machine = runner.Machine(now=fake.machine().now, freshness=runner.read_freshness,
-                                 ssd_mounted=lambda: True, free_memory_pct=lambda: 80, busy=lambda: False)
+                                 ssd_mounted=lambda: True)
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(runner.urllib.request, "urlopen", side_effect=urlopen):
             status = runner.tick(runner.State(Path(tmp) / "state.json"), machine, lambda stamp: self.fail("ran"))
@@ -479,7 +454,7 @@ class LoaderTests(unittest.TestCase):
     def test_without_the_writer_the_loader_still_loads_with_no_upcoming(self):
         with mock.patch.dict(sys.modules, {"insights_writer": None}):
             self.assertIsNone(runner.writer_upcoming())
-            self.assertIsNone(runner.writer_work(FakeClient(), model=None, store="/nonexistent"))
+            self.assertIsNone(runner.writer_work(FakeClient(), store="/nonexistent"))
             students = runner.load_students(FakeClient())
         self.assertEqual(students[0]["upcoming"], [])
 
@@ -506,7 +481,7 @@ class LoaderTests(unittest.TestCase):
         with mock.patch.object(runner.importlib, "import_module", side_effect=missing):
             students, lines = self._load()
             work_lines = []
-            self.assertIsNone(runner.writer_work(FakeClient(), None, "/nonexistent", log=work_lines.append))
+            self.assertIsNone(runner.writer_work(FakeClient(), "/nonexistent", log=work_lines.append))
         self.assertEqual(students[0]["upcoming"], [])
         self.assertEqual(lines + work_lines, [])
 
@@ -540,7 +515,7 @@ class LoaderTests(unittest.TestCase):
         with mock.patch.dict(sys.modules, {"insights_writer": fake}):
             students, lines = self._load()
             work_lines = []
-            self.assertIsNone(runner.writer_work(FakeClient(), None, "/nonexistent", log=work_lines.append))
+            self.assertIsNone(runner.writer_work(FakeClient(), "/nonexistent", log=work_lines.append))
         self.assertEqual(students[0]["upcoming"], [])
         self.assertEqual(lines, ["grade-insights: warning: writer upcoming_items unavailable (ImportError); "
                                  "0 upcoming items"])
@@ -574,25 +549,24 @@ class LoaderTests(unittest.TestCase):
         self.assertEqual((whatif["next_title"], whatif["next_due"]), ("Ch. 5 Test", "2026-10-30"))
 
     @unittest.skipUnless(writer_has_upcoming(), "needs the writer's WriterWork (PR #52)")
-    def test_writer_work_hands_the_model_the_named_item_and_loads_once(self):
-        drafts = []
+    def test_writer_work_hands_the_writer_the_named_item_and_loads_once(self):
+        import insights_writer
 
-        class Model:
-            def complete(self, system, user):
-                # The draft prompt's marker (#52's DRAFT_SYSTEM says "You get FACTS as JSON."). "class story"
-                # left #52 at fcec92e, so it must not be part of the filter.
-                if "FACTS as JSON" in system:
-                    drafts.append(json.loads(user))
-                return json.dumps({"sentences": []})
+        seen = []
+        real = insights_writer.write_up
+
+        def record(insight_facts, log_items=None, upcoming=None):
+            seen.append(upcoming)
+            return real(insight_facts, log_items, upcoming)
 
         client = FakeClient()
-        with tempfile.TemporaryDirectory() as tmp:
-            work = runner.writer_work(client, Model(), tmp, env={})
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(insights_writer, "write_up", record):
+            work = runner.writer_work(client, tmp, env={})
             for step in work.plan("2026-10-22"):
                 work.run_step("2026-10-22", step)
         self.assertEqual(client.calls, ["latest", "log"])
-        whatif = next(f for f in drafts[0]["facts"] if f["kind"] == "what_if")
-        self.assertEqual((whatif["next_title"], whatif["next_due"]), ("Ch. 5 Test", "2026-10-30"))
+        self.assertEqual(seen, [[{"class": "Math", "bucket": "Tests", "title": "Ch. 5 Test", "due": "2026-10-30",
+                                  "points": 50.0}]])
 
 
 SECRET_STANDIN = "insights-secret-standin-not-real"
@@ -791,23 +765,19 @@ class InsightsPublisherTests(unittest.TestCase):
 
     @unittest.skipUnless(writer_has_upcoming(), "needs the writer's WriterWork (PR #52)")
     def test_the_nightly_publish_step_puts_the_write_ups_keyed_by_student(self):
-        class Model:
-            def complete(self, system, user):
-                return json.dumps({"sentences": []})
-
         import insights_writer
 
-        def one_story(model, facts, log_items=None, votes=None, upcoming=None):
+        def one_story(facts, log_items=None, upcoming=None):
             return {"as_of": facts["as_of"], "stories": [
                 {"class": "Math", "story": "Still a B, 2.1 points from an A.", "cites": ["whatif:math:tests:50"],
-                 "slotted": "x", "dropped": ["vote"]}]}
+                 "slotted": "x"}]}
 
         opener = FakeOpener()
         fake = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener)
         env = {"GRADE_INSIGHTS_PUBLISH": "1"}
         lines = []
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(insights_writer, "write_up", one_story):
-            work = runner.writer_work(FakeClient(), Model(), tmp, put=runner.publisher_put(env, fake), env=env,
+            work = runner.writer_work(FakeClient(), tmp, put=runner.publisher_put(env, fake), env=env,
                                       log=lines.append)
             for step in work.plan("2026-10-22"):
                 work.run_step("2026-10-22", step)
@@ -819,15 +789,11 @@ class InsightsPublisherTests(unittest.TestCase):
 
     @unittest.skipUnless(writer_has_upcoming(), "needs the writer's WriterWork (PR #52)")
     def test_a_night_with_no_surviving_lines_sends_nothing(self):
-        class Model:
-            def complete(self, system, user):
-                return json.dumps({"sentences": []})
-
         opener = FakeOpener()
         fake = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener)
         env = {"GRADE_INSIGHTS_PUBLISH": "1"}
         with tempfile.TemporaryDirectory() as tmp:
-            work = runner.writer_work(FakeClient(), Model(), tmp, put=runner.publisher_put(env, fake), env=env)
+            work = runner.writer_work(FakeClient(), tmp, put=runner.publisher_put(env, fake), env=env)
             for step in work.plan("2026-10-22"):
                 work.run_step("2026-10-22", step)
             published = json.loads((Path(tmp) / "2026-10-22" / "publish.json").read_text())
@@ -836,14 +802,10 @@ class InsightsPublisherTests(unittest.TestCase):
 
     @unittest.skipUnless(writer_has_upcoming(), "needs the writer's WriterWork (PR #52)")
     def test_with_the_flag_unset_the_publish_step_sends_nothing(self):
-        class Model:
-            def complete(self, system, user):
-                return json.dumps({"sentences": []})
-
         opener = FakeOpener()
         fake = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener)
         with tempfile.TemporaryDirectory() as tmp:
-            work = runner.writer_work(FakeClient(), Model(), tmp, put=runner.publisher_put({}, fake), env={})
+            work = runner.writer_work(FakeClient(), tmp, put=runner.publisher_put({}, fake), env={})
             for step in work.plan("2026-10-22"):
                 work.run_step("2026-10-22", step)
             published = json.loads((Path(tmp) / "2026-10-22" / "publish.json").read_text())
@@ -1094,26 +1056,15 @@ class TickScriptTests(unittest.TestCase):
 
 
 
-def one_story(model, facts, log_items=None, votes=None, upcoming=None):
-    """A stand-in write_up with one publishable story, so no model is needed."""
+def one_story(facts, log_items=None, upcoming=None):
+    """A stand-in write_up with one publishable story."""
     return {"as_of": facts["as_of"], "stories": [
         {"class": "Math", "story": "Still a B, 2.1 points from an A.", "cites": ["whatif:math:tests:50"]}]}
 
 
-class NoModel:
-    """Fails the test if anything asks it to write."""
-
-    def complete(self, system, user):
-        raise AssertionError("the model was called")
-
-
-class QuietModel:
-    def __init__(self):
-        self.calls = 0
-
-    def complete(self, system, user):
-        self.calls += 1
-        return json.dumps({"sentences": []})
+def no_write(*args, **kwargs):
+    """A stand-in write_up that fails the test if anything asks it to write."""
+    raise AssertionError("the writer ran")
 
 
 # Names, keys, scores and titles from synthetic_latest; none may reach a log line.
@@ -1160,22 +1111,25 @@ class ChangeCheckTests(unittest.TestCase):
     def bodies(self):
         return [json.loads(r.data)["students"] for r in self.opener.requests]
 
-    def run_sync(self, students, model, put="on", machine=None, stamp=AFTERNOON_STAMP):
+    def run_sync(self, students, put="on", stamp=AFTERNOON_STAMP, writes=True):
+        """runner.run_sync on these students; writes=False fails the test if the writer runs."""
         if put == "on":
             put = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=self.opener).put
         env = {"GRADE_INSIGHTS_PUBLISH": "1"} if put else {}
-        machine = machine or FakeMachine(at(22, 16, 55)).machine()
-        return runner.run_sync(stamp, lambda: students, self.writer.WriterWork, model, put, machine, self.store,
-                               self.prints, env=env, log=self.logs.append)
+        with contextlib.ExitStack() as stack:
+            if not writes:
+                stack.enter_context(mock.patch.object(self.writer, "write_up", no_write))
+            return runner.run_sync(stamp, lambda: students, self.writer.WriterWork, put, self.store,
+                                   self.prints, env=env, log=self.logs.append)
 
-    def test_a_change_publishes_then_the_same_grades_skip_without_the_model_or_a_put(self):
+    def test_a_change_publishes_then_the_same_grades_skip_without_a_write_or_a_put(self):
         students = self.students()
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.assertEqual(self.run_sync(students, QuietModel()), "published")
+            self.assertEqual(self.run_sync(students), "published")
         self.assertEqual(len(self.opener.requests), 1)
         self.assertEqual(runner.read_fingerprints(self.prints),
                          {runner.student_key(students[0]["sn"]): students[0]["fingerprint"]})
-        self.assertEqual(self.run_sync(self.students(), NoModel(), stamp=EVENING_STAMP), "no_change")
+        self.assertEqual(self.run_sync(self.students(), writes=False, stamp=EVENING_STAMP), "no_change")
         self.assertEqual(len(self.opener.requests), 1)
         self.assertFalse((self.store / runner.run_id(EVENING_STAMP)).exists())
         self.assertEqual(self.logs, ["grade-insights: 1 students, 1 changed; writing", "grade-insights: published",
@@ -1183,7 +1137,7 @@ class ChangeCheckTests(unittest.TestCase):
 
     def test_the_fingerprint_file_is_mode_600_and_holds_hashes_only(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.students(), QuietModel())
+            self.run_sync(self.students())
         self.assertEqual(self.prints.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.prints.parent.stat().st_mode & 0o777, 0o700)
         data = json.loads(self.prints.read_text())
@@ -1239,43 +1193,43 @@ class ChangeCheckTests(unittest.TestCase):
         before = self.published().read_bytes()
         self.opener.status = 500
         with mock.patch.object(self.writer, "write_up", one_story), self.assertRaises(runner.FamilyDataError):
-            self.run_sync(self.students(), QuietModel())
+            self.run_sync(self.students())
         self.assertEqual(runner.read_fingerprints(self.prints), {"k" * 64: "0" * 64})
         self.assertEqual(self.published().read_bytes(), before)
 
     def test_a_crash_while_writing_keeps_no_fingerprint(self):
         def boom(*args, **kwargs):
-            raise RuntimeError("model crashed")
+            raise RuntimeError("writer crashed")
 
         with mock.patch.object(self.writer, "write_up", boom), self.assertRaises(RuntimeError):
-            self.run_sync(self.students(), QuietModel())
+            self.run_sync(self.students())
         self.assertFalse(self.prints.exists())
         self.assertEqual(self.opener.requests, [])
 
     def test_publish_off_sends_nothing_and_never_saves_the_fingerprint(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.assertEqual(self.run_sync(self.students(), QuietModel(), put=None), "publish_off")
+            self.assertEqual(self.run_sync(self.students(), put=None), "publish_off")
         self.assertEqual(self.opener.requests, [])
         self.assertFalse(self.prints.exists())
 
     def test_nothing_to_send_sends_nothing_and_moves_no_fingerprint(self):
-        model = QuietModel()
-        self.assertEqual(self.run_sync(self.students(), model), "nothing_to_send")
-        self.assertGreater(model.calls, 0)
+        real, calls = self.writer.write_up, []
+
+        def counted(*args):
+            calls.append(1)
+            return real(*args)
+
+        with mock.patch.object(self.writer, "write_up", counted):
+            self.assertEqual(self.run_sync(self.students()), "nothing_to_send")
+        self.assertGreater(len(calls), 0)
         self.assertEqual(self.opener.requests, [])
         self.assertFalse(self.prints.exists())
         self.assertFalse(self.published().exists())
 
-    def test_a_render_between_students_waits_and_sends_nothing(self):
-        fake = FakeMachine(at(22, 16, 55), busy=True)
-        self.assertEqual(self.run_sync(self.students(), NoModel(), machine=fake.machine()), "waiting_for_machine")
-        self.assertEqual(self.opener.requests, [])
-        self.assertFalse(self.prints.exists())
-
     def test_logs_carry_counts_and_outcomes_only(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.students(), QuietModel())
-        self.run_sync(self.students(), NoModel(), stamp=EVENING_STAMP)
+            self.run_sync(self.students())
+        self.run_sync(self.students(), writes=False, stamp=EVENING_STAMP)
         self.assertTrue(self.logs)
         for line in self.logs:
             self.assertRegex(line, LOG_LINE)
@@ -1285,7 +1239,7 @@ class ChangeCheckTests(unittest.TestCase):
 
     def test_two_kids_publish_together(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.assertEqual(self.run_sync(self.two_kids(), QuietModel()), "published")
+            self.assertEqual(self.run_sync(self.two_kids()), "published")
         self.assertEqual(sorted(self.bodies()[0]), ["9001", "9002"])
         self.assertEqual(len(runner.read_fingerprints(self.prints)), 2)
         self.assertEqual(sorted(runner.read_published(self.published())), ["9001", "9002"])
@@ -1296,22 +1250,22 @@ class ChangeCheckTests(unittest.TestCase):
         # Sync 1 publishes A and B. Sync 2 changes only A; a writer that would now drop B's sentences never runs
         # for B, B's last entry rides along, and the PUT still carries both.
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
         calls = []
 
-        def flaky(model, facts, *rest):
+        def flaky(facts, *rest):
             calls.append(facts)
-            return one_story(model, facts) if len(calls) == 1 else {"as_of": facts["as_of"], "stories": []}
+            return one_story(facts) if len(calls) == 1 else {"as_of": facts["as_of"], "stories": []}
 
         with mock.patch.object(self.writer, "write_up", flaky):
-            status = self.run_sync(self.two_kids(a_print="c" * 64), QuietModel(), stamp=EVENING_STAMP)
+            status = self.run_sync(self.two_kids(a_print="c" * 64), stamp=EVENING_STAMP)
         self.assertEqual(status, "published")
         self.assertEqual(len(calls), 1)
         first, second = self.bodies()
         self.assertEqual(sorted(second), ["9001", "9002"])
         self.assertEqual(second["9002"], first["9002"])
 
-    def empty(self, model, facts, *rest):
+    def empty(self, facts, *rest):
         return {"as_of": facts["as_of"], "stories": []}
 
     def state_bytes(self):
@@ -1322,11 +1276,11 @@ class ChangeCheckTests(unittest.TestCase):
     def test_clear_one_kid_changed_and_empty(self):
         one = self.students()
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(one, QuietModel())
+            self.run_sync(one)
         old = runner.read_fingerprints(self.prints)
         changed = [dict(one[0], fingerprint="c" * 64)]
         with mock.patch.object(self.writer, "write_up", self.empty):
-            self.assertEqual(self.run_sync(changed, QuietModel(), stamp=EVENING_STAMP), "published")
+            self.assertEqual(self.run_sync(changed, stamp=EVENING_STAMP), "published")
         self.assertEqual(self.opener.requests[1].data, b'{"students": {}}')
         self.assertEqual(self.opener.requests[1].get_method(), "PUT")
         self.assertEqual(runner.read_published(self.published()), {})
@@ -1334,18 +1288,16 @@ class ChangeCheckTests(unittest.TestCase):
         self.assertEqual(self.logs[-1], "grade-insights: published an empty doc; 1 changed left out until the next "
                                         "sync, 0 missing aged out")
         # The next sync retries the kid; with nothing in the last doc there is nothing more to clear.
-        model = QuietModel()
         with mock.patch.object(self.writer, "write_up", self.empty):
-            self.assertEqual(self.run_sync(changed, model, stamp="2026-10-23T23:46:30.000Z",
-                                           machine=FakeMachine(at(23, 16, 55)).machine()), "nothing_to_send")
+            self.assertEqual(self.run_sync(changed, stamp="2026-10-23T23:46:30.000Z"), "nothing_to_send")
         self.assertEqual(len(self.opener.requests), 2)
         self.assertEqual(self.logs[-1], "grade-insights: nothing to send, the stored notes stay; 0 due to be removed")
 
     def test_clear_both_kids_changed_and_empty(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
         with mock.patch.object(self.writer, "write_up", self.empty):
-            status = self.run_sync(self.two_kids(a_print="c" * 64, b_print="d" * 64), QuietModel(), stamp=EVENING_STAMP)
+            status = self.run_sync(self.two_kids(a_print="c" * 64, b_print="d" * 64), stamp=EVENING_STAMP)
         self.assertEqual(status, "published")
         self.assertEqual(self.bodies()[1], {})
         self.assertEqual(runner.read_published(self.published()), {})
@@ -1355,12 +1307,12 @@ class ChangeCheckTests(unittest.TestCase):
     def test_clear_after_every_kid_is_missing_for_three_syncs(self):
         # A load that succeeds with zero kids is the missing path, not a failure: carried twice, then cleared.
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
         stamps = ["2026-10-23T03:08:40.000Z", "2026-10-23T23:46:30.000Z", "2026-10-24T03:08:40.000Z"]
         for stamp in stamps[:2]:
-            self.assertEqual(self.run_sync([], NoModel(), stamp=stamp), "no_change")
+            self.assertEqual(self.run_sync([], writes=False, stamp=stamp), "no_change")
         self.assertEqual(len(self.opener.requests), 1)
-        self.assertEqual(self.run_sync([], NoModel(), stamp=stamps[2]), "published")
+        self.assertEqual(self.run_sync([], writes=False, stamp=stamps[2]), "published")
         self.assertEqual(self.bodies()[1], {})
         self.assertEqual(runner.read_published(self.published()), {})
         self.assertEqual(runner.read_missed(self.prints.with_name(runner.MISSED_FILE)), {})
@@ -1370,54 +1322,54 @@ class ChangeCheckTests(unittest.TestCase):
 
     def test_clear_when_one_kid_is_changed_and_empty_and_the_other_ages_out(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
         only_a = self.two_kids()[:1]
         for stamp in ("2026-10-23T03:08:40.000Z", "2026-10-23T23:46:30.000Z"):
-            self.assertEqual(self.run_sync(only_a, NoModel(), stamp=stamp), "no_change")
+            self.assertEqual(self.run_sync(only_a, writes=False, stamp=stamp), "no_change")
         a_changed = self.two_kids(a_print="c" * 64)[:1]
         with mock.patch.object(self.writer, "write_up", self.empty):
-            self.assertEqual(self.run_sync(a_changed, QuietModel(), stamp="2026-10-24T03:08:40.000Z"), "published")
+            self.assertEqual(self.run_sync(a_changed, stamp="2026-10-24T03:08:40.000Z"), "published")
         self.assertEqual(self.bodies()[1], {})
         self.assertEqual(self.logs[-1], "grade-insights: published an empty doc; 1 changed left out until the next "
                                         "sync, 1 missing aged out")
 
     def test_a_failed_load_never_clears_and_saves_no_state(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
         before = self.state_bytes()
 
         def failed_load():
             raise runner.FamilyDataError("GET /v1/grades/latest returned 500")
 
         with self.assertRaises(runner.FamilyDataError):
-            runner.run_sync(EVENING_STAMP, failed_load, self.writer.WriterWork, NoModel(),
+            runner.run_sync(EVENING_STAMP, failed_load, self.writer.WriterWork,
                             runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=self.opener).put,
-                            FakeMachine(at(22, 20, 20)).machine(), self.store, self.prints,
+                            self.store, self.prints,
                             env={"GRADE_INSIGHTS_PUBLISH": "1"}, log=self.logs.append)
         with self.assertRaises(runner.FamilyDataError):
-            runner.run_sync(EVENING_STAMP, lambda: None, self.writer.WriterWork, NoModel(),
+            runner.run_sync(EVENING_STAMP, lambda: None, self.writer.WriterWork,
                             runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=self.opener).put,
-                            FakeMachine(at(22, 20, 20)).machine(), self.store, self.prints,
+                            self.store, self.prints,
                             env={"GRADE_INSIGHTS_PUBLISH": "1"}, log=self.logs.append)
         self.assertEqual(len(self.opener.requests), 1)
         self.assertEqual(self.state_bytes(), before)
 
     def test_an_exception_while_writing_never_clears_and_saves_no_state(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
         before = self.state_bytes()
 
         def boom(*args, **kwargs):
-            raise RuntimeError("model crashed")
+            raise RuntimeError("writer crashed")
 
         with mock.patch.object(self.writer, "write_up", boom), self.assertRaises(RuntimeError):
-            self.run_sync(self.two_kids(a_print="c" * 64, b_print="d" * 64), QuietModel(), stamp=EVENING_STAMP)
+            self.run_sync(self.two_kids(a_print="c" * 64, b_print="d" * 64), stamp=EVENING_STAMP)
         self.assertEqual(len(self.opener.requests), 1)
         self.assertEqual(self.state_bytes(), before)
 
     def test_a_doc_emptied_by_the_publish_limits_is_not_cleared(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
         before = self.state_bytes()
         real_doc = runner.insights_doc
 
@@ -1427,7 +1379,7 @@ class ChangeCheckTests(unittest.TestCase):
 
         with mock.patch.object(self.writer, "write_up", one_story), \
                 mock.patch.object(runner, "insights_doc", side_effect=limits_empty_the_merged_doc):
-            status = self.run_sync(self.two_kids(a_print="c" * 64, b_print="d" * 64), QuietModel(), stamp=EVENING_STAMP)
+            status = self.run_sync(self.two_kids(a_print="c" * 64, b_print="d" * 64), stamp=EVENING_STAMP)
         self.assertEqual(status, "nothing_to_send")
         self.assertEqual(len(self.opener.requests), 1)
         self.assertEqual(self.state_bytes(), before)
@@ -1436,17 +1388,17 @@ class ChangeCheckTests(unittest.TestCase):
     def test_a_changed_kid_with_empty_output_is_dropped_and_retried_next_sync(self):
         # No notes beat wrong numbers: B changed and came out empty, so B's old entry is not sent.
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
         old = runner.read_fingerprints(self.prints)
 
-        def only_a(model, facts, *rest):
+        def only_a(facts, *rest):
             only_a.n += 1
-            return one_story(model, facts) if only_a.n == 1 else {"as_of": facts["as_of"], "stories": []}
+            return one_story(facts) if only_a.n == 1 else {"as_of": facts["as_of"], "stories": []}
 
         only_a.n = 0
         kids = self.two_kids(a_print="c" * 64, b_print="d" * 64)
         with mock.patch.object(self.writer, "write_up", only_a):
-            self.assertEqual(self.run_sync(kids, QuietModel(), stamp=EVENING_STAMP), "published_partial")
+            self.assertEqual(self.run_sync(kids, stamp=EVENING_STAMP), "published_partial")
         self.assertEqual(sorted(self.bodies()[1]), ["9001"])
         self.assertEqual(sorted(runner.read_published(self.published())), ["9001"])
         prints = runner.read_fingerprints(self.prints)
@@ -1457,13 +1409,12 @@ class ChangeCheckTests(unittest.TestCase):
         # The next sync with the same grades writes only B again, and B is back in the doc.
         seen = []
 
-        def record(model, facts, *rest):
+        def record(facts, *rest):
             seen.append(1)
-            return one_story(model, facts)
+            return one_story(facts)
 
         with mock.patch.object(self.writer, "write_up", record):
-            self.assertEqual(self.run_sync(kids, QuietModel(), stamp="2026-10-23T23:46:30.000Z",
-                                           machine=FakeMachine(at(23, 16, 55)).machine()), "published")
+            self.assertEqual(self.run_sync(kids, stamp="2026-10-23T23:46:30.000Z"), "published")
         self.assertEqual(len(seen), 1)
         self.assertEqual(sorted(self.bodies()[2]), ["9001", "9002"])
         self.assertEqual(runner.read_fingerprints(self.prints)[runner.student_key("9002")], "d" * 64)
@@ -1472,48 +1423,47 @@ class ChangeCheckTests(unittest.TestCase):
         # B is dropped with its old fingerprint kept; if B's data returns to that fingerprint, B has no entry in the
         # doc, so B still counts as changed instead of being skipped forever.
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
 
-        def only_a(model, facts, *rest):
+        def only_a(facts, *rest):
             only_a.n += 1
-            return one_story(model, facts) if only_a.n == 1 else {"as_of": facts["as_of"], "stories": []}
+            return one_story(facts) if only_a.n == 1 else {"as_of": facts["as_of"], "stories": []}
 
         only_a.n = 0
         with mock.patch.object(self.writer, "write_up", only_a):
-            self.run_sync(self.two_kids(a_print="c" * 64, b_print="d" * 64), QuietModel(), stamp=EVENING_STAMP)
+            self.run_sync(self.two_kids(a_print="c" * 64, b_print="d" * 64), stamp=EVENING_STAMP)
         with mock.patch.object(self.writer, "write_up", one_story):
-            status = self.run_sync(self.two_kids(a_print="c" * 64), QuietModel(), stamp="2026-10-23T23:46:30.000Z",
-                                   machine=FakeMachine(at(23, 16, 55)).machine())
+            status = self.run_sync(self.two_kids(a_print="c" * 64), stamp="2026-10-23T23:46:30.000Z")
         self.assertEqual(status, "published")
         self.assertEqual(sorted(self.bodies()[2]), ["9001", "9002"])
 
     def test_a_changed_kid_with_empty_output_and_no_last_entry_is_left_out(self):
-        def only_a(model, facts, *rest):
+        def only_a(facts, *rest):
             only_a.n += 1
-            return one_story(model, facts) if only_a.n == 1 else {"as_of": facts["as_of"], "stories": []}
+            return one_story(facts) if only_a.n == 1 else {"as_of": facts["as_of"], "stories": []}
 
         only_a.n = 0
         with mock.patch.object(self.writer, "write_up", only_a):
-            self.assertEqual(self.run_sync(self.two_kids(), QuietModel()), "published_partial")
+            self.assertEqual(self.run_sync(self.two_kids()), "published_partial")
         self.assertEqual(sorted(self.bodies()[0]), ["9001"])
         self.assertEqual(list(runner.read_fingerprints(self.prints)), [runner.student_key("9001")])
 
     def test_a_missing_kid_is_carried_for_two_syncs_then_aged_out(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
         first = self.bodies()[0]
         only_a = self.two_kids()[:1]
         missed = self.prints.with_name(runner.MISSED_FILE)
         stamps = ["2026-10-23T03:08:40.000Z", "2026-10-23T23:46:30.000Z", "2026-10-24T03:08:40.000Z"]
-        # Syncs 1 and 2 without B: nothing else changed, so no model and no PUT, B's entry stays, the count goes up.
+        # Syncs 1 and 2 without B: nothing else changed, so no write and no PUT, B's entry stays, the count goes up.
         for n, stamp in enumerate(stamps[:2], 1):
-            self.assertEqual(self.run_sync(only_a, NoModel(), stamp=stamp), "no_change")
+            self.assertEqual(self.run_sync(only_a, writes=False, stamp=stamp), "no_change")
             self.assertEqual(runner.read_missed(missed), {runner.student_key("9002"): n})
         self.assertEqual(len(self.opener.requests), 1)
         self.assertEqual(missed.stat().st_mode & 0o777, 0o600)
         self.assertNotIn("9002", missed.read_text())
-        # Sync 3 without B: aged out, so the doc is sent once more without B. No model call.
-        self.assertEqual(self.run_sync(only_a, NoModel(), stamp=stamps[2]), "published")
+        # Sync 3 without B: aged out, so the doc is sent once more without B. No write.
+        self.assertEqual(self.run_sync(only_a, writes=False, stamp=stamps[2]), "published")
         third = self.bodies()[1]
         self.assertEqual(sorted(third), ["9001"])
         self.assertEqual(json.dumps(third["9001"]), json.dumps(first["9001"]))
@@ -1524,14 +1474,13 @@ class ChangeCheckTests(unittest.TestCase):
                                         "0 missing carried, 1 missing aged out")
         # B comes back with the same grades: written again, since B has no entry any more.
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.assertEqual(self.run_sync(self.two_kids(), QuietModel(), stamp="2026-10-26T23:46:30.000Z",
-                                           machine=FakeMachine(at(26, 16, 55)).machine()), "published")
+            self.assertEqual(self.run_sync(self.two_kids(), stamp="2026-10-26T23:46:30.000Z"), "published")
         self.assertEqual(sorted(self.bodies()[2]), ["9001", "9002"])
 
     def test_a_missing_kid_rides_along_on_a_changed_sync_and_the_count_resets_on_return(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
-            status = self.run_sync(self.two_kids(a_print="c" * 64)[:1], QuietModel(), stamp=EVENING_STAMP)
+            self.run_sync(self.two_kids())
+            status = self.run_sync(self.two_kids(a_print="c" * 64)[:1], stamp=EVENING_STAMP)
         self.assertEqual(status, "published_partial")
         first, second = self.bodies()
         self.assertEqual(sorted(second), ["9001", "9002"])
@@ -1540,22 +1489,21 @@ class ChangeCheckTests(unittest.TestCase):
         self.assertEqual(runner.read_missed(missed), {runner.student_key("9002"): 1})
         self.assertEqual(self.logs[-1], "grade-insights: published; 0 changed left out until the next sync, "
                                         "1 missing carried, 0 missing aged out")
-        # B is back, unchanged: carried as an unchanged kid, and the count resets without a model call or a PUT.
-        self.assertEqual(self.run_sync(self.two_kids(a_print="c" * 64), NoModel(), stamp="2026-10-23T23:46:30.000Z",
-                                       machine=FakeMachine(at(23, 16, 55)).machine()), "no_change")
+        # B is back, unchanged: carried as an unchanged kid, and the count resets without a write or a PUT.
+        self.assertEqual(self.run_sync(self.two_kids(a_print="c" * 64), writes=False, stamp="2026-10-23T23:46:30.000Z"), "no_change")
         self.assertEqual(runner.read_missed(missed), {})
         self.assertEqual(len(self.opener.requests), 2)
 
     def test_the_carried_entry_is_byte_identical_even_when_the_writer_would_now_word_it_differently(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
 
-        def reworded(model, facts, *rest):
+        def reworded(facts, *rest):
             return {"as_of": facts["as_of"], "stories": [
                 {"class": "Math", "story": "Reworded: a B, close to an A.", "cites": ["whatif:math:tests:50"]}]}
 
         with mock.patch.object(self.writer, "write_up", reworded):
-            self.run_sync(self.two_kids(a_print="c" * 64), QuietModel(), stamp=EVENING_STAMP)
+            self.run_sync(self.two_kids(a_print="c" * 64), stamp=EVENING_STAMP)
         first_raw, second_raw = (r.data for r in self.opener.requests)
         carried = json.dumps(json.loads(first_raw)["students"]["9002"]).encode()
         self.assertIn(carried, first_raw)
@@ -1567,9 +1515,9 @@ class ChangeCheckTests(unittest.TestCase):
 
     def test_a_lost_published_doc_rewrites_everyone(self):
         with mock.patch.object(self.writer, "write_up", one_story):
-            self.run_sync(self.two_kids(), QuietModel())
+            self.run_sync(self.two_kids())
             self.published().unlink()
-            self.assertEqual(self.run_sync(self.two_kids(), QuietModel(), stamp=EVENING_STAMP), "published")
+            self.assertEqual(self.run_sync(self.two_kids(), stamp=EVENING_STAMP), "published")
         self.assertEqual(sorted(self.bodies()[1]), ["9001", "9002"])
         self.assertEqual(self.logs[2], "grade-insights: 2 students, 2 changed; writing")
 
@@ -1614,7 +1562,7 @@ def grade_replies():
 
 @unittest.skipUnless(writer_has_upcoming(), "needs the writer's WriterWork")
 class MainTests(unittest.TestCase):
-    """main() wired end to end on synthetic data: fake machine, fake opener, no model, no Keychain."""
+    """main() wired end to end on synthetic data: fake machine, fake opener, no Keychain."""
 
     def setUp(self):
         import insights_writer
@@ -1639,16 +1587,15 @@ class MainTests(unittest.TestCase):
             env["GRADE_INSIGHTS_PUBLISH"] = "1"
         return env
 
-    def main(self, fake, client, publish=True, model=None):
+    def main(self, fake, client, publish=True, writes=True):
         import contextlib
         import io
 
         out, err = io.StringIO(), io.StringIO()
         publisher = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=self.opener)
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), \
-                mock.patch.object(self.writer, "write_up", one_story):
-            code = runner.main([], machine=fake.machine(), client=client, model=model or QuietModel(),
-                               publisher=publisher, env=self.env(publish))
+                mock.patch.object(self.writer, "write_up", one_story if writes else no_write):
+            code = runner.main([], machine=fake.machine(), client=client, publisher=publisher, env=self.env(publish))
         self.output = out.getvalue() + err.getvalue()
         return code
 
@@ -1667,7 +1614,7 @@ class MainTests(unittest.TestCase):
         first = self.output
 
         client, sent = recording_client(grade_replies())
-        self.assertEqual(self.main(FakeMachine(at(22, 20, 20), stamp=EVENING_STAMP), client, model=NoModel()), 0)
+        self.assertEqual(self.main(FakeMachine(at(22, 20, 20), stamp=EVENING_STAMP), client, writes=False), 0)
         self.assertEqual(len(self.opener.requests), 1)
         self.assertEqual(self.output, "grade-insights: skip: no change\n")
         for word in PRIVATE + (SECRET_STANDIN, "0000", "t1"):
@@ -1685,14 +1632,14 @@ class MainTests(unittest.TestCase):
 
     def test_a_missing_ssd_skips_without_unlocking(self):
         client, sent = recording_client([])
-        self.assertEqual(self.main(FakeMachine(at(22, 16, 55), ssd=False), client, model=NoModel()), 0)
+        self.assertEqual(self.main(FakeMachine(at(22, 16, 55), ssd=False), client, writes=False), 0)
         self.assertEqual((sent, self.opener.requests), ([], []))
         self.assertEqual(self.output, "grade-insights: sync skipped, the SSD is not mounted; the last write-up stays\n")
         self.assertFalse((self.ssd / "grade-insights").exists())
 
     def test_a_failure_logs_the_type_only_and_the_next_start_retries(self):
         client, sent = recording_client([(200, b'{"token": "t1"}'), (500, b"")])
-        self.assertEqual(self.main(FakeMachine(at(22, 16, 55)), client, model=NoModel()), 1)
+        self.assertEqual(self.main(FakeMachine(at(22, 16, 55)), client, writes=False), 1)
         self.assertEqual(self.output, "grade-insights: run failed (FamilyDataError)\n")
         state = json.loads((self.tmp / "home" / "state.json").read_text())
         self.assertEqual(state["status"], "failed")
@@ -1707,7 +1654,7 @@ class MainTests(unittest.TestCase):
         state = self.ssd / "grade-insights" / "state"
         before = {p.name: p.read_bytes() for p in state.iterdir()}
         client, _ = recording_client([(200, b'{"token": "t1"}'), (503, b"")])
-        self.assertEqual(self.main(FakeMachine(at(22, 20, 20), stamp=EVENING_STAMP), client, model=NoModel()), 1)
+        self.assertEqual(self.main(FakeMachine(at(22, 20, 20), stamp=EVENING_STAMP), client, writes=False), 1)
         self.assertEqual(self.output, "grade-insights: run failed (FamilyDataError)\n")
         self.assertEqual(len(self.opener.requests), 1)
         self.assertEqual({p.name: p.read_bytes() for p in state.iterdir()}, before)
@@ -1722,9 +1669,8 @@ class MainTests(unittest.TestCase):
             client, sent = recording_client([])
             machine = FakeMachine(at(22, 16, 55)).machine()
             freshness = mock.Mock(side_effect=AssertionError("freshness read"))
-            locked = runner.Machine(now=machine.now, freshness=freshness, ssd_mounted=machine.ssd_mounted,
-                                    free_memory_pct=machine.free_memory_pct, busy=machine.busy)
-            self.assertEqual(runner.main([], machine=locked, client=client, model=NoModel(), env=self.env()), 0)
+            locked = runner.Machine(now=machine.now, freshness=freshness, ssd_mounted=machine.ssd_mounted)
+            self.assertEqual(runner.main([], machine=locked, client=client, env=self.env()), 0)
             self.assertEqual((sent, self.opener.requests), ([], []))
             self.assertFalse((home / "state.json").exists())
         # Once the first start lets go, the next start runs.
@@ -1742,21 +1688,6 @@ class MainTests(unittest.TestCase):
             self.assertEqual(path.stat().st_mode & 0o077, 0, path)
 
 
-class ModelReplyTests(unittest.TestCase):
-    def test_clean_reply_keeps_only_the_json_object(self):
-        cases = {
-            '{"a": 1}': '{"a": 1}',
-            '<think>\nhmm\n</think>\n{"a": 1}': '{"a": 1}',
-            '```json\n{"a": 1}\n```': '{"a": 1}',
-            'Sure: {"a": 1} done': '{"a": 1}',
-            "": "",
-        }
-        self.assertEqual({k: runner.clean_reply(k) for k in cases}, cases)
-
-    def test_the_model_loads_nothing_until_asked(self):
-        model = runner.MlxModel(runner.DEFAULT_SSD)
-        self.assertIsNone(model._loaded)
-        self.assertEqual(model.name, "qwen3-8b")
 
 if __name__ == "__main__":
     unittest.main()
