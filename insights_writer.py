@@ -176,13 +176,16 @@ _NOT_GENERAL = ("bucket_weight_pct", "coverage", "needed_pct")
 # The made-up example: a class, items, numbers and a weekday that match no real class.
 EXAMPLE_FACTS = [
     {"id": "next:ceramics", "kind": "next_letter", "class": "Ceramics", "pct": 68.8, "letter": "D",
-     "next_letter": "C", "threshold": 70.0, "gap": 1.2},
+     "next_letter": "C", "threshold": 70.0, "gap": 1.2, "say_opening": "Still a D, 1.2 points from a C."},
     {"id": "move:ceramics:2026-09-09", "kind": "grade_move", "class": "Ceramics", "since": "2026-09-09",
      "since_label": "Sep 9", "from_pct": 71.1, "to_pct": 68.8, "delta": -2.3, "explained": -2.2, "coverage": 0.96,
-     "coverage_trimmed": False, "causes": [
+     "coverage_trimmed": False, "say_opening": "Slipped to a D since Sep 9, down 2.3.", "causes": [
          {"id": "cause:ceramics:2026-09-09:glazetest", "title": "Glaze Test", "category": "Projects",
           "bucket": "Projects", "bucket_weight_pct": 40.0, "change": "new", "earned": 11.0, "possible": 20.0,
-          "points": -2.1, "share": -2.2}]},
+          "points": -2.6, "share": -2.6, "effect": "hurt"},
+         {"id": "cause:ceramics:2026-09-09:claysketch", "title": "Clay Sketch", "category": "Projects",
+          "bucket": "Projects", "bucket_weight_pct": 40.0, "change": "new", "earned": 19.0, "possible": 20.0,
+          "points": 0.4, "share": 0.4, "effect": "helped"}]},
     {"id": "whatif:ceramics:projects:20", "kind": "what_if", "class": "Ceramics", "bucket": "Projects",
      "bucket_weight_pct": 40.0, "points": 20.0, "target": 70.0, "needed_pct": 73.4, "say_needed": "74 or better",
      "reachable": True},
@@ -190,20 +193,22 @@ EXAMPLE_FACTS = [
      "share": 0.8, "scores": 10, "window_days": 28},
 ]
 EXAMPLE_NOTE = [
-    {"text": "Slipped to a D since Sep 9, 1.2 points from a C.", "cites": ["next:ceramics", "move:ceramics:2026-09-09"]},
+    {"text": "Slipped to a D since Sep 9, down 2.3.", "cites": ["move:ceramics:2026-09-09"]},
     {"text": "The Glaze Test (11/20) did most of the damage.", "cites": ["cause:ceramics:2026-09-09:glazetest"]},
+    {"text": "The Clay Sketch (19/20) helped.", "cites": ["cause:ceramics:2026-09-09:claysketch"]},
     {"text": "Scores usually post Tuesdays.", "cites": ["pattern:posting_day:ceramics"]},
     {"text": "A 74 or better on the next project gets it to a C.", "cites": ["whatif:ceramics:projects:20"]},
 ]
 # A sentence carrying any of these copied the example rather than the facts.
-EXAMPLE_MARKERS = ("ceramics", "glaze", "kiln", "sep 9", "74 or better", "73.4", "68.8", "71.1")
+EXAMPLE_MARKERS = ("ceramics", "glaze", "kiln", "clay sketch", "sep 9", "74 or better", "73.4", "68.8", "71.1")
 
 DRAFT_SYSTEM = """You write a short note to a parent about one class, the way a sharp teacher would.
 You get FACTS as JSON. Every fact has an id. Use only those facts.
 
 Write 1 to 4 short, plain sentences:
-- Open with the letter and the gap, or the letter and the move, citing the next_letter or grade_move: "Still a B, down 1.4 since Mar 3." or "Half a point from a B."
-- Then why it moved, naming the real assignment with its score as earned/possible (4/10) or a percent: "Mostly the Lab Report (6/10)."
+- Open with say_opening, word for word: from the grade_move if there is one, else from the next_letter. Cite that fact.
+- Then why it moved: the causes whose effect matches the move ("hurt" on a drop, "helped" on a rise), largest first, with the score as earned/possible: "Mostly the Lab Report (6/10)."
+- A cause with the opposite effect only as a contrast, in its own words: "The Rocket Lab (9/10) helped." Never as part of the reason.
 - Then a pattern, only if FACTS has a posting_day fact, naming its weekday.
 - End with one next step, only from a what_if fact, using its say_needed: "An 85 or better on the next test gets it to a B."
 - With no what_if fact, end without a next step. Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
@@ -216,7 +221,6 @@ Rules:
 - With no grade_move, the grade didn't move: say "Still a C", never "moved to a C".
 - No talk of the next letter without a next_letter fact. A class at an A has no next letter.
 - "Back to" or "again" only when a grade_move shows the class had that letter before.
-- A cause that helped while the grade fell (or hurt while it rose) is never the reason. Name it only as a contrast: "The Lab (9/10) helped." or "..., while the Lab (9/10) helped."
 - Never say what isn't there ("no major assignments", "no pattern").
 - Say "since" only with since_label; never "since last report".
 - Numbers come from the cited facts, written as digits. A needed score is say_needed ("85 or better"), never rounded down.
@@ -331,8 +335,34 @@ def say_needed(needed_pct):
     return f"{math.ceil(round(needed_pct, 6))} or better"
 
 
+def _article(word):
+    return fix_articles(f"a {word}").split(" ")[0]
+
+
+def say_opening(fact):
+    """The story's first sentence, built from one next_letter or grade_move fact, or None.
+
+    next_letter: "Still a C, 0.5 points from a B."  grade_move: "Still an A, down 1.6 since Oct 14."
+    or, when the move crossed a letter, "Slipped to a C since Oct 14, down 1.6."
+    """
+    kind = fact.get("kind")
+    if kind == "next_letter" and fact.get("letter") and fact.get("next_letter") and isinstance(fact.get("gap"), (int, float)):
+        letter, nxt = fact["letter"], fact["next_letter"]
+        return f"Still {_article(letter)} {letter}, {fact['gap']:g} points from {_article(nxt)} {nxt}."
+    if kind == "grade_move" and all(isinstance(fact.get(k), (int, float)) for k in ("from_pct", "to_pct", "delta")):
+        before, after = insights.letter_for(fact["from_pct"]), insights.letter_for(fact["to_pct"])
+        way = "down" if fact["delta"] < 0 else "up"
+        since = f" since {fact['since_label']}" if fact.get("since_label") else ""
+        if before == after:
+            return f"Still {_article(after)} {after}, {way} {abs(fact['delta']):g}{since}."
+        verb = "Slipped" if fact["delta"] < 0 else "Up"
+        return f"{verb} to {_article(after)} {after}{since}, {way} {abs(fact['delta']):g}."
+    return None
+
+
 def _say_fields(fact):
-    """Ready-to-say wording the model copies instead of rounding: say_needed and since_label."""
+    """Ready-to-say wording the model copies instead of rounding: say_needed, since_label,
+    say_opening, and each cause's effect ("hurt" or "helped") on the grade."""
     if fact.get("kind") == "what_if" and isinstance(fact.get("needed_pct"), (int, float)) and fact.get("reachable"):
         fact = {**fact, "say_needed": say_needed(fact["needed_pct"])}
     if fact.get("kind") == "grade_move" and fact.get("since"):
@@ -340,6 +370,14 @@ def _say_fields(fact):
             fact = {**fact, "since_label": due_label(fact["since"])}
         except ValueError:
             pass
+    if fact.get("kind") == "grade_move" and fact.get("causes"):
+        def effect(cause):
+            size = cause.get("share") if cause.get("share") is not None else cause.get("points")
+            return "hurt" if (size or 0) < 0 else "helped"
+        fact = {**fact, "causes": [{**c, "effect": effect(c)} for c in fact["causes"]]}
+    opening = say_opening(fact)
+    if opening:
+        fact = {**fact, "say_opening": opening}
     return fact
 
 

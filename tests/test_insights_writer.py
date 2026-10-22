@@ -689,6 +689,28 @@ class PolishPassTests(unittest.TestCase):
         chem = w.fact_index(chem_facts())
         self.assertIsNone(w.check_sentence("The Lab 3 Packet (4/10) drove the drop.", [CHEM_C1], chem))
 
+    def test_the_model_gets_a_ready_opening_and_each_causes_effect(self):
+        geo = w.model_facts(geometry_facts())
+        self.assertEqual(geo[0]["say_opening"], "Still a C, 0.5 points from a B.")
+        chem = w.model_facts(chem_facts())
+        self.assertEqual(chem[0]["say_opening"], "Still an A, down 1.6 since Oct 14.")
+        self.assertEqual([c["effect"] for c in chem[0]["causes"]], ["hurt", "hurt"])
+        crossed = dict(chem_facts()[0], from_pct=80.4, to_pct=78.8)
+        self.assertEqual(w.say_opening(w._say_fields(crossed)), "Slipped to a C since Oct 14, down 1.6.")
+        risen = dict(chem_facts()[0], from_pct=78.8, to_pct=80.4, delta=1.6, causes=[])
+        self.assertEqual(w.say_opening(w._say_fields(risen)), "Up to a B since Oct 14, up 1.6.")
+        # The ready openings pass the checker and the opening rule as written.
+        gidx, cidx = w.fact_index(geometry_facts()), w.fact_index(chem_facts())
+        self.assertIsNone(w.check_sentence(geo[0]["say_opening"], [GEO_NEXT], gidx))
+        self.assertIsNone(w.eval_story([{"text": geo[0]["say_opening"], "cites": [GEO_NEXT]},
+                                        {"text": "An 85 or better on the next test gets there.", "cites": [GEO_WHATIF]}], gidx))
+        self.assertIsNone(w.check_sentence(chem[0]["say_opening"], [CHEM_MOVE], cidx))
+        self.assertIsNone(w.eval_story([{"text": chem[0]["say_opening"], "cites": [CHEM_MOVE]}], cidx))
+        lab = dict(chem_facts()[0])
+        lab["causes"] = lab["causes"] + [{"id": "cause:chem:2026-10-14:rocketlab", "title": "Rocket Lab", "share": 0.4,
+                                          "points": 0.8, "earned": 9.0, "possible": 10.0}]
+        self.assertEqual(w._say_fields(lab)["causes"][-1]["effect"], "helped")
+
     def test_a_and_an_follow_how_the_number_or_letter_is_said(self):
         cases = {
             "A 85 or better on the next test gets there.": "An 85 or better on the next test gets there.",
