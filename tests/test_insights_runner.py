@@ -2,6 +2,7 @@ import json
 import re
 import sys
 import tempfile
+import types
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -467,6 +468,70 @@ class LoaderTests(unittest.TestCase):
             self.assertIsNone(runner.writer_work(FakeClient(), model=None, store="/nonexistent"))
             students = runner.load_students(FakeClient())
         self.assertEqual(students[0]["upcoming"], [])
+
+    def _with_writer_source(self, source):
+        """Put a synthetic insights_writer.py first on sys.path for one test; restore everything after."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        Path(tmp.name, "insights_writer.py").write_text(source)
+        modules = mock.patch.dict(sys.modules)
+        modules.start()
+        self.addCleanup(modules.stop)
+        sys.modules.pop("insights_writer", None)
+        path = mock.patch.object(sys, "path", [tmp.name] + sys.path)
+        path.start()
+        self.addCleanup(path.stop)
+
+    def _load(self):
+        lines = []
+        students = runner.load_students(FakeClient(), log=lines.append)
+        return students, lines
+
+    def test_a_truly_missing_writer_is_quiet(self):
+        missing = ModuleNotFoundError("No module named 'insights_writer'", name="insights_writer")
+        with mock.patch.object(runner.importlib, "import_module", side_effect=missing):
+            students, lines = self._load()
+            work_lines = []
+            self.assertIsNone(runner.writer_work(FakeClient(), None, "/nonexistent", log=work_lines.append))
+        self.assertEqual(students[0]["upcoming"], [])
+        self.assertEqual(lines + work_lines, [])
+
+    def test_a_writer_that_raises_on_import_warns_once_and_the_run_continues(self):
+        self._with_writer_source("SECRET_MARKER = 1\nraise RuntimeError('synthetic token value')\n")
+        students, lines = self._load()
+        self.assertEqual(len(students), 1)
+        self.assertEqual(students[0]["upcoming"], [])
+        self.assertEqual(lines, ["grade-insights: warning: writer upcoming_items unavailable (RuntimeError); "
+                                 "0 upcoming items"])
+        self.assertNotIn("synthetic token value", lines[0])
+
+    def test_other_import_failures_warn_once_with_the_type_only(self):
+        cases = {
+            "import not_a_real_module_for_tests\n": "ModuleNotFoundError",
+            "def broken(:\n": "SyntaxError",
+            "from os import not_a_real_name\n": "ImportError",
+        }
+        for source, kind in cases.items():
+            with self.subTest(kind=kind):
+                self._with_writer_source(source)
+                students, lines = self._load()
+                self.assertEqual(students[0]["upcoming"], [])
+                self.assertEqual(len(lines), 1)
+                self.assertIn(f"({kind})", lines[0])
+                self.assertNotIn("not_a_real", lines[0])
+                self.doCleanups()
+
+    def test_a_writer_missing_the_name_warns_once(self):
+        fake = types.ModuleType("insights_writer")
+        with mock.patch.dict(sys.modules, {"insights_writer": fake}):
+            students, lines = self._load()
+            work_lines = []
+            self.assertIsNone(runner.writer_work(FakeClient(), None, "/nonexistent", log=work_lines.append))
+        self.assertEqual(students[0]["upcoming"], [])
+        self.assertEqual(lines, ["grade-insights: warning: writer upcoming_items unavailable (ImportError); "
+                                 "0 upcoming items"])
+        self.assertEqual(work_lines, ["grade-insights: warning: writer WriterWork unavailable (ImportError); "
+                                      "0 upcoming items"])
 
     def test_the_loader_reads_with_one_unlock_and_gets_only(self):
         latest, log = synthetic_latest()

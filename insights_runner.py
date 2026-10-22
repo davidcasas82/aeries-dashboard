@@ -7,6 +7,7 @@ writing, checking) sits behind NightWork; this file never calls a model.
 """
 
 import fcntl
+import importlib
 import json
 import os
 import plistlib
@@ -339,19 +340,37 @@ def class_inputs(student):
     return out
 
 
-def writer_upcoming():
-    """The writer's upcoming_items, or None while the writer (PR #52) isn't in this checkout.
+WRITER_MODULE = "insights_writer"
 
-    Imported here rather than at the top so the runner keeps working without the writer.
+
+def writer_attr(name, log=print):
+    """One attribute of the writer (PR #52), or None.
+
+    Quiet only when the writer module truly isn't in this checkout: a ModuleNotFoundError naming
+    insights_writer itself. Anything else (a missing name, another missing module, a syntax error,
+    any exception while importing) logs one line with the exception type only and returns None,
+    so the night still runs without the writer's piece.
     """
     try:
-        from insights_writer import upcoming_items
-    except ImportError:
-        return None
-    return upcoming_items
+        return getattr(importlib.import_module(WRITER_MODULE), name)
+    except ModuleNotFoundError as err:
+        if err.name == WRITER_MODULE:
+            return None
+        failure = type(err).__name__
+    except AttributeError:
+        failure = "ImportError"
+    except Exception as err:  # noqa: BLE001 - a broken writer must never stop the runner
+        failure = type(err).__name__
+    log(f"grade-insights: warning: writer {name} unavailable ({failure}); 0 upcoming items")
+    return None
 
 
-def load_students(client, upcoming_items=None):
+def writer_upcoming(log=print):
+    """The writer's upcoming_items, or None (see writer_attr)."""
+    return writer_attr("upcoming_items", log)
+
+
+def load_students(client, upcoming_items=None, log=print):
     """[{"insight_facts", "log_items", "upcoming"}] per student with facts, for the writer.
 
     Two GETs on the read-only session: the latest grades and the scored log. Students are
@@ -363,7 +382,7 @@ def load_students(client, upcoming_items=None):
     remote_log = client.scored_log() or {}
     log_doc = remote_log.get("doc") if isinstance(remote_log.get("doc"), dict) else {}
     logged = log_doc.get("students") or {}
-    build = upcoming_items or writer_upcoming()
+    build = upcoming_items or writer_upcoming(log)
     students = []
     for student in latest.get("students") or []:
         facts = student.get("insight_facts")
@@ -375,23 +394,24 @@ def load_students(client, upcoming_items=None):
     return students
 
 
-def writer_work(client, model, store, put=None, env=None):
-    """The writer's nightly steps fed by load_students, or None while the writer isn't merged.
+def writer_work(client, model, store, put=None, env=None, log=print):
+    """The writer's nightly steps fed by load_students, or None without a usable writer.
 
+    Same import rule as writer_attr: quiet when the writer isn't in the checkout, one
+    type-only warning when it is there but broken. None means the runner keeps PendingWork.
     The load is read once per runner process, so a run unlocks at most once.
     """
-    try:
-        from insights_writer import WriterWork
-    except ImportError:
+    work_class = writer_attr("WriterWork", log)
+    if work_class is None:
         return None
     loaded = []
 
     def load():
         if not loaded:
-            loaded.append(load_students(client))
+            loaded.append(load_students(client, log=log))
         return loaded[0]
 
-    return WriterWork(load, model, store, put=put, env=env)
+    return work_class(load, model, store, put=put, env=env)
 
 
 def model_dir(ssd_path):
