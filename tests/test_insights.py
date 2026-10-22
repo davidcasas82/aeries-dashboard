@@ -464,7 +464,10 @@ class KeepFactShapeTests(unittest.TestCase):
         safe = insights.keep_fact(model, 92.1, upcoming[:1])
         self.assertEqual(safe["bucket"], "Assessments")  # its typical 1000-point item still needs a score
         only_safe = keep_model([("Coursework", 100.0, [(10, 10)] * 40)])
-        self.assertEqual(insights.keep_fact(only_safe, 100.0)["cannot_lose"], True)
+        # A can't-drop fact only about a named upcoming item at its posted points; at a typical size, none.
+        self.assertIsNone(insights.keep_fact(only_safe, 100.0))
+        named = [(date(2026, 10, 23), "Lab 9", "Coursework", 10.0)]
+        self.assertEqual(insights.keep_fact(only_safe, 100.0, named)["cannot_lose"], True)
 
     def test_keep_score_with_zero_points_is_none(self):
         model = keep_model([("Tests", 100.0, [(85, 100)])])
@@ -543,7 +546,9 @@ def busy_night(moves, new=6):
         name = f"Advanced Placement Course Number {c} Honors"
         classes.append({"name": name, "pct": pct, "mark": mark,
                         "counted_insight": scraper.build_counted_insight(tot, rows, posted_pct=pct, posted_mark=mark),
-                        "assignments": rows, "new_keys": [insights.slug(r["description"]) for r in rows[-new:]],
+                        # One named upcoming item per class, so a can't-drop keep fact has real points to be about.
+                        "assignments": rows + [row("Homework Assignment 40 Chapter 10", "Homework", None, 10.0, "10/27/2026")],
+                        "new_keys": [insights.slug(r["description"]) for r in rows[-new:]],
                         "prior_scores": {}})
     prior = snapshot("2026-10-21", {c["name"]: (c["pct"] + 1.3, c["mark"]) for c in classes}) if moves else None
     return insights.student_facts(classes, [], prior, TODAY)
@@ -1066,6 +1071,40 @@ class SnapshotSizeGuardTests(unittest.TestCase):
         scraper.upsert_student_snapshot(history, "1", "", evening)
         scraper.upsert_student_snapshot(history, "1", "", {"date": "2026-10-19", "classes": {"Lab": {"pct": 91.0}}}, replace_items=False)
         self.assertEqual(history["students"]["1"]["snapshots"][0]["classes"]["Lab"]["scores_trimmed"], 4)
+
+
+
+class CannotDropNeedsANamedItemTests(unittest.TestCase):
+    """GE's #55 finding: "The {next:} can't drop it below an A." was worked out at the bucket's typical size and
+    was false about 19% of the time on a bigger next item. Now it is only made for a named upcoming item, at
+    that item's posted points."""
+
+    # Tests 80% at 92/100, Coursework 20% at 5 x 10/10: a 93.6. A 0 on a 10-point item keeps the A; on 20 it doesn't.
+    MODEL = [("Tests", 80.0, [(92, 100)]), ("Coursework", 20.0, [(10, 10)] * 5)]
+
+    def test_ges_case_a_typical_size_can_drop_fact_is_not_made(self):
+        m = keep_model(self.MODEL)
+        g = insights.truncated_grade(m)
+        self.assertEqual(g, 93.6)
+        self.assertEqual(insights.keep_score(m, "Coursework", 10.0, 90.0), (None, True))
+        self.assertFalse(insights.holds(m, "Coursework", 0.0, 20.0, 90.0))  # the bigger next item breaks it
+        for upcoming in ((), [(date(2026, 10, 23), "Big Lab", "Coursework", 20.0)]):
+            fact = insights.keep_fact(m, g, upcoming)
+            self.assertFalse(fact and fact["cannot_lose"], (upcoming, fact))
+        only = keep_model([("Coursework", 100.0, [(10, 10)] * 40)])
+        self.assertIsNone(insights.keep_fact(only, 100.0))
+        # A named 400-point project: worked out at its real points it needs a score, so the score form, not can't-drop.
+        big = insights.keep_fact(only, 100.0, [(date(2026, 10, 23), "Unit Project", "Coursework", 400.0)])
+        self.assertEqual((big["points"], big["needed_pct"], big["cannot_lose"]), (400.0, 80.0, False))
+
+    def test_a_named_item_where_even_a_0_keeps_the_a_gets_the_fact(self):
+        m = keep_model([("Coursework", 100.0, [(10, 10)] * 40)])
+        named = [(date(2026, 10, 23), "Lab 9", "Coursework", 10.0)]
+        fact = insights.keep_fact(m, 100.0, named)
+        self.assertEqual((fact["bucket"], fact["points"], fact["needed_pct"], fact["cannot_lose"]),
+                         ("Coursework", 10.0, None, True))
+        # Checked against the item's real points: the lowest score the class allows still keeps the A.
+        self.assertTrue(insights.holds(m, "Coursework", insights._score_range(m)[0], 10.0, 90.0))
 
 
 if __name__ == "__main__":

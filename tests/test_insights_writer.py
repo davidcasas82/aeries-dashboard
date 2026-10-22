@@ -1,10 +1,12 @@
 """The local write-up: synthetic facts only, and a scripted model in place of a real one."""
 
 import json
+import random
 import re
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -1080,6 +1082,169 @@ class CtoRoundFourTests(unittest.TestCase):
                                                        [self.ALG], idx))
 
 
+KEEP_LAB, KEEP_TEST = "keep:chem:coursework:10", "keep:chem:tests:50"
+
+
+def chem_keep_facts(cannot_lose=False, keep_id=KEEP_LAB, named=True):
+    """Chem (an A that dropped 1.6, mostly on Coursework) plus the engine's one keep_letter fact.
+
+    A can't-drop fact is about a named upcoming item at its posted points (attach_next_items names it);
+    named=False leaves it at a typical size with no name, which the writer must not say."""
+    bucket, points, needed = ("Coursework", 10.0, 61.3) if keep_id == KEEP_LAB else ("Tests", 50.0, 72.0)
+    keep = {"id": keep_id, "kind": "keep_letter", "class": "Chem", "letter": "A", "bucket": bucket,
+            "points": points, "needed_pct": needed, "cannot_lose": False}
+    if cannot_lose:
+        keep.update(needed_pct=None, cannot_lose=True)
+        if named:
+            keep.update(next_title="Lab 9", next_due="2026-10-23", next_due_label="Fri Oct 23")
+    return chem_facts() + [keep]
+
+
+def biology_facts():
+    """GE's repro: Biology at 85.2 (a B), down since Oct 14, a keep_letter fact for the B and next:biology."""
+    return [{"id": "next:biology", "kind": "next_letter", "class": "Biology", "pct": 85.2, "letter": "B",
+             "next_letter": "A", "threshold": 90.0, "gap": 4.8},
+            {"id": "move:biology:2026-10-14", "kind": "grade_move", "class": "Biology", "since": "2026-10-14",
+             "from_pct": 87.0, "to_pct": 85.2, "delta": -1.8, "explained": -1.8, "coverage": 1.0,
+             "coverage_trimmed": False, "causes": []},
+            {"id": "keep:biology:tests:50", "kind": "keep_letter", "class": "Biology", "letter": "B",
+             "bucket": "Tests", "points": 50.0, "needed_pct": 53.2, "cannot_lose": False}]
+
+
+class KeepTheLetterWriterTests(unittest.TestCase):
+    """The engine's keep_letter fact on a drop story, on made-up Chem data."""
+
+    OPEN = {"text": "Still an A, down 1.6 since Oct 14.", "cites": [CHEM_MOVE]}
+    CAUSE = {"text": "Mostly the {item:%s}." % CHEM_C1, "cites": [CHEM_C1]}
+    KEEP = {"text": "A 62 or better on the {next:%s} keeps the A." % KEEP_LAB, "cites": [KEEP_LAB]}
+
+    def test_keep_sentences_are_not_cause_sentences(self):
+        # #52's cause-sentence gate leaves keep wording alone: it names no cause and cites no move.
+        idx = w.fact_index(chem_keep_facts())
+        self.assertIsNone(w.cause_form_reason(self.KEEP["text"], [KEEP_LAB], idx))
+        self.assertIsNone(w.check_sentence(self.KEEP["text"], [KEEP_LAB], idx, "Chem"))
+        safe = w.fact_index(chem_keep_facts(cannot_lose=True))
+        line = "The {next:%s} can't drop it below an A." % KEEP_LAB
+        self.assertIsNone(w.cause_form_reason(line, [KEEP_LAB], safe))
+        self.assertIsNone(w.check_sentence(line, [KEEP_LAB], safe, "Chem"))
+        story = w.write_class(ScriptedModel({"Chem": [self.OPEN, self.CAUSE, self.KEEP]}), chem_keep_facts(), "Chem")
+        self.assertEqual(story["dropped"], [])
+
+    def test_the_model_sees_the_engines_keep_fact_with_its_wording(self):
+        seen = [f for f in w.model_facts(chem_keep_facts()) if w.is_keep(f)]
+        self.assertEqual([f["id"] for f in seen], [KEEP_LAB])
+        # The keep wording names the item only through a {next:} slot; code fills it after the checks.
+        self.assertEqual(seen[0]["say_keep"], "A 62 or better on the {next:%s} keeps the A." % KEEP_LAB)
+        idx = w.fact_index(chem_keep_facts())
+        self.assertEqual(w.fill_slots(seen[0]["say_keep"], idx), "A 62 or better on the next coursework assignment keeps the A.")
+        safe = [f for f in w.model_facts(chem_keep_facts(cannot_lose=True)) if w.is_keep(f)]
+        self.assertEqual(safe[0]["say_keep"], "The {next:%s} can't drop it below an A." % KEEP_LAB)
+        self.assertEqual(w.fill_slots(safe[0]["say_keep"], w.fact_index(chem_keep_facts(cannot_lose=True))),
+                         "The Lab 9 can't drop it below an A.")
+        tests = [f for f in w.model_facts(chem_keep_facts(keep_id=KEEP_TEST)) if w.is_keep(f)]
+        self.assertEqual(w.fill_slots(tests[0]["say_keep"], w.fact_index(chem_keep_facts(keep_id=KEEP_TEST))),
+                         "A 72 or better on the next test keeps the A.")
+        # A named next item of the same bucket and size gives the keep step its title.
+        upcoming = [{"class": "Chem", "bucket": "Tests", "title": "Unit 4 Test", "due": "2026-10-28", "points": 50.0}]
+        named = w.attach_next_items(chem_keep_facts(keep_id=KEEP_TEST), upcoming)
+        pick = w.pick_keep(named)
+        self.assertEqual((pick["id"], w.fill_slots(w.say_keep(pick), w.fact_index(named))),
+                         (KEEP_TEST, "A 72 or better on the Unit 4 Test keeps the A."))
+        # The old what_if-with-target-keep shape is no longer a keep fact.
+        self.assertFalse(w.is_keep({"kind": "what_if", "target": "keep"}))
+
+    def test_a_drop_story_with_a_keep_fact_ends_on_it(self):
+        idx = w.fact_index(chem_keep_facts())
+        self.assertEqual(w.eval_story([dict(self.OPEN), dict(self.CAUSE)], idx), "a drop story must end on its what-if step")
+        self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE), dict(self.KEEP)], idx))
+        story = w.write_class(ScriptedModel({"Chem": [self.OPEN, self.CAUSE, self.KEEP]}), chem_keep_facts(), "Chem")
+        self.assertEqual(story["story"], "Still an A, down 1.6 since Oct 14. Mostly the Lab 3 Packet (4/10). "
+                                         "A 62 or better on the next coursework assignment keeps the A.")
+
+    def test_the_checker_takes_a_keep_claim_only_from_a_cited_keep_fact(self):
+        idx = w.fact_index(chem_keep_facts())
+        self.assertIsNone(w.check_sentence(self.KEEP["text"], [KEEP_LAB], idx, "Chem"))
+        self.assertEqual(w.check_sentence("A 62 or better on the next coursework assignment keeps the A.", [CHEM_MOVE], idx, "Chem"),
+                         "says the letter holds with no keep_letter fact cited")
+        self.assertIn("doesn't cite", w.check_sentence(self.KEEP["text"], [CHEM_MOVE], idx, "Chem"))
+        # Free text naming the item is dropped even with the keep fact cited.
+        self.assertIn("outside a slot", w.check_sentence("A 62 or better on the next coursework assignment keeps the A.",
+                                                         [KEEP_LAB], idx, "Chem"))
+        self.assertEqual(w.check_sentence("It stays an A with a 62 or better on the next lab.", [CHEM_C1], idx, "Chem"),
+                         "says the letter holds with no keep_letter fact cited")
+        # Round up only: the exact ceiling, "or better".
+        self.assertEqual(w.check_sentence("A 61 or better on the next coursework assignment keeps the A.", [KEEP_LAB], idx, "Chem"),
+                         "number 61 isn't the needed score or a round-up of it")
+        self.assertEqual(w.check_sentence("A 63 or better on the next coursework assignment keeps the A.", [KEEP_LAB], idx, "Chem"),
+                         "number 63 isn't the needed score or a round-up of it")
+        # A keep fact never backs a gets-it-to claim.
+        self.assertEqual(w.check_sentence("A 62 or better on the next lab gets it up to an A.", [KEEP_LAB], idx, "Chem"),
+                         "a keep_letter fact never backs a gets-it-to claim")
+        self.assertEqual(w.check_sentence("The next coursework assignment can't drop it below an A.", [KEEP_LAB], idx, "Chem"),
+                         "says the next item can't cost the letter, but the keep_letter fact needs a score")
+        # The letter kept is the keep fact's, the class's current letter.
+        self.assertIn("current letter", w.check_sentence("A 62 or better on the next coursework assignment keeps the B.",
+                                                         [KEEP_LAB], idx, "Chem"))
+
+    def test_ge_biology_repro_keep_never_backs_gets_it_to(self):
+        idx = w.fact_index(biology_facts())
+        self.assertEqual(w.check_sentence("A 54 or better on the next test gets it to an A.",
+                                          ["keep:biology:tests:50", "next:biology"], idx, "Biology"),
+                         "a keep_letter fact never backs a gets-it-to claim")
+        self.assertIsNone(w.check_sentence("A 54 or better on the {next:keep:biology:tests:50} keeps the B.",
+                                           ["keep:biology:tests:50"], idx, "Biology"))
+        self.assertIn("current letter", w.check_sentence("A 54 or better on the next test keeps the A.",
+                                                         ["keep:biology:tests:50"], idx, "Biology"))
+        self.assertEqual(w.fill_slots(w.model_facts(biology_facts())[2]["say_keep"], idx),
+                         "A 54 or better on the next test keeps the B.")
+
+    def test_physics_bar_story_passes_on_synthetic_facts(self):
+        phys = [{"id": "move:p", "kind": "grade_move", "class": "Physics & Eng", "since": "2026-10-14",
+                 "from_pct": 98.1, "to_pct": 96.5, "delta": -1.6, "explained": -1.73, "coverage": 1.08,
+                 "coverage_trimmed": False, "causes": [
+                     {"id": "cause:p:packet", "title": "Unit 2 Packet", "bucket": "Coursework", "bucket_weight_pct": 5.0,
+                      "change": "new", "earned": 4.0, "possible": 10.0, "points": -0.79, "share": -1.36},
+                     {"id": "cause:p:lab", "title": "Balloon Rocket Lab", "bucket": "Coursework", "bucket_weight_pct": 5.0,
+                      "change": "new", "earned": 9.0, "possible": 10.0, "points": 0.77, "share": 0.38}]},
+                {"id": "keep:p:assessments:10", "kind": "keep_letter", "class": "Physics & Eng", "letter": "A",
+                 "bucket": "Assessments", "points": 10.0, "needed_pct": 74.6, "cannot_lose": False}]
+        mf = w.model_facts(phys)
+        self.assertEqual(mf[1]["say_keep"], "A 75 or better on the {next:keep:p:assessments:10} keeps the A.")
+        draft = [{"text": mf[0]["say_opening"], "cites": ["move:p"]},
+                 {"text": "The {item:cause:p:packet} did most of the damage.", "cites": ["cause:p:packet"]},
+                 {"text": "The {item:cause:p:lab} helped.", "cites": ["cause:p:lab"]},
+                 {"text": mf[1]["say_keep"], "cites": ["keep:p:assessments:10"]}]
+        story = w.write_class(ScriptedModel({"Physics & Eng": draft}), phys, "Physics & Eng")
+        self.assertEqual(story["story"], "Still an A, down 1.6 since Oct 14. The Unit 2 Packet (4/10) did most of the damage. "
+                                         "The Balloon Rocket Lab (9/10) helped. A 75 or better on the next assessment keeps the A.")
+        self.assertEqual(story["dropped"], [])
+        # It must end on the keep step, which names a score.
+        self.assertEqual(w.eval_story([dict(s) for s in draft[:3]], w.fact_index(phys)),
+                         "a drop story must end on its what-if step")
+
+    def test_a_next_item_that_cannot_cost_the_letter_is_optional_and_plain(self):
+        idx = w.fact_index(chem_keep_facts(cannot_lose=True))
+        line = {"text": "The {next:%s} can't drop it below an A." % KEEP_LAB, "cites": [KEEP_LAB]}
+        self.assertIsNone(w.check_sentence(line["text"], line["cites"], idx, "Chem"))
+        self.assertEqual(w.check_sentence("The next coursework assignment can't drop it below an A.", [CHEM_MOVE], idx, "Chem"),
+                         "says the letter holds with no keep_letter fact cited")
+        self.assertEqual(w.check_sentence("A 62 or better on the next coursework assignment keeps the A.", [KEEP_LAB], idx, "Chem"),
+                         "says a score keeps the letter, but the keep_letter fact has no needed score")
+        # No item can cost the A, so no step is owed.
+        self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE)], idx))
+        self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE), dict(line)], idx))
+
+    def test_an_a_with_no_keep_fact_ends_on_the_cause_and_keep_alone_is_no_story(self):
+        self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE)], w.fact_index(chem_facts())))
+        steady = [f for f in chem_keep_facts() if f.get("kind") != "grade_move"]
+        self.assertFalse(w.worth_saying(steady))
+        self.assertIsNone(w.pick_keep(steady))
+        self.assertEqual([f for f in w.model_facts(steady) if w.is_keep(f)], [])
+        only_keep = [f for f in chem_keep_facts() if w.is_keep(f)]
+        self.assertFalse(w.worth_saying(only_keep))
+        self.assertEqual(w.eval_story([dict(self.KEEP)], w.fact_index(only_keep)),
+                         "cites no grade_move, what_if or pattern fact")
+
 def geo_facts(title="Unit Test", bucket="Tests", cls="Geo"):
     """GE's Geo repro: a D after a 2.5 drop, all on one cause; a what-if and a Thursday pattern."""
     return [{"id": "next:geo", "kind": "next_letter", "class": cls, "pct": 69.0, "letter": "D", "next_letter": "C",
@@ -1319,15 +1484,19 @@ class FoldedCausesAndKeepFactTests(unittest.TestCase):
         story = w.write_class(ScriptedModel({"Math": GOOD}), facts, "Math")
         self.assertEqual(story["story"], GOOD_STORY)
 
-    def test_the_model_never_sees_keep_letter_facts_on_this_branch(self):
+    def test_keep_a_sends_the_keep_fact_only_on_a_drop_and_in_slot_form(self):
+        """keep-a re-enables keep_letter for the model: pick_keep's one fact, on a drop story only."""
         keep = {"id": "keep:math:tests:50", "kind": "keep_letter", "class": "Math", "letter": "B", "bucket": "Tests",
                 "points": 50.0, "needed_pct": 41.2, "cannot_lose": False}
         facts = math_facts() + [keep]
-        self.assertNotIn("keep_letter", [f["kind"] for f in w.model_facts(facts)])
+        sent = [f for f in w.model_facts(facts) if f["kind"] == "keep_letter"]
+        self.assertEqual([f["id"] for f in sent], [keep["id"]] if w.pick_keep(facts) else [])
         self.assertFalse(w.worth_saying([keep]))
+        steady = [f for f in facts if f.get("kind") != "grade_move"]
+        self.assertEqual([f for f in w.model_facts(steady) if f["kind"] == "keep_letter"], [])
 
     @unittest.skipUnless(hasattr(insights, "keep_fact"), "needs #54's keep_letter engine")
-    def test_engine_keep_facts_never_reach_the_model_prompt(self):
+    def test_engine_keep_fact_reaches_the_prompt_on_a_drop_with_slot_wording(self):
         from test_insights import POG_ROWS, POG_TOTALS, class_input, snapshot, TODAY
 
         prior = snapshot("2026-10-21", {"Biology": (91.8, "A")})
@@ -1341,8 +1510,13 @@ class FoldedCausesAndKeepFactTests(unittest.TestCase):
                 return json.dumps({"sentences": [], "backed": []})
 
         w.write_class(Spy(), facts, "Biology")
-        self.assertTrue(sent)
-        self.assertNotIn("keep_letter", " ".join(sent))
+        prompt = json.loads(sent[0])
+        keeps = [f for f in prompt["facts"] if f["kind"] == "keep_letter"]
+        self.assertEqual(len(keeps), 1)
+        self.assertEqual(keeps[0]["say_keep"], "A 54 or better on the {next:%s} keeps the B." % keeps[0]["id"])
+        idx = w.fact_index(w.facts_for(facts, "Biology"))
+        self.assertIsNone(w.check_sentence(keeps[0]["say_keep"], [keeps[0]["id"]], idx, "Biology"))
+        self.assertEqual(w.fill_slots(keeps[0]["say_keep"], idx), "A 54 or better on the next test keeps the B.")
 
 
 def geo_rise_facts():
@@ -1989,9 +2163,10 @@ class ReviewNitTests(unittest.TestCase):
             self.assertIsNone(w.check_sentence("A 74 or better on the {next:whatif:geo} gets it to a C.",
                                                ["whatif:geo"], idx, "Geo"), bucket)
 
-    def test_the_prompt_offers_no_keep_ids_until_keep_a(self):
-        self.assertNotIn("keep_letter", w.DRAFT_SYSTEM)
-        self.assertIn("{next:<what_if id>}", w.DRAFT_SYSTEM)
+    def test_keep_a_offers_keep_ids_in_next_slots(self):
+        # #52 drops this line until keep-A lands; keep-A puts it back.
+        self.assertIn("{next:<keep_letter id>}", w.DRAFT_SYSTEM)
+        self.assertIn("A what_if or keep_letter id goes in a {next:} slot", w.DRAFT_SYSTEM)
 
 
 class OtherClassNameTests(unittest.TestCase):
@@ -2266,6 +2441,79 @@ class HostileTitleFillTests(unittest.TestCase):
         for text in ("Mostly the {item:cause:g:a}, next:whatif:g.", "Mostly the {item:cause:g:a} item:cause:g:b.",
                      "Mostly the {item:cause:g:a}, cause:g:b.", "Mostly the {item:cause:g:a} a:b."):
             self.assertIsNotNone(w.check_sentence(text, ["move:g", "cause:g:a"], idx, "Geo", ["Geo"]), text)
+
+
+
+class CannotDropWriterTests(unittest.TestCase):
+    """GE's #55 finding, writer side: the can't-drop form only for a named next item at its posted points."""
+
+    LINE = "The {next:%s} can't drop it below an A." % KEEP_LAB
+
+    def test_an_unnamed_cannot_drop_fact_is_never_said(self):
+        facts = chem_keep_facts(cannot_lose=True, named=False)
+        keep = [f for f in facts if w.is_keep(f)][0]
+        self.assertIsNone(w.say_keep(keep))
+        self.assertIsNone(w.pick_keep(facts))
+        self.assertEqual([f for f in w.model_facts(facts) if w.is_keep(f)], [])
+        idx = w.fact_index(facts)
+        self.assertEqual(w.check_sentence(self.LINE, [KEEP_LAB], idx, "Chem"), w.FORM_REASON)
+        story = w.write_class(ScriptedModel({"Chem": [KeepTheLetterWriterTests.OPEN, KeepTheLetterWriterTests.CAUSE,
+                                                       {"text": self.LINE, "cites": [KEEP_LAB]}]}), facts, "Chem")
+        self.assertEqual(len(story["dropped"]), 1)
+
+    def test_the_cannot_drop_form_on_a_needed_score_fact_drops(self):
+        idx = w.fact_index(chem_keep_facts())
+        self.assertIsNotNone(w.check_sentence(self.LINE, [KEEP_LAB], idx, "Chem"))
+        named = chem_keep_facts()
+        named[-1] = {**named[-1], "next_title": "Lab 9"}
+        self.assertIsNotNone(w.check_sentence(self.LINE, [KEEP_LAB], w.fact_index(named), "Chem"))
+
+    def test_a_named_cannot_drop_fact_passes_and_the_score_form_stays(self):
+        facts = chem_keep_facts(cannot_lose=True)
+        idx = w.fact_index(facts)
+        self.assertIsNone(w.check_sentence(self.LINE, [KEEP_LAB], idx, "Chem"))
+        self.assertEqual(w.fill_slots(self.LINE, idx), "The Lab 9 can't drop it below an A.")
+        self.assertIsNone(w.check_sentence(KeepTheLetterWriterTests.KEEP["text"], [KEEP_LAB], w.fact_index(chem_keep_facts()), "Chem"))
+
+    def test_every_emitted_cannot_drop_sentence_is_true(self):
+        # Brute force through the engine and the writer: random A-to-D classes, a next item of the usual size or
+        # bigger, named on the page or not. Every can't-drop sentence the writer would allow must hold at the
+        # lowest score the class allows, on the points of the item it names.
+        rng = random.Random(55)
+        emitted = 0
+        for _ in range(1500):
+            buckets = []
+            for i in range(rng.choice([1, 2, 3])):
+                rows = []
+                for j in range(rng.randint(1, 10)):
+                    p = float(rng.choice([5, 10, 20, 25, 40, 50, 100]))
+                    rows.append(insights.Score(f"B{i}{j}", "", f"B{i}", round(rng.uniform(0.8, 1.0) * p, 1), p))
+                buckets.append(insights.Bucket(f"B{i}", rng.randint(5, 70), tuple(rows)))
+            m = insights.ClassModel("X", "percent_of_grade", tuple(buckets), None, rng.choice([None, 100.0]))
+            g = insights.truncated_grade(m)
+            if g is None or insights.letter_floor(g) is None:
+                continue
+            floor = insights.letter_floor(g)[1]
+            b = rng.choice(m.buckets)
+            real = sorted(s.possible for s in b.scores)[len(b.scores) // 2] * rng.choice([1, 1, 2, 3, 5])
+            named = rng.random() < 0.5
+            ups = [(date(2026, 10, 27), "Next One", b.name, float(real))] if named else []
+            keep = insights.keep_fact(m, g, ups, {"delta": -1.0, "causes": []})
+            if not keep:
+                continue
+            move = {"id": "move:x", "kind": "grade_move", "class": "X", "delta": -1.0, "from_pct": g + 1, "to_pct": g,
+                    "causes": []}
+            facts = w.attach_next_items([move, keep], [{"class": "X", "bucket": b.name, "points": float(real),
+                                                        "title": "Next One", "due": "2026-10-27"}] if named else [])
+            line = "The {next:%s} can't drop it below %s %s." % (keep["id"], "an" if keep["letter"] in "AF" else "a",
+                                                                   keep["letter"])
+            if w.check_sentence(line, [keep["id"]], w.fact_index(facts), "X", ["X"]) is not None:
+                continue
+            emitted += 1
+            self.assertEqual(facts[1].get("next_title"), "Next One")
+            self.assertTrue(insights.holds(m, keep["bucket"], insights._score_range(m)[0], float(real), floor),
+                            (keep, real))
+        self.assertGreater(emitted, 50)
 
 
 if __name__ == "__main__":
