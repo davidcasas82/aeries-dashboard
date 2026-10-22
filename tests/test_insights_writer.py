@@ -431,7 +431,8 @@ class WeekdayRuleTests(unittest.TestCase):
         for sentence in w.EXAMPLE_NOTE:
             self.assertIsNone(w._RELATIVE_RE.search(sentence["text"]))
             cited = w._cited_facts(sentence["cites"], idx)
-            self.assertIsNone(w._claims_reason(w.fill_slots(sentence["text"], idx), cited, idx), sentence["text"])
+            self.assertIsNone(w._claims_reason(w.fill_slots(sentence["text"], idx), cited, idx, slotted=sentence["text"]),
+                              sentence["text"])
             self.assertIsNone(w.check_sentence(sentence["text"], sentence["cites"], idx), sentence["text"])
         self.assertIsNone(w.eval_story([dict(s) for s in w.EXAMPLE_NOTE], idx))
 
@@ -624,8 +625,9 @@ class BakeoffFindingTests(unittest.TestCase):
                                    "category": "Coursework", "bucket": "Coursework", "bucket_weight_pct": 10.0,
                                    "change": "new", "earned": 9.0, "possible": 10.0, "points": 0.8, "share": 0.4})
         idx = w.fact_index(facts)
-        self.assertIsNone(check("The Rocket Lab (9/10) helped a little.",
-                                           ["cause:chem:2026-10-14:rocketlab"], idx))
+        # The exact contrast form passes; "helped a little" is cause wording off the forms (#52 868098d review).
+        self.assertIsNone(check("The Rocket Lab (9/10) helped.", ["cause:chem:2026-10-14:rocketlab"], idx))
+        self.assertIsNotNone(check("The Rocket Lab (9/10) helped a little.", ["cause:chem:2026-10-14:rocketlab"], idx))
         self.assertEqual(w.check_sentence("Down 1.6, mostly from the Rocket Lab (9/10).",
                                           [CHEM_MOVE, "cause:chem:2026-10-14:rocketlab"], idx),
                          "gives an offsetting cause as the reason for the move")
@@ -1103,13 +1105,14 @@ class SlotRoundThreeTests(unittest.TestCase):
                                            ["whatif:geo"], idx, "Geo"))
         self.assertEqual(w.fill_slots("A 74 or better on the next {bucket:whatif:geo} score gets it to a C.", idx),
                          "A 74 or better on the next homework score gets it to a C.")
-        # Share order: "mostly" on a bucket of a cause that isn't the top share is dropped.
+        # Share order: "mostly" on a bucket that isn't the top bucket by net share is dropped (by the gate).
         facts = geo_facts(bucket="Homework")
         facts[1]["causes"].append({"id": "cause:geo:q", "title": "Quiz 2", "bucket": "Quizzes", "bucket_weight_pct": 20.0,
                                    "earned": 5.0, "possible": 10.0, "points": -0.5, "share": -0.4})
         idx2 = w.fact_index(facts)
         self.assertEqual(w.check_sentence("Mostly {bucket:cause:geo:q} scores.", ["cause:geo:q"], idx2, "Geo"),
-                         "names causes out of share order")
+                         w.CAUSE_FORM_REASON)
+        self.assertIsNone(w.check_sentence("Mostly {bucket:cause:geo:t} scores.", ["cause:geo:t"], idx2, "Geo"))
         self.assertIn("outside a slot", w.check_sentence("Homework scores did most of the damage.", ["cause:geo:t"], idx, "Geo"))
 
     def test_subject_check_uses_the_students_own_classes(self):
@@ -1366,7 +1369,12 @@ class DirectionTests(unittest.TestCase):
         # The word checks back up the cause-sentence gate, so they're read with the gate set aside.
         idx = w.fact_index(w.model_facts(facts))
         for text in texts:
-            self.assertEqual(claims(text, list(cites), idx, "Geo"), expected, text)
+            got = claims(text, list(cites), idx, "Geo")
+            if expected == self.WRONG:
+                # "Pulled it up" on a drop is also a move-direction word the cited move doesn't back.
+                self.assertIn(got, (self.WRONG, "says the grade moved a way no cited move did"), text)
+            else:
+                self.assertEqual(got, expected, text)
 
     def test_on_a_drop_a_cause_never_helped(self):
         self.check_all(geo_facts(), self.UP, self.WRONG)
@@ -1580,6 +1588,116 @@ class CauseFormGateTests(unittest.TestCase):
         self.assertEqual(w.check_sentence(wrong, [fid], idx, "Ceramics"), w.CAUSE_FORM_REASON)
         for sentence in w.EXAMPLE_NOTE:
             self.assertIsNone(w.check_sentence(sentence["text"], sentence["cites"], idx, "Ceramics"), sentence["text"])
+
+
+def bucket_net_facts(delta=-2.0, a=-1.0, c=2.0, b=-3.0):
+    """GE's gate868 fixture: Tests holds a and c, Labs holds b; the move is delta."""
+    facts = geo2_facts(delta=delta, neg=a, pos=b)
+    facts[1]["causes"].append({"id": "cause:g:c", "title": "Map Quiz", "bucket": "Tests", "bucket_weight_pct": 50.0,
+                               "earned": 10.0, "possible": 10.0, "points": c, "share": c})
+    return facts
+
+
+class GateReviewTests(unittest.TestCase):
+    """GE's gate868 on 868098d and the CTO's rules: non-cause buckets, bucket nets, move-direction words."""
+
+    MOVED = "says the grade moved a way no cited move did"
+
+    def test_a_bucket_slot_on_a_what_if_never_carries_a_direction(self):
+        for facts in (geo2_facts(), geo2_facts(delta=2.5, neg=-0.5, pos=3.0)):
+            idx = w.fact_index(w.model_facts(facts))
+            for text, cites in (("{bucket:whatif:g} scores helped.", ["whatif:g"]),
+                                ("{bucket:whatif:g} scores helped.", ["whatif:g", "move:g"]),
+                                ("{bucket:whatif:g} scores hurt.", ["whatif:g", "next:g"]),
+                                ("{bucket:whatif:g} scores dragged it down.", ["whatif:g"]),
+                                ("Mostly {bucket:whatif:g} scores.", ["whatif:g", "move:g"]),
+                                ("{bucket:whatif:g} scores did most of the damage.", ["whatif:g"])):
+                self.assertIsNotNone(w.check_sentence(text, cites, idx, "Geo"), text)
+            # With no direction word a what-if bucket is fine: the next step and a weight.
+            for text in ("A 74 or better on the next {bucket:whatif:g} score gets it to a C.",
+                         "{bucket:whatif:g} is 50% of the grade.", "The next {bucket:whatif:g} score decides it."):
+                self.assertIsNone(w.check_sentence(text, ["whatif:g"], idx, "Geo"), text)
+
+    def test_a_bucket_reads_its_net_share_in_the_move(self):
+        # Drop of 2.0: Tests nets +1.0 (a -1.0, c +2.0), Labs -3.0.
+        idx = w.fact_index(w.model_facts(bucket_net_facts()))
+        for text in ("{bucket:cause:g:a} scores hurt.", "{bucket:cause:g:c} scores hurt.",
+                     "{bucket:cause:g:a} scores did most of the damage.", "Mostly {bucket:cause:g:a} scores.",
+                     "{bucket:cause:g:b} scores helped.", "{bucket:cause:g:a} and {bucket:cause:g:c} scores helped."):
+            self.assertIsNotNone(gate_check(text, bucket_net_facts()), text)
+        for text in ("{bucket:cause:g:a} scores helped.", "{bucket:cause:g:c} scores helped.",
+                     "{bucket:cause:g:b} scores hurt.", "{bucket:cause:g:b} scores did most of the damage.",
+                     "Mostly {bucket:cause:g:b} scores."):
+            self.assertIsNone(gate_check(text, bucket_net_facts()), text)
+        self.assertEqual(w._bucket_net(idx, idx["cause:g:a"]), 1.0)
+        # Rise of 2.0: Tests nets -1.0 (a +1.0, c -2.0), Labs +3.0.
+        rise = bucket_net_facts(delta=2.0, a=1.0, c=-2.0, b=3.0)
+        for text in ("{bucket:cause:g:a} scores helped.", "Mostly {bucket:cause:g:a} scores.", "{bucket:cause:g:b} scores hurt."):
+            self.assertIsNotNone(gate_check(text, rise), text)
+        for text in ("{bucket:cause:g:a} scores hurt.", "{bucket:cause:g:b} scores helped.", "Mostly {bucket:cause:g:b} scores."):
+            self.assertIsNone(gate_check(text, rise), text)
+
+    def test_mostly_a_bucket_ranks_buckets_by_net(self):
+        # Drop: Tests -2.5 (a -1.5, c -1.0) beats Labs -2.0, though Labs holds the largest single cause.
+        facts = bucket_net_facts(delta=-4.5, a=-1.5, c=-1.0, b=-2.0)
+        self.assertIsNone(gate_check("Mostly {bucket:cause:g:a} scores.", facts))
+        self.assertIsNone(gate_check("Mostly {bucket:cause:g:c} scores.", facts))
+        self.assertIsNotNone(gate_check("Mostly {bucket:cause:g:b} scores.", facts))
+        self.assertIsNone(gate_check("Mostly the {item:cause:g:b}.", facts))
+        rise = bucket_net_facts(delta=4.5, a=1.5, c=1.0, b=2.0)
+        self.assertIsNone(gate_check("Mostly {bucket:cause:g:a} scores.", rise))
+        self.assertIsNotNone(gate_check("Mostly {bucket:cause:g:b} scores.", rise))
+
+    def test_a_bucket_net_under_a_tenth_claims_no_direction(self):
+        # The edge is 0.1 either way: 0.3 - 0.2 nets 0.1 (to the float), 0.29 - 0.2 nets 0.09.
+        for c, a, ok in ((0.3, -0.2, True), (0.29, -0.2, False), (0.1, 0.0, True), (0.0, 0.0, False)):
+            facts = bucket_net_facts(delta=-2.9, a=a, c=c, b=-3.0)
+            got = gate_check("{bucket:cause:g:c} scores helped.", facts)
+            self.assertEqual(got is None, ok, (c, a, got))
+        for c, a, ok in ((-0.3, 0.2, True), (-0.29, 0.2, False)):
+            facts = bucket_net_facts(delta=2.9, a=a, c=c, b=3.0)
+            got = gate_check("{bucket:cause:g:c} scores hurt.", facts)
+            self.assertEqual(got is None, ok, (c, a, got))
+
+    def test_move_direction_words_need_a_cited_move_of_that_sign(self):
+        for facts, wrong, right in ((geo2_facts(), "rose", "slipped"), (geo2_facts(delta=2.5, neg=-0.5, pos=3.0), "fell", "rose")):
+            idx = w.fact_index(w.model_facts(facts))
+            for text, cites in (("Scores dropped.", ["next:g"]), ("It rose.", ["next:g"]),
+                                ("It fell.", ["pat:g"]), ("Scores went up.", ["pat:g"]), ("It slipped.", ["next:g"])):
+                self.assertEqual(w.check_sentence(text, cites, idx, "Geo"), self.MOVED, text)
+            self.assertEqual(claims(f"It {wrong} since Oct 14.", ["move:g"], idx, "Geo"), self.MOVED)
+            self.assertIsNone(claims(f"It {right} since Oct 14.", ["move:g"], idx, "Geo"))
+            opening = w.model_facts(facts)[1]["say_opening"]
+            self.assertIsNone(w.check_sentence(opening, ["move:g"], idx, "Geo"), opening)
+            flipped = opening.replace("down", "up") if "down" in opening else opening.replace("up", "down")
+            self.assertIsNotNone(w.check_sentence(flipped, ["move:g"], idx, "Geo"), flipped)
+
+    def test_the_exact_contrast_forms_pass_both_ways(self):
+        drop, rise = geo2_facts(), geo2_facts(delta=2.5, neg=-0.5, pos=3.0)
+        self.assertIsNone(gate_check("The {item:cause:g:b} helped.", drop))
+        self.assertIsNone(gate_check("The {item:cause:g:a} hurt.", rise))
+        self.assertIsNone(gate_check("{bucket:cause:g:a} scores hurt.", rise))
+        self.assertIsNotNone(gate_check("The {item:cause:g:a} hurt a little.", rise))
+        self.assertIsNotNone(gate_check("The {item:cause:g:a} dragged it down.", rise))
+
+    def test_a_bucket_weight_on_a_cause_is_no_direction_claim(self):
+        idx = w.fact_index(w.model_facts(geo2_facts()))
+        self.assertIsNone(w.check_sentence("{bucket:cause:g:a} is 50% of the grade.", ["cause:g:a"], idx, "Geo"))
+        self.assertIsNone(w.check_sentence("{bucket:cause:g:a} scores are 50% of the grade.", ["cause:g:a"], idx, "Geo"))
+        self.assertIsNotNone(w.check_sentence("{bucket:cause:g:a} is 40% of the grade.", ["cause:g:a"], idx, "Geo"))
+        self.assertIsNotNone(w.check_sentence("{bucket:cause:g:a} is 50% of the grade and dragged it down.",
+                                              ["cause:g:a"], idx, "Geo"))
+        self.assertIsNotNone(w.check_sentence("{bucket:cause:g:b} is 30% of the grade, and helped.", ["cause:g:b"], idx, "Geo"))
+
+    def test_bucket_fills_keep_their_capitals_but_not_after_an_article(self):
+        idx = w.fact_index(w.model_facts(geo2_facts()))
+        self.assertEqual(w.fill_slots("Mostly {bucket:cause:g:a} scores.", idx), "Mostly Tests scores.")
+        self.assertEqual(w.fill_slots("{bucket:cause:g:b} scores helped.", idx), "Labs scores helped.")
+        self.assertEqual(w.fill_slots("The {item:cause:g:a} and {bucket:cause:g:b} scores hurt.", idx),
+                         "The Unit Test (20/40) and Labs scores hurt.")
+        self.assertEqual(w.fill_slots("The next {bucket:whatif:g} score decides it.", idx),
+                         "The next tests score decides it.")
+        self.assertEqual(w.fill_slots("Mostly one {bucket:cause:g:a} score.", idx), "Mostly one tests score.")
 
 
 class ReviewNitTests(unittest.TestCase):
