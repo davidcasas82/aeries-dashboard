@@ -1564,16 +1564,6 @@
         .glance-trend.none .glance-trend-symbol { color: var(--g-faint); background: #eef0ec; }
         .glance-facts { overflow: hidden; margin-bottom: 14px; }
         .glance-action-icon.fact { color: var(--g-amber); background: var(--g-amber-soft); }
-        .glance-look-next {
-            margin: -6px 0 20px;
-            padding: 0 24px 0 42px;
-            color: var(--g-muted);
-            font-size: var(--g-fs-note);
-            font-weight: 550;
-            line-height: 1.4;
-            letter-spacing: 0;
-        }
-        .glance-look-next li { margin: 0 0 3px; }
         .glance-insights { margin-bottom: 14px; min-width: 0; max-width: 100%; }
         .glance-insights > *, .glance-insight-list, .glance-insight-row,
         .glance-drawer-top > div { min-width: 0; }
@@ -1622,11 +1612,6 @@
             line-height: 1.45;
         }
         .glance-local-story { margin: 8px 0 0; color: var(--g-ink); }
-        .glance-look-next.is-empty {
-            margin-left: 0;
-            padding-left: 24px;
-            list-style: none;
-        }
         .glance-bands {
             display: flex;
             flex-direction: column;
@@ -2117,7 +2102,6 @@
             .glance-tonight-meta { padding-left: 18px; padding-right: 18px; }
             .glance-band-empty { padding-left: 18px; padding-right: 18px; }
             .glance-week-label { padding-left: 18px; padding-right: 18px; }
-            .glance-look-next { padding-left: 18px; padding-right: 18px; }
             .glance-action { gap: 11px; padding: 14px 18px; }
             .glance-action-title { font-size: 19px; }
             .glance-drawer {
@@ -4628,92 +4612,6 @@
             return out;
         }
 
-        const LOOK_NEXT_EMPTY = 'Nothing else outside this list.';
-
-        function glanceIsoDay(date) {
-            if (!date) return '';
-            const y = date.getFullYear();
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const d = String(date.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
-        }
-
-        function glanceLookNextPacket(profiles) {
-            const windowDays = glanceSchoolDaysFrom(TODAY, 5);
-            const inWindow = (due) => due && windowDays.some(d => glanceSameDay(due, d));
-            const pastRows = [];
-            const outsideGroups = new Map();
-            const unscoredGroups = new Map();
-            for (const p of profiles || []) {
-                const course = ((p.classMeta || {}).course_name || '').trim();
-                if (!course) continue;
-                let pastN = 0;
-                for (const item of glanceRawWork(p)) {
-                    const name = glanceWorkName(item);
-                    if (!name) continue;
-                    const due = glanceWorkDue(item);
-                    if (glanceSubmitted(item) && item.points_earned == null && inWindow(due)) {
-                        const key = course.toLowerCase();
-                        const row = unscoredGroups.get(key) || { course, count: 0 };
-                        row.count += 1;
-                        unscoredGroups.set(key, row);
-                    }
-                    if (glanceNotOpenWork(item)) continue;
-                    if (glanceWorkBucket(item) === 'past_due') pastN += 1;
-                    else if (due && daysFromToday(due) > 0 && !inWindow(due)) {
-                        const key = `${course.toLowerCase()}|${glanceIsoDay(due)}`;
-                        const row = outsideGroups.get(key) || {
-                            course,
-                            count: 0,
-                            iso: glanceIsoDay(due),
-                            date_label: glanceMonthDay(due),
-                        };
-                        row.count += 1;
-                        outsideGroups.set(key, row);
-                    }
-                }
-                if (pastN) pastRows.push({ n: pastN, course, period: p.period });
-            }
-            pastRows.sort((a, b) => (b.n - a.n) || a.course.localeCompare(b.course) || String(a.period ?? '').localeCompare(String(b.period ?? '')));
-            const outside = [...outsideGroups.values()].sort((a, b) => (a.iso || '').localeCompare(b.iso || '') || (a.course || '').localeCompare(b.course || ''));
-            const unscored = [...unscoredGroups.values()].sort((a, b) => (a.course || '').localeCompare(b.course || ''));
-            return {
-                past_due: pastRows[0] ? { course: pastRows[0].course, count: pastRows[0].n } : null,
-                outside,
-                unscored,
-            };
-        }
-
-        function glanceLookNextLines(packet) {
-            const lines = [];
-            const past = packet && packet.past_due;
-            if (past && past.course && past.count) lines.push(`${past.course} has ${past.count} past due.`);
-            for (const row of (packet && packet.outside) || []) {
-                if (row.course && row.count && row.date_label) {
-                    lines.push(`${row.course} has ${row.count} due ${row.date_label}.`);
-                }
-            }
-            for (const row of (packet && packet.unscored) || []) {
-                if (row.course && row.count) {
-                    lines.push(`${row.course} has ${row.count} turned in, no score yet.`);
-                }
-            }
-            return lines.length ? lines : [LOOK_NEXT_EMPTY];
-        }
-
-        function glanceLookNext(profiles) {
-            // Always the class-count bullets.
-            return glanceLookNextLines(glanceLookNextPacket(profiles));
-        }
-
-        function glanceLookNextMarkup(lines) {
-            const rows = (lines || []).filter(Boolean);
-            const list = rows.length ? rows : [LOOK_NEXT_EMPTY];
-            const empty = list.length === 1 && list[0] === LOOK_NEXT_EMPTY;
-            if (empty) return `<p class="glance-look-next is-empty">${esc(LOOK_NEXT_EMPTY)}</p>`;
-            return `<ul class="glance-look-next">${list.map(line => `<li>${esc(line)}</li>`).join('')}</ul>`;
-        }
-
         function buildGlance(student, profiles) {
             const standing = (profiles || []).map(p => {
                 const c = p.classMeta || {};
@@ -4792,8 +4690,6 @@
                 if (ad && !bd) return -1;
                 return ad.localeCompare(bd) || (a.title || '').localeCompare(b.title || '');
             });
-            const lookPacket = glanceLookNextPacket(profiles);
-            const lookNext = glanceLookNextLines(lookPacket);
             const count = dueSoon.length;
             const empty = count === 0;
             const dueSoonEmpty = 'Nothing due in the next 5 school days.';
@@ -4823,8 +4719,6 @@
                     weekend: null,
                 },
                 facts: [],
-                look_next: lookNext,
-                look_next_packet: lookPacket,
                 suppressed,
                 verified_count: count,
             };
@@ -4900,14 +4794,9 @@
                     ${countHtml}
                 </button>`;
             }).join('');
-            const lookLines = Array.isArray(g.look_next)
-                ? g.look_next
-                : String(g.look_next || '').split('\n').filter(Boolean);
-            const lookHtml = glanceLookNextMarkup(lookLines);
             const bands = renderGlanceBand(g.bands.due_soon || g.bands.focus);
             return `<div class="glance" id="glance-${idx}">
                 ${bands ? `<div class="glance-bands">${bands}</div>` : ''}
-                ${lookHtml}
                 <section class="glance-standing glance-card">
                     <div class="glance-section-head">
                         <div>

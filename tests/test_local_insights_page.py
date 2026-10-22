@@ -247,5 +247,91 @@ class LocalNotesPageTests(unittest.TestCase):
         self.assertEqual(got["picks"], ["Still an A.", None])
 
 
+
+# The whole page script in a node vm with a stub browser, so renderStudent builds a kid's dashboard the way
+# paint() does; the Grade notes section then goes in before Current standing, as mountLocalInsights does.
+PAGE_VM = r"""
+const vm = require('vm');
+const src = data.html.slice(data.html.indexOf('<script>', data.html.indexOf('<body')) + 8, data.html.lastIndexOf('</script>'))
+    .replace(/\n\s*init\(\);\s*$/, '\n');
+const any = () => new Proxy(function () {}, {
+    get: (t, k) => (k === Symbol.toPrimitive ? () => '' : (k === 'then' ? undefined : any())),
+    apply: () => any(), construct: () => any(),
+});
+const noop = () => {};
+const store = { getItem: () => null, setItem: noop, removeItem: noop };
+const classList = { add: noop, remove: noop, toggle: noop, contains: () => false };
+const ctx = {
+    console, Intl, Date, Math, JSON, URL, URLSearchParams, setTimeout: () => 0, clearTimeout: noop,
+    setInterval: () => 0, clearInterval: noop, localStorage: store, sessionStorage: store,
+    navigator: { userAgent: 'node' }, location: { hostname: '127.0.0.1', protocol: 'http:', search: '', hash: '' },
+    fetch: async () => ({ ok: false, json: async () => ({}) }),
+    matchMedia: () => ({ matches: false, addEventListener: noop, addListener: noop }),
+    requestAnimationFrame: () => 0, Event: function () {}, addEventListener: noop, scrollTo: noop, scrollY: 0,
+    document: {
+        createElement: document.createElement, getElementById: () => any(), querySelector: () => any(),
+        querySelectorAll: () => [], addEventListener: noop, body: { classList, appendChild: noop },
+        documentElement: any(), visibilityState: 'visible',
+    },
+};
+ctx.window = ctx;
+vm.createContext(ctx);
+vm.runInContext(src, ctx);
+ctx.input = data;
+const out = vm.runInContext(`
+    const day = (n) => { const d = new Date(TODAY); d.setDate(d.getDate() + n); return d; };
+    const mdy = (d) => (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+    let next = 1;
+    while ([0, 6].includes(day(next).getDay())) next += 1;
+    const work = (description, offset) => ({ description, due_date: mdy(day(offset)), points_earned: null,
+        points_possible: 10, aeries_missing: false });
+    const student = {
+        name: 'Fixture Alpha', sn: 9001,
+        classes: [
+            { period: 1, course_name: 'Algebra Fixture', teacher: 'Teacher Example', mark: 'A', percent: '94' },
+            { period: 2, course_name: 'English Fixture', teacher: 'Teacher Example', mark: 'B', percent: '86' },
+        ],
+        assignments_by_class: [
+            { class_name: '1-Algebra Fixture', period: 1, assignments: [work('Lab Worksheet', next)] },
+            { class_name: '2-English Fixture', period: 2, assignments: [work('Old Packet', -6), work('Far Essay', 20)] },
+        ],
+    };
+    localInsights = { students: { '9001': input.up } };
+    let page = renderStudent(withLocalWriteUp(student), 0);
+    const { section } = buildLocalInsights(localWriteUpFor(student), glanceStore[0].standing.map(c => c.course));
+    ({ page, section, standingAt: page.indexOf('glance-standing') });
+`, ctx);
+process.stdout.write(JSON.stringify({ page: out.page, standingAt: out.standingAt,
+    notes: walk(out.section).map(n => n._text).filter(Boolean) }));
+"""
+
+
+@unittest.skipUnless(shutil.which("node"), "node not installed")
+class NoDueBulletsTests(unittest.TestCase):
+    def test_no_class_count_bullets_while_notes_and_cards_still_render(self):
+        up = {"as_of": "2026-10-21", "stories": [
+            {"class": "Algebra Fixture", "story": "Synthetic note one.", "tags": ["easiest_win"]},
+            {"class": "English Fixture", "story": "Synthetic note two."},
+        ]}
+        got = run_page(PAGE_VM, {"html": HTML, "up": up})
+        page = got["page"]
+        # The bullet list ("X has 1 past due.", "X has 1 due Nov 11.") is gone, empty line included.
+        self.assertNotIn("glance-look-next", page)
+        self.assertNotIn("<ul", page)
+        self.assertNotIn("past due.", page)
+        self.assertNotIn("Nothing else outside this list.", page)
+        self.assertNotIn("glance-look-next", HTML)
+        # Due soon still lists the assignment card; every class keeps its standing card.
+        self.assertIn('aria-label="Due soon"', page)
+        self.assertIn("Lab Worksheet", page)
+        self.assertIn('aria-label="Open Algebra Fixture"', page)
+        self.assertEqual(page.count('class="glance-grade"'), 2)
+        self.assertGreater(got["standingAt"], 0)
+        # Grade notes still build for the same kid.
+        self.assertIn("Grade notes", got["notes"])
+        self.assertIn("Synthetic note one.", got["notes"])
+        self.assertIn("Synthetic note two.", got["notes"])
+
+
 if __name__ == "__main__":
     unittest.main()

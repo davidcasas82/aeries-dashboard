@@ -1438,8 +1438,8 @@ class LookNextHintTests(unittest.TestCase):
         self.assertNotIn("Already on the page", html)
         self.assertNotIn("GROK_API_KEY", html)
         self.assertNotIn("api.x.ai", html)
-        self.assertIn("Nothing else outside this list.", html)
-        self.assertIn("glanceLookNextMarkup", html)
+        self.assertNotIn("Nothing else outside this list.", html)
+        self.assertNotIn("glanceLookNextMarkup", html)
         self.assertNotIn("glanceLookNextAccepts", html)
         self.assertIn("No due date.", html)
 
