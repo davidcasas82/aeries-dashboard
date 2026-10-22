@@ -1,4 +1,5 @@
 import copy
+import json
 import random
 import sys
 import unittest
@@ -137,7 +138,7 @@ class PercentOfGradeGoldenTests(unittest.TestCase):
         }])
 
     def test_what_if_says_no_single_next_assignment_reaches_an_a(self):
-        rows = [(f["id"], f["points"], f["needed_pct"], f["reachable"]) for f in by_kind(self.facts, "what_if")]
+        rows = [(f["id"], f["points"], f["needed_pct"], f["reachable"]) for f in by_kind(self.facts, "what_if") if f.get("target") != "keep"]
         self.assertEqual(rows, [
             ("whatif:biology:tests:50", 50.0, None, False),
             ("whatif:biology:homework:10", 10.0, None, False),
@@ -160,7 +161,7 @@ class SummativeFormativeGoldenTests(unittest.TestCase):
         self.assertEqual(insights.live_weight_pct(model, "summative"), 70.0)
 
     def test_next_test_at_100_reaches_an_a_and_classwork_cannot(self):
-        rows = [(f["id"], f["needed_pct"], f["reachable"]) for f in by_kind(self.facts, "what_if")]
+        rows = [(f["id"], f["needed_pct"], f["reachable"]) for f in by_kind(self.facts, "what_if") if f.get("target") != "keep"]
         self.assertEqual(rows, [
             ("whatif:worldhistory:summative:20", 100.0, True),
             ("whatif:worldhistory:formative:10", None, False),
@@ -310,6 +311,100 @@ class FloorAndCapTests(unittest.TestCase):
     def test_no_floor_or_cap_is_plain_interpolation(self):
         self.assertEqual(self.needed(80.0), 90.0)
         self.assertEqual(self.needed(60.0), 50.0)
+
+
+def keep_model(buckets, min_pct=None, max_pct=None, name="Physics"):
+    """buckets: [(name, weight, [(earned, possible), ...])]."""
+    return insights.ClassModel(name, "percent_of_grade", tuple(
+        insights.Bucket(b, w, tuple(insights.Score(f"{b}{i}", f"{b} {i}", b, e, p) for i, (e, p) in enumerate(rows)))
+        for b, w, rows in buckets), min_pct, max_pct)
+
+
+class KeepTheLetterTests(unittest.TestCase):
+    """The keep what-if: the lowest score on the next item that keeps the letter the class holds now."""
+
+    # Tests 70% at 180/200 (90%), Classwork 30% at 30/30: a 93.0, an A.
+    A_CLASS = [("Tests", 70.0, [(92, 100), (88, 100)]), ("Classwork", 30.0, [(10, 10), (10, 10), (10, 10)])]
+
+    def assert_lands(self, model, bucket, points, needed, floor):
+        """The named score lands at the floor or above; a point less lands below it."""
+        self.assertGreaterEqual(insights.truncated_grade(insights.with_score(model, bucket, needed / 100 * points, points)), floor)
+        self.assertLess(insights.truncated_grade(insights.with_score(model, bucket, (needed - 1) / 100 * points, points)), floor)
+
+    def test_an_a_that_needs_a_real_score_to_stay_above_90(self):
+        model = keep_model(self.A_CLASS)
+        self.assertEqual(insights.grade(model), 93.0)
+        facts = {f["id"]: f for f in insights.keep_search(model, 93.0)}
+        test = facts["keep:physics:tests:100"]
+        self.assertEqual((test["kind"], test["target"], test["letter"], test["threshold"]), ("what_if", "keep", "A", 90.0))
+        # 77.1 lands at 89.99, shown 89.9 (cut off, not rounded); 77.2 lands at 90.01.
+        self.assertEqual((test["needed_pct"], test["cannot_lose"], test["reachable"]), (77.2, False, True))
+        self.assertFalse(insights.holds(model, "Tests", 77.1, 100, 90.0))
+        self.assert_lands(model, "Tests", 100, 77.2, 90.0)
+        self.assertEqual(facts["keep:physics:classwork:10"]["needed_pct"], 60.0)
+        self.assert_lands(model, "Classwork", 10, 60.0, 90.0)
+
+    def test_an_a_the_next_item_cannot_cost(self):
+        model = keep_model([("Tests", 100.0, [(940, 1000), (10, 10), (10, 10)])])
+        fact = insights.keep_search(model, insights.grade(model))[0]
+        self.assertEqual(fact["points"], 10.0)
+        self.assertEqual((fact["needed_pct"], fact["cannot_lose"], fact["reachable"]), (None, True, True))
+        self.assertGreaterEqual(insights.truncated_grade(insights.with_score(model, "Tests", 0.0, 10.0)), 90.0)
+
+    def test_a_letter_even_the_cap_cannot_hold(self):
+        # Capped at 85% a score, the A rests on 10 bonus points; a 200-point item at the cap pulls it to 88.33.
+        model = keep_model([("Tests", 100.0, [(85, 100), (10, 0)])], max_pct=85.0)
+        self.assertEqual(insights.grade(model), 95.0)
+        self.assertEqual(insights.keep_score(model, "Tests", 200.0, 90.0), (None, False))
+        self.assertEqual(insights.keep_score(model, "Tests", 100.0, 90.0), (85.0, False))
+
+    def test_floor_and_cap(self):
+        floored = keep_model([("Tests", 100.0, [(90, 100), (90, 100)])], min_pct=50.0)
+        self.assertEqual(insights.keep_score(floored, "Tests", 100.0, 90.0), (90.0, False))
+        self.assert_lands(floored, "Tests", 100, 90.0, 90.0)
+        # A floor of 90 a score: even a blank keeps the A.
+        self.assertEqual(insights.keep_score(keep_model([("Tests", 100.0, [(95, 100), (95, 100)])], min_pct=90.0),
+                                             "Tests", 100.0, 90.0), (None, True))
+        # Capped at 95: the 100 counts as 95, so the class is an 87.5 B; a 65 keeps the B.
+        capped = keep_model([("Tests", 100.0, [(100, 100), (80, 100)])], max_pct=95.0)
+        self.assertEqual(insights.grade(capped), 87.5)
+        fact = insights.keep_search(capped, 87.5)[0]
+        self.assertEqual((fact["letter"], fact["threshold"], fact["needed_pct"]), ("B", 80.0, 65.0))
+        self.assert_lands(capped, "Tests", 100, 65.0, 80.0)
+
+    def test_truncation_at_89_95_and_90_00(self):
+        model = keep_model([("Tests", 100.0, [(90, 100), (90, 100)])])
+        at = lambda pct: insights.with_score(model, "Tests", pct, 100.0)
+        self.assertEqual(insights.truncated_grade(at(89.85)), 89.9)  # a raw 89.95
+        self.assertFalse(insights.holds(model, "Tests", 89.85, 100, 90.0))
+        # 89.99 on the item is a 89.9967: grade() rounds it to 90.0, Aeries shows 89.9, a B.
+        self.assertEqual((insights.grade(at(89.99)), insights.truncated_grade(at(89.99))), (90.0, 89.9))
+        self.assertFalse(insights.holds(model, "Tests", 89.99, 100, 90.0))
+        self.assertEqual(insights.truncated_grade(at(90.0)), 90.0)
+        self.assertEqual(insights.keep_score(model, "Tests", 100.0, 90.0), (90.0, False))
+
+    def test_an_f_has_no_letter_to_keep_and_golden_classes_get_keep_facts(self):
+        self.assertEqual(insights.keep_search(keep_model([("Tests", 100.0, [(40, 100)])]), 40.0), [])
+        facts = insights.class_facts(class_input("Biology", POG_TOTALS, POG_ROWS, 85.2, "B"), [], None, TODAY)
+        keeps = [f for f in facts if f.get("target") == "keep"]
+        self.assertEqual([f["id"] for f in keeps], ["keep:biology:tests:50", "keep:biology:homework:10",
+                                                    "keep:biology:participation:10"])
+        self.assertTrue(all(f["letter"] == "B" and f["threshold"] == 80.0 for f in keeps))
+        model = insights.build_class_model("Biology", class_input("Biology", POG_TOTALS, POG_ROWS, 85.2, "B")["counted_insight"], POG_ROWS)
+        for f in keeps:
+            if f["needed_pct"] is not None:
+                self.assert_lands(model, f["bucket"], f["points"], f["needed_pct"], 80.0)
+
+    def test_the_payload_still_fits(self):
+        classes = [dict(class_input(f"Class {i}", POG_TOTALS, POG_ROWS, 85.2, "B"), name=f"Class {i}") for i in range(9)]
+        facts = insights.student_facts(classes, [], None, TODAY)
+        keeps = [f for f in facts["facts"] if f.get("target") == "keep"]
+        self.assertEqual(len(keeps), 27)
+        added = len(json.dumps(keeps, separators=(",", ":")))
+        self.assertLess(added, 10_000)
+        data = {"students": [{"sn": "1", "insight_facts": facts}, {"sn": "2", "insight_facts": facts}]}
+        scraper.fit_payload_for_family_data(data, today=TODAY)
+        self.assertEqual(data["students"][0]["insight_facts"], facts)
 
 
 class ScraperWiringTests(unittest.TestCase):
