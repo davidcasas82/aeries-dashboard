@@ -138,6 +138,10 @@ class RealWorkerTests(unittest.TestCase):
         result = run_worker(bodies)
         self.assertEqual(result, {"checked": len(bodies), "failures": []})
 
+    def test_the_real_worker_takes_the_empty_clearing_doc(self):
+        body = runner.insights_body({"students": {}}).decode("utf-8")
+        self.assertEqual(run_worker([body]), {"checked": 1, "failures": []})
+
     def test_the_worker_would_reject_what_the_runner_drops(self):
         # Controls: each raw shape fails the real cleanInsights, so the runner's drops are needed.
         raw = [

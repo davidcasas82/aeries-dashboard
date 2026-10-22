@@ -1,5 +1,5 @@
 #!/bin/sh
-# launchd's entry for the grade-insights runner (deploy/com.davidcasas.grade-insights.plist.template).
+# launchd's entry for the grade-insights runner (deploy/com.davidcasas.grade-insights.plist).
 #
 # Runs insights_runner.py under the SSD venv's Python (Homebrew 3.12, which has mlx-lm) and
 # nothing else: no python3, no /usr/bin/env, no PATH lookup. The plist passes that full path as
@@ -11,7 +11,7 @@
 #   - the SSD is mounted but the interpreter isn't runnable (a venv symlink to a Homebrew
 #     python@3.12 that's gone): "the venv Python is missing".
 # With it all in place, the runner's own check (ssd_mounted: a mount point named "David C SSD")
-# still decides the night.
+# still decides the sync.
 set -u
 PINNED='/Volumes/David C SSD/grade-insights/venv/bin/python'
 MOUNT="${PINNED%/grade-insights/*}"
