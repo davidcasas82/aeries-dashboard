@@ -29,7 +29,7 @@ import insights
 INSIGHT_KINDS = ("grade_move", "what_if", "posting_day")
 # Story order: letter and distance, then the cause, then the what-if, then a pattern.
 # Story order: the letter, then why it moved, then the pattern, then the one next step.
-ORDER = {"next_letter": 0, "scale_break": 0, "grade_move": 1, "posting_day": 2, "what_if": 3}
+ORDER = {"next_letter": 0, "scale_break": 0, "grade_move": 1, "posting_day": 2, "what_if": 3, "keep_letter": 3}
 VOTES = 3
 # A move's causes may be stated only when they explain it: same sign, within 20% of delta.
 # The engine's coverage field (explained / delta) carries both: 0.8 <= coverage <= 1.2.
@@ -136,12 +136,16 @@ _NEXT_CLAIM_RE = re.compile(
     r"(?:gets?|getting|brings?|pulls?|push(?:es)?|lifts?|raises?|moves?)\s+(?:\w+\s+){0,2}?(?:up\s+)?to an? [A-D]\b|"
     r"(?:points?|pts\.?|percent|%)\s+(?:away\s+)?(?:from|short of|shy of|below)\s+an? [A-D]\b)"
 )
-# "Keeps the A", "stays a B", "can't drop it below an A": only with a cited keep what-if.
+# "Keeps the A", "stays a B", "can't drop it below an A": only with a cited keep_letter fact.
 _KEEP_CLAIM_RE = re.compile(
     r"\b(?:keeps?|keeping|holds?|holding|hangs? on to|stays?|staying|remains?)\s+(?:it\s+|the grade\s+)?"
     r"(?:at\s+|as\s+)?(?:an?\s+|the\s+)?[A-F]\b(?![\w'’+-])"
     r"|\bcan(?:'|’|no)?t\s+(?:drop|pull|cost|take|lose|bring)\b|\bcannot\s+(?:drop|pull|cost|take|lose|bring)\b")
 _CANT_LOSE_RE = re.compile(r"\bcan(?:'|’|no)?t\s+(?:drop|pull|cost|take|lose|bring)\b|\bcannot\s+(?:drop|pull|cost|take|lose|bring)\b", re.I)
+# The letter a keep claim is about: "keeps the A", "stays a B", "below an A".
+_KEEP_LETTER_RE = re.compile(
+    r"\b(?:keeps?|keeping|holds?|holding|hangs? on to|stays?|staying|remains?)\s+(?:it\s+|the grade\s+)?"
+    r"(?:at\s+|as\s+)?(?:an?\s+|the\s+)?([A-F])\b(?![\w'’+-])|\bbelow\s+(?:an?\s+|the\s+)?([A-F])\b(?![\w'’+-])")
 # "Back to a B", "gets the A back", "a B again": only when a move shows the class held that letter.
 _BACK_RE = re.compile(
     r"\b(?:back(?: up)? to|gets? (?:it |the \w+ |that \w+ )?back|regain\w*|again|return\w* to|wins? back)\b", re.I
@@ -232,7 +236,7 @@ Write 1 to 4 short, plain sentences:
 - A cause with the opposite effect only as a contrast, in its own words: "The Rocket Lab (9/10) helped." Never as part of the reason.
 - Then a pattern, only if FACTS has a posting_day fact, naming its weekday.
 - End with one next step, only from a what_if fact, using its say_needed: "An 85 or better on the next test gets it to a B."
-- If the grade dropped and FACTS has a what_if with target "keep", end with its say_keep, word for word, citing it: "A 62 or better on the next test keeps the A." If its say_keep says the next item can't drop the letter, you may end with that or leave it out.
+- If the grade dropped and FACTS has a keep_letter fact, end with its say_keep, word for word, citing it: "A 62 or better on the next test keeps the A." If its say_keep says the next item can't drop the letter, you may end with that or leave it out.
 - With no what_if fact, end without a next step. Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
 
 Rules:
@@ -339,7 +343,7 @@ def ranked_causes(move):
 
 def model_facts(class_facts):
     """What the model sees: a move whose causes don't explain it is sent without them, and of the
-    keep what-ifs only the one a drop story may end on (pick_keep), with its say_keep wording."""
+    class's keep_letter fact only on a drop story (pick_keep), with its say_keep wording."""
     out = []
     keep = pick_keep(class_facts)
     for fact in class_facts:
@@ -463,7 +467,7 @@ def attach_next_items(facts, upcoming):
     """
     out = []
     for fact in facts or []:
-        if fact.get("kind") == "what_if":
+        if fact.get("kind") in ("what_if", "keep_letter"):
             match = next((i for i in upcoming or [] if i["class"] == fact.get("class")
                           and i["bucket"] == fact.get("bucket") and i["points"] == fact.get("points")), None)
             if match:
@@ -474,38 +478,29 @@ def attach_next_items(facts, upcoming):
 
 
 def is_keep(fact):
-    """A keep-the-letter what-if from the engine (target "keep"), never a next-letter what-if."""
-    return fact.get("kind") == "what_if" and fact.get("target") == "keep"
+    """The engine's keep-the-letter fact (kind keep_letter), never a next-letter what-if."""
+    return fact.get("kind") == "keep_letter"
 
 
 def pick_keep(class_facts):
-    """The one keep what-if a drop story may end on, or None.
+    """The class's keep_letter fact when its grade dropped, else None.
 
-    Only a class whose grade dropped gets one. Of its reachable keep facts, those that need a score
-    (an item that could cost the letter) come first; among them: the bucket with the soonest named next item, else the bucket of the largest cause that pulled it down, else the
-    bucket that carries the most weight.
+    The engine already picks one per class (a needed score beats can't-drop, then the soonest named
+    next item, the drop's biggest cause, the heaviest bucket), so the writer only takes it.
     """
     facts = [f for f in class_facts if not f.get("move")]
-    drops = [f for f in facts if f.get("kind") == "grade_move" and isinstance(f.get("delta"), (int, float)) and f["delta"] < 0]
-    keeps = [f for f in facts if is_keep(f) and f.get("reachable")]
-    if not drops or not keeps:
+    dropped = any(f.get("kind") == "grade_move" and isinstance(f.get("delta"), (int, float)) and f["delta"] < 0
+                  for f in facts)
+    keep = next((f for f in facts if is_keep(f)), None)
+    if not dropped or keep is None:
         return None
-    # An item that can cost the letter matters more than one that can't.
-    scored = [f for f in keeps if isinstance(f.get("needed_pct"), (int, float))]
-    keeps = scored or keeps
-    named = sorted((f for f in keeps if f.get("next_due")), key=lambda f: (f["next_due"], f["id"]))
-    if named:
-        return named[0]
-    drivers = [c for d in drops for c in ranked_causes(d) if (c.get("share") or c.get("points") or 0) < 0]
-    for cause in drivers:
-        hit = next((f for f in keeps if f.get("bucket") == cause.get("bucket")), None)
-        if hit:
-            return hit
-    return max(keeps, key=lambda f: (f.get("bucket_weight_pct") or 0, f["id"]))
+    if not isinstance(keep.get("needed_pct"), (int, float)) and not keep.get("cannot_lose"):
+        return None
+    return keep
 
 
 def say_keep(fact):
-    """How a note says a keep what-if: "A 62 or better on the next test keeps the A." or, when the next
+    """How a note says a keep_letter fact: "A 62 or better on the next test keeps the A." or, when the next
     item can't cost the letter, "The next test can't drop it below an A." """
     letter = fact.get("letter")
     if not letter:
@@ -522,7 +517,7 @@ def say_keep(fact):
 
 
 def worth_saying(class_facts):
-    """No filler: a story needs an explained move, a reachable what-if or a pattern. A keep what-if alone isn't one."""
+    """No filler: a story needs an explained move, a reachable what-if or a pattern. A keep_letter fact alone isn't one."""
     for fact in class_facts:
         if is_keep(fact):
             continue
@@ -606,7 +601,7 @@ def _needed_ok(text_number, cited):
     n = float(text_number)
     for fact in cited:
         v = fact.get("needed_pct")
-        if fact.get("kind") == "what_if" and isinstance(v, (int, float)):
+        if fact.get("kind") in ("what_if", "keep_letter") and isinstance(v, (int, float)):
             if abs(n - v) < 0.051 or (v <= n < v + 1 and n <= 100):
                 return True
     return False
@@ -834,6 +829,20 @@ def _unbacked_name(text, cited):
     return None
 
 
+def _current_letters(index, cited):
+    """The letter each cited class holds now, from its next_letter fact or its latest move."""
+    classes = {f.get("class") for f in cited}
+    out = set()
+    for fact in index.values():
+        if fact.get("class") not in classes or fact.get("move"):
+            continue
+        if fact.get("kind") == "next_letter" and fact.get("letter"):
+            out.add(fact["letter"])
+        elif fact.get("kind") == "grade_move" and isinstance(fact.get("to_pct"), (int, float)):
+            out.add(insights.letter_for(fact["to_pct"]))
+    return out
+
+
 def _class_moves(index, cited):
     classes = {f.get("class") for f in cited}
     return [f for f in index.values() if f.get("kind") == "grade_move" and not f.get("move")
@@ -881,7 +890,8 @@ def _claims_reason(text, cited, index):
         day = next((d for d in WEEKDAY_NAMES if d.startswith(match.group(1).lower()[:3])), None)
         if day not in pattern_days:
             return f"names a weekday ({match.group(0)}) no pattern backs"
-    if _ADVICE_RE.search(_strip_names(masked, cited)) and not any(f.get("kind") == "what_if" for f in cited):
+    if _ADVICE_RE.search(_strip_names(masked, cited)) and not any(f.get("kind") in ("what_if", "keep_letter")
+                                                                     for f in cited):
         return "gives advice no what_if backs"
     if _NOTHING_RE.search(_strip_names(masked, cited)):
         return "says what isn't there"
@@ -926,11 +936,21 @@ def _claims_reason(text, cited, index):
     keeps = [f for f in cited if is_keep(f)]
     if _KEEP_CLAIM_RE.search(bare):
         if not keeps:
-            return "says the letter holds with no keep what-if cited"
+            return "says the letter holds with no keep_letter fact cited"
         if _CANT_LOSE_RE.search(bare) and not any(f.get("cannot_lose") for f in keeps):
-            return "says the next item can't cost the letter, but the keep what-if needs a score"
+            return "says the next item can't cost the letter, but the keep_letter fact needs a score"
+        if not _CANT_LOSE_RE.search(bare) and not any(isinstance(f.get("needed_pct"), (int, float)) for f in keeps):
+            return "says a score keeps the letter, but the keep_letter fact has no needed score"
+        held = {f.get("letter") for f in keeps}
+        current = _current_letters(index, cited)
+        for match in _KEEP_LETTER_RE.finditer(bare):
+            letter = match.group(1) or match.group(2)
+            if letter not in held or (current and letter not in current):
+                return f"says it keeps {letter}, but the keep_letter fact is for the current letter {'/'.join(sorted(held))}"
     if _NEXT_CLAIM_RE.search(bare):
-        if not any(f.get("kind") in ("next_letter", "what_if") and not is_keep(f) for f in cited):
+        if keeps:
+            return "a keep_letter fact never backs a gets-it-to claim"
+        if not any(f.get("kind") in ("next_letter", "what_if") for f in cited):
             return "claims a next letter with no next_letter or what_if fact"
         if _class_at_a(index, cited):
             return "claims a next letter for a class at an A"
@@ -950,7 +970,8 @@ def _claims_reason(text, cited, index):
         if role == "needed":
             if _needed_ok(match.group(0), cited):
                 continue
-            if any(f.get("kind") == "what_if" and isinstance(f.get("needed_pct"), (int, float)) for f in cited):
+            if any(f.get("kind") in ("what_if", "keep_letter") and isinstance(f.get("needed_pct"), (int, float))
+                   for f in cited):
                 return f"number {match.group(0)} isn't the needed score or a round-up of it"
             return f"number {match.group(0)} isn't in the cited facts"
         allowed = set().union(*(_numbers_of(f, role) for f in cited))
@@ -980,7 +1001,7 @@ def eval_story(sentences, index):
         return "doesn't open with the letter and the gap or move"
     drops = [f for f in index.values() if f.get("kind") == "grade_move" and not f.get("move")
              and isinstance(f.get("delta"), (int, float)) and f["delta"] < 0]
-    steps = {fid for fid, f in index.items() if f.get("kind") == "what_if" and not is_keep(f) and f.get("reachable")
+    steps = {fid for fid, f in index.items() if f.get("kind") == "what_if" and f.get("reachable")
              and isinstance(f.get("needed_pct"), (int, float))}
     keep = pick_keep(list(index.values()))
     if keep and isinstance(keep.get("needed_pct"), (int, float)):
