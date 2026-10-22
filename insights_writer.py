@@ -1785,12 +1785,20 @@ PUBLISH_MAX_CITE = 120
 PUBLISH_MAX_CLASS = 120
 
 
+# String.prototype.trim's whitespace set (not Python's strip()), as family-data's isText uses.
+_JS_WHITESPACE = ("\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008"
+                  "\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff")
+
+
 def _js_len(text):
-    return len(text.encode("utf-16-le")) // 2
+    """UTF-16 code units, as JS .length counts them."""
+    return sum(2 if ord(ch) > 0xFFFF else 1 for ch in text)
 
 
 def _fits_text(text, limit):
-    return isinstance(text, str) and bool(text.strip()) and _js_len(text) <= limit
+    """Not blank by JS trim, no lone surrogate (it can't be sent), at most `limit` UTF-16 units."""
+    return (isinstance(text, str) and not any("\ud800" <= ch <= "\udfff" for ch in text)
+            and text.strip(_JS_WHITESPACE) != "" and _js_len(text) <= limit)
 
 
 def within_publish_limits(text, cites, class_name=None):

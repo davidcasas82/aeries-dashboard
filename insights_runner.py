@@ -11,6 +11,7 @@ import importlib
 import json
 import os
 import plistlib
+import re
 import subprocess
 import sys
 import urllib.error
@@ -321,7 +322,7 @@ class InsightsPublisher:
         doc = insights_doc(write_ups)
         if not doc["students"]:
             return False
-        body = json.dumps(doc).encode("utf-8")
+        body = insights_body(doc)
         request = urllib.request.Request(
             self._base + INSIGHTS_PATH,
             data=body,
@@ -339,8 +340,12 @@ class InsightsPublisher:
         return True
 
 
-# family-data src/insights.js cleanInsights limits, all inclusive, lengths in UTF-16 code units like JS.
-# Checked again here, right before the PUT, so one bad story can't fail the whole publish.
+# A per-student port of family-data src/insights.js cleanInsights/cleanLine (pinned copy and a real-
+# Worker test in tests/fixtures/family_data_insights.js), plus the Worker's 256 KB body cap. The Worker
+# rejects the whole body on one bad field; this never does. It drops the bad line, then a student
+# left with nothing, then stories until the body fits. Limits are inclusive and lengths are UTF-16
+# code units, as in JS.
+PUBLISH_MAX_BYTES = 256 * 1024
 PUBLISH_MAX_STUDENTS = 8
 PUBLISH_MAX_STORIES = 40
 PUBLISH_MAX_TEXT = 600
@@ -348,54 +353,115 @@ PUBLISH_MAX_CITES = 12
 PUBLISH_MAX_CITE = 120
 PUBLISH_MAX_CLASS = 120
 PUBLISH_MAX_AS_OF = 40
+STUDENT_KEY_RE = re.compile(r"[A-Za-z0-9-]{1,32}", re.ASCII)
+# String.prototype.trim's set: WhiteSpace (incl. U+FEFF and Zs) and LineTerminator. Not Python's strip().
+JS_WHITESPACE = ("\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008"
+                 "\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff")
 
 
-def _fits(text, limit):
-    return isinstance(text, str) and bool(text.strip()) and len(text.encode("utf-16-le")) // 2 <= limit
+def _has_surrogate(text):
+    """A lone surrogate can't be encoded, so a string holding one never fits."""
+    return any("\ud800" <= ch <= "\udfff" for ch in text)
 
 
-def _publish_line(value, field, class_name=None):
-    """{field, "cites"} with cites deduped in order, or None: no text, no cites, or over a limit.
+def _js_len(text):
+    return sum(2 if ord(ch) > 0xFFFF else 1 for ch in text)
 
-    Over a limit drops the whole line; nothing is trimmed.
-    """
-    if not isinstance(value, dict) or not _fits(value.get(field), PUBLISH_MAX_TEXT):
+
+def _is_text(value, limit):
+    """cleanInsights isText: a string, not blank by JS trim, at most `limit` UTF-16 units."""
+    return (isinstance(value, str) and not _has_surrogate(value) and value.strip(JS_WHITESPACE) != ""
+            and _js_len(value) <= limit)
+
+
+def _clean_line(value, field):
+    """cleanLine, with cites deduped in order and at least one required. None drops the line whole."""
+    if not isinstance(value, dict) or not _is_text(value.get(field), PUBLISH_MAX_TEXT):
         return None
-    seen, cites = set(), []
-    for cite in value.get("cites") or []:
-        if isinstance(cite, str) and cite not in seen:
-            seen.add(cite)
-            cites.append(cite)
-    if not cites or len(cites) > PUBLISH_MAX_CITES or not all(_fits(c, PUBLISH_MAX_CITE) for c in cites):
+    raw = value.get("cites")
+    if not isinstance(raw, list):
         return None
-    line = {field: value[field], "cites": cites}
-    if class_name is not None:
-        if not _fits(class_name, PUBLISH_MAX_CLASS):
+    cites = []
+    for cite in raw:
+        if not _is_text(cite, PUBLISH_MAX_CITE):
             return None
-        line = {"class": class_name, **line}
-    return line
+        if cite not in cites:
+            cites.append(cite)
+    if not cites or len(cites) > PUBLISH_MAX_CITES:
+        return None
+    return {field: value[field], "cites": cites}
+
+
+def _clean_student(up):
+    """One student as the Worker stores it, or None when nothing of it survives."""
+    if not isinstance(up, dict):
+        return None
+    as_of = up.get("as_of")
+    headline = _clean_line(up.get("headline"), "text")
+    stories = []
+    raw = up.get("stories")
+    for story in raw if isinstance(raw, list) else []:
+        line = _clean_line(story, "story")
+        if line and _is_text(story.get("class"), PUBLISH_MAX_CLASS):
+            stories.append({"class": story["class"], **line})
+        if len(stories) == PUBLISH_MAX_STORIES:
+            break
+    if headline is None and not stories:
+        return None
+    return {"as_of": as_of if _is_text(as_of, PUBLISH_MAX_AS_OF) else None, "headline": headline,
+            "stories": stories}
+
+
+def insights_body(doc):
+    """The exact bytes InsightsPublisher sends for `doc`."""
+    return json.dumps(doc).encode("utf-8")
+
+
+def _fit_body(doc):
+    """Drop stories until the body is within PUBLISH_MAX_BYTES: always the last story of the largest
+    student (ties go to the later student), then a student left with only a headline loses it and goes."""
+    students = doc["students"]
+    size = len(insights_body(doc))
+    sizes = {key: len(json.dumps(up)) for key, up in students.items()}
+    while size > PUBLISH_MAX_BYTES and students:
+        order = list(students)
+        key = max(order, key=lambda k: (sizes[k], order.index(k)))
+        up = students[key]
+        if up["stories"]:
+            up["stories"].pop()
+        else:
+            up["headline"] = None
+        if up["headline"] is None and not up["stories"]:
+            del students[key], sizes[key]
+            size = len(insights_body(doc))
+            continue
+        new = len(json.dumps(up))
+        size += new - sizes[key]
+        sizes[key] = new
+    assert len(insights_body(doc)) <= PUBLISH_MAX_BYTES or not students
+    return doc
 
 
 def insights_doc(write_ups):
-    """{"students": {sn: {"as_of", "headline", "stories"}}} from the writer's published write-ups.
+    """{"students": {sn: {"as_of", "headline", "stories"}}} that the Worker's cleanInsights accepts unchanged.
 
-    A write-up with no student key is skipped: the dashboard could not place it. Each story and the
-    headline must have cites and fit the Worker's limits, or that one line is dropped.
+    A write-up whose student key isn't 1-32 ASCII letters, digits or dashes is skipped, as is one with
+    nothing left after its bad lines are dropped. At most 8 students; the body stays under 256 KB.
     """
     students = {}
     for up in write_ups or []:
-        sn = str((up or {}).get("sn") or "").strip()
-        if not sn or len(students) >= PUBLISH_MAX_STUDENTS:
+        if len(students) == PUBLISH_MAX_STUDENTS:
+            break
+        sn = (up or {}).get("sn") if isinstance(up, dict) else None
+        if isinstance(sn, bool) or not isinstance(sn, (str, int)):
             continue
-        stories = [line for line in (_publish_line(story, "story", (story or {}).get("class"))
-                                     for story in up.get("stories") or []) if line]
-        as_of = up.get("as_of")
-        students[sn] = {
-            "as_of": as_of if _fits(as_of, PUBLISH_MAX_AS_OF) else None,
-            "headline": _publish_line(up.get("headline"), "text"),
-            "stories": stories[:PUBLISH_MAX_STORIES],
-        }
-    return {"students": students}
+        sn = str(sn).strip(JS_WHITESPACE)
+        if not STUDENT_KEY_RE.fullmatch(sn) or sn in students:
+            continue
+        clean = _clean_student(up)
+        if clean is not None:
+            students[sn] = clean
+    return _fit_body({"students": students})
 
 
 def publisher_put(env=None, publisher=None):

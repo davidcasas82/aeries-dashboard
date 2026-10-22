@@ -779,11 +779,18 @@ class InsightsPublisherTests(unittest.TestCase):
             def complete(self, system, user):
                 return json.dumps({"sentences": []})
 
+        import insights_writer
+
+        def one_story(model, facts, log_items=None, votes=None, upcoming=None):
+            return {"as_of": facts["as_of"], "headline": None, "stories": [
+                {"class": "Math", "story": "Still a B, 2.1 points from an A.", "cites": ["whatif:math:tests:50"],
+                 "slotted": "x", "dropped": ["vote"]}]}
+
         opener = FakeOpener()
         fake = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener)
         env = {"GRADE_INSIGHTS_PUBLISH": "1"}
         lines = []
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(insights_writer, "write_up", one_story):
             work = runner.writer_work(FakeClient(), Model(), tmp, put=runner.publisher_put(env, fake), env=env,
                                       log=lines.append)
             for step in work.plan("2026-10-22"):
@@ -793,6 +800,23 @@ class InsightsPublisherTests(unittest.TestCase):
         self.assertEqual(list(body["students"]), ["9001"])
         self.assertEqual(body["students"]["9001"]["as_of"], "2026-10-22")
         self.assertFalse(any(SECRET_STANDIN in line for line in lines))
+
+    @unittest.skipUnless(writer_has_upcoming(), "needs the writer's WriterWork (PR #52)")
+    def test_a_night_with_no_surviving_lines_sends_nothing(self):
+        class Model:
+            def complete(self, system, user):
+                return json.dumps({"sentences": []})
+
+        opener = FakeOpener()
+        fake = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener)
+        env = {"GRADE_INSIGHTS_PUBLISH": "1"}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = runner.writer_work(FakeClient(), Model(), tmp, put=runner.publisher_put(env, fake), env=env)
+            for step in work.plan("2026-10-22"):
+                work.run_step("2026-10-22", step)
+            published = json.loads((Path(tmp) / "2026-10-22" / "publish.json").read_text())
+        self.assertEqual(opener.requests, [])
+        self.assertEqual(published, {"published": False})
 
     @unittest.skipUnless(writer_has_upcoming(), "needs the writer's WriterWork (PR #52)")
     def test_with_the_flag_unset_the_publish_step_sends_nothing(self):
