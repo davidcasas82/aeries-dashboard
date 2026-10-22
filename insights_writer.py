@@ -931,15 +931,18 @@ def slot_reason(text, cites, index):
 def leak_reason(text, index, filled=False):
     """Why the text still carries a raw fact id or slot debris once the real slots are out, or None.
 
-    Times ("3:05") and scores ("11/20") aren't ids. On filled text only real ids and braces count, so a
-    title like "Unit 3: Part 2" is fine.
+    Times ("3:05") and scores ("11/20") aren't ids. On filled text real ids, braces, slot words with a colon
+    ("item:") and id-like tokens ("cause:g:h") count, so a title like "Unit 3: Part 2" is fine.
     """
     bare = text if filled else SLOT_RE.sub(" ", text)
     for fid in sorted(index, key=len, reverse=True):
         if ":" in fid and fid in bare:
             return "leaks a raw fact id"
     if filled:
-        return "leaves slot debris" if re.search(r"[{}｛｝]", bare) else None
+        # A title that looks like a slot or an id ("{item:cause:g:h}" fills as "item:cause:g:h") drops too.
+        if re.search(r"[{}｛｝]", bare) or _SLOT_DEBRIS_RE.search(bare):
+            return "leaves slot debris"
+        return "leaks a raw fact id" if _ID_LIKE_RE.search(bare) else None
     if _ID_LIKE_RE.search(bare):
         return "leaks a raw fact id"
     if _SLOT_DEBRIS_RE.search(bare):
@@ -1441,7 +1444,8 @@ def _lower_first(sentence):
 
 def _headline_forms(cited):
     """The headline forms for the cited facts: a what_if step alone, led by its class, or after the gap.
-    Each may cite the step's class's next_letter or not (the gap form needs it).
+    Each may cite the step's class's next_letter or not (the gap form needs it). A headline cites one what_if and
+    at most that class's next_letter; anything else (a second what_if, another class's letter) has no form.
 
     "An 88 or better on the {next:<id>} gets it to an A."
     "{class:<id>}: an 88 or better on the {next:<id>} gets it to an A."
@@ -1450,14 +1454,16 @@ def _headline_forms(cited):
     """
     steps = [f for f in cited if f.get("kind") == "what_if" and _step(f)]
     letters = [f for f in cited if f.get("kind") == "next_letter"]
-    if not steps or len(steps) + len(letters) != len(cited) or len(letters) > 1:
+    # Fail closed: one what_if, at most one next_letter, both the same class. So the {class:} lead, the gap and
+    # the step can only ever be one class's.
+    if len(steps) != 1 or len(steps) + len(letters) != len(cited) or len(letters) > 1:
         return set()
     forms = set()
     for step_fact in steps:
         step = _step(step_fact)
         if any(letter.get("class") != step_fact.get("class") for letter in letters):
             continue
-        leads = {step_fact["class"]} | {f"{{class:{f['id']}}}" for f in cited}
+        leads = {step_fact["class"]} | {f"{{class:{f['id']}}}" for f in cited if f.get("class") == step_fact.get("class")}
         # As in a story, the step may cite its class's next_letter or not.
         forms.add(step)
         forms |= {f"{lead}: {_lower_first(step)}" for lead in leads}

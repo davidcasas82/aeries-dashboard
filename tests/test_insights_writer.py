@@ -2132,5 +2132,123 @@ class CtoRulingFiveTests(unittest.TestCase):
             self.assertIsNone(w._json(raw), raw)
 
 
+
+def art_facts():
+    """Art at a C, 1.0 from a B, with a what-if on Projects (GE's headline_xclass fixture)."""
+    return [{"id": "next:a", "kind": "next_letter", "class": "Art", "pct": 79.0, "letter": "C", "next_letter": "B",
+             "threshold": 80.0, "gap": 1.0},
+            {"id": "whatif:a", "kind": "what_if", "class": "Art", "bucket": "Projects", "bucket_weight_pct": 40.0,
+             "points": 20.0, "target": 80.0, "needed_pct": 84.1, "reachable": True}]
+
+
+class CrossClassHeadlineTests(unittest.TestCase):
+    """GE's must-fix on #52 a458198: a headline put one class's {class:} lead on another class's step."""
+
+    def setUp(self):
+        self.facts = geo2_facts() + art_facts()
+        model = {f["id"]: f for f in w.model_facts(self.facts)}
+        self.geo_step, self.art_step = model["whatif:g"]["say_step"], model["whatif:a"]["say_step"]
+        self.stories = [{"class": "Geo", "story": "...", "slotted": self.geo_step, "cites": ["next:g", "whatif:g"]},
+                        {"class": "Art", "story": "...", "slotted": self.art_step, "cites": ["next:a", "whatif:a"]}]
+
+    def headline(self, text, cites):
+        class Stub:
+            def complete(self, system, user):
+                return json.dumps({"text": text, "cites": cites})
+        return w.write_headline(Stub(), self.facts, self.stories)
+
+    def forms(self, step, lead_id, letter_id, gap):
+        lower = step[0].lower() + step[1:]
+        return [(step, []), ("{class:%s}: %s" % (lead_id, lower), []),
+                ("{class:%s} is %s; %s" % (lead_id, gap, lower), [letter_id])]
+
+    def test_two_what_ifs_from_different_classes_drop_in_every_form_and_order(self):
+        geo_gap, art_gap = "1 pts from a C", "1 pts from a B"
+        for step, own, other, letter, gap in ((self.geo_step, "whatif:g", "whatif:a", "next:g", geo_gap),
+                                              (self.art_step, "whatif:a", "whatif:g", "next:a", art_gap)):
+            for lead in (own, other):
+                for text, extra in self.forms(step, lead, letter, gap):
+                    for cites in ([own, other] + extra, [other, own] + extra, extra + [other, own]):
+                        self.assertIsNone(self.headline(text, cites), (text, cites))
+                        self.assertEqual(w.check_sentence(text, cites, w.fact_index(self.facts), headline=True),
+                                         w.FORM_REASON, (text, cites))
+
+    def test_ges_repro_drops(self):
+        for text, cites in (("{class:whatif:a}: a 74 or better on the {next:whatif:g} gets it to a C.", ["whatif:g", "whatif:a"]),
+                            ("{class:whatif:a} is 1.4 pts from a C; a 74 or better on the {next:whatif:g} gets it to a C.",
+                             ["next:g", "whatif:g", "whatif:a"]),
+                            ("{class:whatif:g}: an 85 or better on the {next:whatif:a} gets it to a B.", ["whatif:a", "whatif:g"])):
+            self.assertIsNone(self.headline(text, cites), text)
+
+    def test_a_class_lead_or_gap_from_another_class_drops(self):
+        lower = self.geo_step[0].lower() + self.geo_step[1:]
+        for text, cites in (("{class:next:a}: " + lower, ["next:a", "whatif:g"]),
+                            ("{class:whatif:g} is 1 pts from a B; " + lower, ["next:a", "whatif:g"]),
+                            ("{class:whatif:g} is 1 pts from a C; " + lower, ["next:a", "whatif:g"]),
+                            ("{class:next:a} is 1 pts from a B; " + lower, ["next:a", "whatif:g"]),
+                            (self.geo_step, ["next:a", "whatif:g"]), ("Art: " + lower, ["whatif:g"]),
+                            ("Art: " + lower, ["next:a", "whatif:g"])):
+            self.assertIsNone(self.headline(text, cites), (text, cites))
+
+    def test_the_same_class_headlines_pass(self):
+        for step, wid, letter, gap, name in ((self.geo_step, "whatif:g", "next:g", "1 pts from a C", "Geo"),
+                                             (self.art_step, "whatif:a", "next:a", "1 pts from a B", "Art")):
+            lower = step[0].lower() + step[1:]
+            for text, cites in ((step, [wid]), (step, [letter, wid]), ("{class:%s}: %s" % (wid, lower), [wid]),
+                                ("{class:%s}: %s" % (letter, lower), [letter, wid]), ("%s: %s" % (name, lower), [wid]),
+                                ("{class:%s} is %s; %s" % (wid, gap, lower), [letter, wid]),
+                                ("%s is %s; %s" % (name, gap, lower), [wid, letter])):
+                got = self.headline(text, cites)
+                self.assertIsNotNone(got, (text, cites))
+                self.assertNotIn("{", got["text"])
+        self.assertEqual(self.headline("{class:whatif:g}: " + self.geo_step[0].lower() + self.geo_step[1:], ["whatif:g"])["text"],
+                         "Geo: a 74 or better on the next test gets it to a C.")
+
+    def test_a_story_class_prefix_is_its_own_facts_class(self):
+        # GE: the story prefix is safe. A {class:} slot may only be the cited fact's own; another class's drops.
+        idx = w.fact_index(w.model_facts(self.facts))
+        model = {f["id"]: f for f in w.model_facts(self.facts)}
+        def low(t):
+            return t[0].lower() + t[1:]
+        for own, text in (("next:g", model["next:g"]["say_opening"]), ("move:g", model["move:g"]["say_opening"]),
+                          ("pat:g", "Scores usually post Thursdays."), ("whatif:g", self.geo_step)):
+            prefixed = "{class:%s} %s" % (own, low(text))
+            if own != "whatif:g":
+                self.assertIsNone(w.check_sentence(prefixed, [own], idx, "Geo", ["Geo", "Art"]), prefixed)
+            for other in ("next:a", "whatif:a"):
+                swapped = "{class:%s} %s" % (other, low(text))
+                for cites in ([own], [own, other], [other, own]):
+                    self.assertIsNotNone(w.check_sentence(swapped, cites, idx, "Geo", ["Geo", "Art"]), (swapped, cites))
+                    self.assertIsNotNone(w.check_sentence(swapped, cites, idx, "Art", ["Geo", "Art"]), (swapped, cites))
+            # A same-class {class:} slot from a different fact is off the form too.
+            for same in ("next:g", "move:g", "pat:g", "whatif:g"):
+                if same != own:
+                    self.assertIsNotNone(w.check_sentence("{class:%s} %s" % (same, low(text)), [own, same], idx, "Geo"))
+
+
+class HostileTitleFillTests(unittest.TestCase):
+    """GE's info note on a458198: a title with a newline or one that looks like a slot."""
+
+    def check(self, title):
+        facts = geo2_facts()
+        facts[1]["causes"][0]["title"] = title
+        idx = w.fact_index(w.model_facts(facts))
+        text = "Mostly the {item:cause:g:a}."
+        reason = w.check_sentence(text, ["move:g", "cause:g:a"], idx, "Geo", ["Geo"])
+        return reason, (w.fill_slots(text, w.fact_index(facts)) if reason is None else None)
+
+    def test_fills_are_one_line_without_braces(self):
+        self.assertEqual(self.check("Quiz\n  3\tPart 2"), (None, "Mostly the Quiz 3 Part 2 (20/40)."))
+        self.assertEqual(self.check("Lab {x}"), (None, "Mostly the Lab x (20/40)."))
+        self.assertEqual(self.check("Test}"), (None, "Mostly the Test (20/40)."))
+        self.assertEqual(self.check("Unit 3: Part 2"), (None, "Mostly the Unit 3: Part 2 (20/40)."))
+
+    def test_a_title_that_looks_like_a_slot_or_an_id_drops(self):
+        for title in ("{item:cause:g:b}", "{item:cause:g:zz}", "item:cause:g:b", "{next:whatif:g}", "[class: Geo]",
+                      "cause:g:b", "move:g", "pattern:posting_day:geo"):
+            reason, out = self.check(title)
+            self.assertIsNotNone(reason, (title, out))
+
+
 if __name__ == "__main__":
     unittest.main()
