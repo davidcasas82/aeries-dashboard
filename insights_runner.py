@@ -43,6 +43,12 @@ BLOCKED = (
 # The parent PIN is a generic password in the mini's login Keychain. Code only for now.
 PIN_KEYCHAIN_SERVICE = "family-data-parent-pin"
 PIN_KEYCHAIN_ACCOUNT = "aeries"
+# The insights write secret (family-data AERIES_INSIGHTS_SECRET) is a second generic password.
+# It can write the insights record and nothing else; the runner never prints or logs it.
+INSIGHTS_KEYCHAIN_SERVICE = "family-data-insights-write"
+INSIGHTS_KEYCHAIN_ACCOUNT = "aeries"
+INSIGHTS_PATH = "/v1/grades/insights"
+PUBLISH_FLAG = "GRADE_INSIGHTS_PUBLISH"
 SSD_VOLUME_NAME = "David C SSD"
 DEFAULT_SSD = f"/Volumes/{SSD_VOLUME_NAME}"
 # Installed on the SSD with mlx-lm 0.32.2. Smoke-test peaks: Qwen 5.2 GB at 32 tok/s, Gemma 8.1 GB at 20 tok/s.
@@ -239,7 +245,7 @@ class ReadOnlyFamilyData:
 
     The Keychain PIN is the family PIN, so its session has the write role. This client can
     send exactly one non-GET, the unlock POST, and has no put, post, patch or delete methods.
-    Publishing (PR5) uses the separate AERIES_INSIGHTS_SECRET bearer, never this session.
+    Publishing uses InsightsPublisher and the separate AERIES_INSIGHTS_SECRET bearer, never this session.
     """
 
     UNLOCK_PATH = "/auth/unlock"
@@ -291,6 +297,70 @@ class ReadOnlyFamilyData:
             headers={"User-Agent": USER_AGENT, "Accept": "application/json", **headers},
         )
         return self._open(request)
+
+
+def insights_secret():
+    """The insights write secret from the login Keychain. Read only when a publish is sent."""
+    return keychain_secret(INSIGHTS_KEYCHAIN_SERVICE, INSIGHTS_KEYCHAIN_ACCOUNT)
+
+
+class InsightsPublisher:
+    """Sends the published write-ups to family-data: one PUT to /v1/grades/insights, nothing else.
+
+    Authenticates with the AERIES_INSIGHTS_SECRET bearer from the Keychain, never the PIN session.
+    No redirects are followed. Errors carry the status only.
+    """
+
+    def __init__(self, secret=insights_secret, base=FAMILY_DATA_URL, opener=None):
+        self._secret = secret
+        self._base = base.rstrip("/")
+        self._open = opener or _open_request
+
+    def put(self, write_ups):
+        body = json.dumps(insights_doc(write_ups)).encode("utf-8")
+        request = urllib.request.Request(
+            self._base + INSIGHTS_PATH,
+            data=body,
+            method="PUT",
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._secret()}",
+            },
+        )
+        status, _ = self._open(request)
+        if status != 200:
+            raise FamilyDataError(f"PUT {INSIGHTS_PATH} returned {status}")
+        return True
+
+
+def insights_doc(write_ups):
+    """{"students": {sn: {"as_of", "headline", "stories"}}} from the writer's published write-ups.
+
+    A write-up with no student key is skipped: the dashboard could not place it.
+    """
+    students = {}
+    for up in write_ups or []:
+        sn = str((up or {}).get("sn") or "").strip()
+        if not sn:
+            continue
+        students[sn] = {
+            "as_of": up.get("as_of"),
+            "headline": up.get("headline") or None,
+            "stories": [
+                {k: story[k] for k in ("class", "story", "cites") if k in story}
+                for story in up.get("stories") or []
+            ],
+        }
+    return {"students": students}
+
+
+def publisher_put(env=None, publisher=None):
+    """The publish callable for WriterWork, or None while GRADE_INSIGHTS_PUBLISH is not "1"."""
+    if (env if env is not None else os.environ).get(PUBLISH_FLAG) != "1":
+        return None
+    return (publisher or InsightsPublisher()).put
 
 
 class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
@@ -371,7 +441,7 @@ def writer_upcoming(log=print):
 
 
 def load_students(client, upcoming_items=None, log=print):
-    """[{"insight_facts", "log_items", "upcoming"}] per student with facts, for the writer.
+    """[{"sn", "insight_facts", "log_items", "upcoming"}] per student with facts, for the writer.
 
     Two GETs on the read-only session: the latest grades and the scored log. Students are
     matched to their log by the same key the scrape writes under; nothing here is logged.
@@ -390,7 +460,8 @@ def load_students(client, upcoming_items=None, log=print):
             continue
         entry = logged.get(str(student.get("sn"))) or {}
         upcoming = build(class_inputs(student), facts["as_of"]) if build and facts.get("as_of") else []
-        students.append({"insight_facts": facts, "log_items": entry.get("items") or [], "upcoming": upcoming})
+        students.append({"sn": str(student.get("sn") or ""), "insight_facts": facts,
+                         "log_items": entry.get("items") or [], "upcoming": upcoming})
     return students
 
 

@@ -1903,22 +1903,32 @@ def normalize_name(text):
 
 
 def match_stories(stories, class_names):
-    """The story for each class name, or None. Names compare normalized (index.html normalizeName).
+    """The story for each class name, or None. Names compare normalized (index.html matchLocalStories).
 
     An exact match wins. Otherwise a class takes a story by containment (either name inside the
-    other) only when exactly one story not already taken by an exact match qualifies, so "Math"
-    and "AP Math Analysis" each keep their own story and an ambiguous name gets none.
+    other) only when exactly one story not already taken qualifies for it and that story qualifies
+    for no other unmatched class, so "Math" and "AP Math Analysis" each keep their own story, an
+    ambiguous name gets none, and a contained story lands on at most one class.
     """
     keyed = [(normalize_name(s.get("class")), s) for s in stories or []]
     keyed = [(name, s) for name, s in keyed if name]
     wants = [normalize_name(n) for n in class_names]
-    picks = [next((s for name, s in keyed if want and name == want), None) for want in wants]
-    exact = {id(p) for p in picks if p is not None}
+    picks = []
+    taken = set()
+    for want in wants:
+        hit = next((s for name, s in keyed if want and name == want and id(s) not in taken), None)
+        picks.append(hit)
+        if hit is not None:
+            taken.add(id(hit))
+    loose = {}
     for i, want in enumerate(wants):
-        if picks[i] is not None or not want:
+        if picks[i] is None and want:
+            loose[i] = [s for name, s in keyed if id(s) not in taken and (want in name or name in want)]
+    for i, hits in loose.items():
+        if len(hits) != 1:
             continue
-        hits = [s for name, s in keyed if id(s) not in exact and (want in name or name in want)]
-        if len(hits) == 1:
+        rivals = [j for j, other in loose.items() if j != i and any(s is hits[0] for s in other)]
+        if not rivals:
             picks[i] = hits[0]
     return picks
 
@@ -1933,9 +1943,9 @@ def publish_enabled(env=None):
 
 
 def publish_write_up(local, put, env=None):
-    """Hand the write-up to `put` only when GRADE_INSIGHTS_PUBLISH=1. Off until PR5.
+    """Hand the write-up to `put` only when GRADE_INSIGHTS_PUBLISH=1.
 
-    PR5's `put` must authenticate with the AERIES_INSIGHTS_SECRET bearer, never the PIN session.
+    The runner's `put` is InsightsPublisher.put: the AERIES_INSIGHTS_SECRET bearer, never the PIN session.
     """
     if not publish_enabled(env):
         return False
@@ -1989,6 +1999,8 @@ class WriterWork:
             student = self.load()[int(step.split(":")[1])]
             result = write_up(self.model, student.get("insight_facts"), student.get("log_items"), self.votes,
                               student.get("upcoming"))
+            if student.get("sn"):
+                result["sn"] = str(student["sn"])
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(result, indent=1))
         tmp.replace(path)

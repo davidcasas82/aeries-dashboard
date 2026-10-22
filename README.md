@@ -61,3 +61,12 @@ Actions logs print `student 1`, not names or student numbers. The Pages site is 
 | `grades_data.json` | Local scrape cache (gitignored). The page reads `/v1/grades/latest`. |
 | `grade_history.json` | Local history cache (gitignored). The Worker stores per-day snapshots. |
 | `school_calendar.json` | First/last day + official 6–12 quarter ends + term cutovers |
+
+## Grade insights publishing (Mac mini)
+
+The mini's runner (`insights_runner.py`) publishes the local write-ups with `PUT /v1/grades/insights` on family-data. It never uses the PIN session for this. Its Bearer is family-data's `AERIES_INSIGHTS_SECRET`, kept in the mini's login Keychain as a generic password:
+
+- service `family-data-insights-write`, account `aeries`
+- read only when a publish is sent, never printed or logged
+
+Publishing is off unless `GRADE_INSIGHTS_PUBLISH=1`. With it unset, the publish step records `{"published": false}` and sends nothing. The dashboard reads the write-ups with `GET /v1/grades/insights` on the same PIN session as the grades and shows them under **Grade notes**, as plain text only.

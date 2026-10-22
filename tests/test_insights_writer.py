@@ -362,6 +362,19 @@ class ClassSlotTests(unittest.TestCase):
                                {"stories": [{"class": "Biology", "story": "bio"}]})
         self.assertEqual(out["classes"][0]["story"], "bio")
 
+    def test_a_contains_story_goes_to_at_most_one_class(self):
+        # Two classes both contain the one "Biology" story: it could fit either, so it lands on neither.
+        out = w.apply_write_up({"classes": [{"class_name": "P3 Biology"}, {"class_name": "P5 Biology Lab"}]},
+                               {"stories": [{"class": "Biology", "story": "bio"}]})
+        self.assertEqual([c["story"] for c in out["classes"]], ["", ""])
+        # Once one class has it by exact name, the other gets nothing.
+        out = w.apply_write_up({"classes": [{"class_name": "Biology Lab"}, {"class_name": "Biology"}]},
+                               {"stories": [{"class": "Biology", "story": "bio"}]})
+        self.assertEqual([c["story"] for c in out["classes"]], ["", "bio"])
+        # Two classes with the same name: the story goes to the first only.
+        picks = w.match_stories([{"class": "Art", "story": "art"}], ["Art", "ART"])
+        self.assertEqual([p and p["story"] for p in picks], ["art", None])
+
 
 def ch5(due="2026-10-30", points=50.0, bucket="Tests"):
     return {"class": "Math", "bucket": bucket, "title": "Ch. 5 Test", "due": due, "points": points}
