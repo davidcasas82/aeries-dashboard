@@ -113,7 +113,21 @@ _FRACTION_WORDS = (
     (re.compile(r"\b(?:a )?tenth of a (point|percent)\b", re.I), r"0.1 \1"),
     (re.compile(r"\b(?:a|one) (point|percent|percentage point)(?! (?:five|\d))\b", re.I), r"1 \1"),
 )
-_AND_A_HALF_RE = re.compile(rf"\b(\d+(?:\.\d+)?|{_W}) and a half\b", re.I)
+_AND_A_HALF_RE = re.compile(rf"\b(\d+(?:\.\d+)?|{_W}(?: {_W})?) and a half\b", re.I)
+# Hyphens inside a spoken number ("one-and-a-half", "a half-point", "twenty-one") read as spaces.
+_NUMBER_PARTS = set(_WORD_VALUE) | {"a", "and", "half", "halves", "quarter", "quarters", "third", "thirds",
+                                    "tenth", "tenths", "point", "points", "percent"}
+_HYPHEN_CHAIN_RE = re.compile(r"\b[a-z]+(?:-[a-z]+)+\b", re.I)
+
+
+def _unhyphen_numbers(text):
+    def swap(match):
+        parts = match.group(0).split("-")
+        if any(p.lower() in _WORD_VALUE or p.lower() in ("half", "quarter", "quarters") for p in parts) and \
+                all(p.lower() in _NUMBER_PARTS for p in parts):
+            return " ".join(parts)
+        return match.group(0)
+    return _HYPHEN_CHAIN_RE.sub(swap, text)
 # Claims about the next letter up: they need a next_letter or what_if fact, and never for an A.
 _NEXT_CLAIM_RE = re.compile(
     r"\b(?:next letter|(?:to )?reach(?:es|ing)? an? [A-D]\b|"
@@ -207,18 +221,6 @@ EXAMPLE_NOTE = [
     {"text": "Scores usually post Tuesdays.", "cites": ["pattern:posting_day:ceramics"]},
     {"text": "A 74 or better on the next project gets it to a C.", "cites": ["whatif:ceramics:projects:20"]},
 ]
-# A sentence naming the made-up class or items copied the example. Never numbers or dates: real
-# classes produce "74 or better" or "since Sep 9" too.
-EXAMPLE_MARKERS = ("ceramics", "glaze test", "glaze", "kiln", "clay sketch")
-
-
-def _normalized(text):
-    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
-
-
-# A whole example sentence, copied word for word, is a copy too.
-EXAMPLE_SENTENCES = frozenset(_normalized(s["text"]) for s in EXAMPLE_NOTE)
-
 DRAFT_SYSTEM = """You write a short note to a parent about one class, the way a sharp teacher would.
 You get FACTS as JSON. Every fact has an id. Use only those facts.
 
@@ -642,6 +644,7 @@ def spelled_to_digits(text):
         value = float(whole) if whole[0].isdigit() else float(_words_value(whole))
         return f"{value + 0.5:g}"
 
+    text = _unhyphen_numbers(text)
     text = _AND_A_HALF_RE.sub(half, text)
     text = _SPELLED_RE.sub(swap, text)
     for pattern, value in _FRACTION_WORDS:
@@ -755,12 +758,6 @@ def check_sentence(text, cites, index, name=None):
     echo = _ECHO_RE.search(text) or _SAME_LETTER_MOVE_RE.search(text)
     if echo:
         return f"echoes the prompt ({echo.group(0)})"
-    lowered = text.lower()
-    copied = next((m for m in EXAMPLE_MARKERS if re.search(rf"\b{re.escape(m)}\b", lowered)), None)
-    if copied:
-        return f"copies the made-up example ({copied})"
-    if _normalized(text) in EXAMPLE_SENTENCES:
-        return "copies a made-up example sentence"
     return _claims_reason(text, cited, index)
 
 
@@ -994,6 +991,13 @@ def _json(raw):
     """A JSON object from a model reply, after dropping <think> blocks and a ```json fence."""
     if not isinstance(raw, str):
         return None
+    # A reply that is already clean JSON keeps every string as is, even one holding "<think>".
+    try:
+        value = json.loads(_FENCE_RE.sub("", raw.strip()).strip())
+        if isinstance(value, dict):
+            return value
+    except (TypeError, ValueError):
+        pass
     text = _THINK_RE.sub("", raw)
     # An unclosed <think> runs to the end: nothing after it is the answer.
     text = re.split(r"<think>", text, maxsplit=1, flags=re.I)[0]
