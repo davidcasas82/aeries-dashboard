@@ -4,6 +4,7 @@ Every fact is a dict with a stable `id` and a `kind`. A writer may only restate 
 Scale is plain 90/80/70/60 with whole letters; +/- marks count as the bare letter.
 """
 
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -32,6 +33,14 @@ def letter_for(pct):
         if pct >= floor:
             return letter
     return "F"
+
+
+def letter_floor(pct):
+    """(letter, floor) of the letter pct holds now, or None for an F, which has no floor to keep."""
+    for letter, floor in SCALE:
+        if pct >= floor:
+            return letter, floor
+    return None
 
 
 def next_threshold(pct):
@@ -285,6 +294,81 @@ def what_if_search(model, target, sizes=None):
     return facts
 
 
+def truncated_grade(model):
+    """The class percent the way Aeries shows it: cut off at the tenths, never rounded up.
+
+    89.96 shows as 89.9, a B, where grade() would round it to 90.0.
+    """
+    total_w = total = 0.0
+    for bucket in model.buckets:
+        earned, possible = _bucket_totals(model, bucket)
+        if possible <= 0:
+            continue
+        total_w += bucket.weight
+        total += bucket.weight * earned / possible * 100.0
+    if total_w <= 0:
+        return None
+    return math.floor(total / total_w * 10.0 + 1e-9) / 10.0
+
+
+def holds(model, bucket_name, pct, points, floor):
+    """True when a raw `pct` on the next `points` in the bucket keeps the truncated grade at `floor` or above."""
+    after = truncated_grade(with_score(model, bucket_name, pct / 100.0 * points, points))
+    return after is not None and after >= floor
+
+
+def keep_score(model, bucket_name, points, floor):
+    """(needed_pct, cannot_lose) for keeping the current letter on the next `points` in a bucket.
+
+    needed_score with the letter's floor as the target, then raised a tenth at a time until the
+    truncated grade really holds, so the score it names never lands at 89.99. (None, True) when
+    the lowest score the floor allows still keeps the letter; (None, False) when not even the
+    cap does.
+    """
+    pct = needed_score(model, bucket_name, points, floor)
+    lowest = model.min_pct if model.min_pct is not None else 0.0
+    ceiling = min(model.max_pct, 100.0) if model.max_pct is not None else 100.0
+    if pct is None or not holds(model, bucket_name, ceiling, points, floor):
+        return None, False
+    if holds(model, bucket_name, lowest, points, floor):
+        return None, True
+    # needed_score rounds to the nearest tenth; settle on the lowest tenth that truly holds.
+    pct = min(max(pct, lowest), ceiling)
+    while pct < ceiling and not holds(model, bucket_name, pct, points, floor):
+        pct = round(pct + 0.1, 1)
+    while pct - 0.1 > lowest and holds(model, bucket_name, round(pct - 0.1, 1), points, floor):
+        pct = round(pct - 0.1, 1)
+    return pct, False
+
+
+def keep_search(model, pct, sizes=None):
+    """For each bucket and next-assignment size (picked like what_if_search), the lowest score that keeps
+    the letter `pct` holds now. kind what_if with target "keep", so it never reads as a next-letter claim."""
+    held = letter_floor(pct)
+    if held is None:
+        return []
+    letter, floor = held
+    facts = []
+    for bucket in model.buckets:
+        for points in (sizes or {}).get(bucket.name) or _typical_sizes(bucket):
+            needed, cannot_lose = keep_score(model, bucket.name, points, floor)
+            facts.append({
+                "id": f"keep:{slug(model.name)}:{slug(bucket.name)}:{points:g}",
+                "kind": "what_if",
+                "target": "keep",
+                "class": model.name,
+                "letter": letter,
+                "threshold": floor,
+                "bucket": bucket.name,
+                "bucket_weight_pct": live_weight_pct(with_score(model, bucket.name, 0.0, points), bucket.name),
+                "points": points,
+                "needed_pct": needed,
+                "cannot_lose": cannot_lose,
+                "reachable": cannot_lose or needed is not None,
+            })
+    return facts
+
+
 def _typical_sizes(bucket):
     """The median points-possible of what's scored there, so 'the next test' means a real size."""
     sizes = sorted(s.possible for s in bucket.scores if s.possible > 0)
@@ -489,6 +573,7 @@ def class_facts(cls, snapshots, prior_snapshot, today):
     if step:
         facts.append(step)
         facts.extend(what_if_search(model, step["threshold"]))
+    facts.extend(keep_search(model, pct))
     return facts
 
 
