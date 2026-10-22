@@ -130,7 +130,7 @@ _GRADE_WORDS_RE = re.compile(
 _BARE_CAUSE_RE = re.compile(r"\b(?:mainly|mostly|largely|primarily|chiefly)\b", re.I)
 # Prompt wording the models echoed back. A note never talks like this.
 _ECHO_RE = re.compile(
-    r"distance to the next letter|\bnext letter\b|\bthe student\b|\bthe letter is\b|\bwhat[- ]if\b|"
+    r"distance to the next letter|\bnext letter\b|\bstudents?\b|\bthe letter is\b|\bwhat[- ]if\b|"
     r"\bwhat moved\b|\bof that size\b|\bnext item of\b|\bitem of similar size\b|\bthe next item\b",
     re.I,
 )
@@ -163,7 +163,7 @@ EXAMPLE_FACTS = [
 EXAMPLE_NOTE = [
     {"text": "Slipped to a D since Sep 9, 1.2 points from a C.", "cites": ["next:ceramics", "move:ceramics:2026-09-09"]},
     {"text": "The Glaze Test (11/20) did most of the damage.", "cites": ["cause:ceramics:2026-09-09:glazetest"]},
-    {"text": "A 74 or better on the next project gets it back to a C.",
+    {"text": "A 74 or better on the next project gets it to a C.",
      "cites": ["whatif:ceramics:projects:20", "move:ceramics:2026-09-09"]},
     {"text": "Scores usually post Tuesdays.", "cites": ["pattern:posting_day:ceramics"]},
 ]
@@ -178,7 +178,7 @@ Write 1 to 4 short, plain sentences:
 - Name the real assignment when a fact names it, with its score as earned/possible (4/10) or a percent.
 - If the grade moved but kept its letter, say it's still that letter, how much it moved, and why: "Still a B, down 1.4 since Mar 3, mostly from the Lab Report (6/10)."
 - If there's a next_letter fact, say how close the next letter is, then the score that gets there, using say_needed from the what_if fact.
-- A pattern only from a posting_day fact: "Scores usually post Mondays."
+- A pattern only from a posting_day fact, naming its weekday.
 
 Rules:
 - Every sentence cites the ids it uses. A cause cites its own cause id. Name causes largest share first.
@@ -186,6 +186,8 @@ Rules:
 - If a grade_move has causes_withheld, say how much it moved but not why.
 - No talk of the next letter without a next_letter fact. A class at an A has no next letter.
 - "Back to" or "again" only when a grade_move shows the class had that letter before.
+- A cause that helped while the grade fell (or hurt while it rose) can be named, but not as the reason.
+- Say "since" only with since_label; never "since last report".
 - Numbers come from the cited facts, written as digits. A needed score is say_needed ("85 or better"), never rounded down.
 - Whole letters only: A, B, C, D, F. Never a plus or minus.
 - Don't mention missing, late, past-due, turned-in or awaiting work. The dashboard lists that.
@@ -503,6 +505,10 @@ def _strip_names(text, cited):
         for key in ("class", "title", "category", "bucket", "next_title"):
             if fact.get(key):
                 names.add(str(fact[key]))
+                # "Unit 2 Warm Ups (wk9-10)" is often written without its parenthetical.
+                short = re.sub(r"\s*\([^)]*\)\s*$", "", str(fact[key])).strip()
+                if short and short != str(fact[key]):
+                    names.add(short)
     nexts = {str(f["next_title"]) for f in cited if f.get("next_title")}
     for name in sorted(names, key=len, reverse=True):
         # A named next item reads like "the next test" to the needed-score rule.
@@ -661,9 +667,17 @@ def _claims_reason(text, cited, index):
     if claims_cause and not all(cause_allowed(m) for m in moves):
         return "states a cause the move's causes don't explain"
     for move in moves:
-        said = [f["id"] for f in cited if f.get("move") == move.get("id")]
-        if said and said != [c["id"] for c in ranked_causes(move)][: len(said)]:
+        said = [f for f in cited if f.get("move") == move.get("id")]
+        if not said:
+            continue
+        sign = 1 if (move.get("delta") or 0) >= 0 else -1
+        drivers = [c["id"] for c in ranked_causes(move) if (c.get("share") or c.get("points") or 0) * sign > 0]
+        said_drivers = [f["id"] for f in said if f["id"] in drivers]
+        if said_drivers != drivers[: len(said_drivers)]:
             return "names causes out of share order"
+        # A cause that pushed the other way may be named, but never as the reason for the move.
+        if not said_drivers and cause_words:
+            return "gives an offsetting cause as the reason for the move"
     pairs = _score_pairs(cited)
     for raw, kind in scores:
         if kind == "score":

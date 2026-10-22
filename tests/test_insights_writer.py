@@ -536,6 +536,31 @@ class BakeoffFindingTests(unittest.TestCase):
         self.assertIsNone(w.check_sentence("Down 1.6, mainly due to a 40% on the Lab 3 Packet.", [CHEM_MOVE, CHEM_C1], chem))
         self.assertIsNone(w.check_sentence("Down 1.6, mainly due to a 4/10 on the Lab 3 Packet.", [CHEM_MOVE, CHEM_C1], chem))
 
+    def test_a_title_written_without_its_parenthetical_is_still_a_name(self):
+        facts = chem_facts()
+        facts[0]["causes"][1]["title"] = "Warm Ups (wk9-10)"
+        idx = w.fact_index(facts)
+        self.assertIsNone(w.check_sentence("The Lab 3 Packet (4/10) and Warm Ups (1/3) hurt the grade most.",
+                                           [CHEM_C1, CHEM_C2], idx))
+
+    def test_an_offsetting_cause_may_be_named_but_not_as_the_reason(self):
+        facts = chem_facts()
+        facts[0]["causes"].append({"id": "cause:chem:2026-10-14:rocketlab", "title": "Rocket Lab",
+                                   "category": "Coursework", "bucket": "Coursework", "bucket_weight_pct": 10.0,
+                                   "change": "new", "earned": 9.0, "possible": 10.0, "points": 0.8, "share": 0.4})
+        idx = w.fact_index(facts)
+        self.assertIsNone(w.check_sentence("The Rocket Lab (9/10) helped a little.",
+                                           ["cause:chem:2026-10-14:rocketlab"], idx))
+        self.assertEqual(w.check_sentence("Down 1.6, mostly from the Rocket Lab (9/10).",
+                                          [CHEM_MOVE, "cause:chem:2026-10-14:rocketlab"], idx),
+                         "gives an offsetting cause as the reason for the move")
+        self.assertEqual(w.check_sentence("Down 1.6, mostly from the Warm Ups (1/3).", [CHEM_MOVE, CHEM_C2], idx),
+                         "names causes out of share order")
+
+    def test_students_wording_is_dropped(self):
+        self.assertIn("echoes the prompt", w.check_sentence(
+            "Students with an 85 or better on the next test earn a B.", [GEO_WHATIF], w.fact_index(geometry_facts())))
+
     def test_json_reads_fenced_and_thinking_replies(self):
         body = '{"sentences": [{"text": "x", "cites": ["a"]}]}'
         for raw in (f"```json\n{body}\n```", f"```\n{body}\n```", f"<think>hmm, the facts...</think>\n{body}",
