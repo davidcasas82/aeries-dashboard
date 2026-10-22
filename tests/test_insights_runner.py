@@ -567,7 +567,9 @@ class LoaderTests(unittest.TestCase):
 
         class Model:
             def complete(self, system, user):
-                if "FACTS as JSON" in system and "class story" in system:
+                # The draft prompt's marker (#52's DRAFT_SYSTEM says "You get FACTS as JSON."). "class story"
+                # left #52 at fcec92e, so it must not be part of the filter.
+                if "FACTS as JSON" in system:
                     drafts.append(json.loads(user))
                 return json.dumps({"sentences": []})
 
@@ -666,7 +668,8 @@ class TickScriptTests(unittest.TestCase):
 
         self.tmp = Path(tempfile.mkdtemp(prefix="tick test "))
         self.addCleanup(shutil.rmtree, self.tmp)
-        self.fake = self.tmp / "Fake C SSD" / "venv" / "bin" / "python"
+        self.mount = self.tmp / "Fake C SSD"
+        self.fake = self.mount / "grade-insights" / "venv" / "bin" / "python"
         (self.tmp / "repo" / "deploy").mkdir(parents=True)
         self.script = self.tmp / "repo" / "deploy" / "grade-insights-tick.sh"
         self.script.write_text(TICK.read_text().replace(PINNED, str(self.fake)))
@@ -697,6 +700,40 @@ class TickScriptTests(unittest.TestCase):
         for other in ("python3", "/usr/bin/python3", "/usr/bin/env python3", str(self.fake) + " "):
             out = self.tick(other)
             self.assertEqual((out.returncode, out.stdout), (64, ""), other)
+
+    def test_a_symlink_a_trailing_slash_or_dotdot_is_refused(self):
+        self.fake.parent.mkdir(parents=True)
+        self.fake.write_text('#!/bin/sh\necho ran\n')
+        self.fake.chmod(0o755)
+        link = self.tmp / "python-link"
+        link.symlink_to(self.fake)
+        dotdot = str(self.fake.parent / ".." / "bin" / "python")
+        for other in (str(link), str(self.fake) + "/", dotdot):
+            out = self.tick(other)
+            self.assertEqual((out.returncode, out.stdout), (64, ""), other)
+
+    def test_a_wrong_interpreter_logs_once_a_day(self):
+        first = self.tick("/usr/bin/python3")
+        self.assertEqual(first.returncode, 64)
+        self.assertRegex(first.stderr, r"^grade-insights: \d{4}-\d{2}-\d{2} refusing to run under anything but the SSD venv's Python\n$")
+        again = self.tick("python3")
+        self.assertEqual((again.returncode, again.stdout, again.stderr), (64, "", ""))
+        self.assertTrue((self.home / "bad-interpreter.day").exists())
+
+    def test_a_broken_venv_symlink_on_a_mounted_ssd_says_the_venv_python_is_missing(self):
+        # Homebrew's python@3.12 is gone: the venv's python is a symlink to nothing, the SSD is there.
+        self.fake.parent.mkdir(parents=True)
+        self.fake.symlink_to(self.tmp / "opt" / "homebrew" / "python3.12")
+        self.assertTrue(self.fake.is_symlink() and not self.fake.exists())
+        first = self.tick(str(self.fake))
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertRegex(first.stdout, r"^grade-insights: \d{4}-\d{2}-\d{2} skipped, the venv Python is missing\n$")
+        self.assertEqual(self.tick(str(self.fake)).stdout, "")
+        self.assertFalse((self.home / "no-ssd.day").exists())
+        # Unplugged (no mount point): back to the SSD message.
+        import shutil
+        shutil.rmtree(self.mount)
+        self.assertRegex(self.tick(str(self.fake)).stdout, r"skipped, the SSD is not mounted\n$")
 
 
 if __name__ == "__main__":
