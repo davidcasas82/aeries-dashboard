@@ -199,7 +199,7 @@ class CheckerTests(unittest.TestCase):
                          "number 95 isn't in the cited facts")
 
     def test_cites_must_exist_and_belong_to_the_class(self):
-        self.assertEqual(w.check_sentence("Math: B.", [], index()), w.FREE_REASON)
+        self.assertEqual(w.check_sentence("Math: B.", [], index()), w.UNCITED_REASON)
         self.assertEqual(w.check_sentence("Math: B.", ["next:art"], index()), "unknown fact next:art")
         both = w.fact_index(math_facts() + quiet_facts())
         self.assertEqual(w.check_sentence("Biology: B.", ["next:biology"], both, "Math"),
@@ -1588,10 +1588,10 @@ class CauseFormGateTests(unittest.TestCase):
             self.assertIsNone(w.check_sentence(text, cites, geo, "Geometry"), text)
 
     def test_the_prompt_teaches_the_forms_and_its_right_example_passes(self):
-        self.assertIn("Every sentence that cites a fact is one of these forms, word for word.", w.DRAFT_SYSTEM)
+        self.assertIn("Every sentence cites at least one fact and is one of these forms, word for word.", w.DRAFT_SYSTEM)
         for form in ('"Mostly the {item:<cause id>}."', '"The {item:<cause id>} did most of the damage."',
                      '"The {item:<cause id>} hurt."', '"The {item:<cause id>} helped."', "say_opening", "say_pattern",
-                     "say_step", "of the grade.", "A sentence that cites no fact", "Right:", "Wrong:"):
+                     "say_step", "of the grade.", "Every sentence cites at least one fact", "Right:", "Wrong:"):
             self.assertIn(form, w.DRAFT_SYSTEM)
         idx = w.fact_index(w.model_facts(w.EXAMPLE_FACTS))
         right = re.search(r'Right: "(The \{item:[^"]+)"', w.DRAFT_SYSTEM).group(1)
@@ -1604,7 +1604,7 @@ class CauseFormGateTests(unittest.TestCase):
         # The example facts carry the say_ fields the model copies.
         model = {f["id"]: f for f in w.model_facts(w.EXAMPLE_FACTS)}
         example = {f["id"]: f for f in w.EXAMPLE_FACTS}
-        for fid, field in (("whatif:ceramics:projects:20", "say_step"), ("pattern:posting_day:ceramics", "say_pattern")):
+        for fid, field in (("whatif:ceramics:projects:20", "say_step"),):
             self.assertEqual(example[fid][field], model[fid][field])
         self.assertIn("Copy the slots as the story has them. Any other headline is thrown away.", w.HEADLINE_SYSTEM)
         for sentence in w.EXAMPLE_NOTE:
@@ -2054,6 +2054,82 @@ class EngineFactsTests(unittest.TestCase):
         said = f"Down mainly from a {cause['earned'] / cause['possible'] * 100:.0f}% on the {cause['title']}."
         expected = None if w.cause_allowed(move) else "states a cause the move's causes don't explain"
         self.assertEqual(check(said, [cause["id"]], idx, "Biology"), expected)
+
+
+
+class CtoRulingFiveTests(unittest.TestCase):
+    """The CTO's ruling on #52 5bc7884: every sentence cites a fact, headline steps with or without the letter,
+    weekdays only from a computed pattern, and one parser leniency (extra trailing braces)."""
+
+    def idx(self, delta=-2.5):
+        facts = geo2_facts() if delta < 0 else geo2_facts(delta=2.5, neg=-0.5, pos=3.0)
+        return w.fact_index(w.model_facts(facts))
+
+    def test_every_uncited_sentence_drops(self):
+        idx = self.idx()
+        for text in ("Heading the wrong way.", "Its posted scale changed.", "Keep it going.", "Nice work this week.",
+                     "Mostly steady.", "Still a D.", "Scores usually post Thursdays.",
+                     "A 74 or better on the next test gets it to a C."):
+            self.assertEqual(w.check_sentence(text, [], idx, "Geo", ["Geo"]), w.UNCITED_REASON, text)
+            self.assertEqual(w.check_sentence(text, [], idx, headline=True), w.UNCITED_REASON, text)
+        self.assertFalse(hasattr(w, "free_reason"))
+        self.assertFalse(hasattr(w, "FREE_REASON"))
+        self.assertIn("Every sentence cites at least one fact", w.DRAFT_SYSTEM)
+
+    def test_headline_steps_pass_with_or_without_the_letter(self):
+        idx = self.idx()
+        step = w.model_facts(geo2_facts())[2]["say_step"]
+        lower = step[0].lower() + step[1:]
+        for cites in (["whatif:g"], ["next:g", "whatif:g"]):
+            for text in (step, "Geo: " + lower, "{class:whatif:g}: " + lower):
+                self.assertIsNone(w.check_sentence(text, cites, idx, headline=True), (text, cites))
+        gap = "{class:whatif:g} is 1 pts from a C; " + lower
+        self.assertIsNone(w.check_sentence(gap, ["next:g", "whatif:g"], idx, headline=True))
+        self.assertIsNotNone(w.check_sentence(gap, ["whatif:g"], idx, headline=True))
+        # Anything beside the step and its own class's letter still drops.
+        self.assertEqual(w.check_sentence(step, ["whatif:g", "pat:g"], idx, headline=True), w.FORM_REASON)
+        self.assertEqual(w.check_sentence(step, ["whatif:g", "move:g"], idx, headline=True), w.FORM_REASON)
+        other = {**idx, "next:o": {"id": "next:o", "kind": "next_letter", "class": "Art", "letter": "B",
+                                   "next_letter": "A", "gap": 1.0, "pct": 89.0, "threshold": 90.0}}
+        self.assertEqual(w.check_sentence(step, ["next:o", "whatif:g"], other, headline=True), w.FORM_REASON)
+        self.assertEqual(w.check_sentence("Geo: " + lower.replace("gets it to", "brings it to"), ["next:g", "whatif:g"],
+                                          idx, headline=True), w.FORM_REASON)
+
+    def test_a_weekday_only_from_the_cited_computed_pattern(self):
+        idx = self.idx()
+        self.assertIsNone(w.check_sentence("Scores usually post Thursdays.", ["pat:g"], idx, "Geo"))
+        for text, cites in (("Scores usually post Fridays.", ["pat:g"]), ("Scores usually post Tuesdays.", ["pat:g"]),
+                            ("Scores usually post Thursdays.", ["next:g"]), ("Scores usually post Thursdays.", ["whatif:g"]),
+                            ("Scores usually post Thursdays.", ["pat:g", "next:g"]),
+                            ("Scores usually post on Thursdays.", ["pat:g"]), ("Thursday scores hurt.", ["move:g"]),
+                            ("Still a D, 1 points from a C, Thursday.", ["next:g"]),
+                            ("Scores usually post Thursdays.", ["pattern:posting_day:ceramics"])):
+            self.assertIsNotNone(w.check_sentence(text, cites, idx, "Geo"), (text, cites))
+        # The pattern fact comes from the engine, which counts real post dates (insights.find_patterns).
+        log = [{"class": "Geo", "first_seen": f"2026-10-{d:02d}", "scrape": "day"} for d in (1, 8, 15, 22, 1, 8, 15, 22, 9)]
+        # Eight Thursday posts and one Friday overnight scrape (counted to Thursday the 8th).
+        log[-1]["scrape"] = "overnight"
+        found = insights.find_patterns(log, insights.date(2026, 10, 23))
+        self.assertEqual([f["weekday"] for f in found], ["Thursday"])
+        self.assertEqual(w.say_pattern(found[0]), "Scores usually post Thursdays.")
+
+    def test_the_prompt_shows_no_weekday_to_copy(self):
+        for day in w.WEEKDAY_NAMES:
+            if day == "friday":  # only inside the wrong example "next Friday"
+                self.assertEqual(w.DRAFT_SYSTEM.lower().count(day), 1)
+                continue
+            self.assertNotIn(day, w.DRAFT_SYSTEM.lower(), day)
+            self.assertNotIn(day, w.HEADLINE_SYSTEM.lower(), day)
+        self.assertFalse([f for f in w.EXAMPLE_FACTS if f.get("kind") == "posting_day"])
+
+    def test_the_parser_strips_extra_trailing_braces_only(self):
+        good = '{"sentences": [{"text": "Still a D.", "cites": ["next:g"]}]}'
+        for raw in (good + "}", good + "}}", good + "}\n", "```json\n" + good + "}\n```"):
+            self.assertEqual(w._json(raw), json.loads(good), raw)
+        self.assertEqual(w._sentences(good + "}")[0]["text"], "Still a D.")
+        for raw in (good[:-1], good[:-2] + "}}}", '{"sentences": [{"text": "x", "cites": []}}}', good + "} x",
+                    good + "}{", "{" + good, '{"sentences": [}', good.replace(":", "", 1) + "}"):
+            self.assertIsNone(w._json(raw), raw)
 
 
 if __name__ == "__main__":
