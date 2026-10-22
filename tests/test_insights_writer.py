@@ -1429,6 +1429,43 @@ class ReviewNitTests(unittest.TestCase):
         self.assertIn("{next:<what_if id>}", w.DRAFT_SYSTEM)
 
 
+class OtherClassNameTests(unittest.TestCase):
+    """GE's nits 1 and 2 on #52 8d2bd63: lowercase class names, and the extra fixed subject words."""
+
+    CLASSES = ["Geo", "English 10", "Physics", "Art", "Band", "Health"]
+
+    def check(self, text, cites=("cause:geo:t",), classes=None, cls="Geo"):
+        return w.check_sentence(text, list(cites), w.fact_index(w.model_facts(geo_facts(cls=cls))), cls,
+                                self.CLASSES if classes is None else classes)
+
+    def test_another_class_in_lowercase_is_dropped(self):
+        for text in ("physics scores dragged it.", "Down 2.5; physics grades dragged it.", "physics dragged it.",
+                     "{bucket:cause:geo:t} scores, not physics class, dragged it.", "health scores dragged it."):
+            self.assertEqual(self.check(text), "names another class (%s)" % re.search(r"physics|health", text).group(0), text)
+
+    def test_lowercase_common_words_still_pass(self):
+        for text, cites in (("Scores usually post Thursdays, state of the art.", ["pattern:posting_day:geo"]),
+                            ("Still a D, 1.4 points from a C; the band for a C starts at 70.", ["next:geo"]),
+                            ("Still a D, 1.4 points from a C, in good health.", ["next:geo"]),
+                            ("geo scores usually post Thursdays.", ["pattern:posting_day:geo"]),
+                            ("{bucket:cause:geo:t} scores dragged it.", ["cause:geo:t"])):
+            self.assertIsNone(self.check(text, cites), text)
+
+    def test_the_extra_subject_words_are_another_class(self):
+        for word in ("Chem", "Bio", "APUSH", "P.E.", "Yearbook"):
+            self.assertEqual(self.check(f"{word} scores dragged it."), f"names another class ({word})", word)
+            self.assertEqual(self.check(f"{word} scores dragged it.", classes=["Geo"]), f"names another class ({word})")
+
+    def test_the_students_own_class_may_use_its_short_form(self):
+        pattern = ["pattern:posting_day:geo"]
+        for cls, text in (("Chemistry H", "Chem scores usually post Thursdays."),
+                          ("Biology", "Bio scores usually post Thursdays."),
+                          ("Yearbook", "Yearbook scores usually post Thursdays."),
+                          ("Physical Education", "P.E. scores usually post Thursdays."),
+                          ("AP US History", "APUSH scores usually post Thursdays.")):
+            self.assertIsNone(self.check(text, pattern, classes=[cls], cls=cls), cls)
+
+
 class EngineFactsTests(unittest.TestCase):
     """Facts from the real engine (synthetic gradebook) go through the checker unchanged."""
 

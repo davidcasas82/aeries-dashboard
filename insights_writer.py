@@ -787,10 +787,12 @@ _WORK_NOUN_RE = re.compile(
     r"units?|chapters?|ch\.)(?![\w])", re.I)
 # A capitalized school subject that isn't one of the student's classes ("Physics scores dragged it." in a
 # Geo note). Title case only, so "the low band", "state of the art" or "posting history" never trip it.
+# The CTO's ruling: this fixed list runs on top of the student's own class names, never instead of them.
 _SUBJECT_RE = re.compile(
-    r"\b(?:Math(?:s|ematics)?|Algebra|Geometry|Calculus|Statistics|Physics|Chemistry|Biology|Science|History|"
-    r"English|Spanish|French|German|Latin|Chinese|Art|Ceramics|Music|Band|Choir|Orchestra|Drama|Theater|Health|"
-    r"Economics|Government|Civics|Engineering|Marketing|Business|Psychology|Geography)\b")
+    r"\b(?:Math(?:s|ematics)?|Algebra|Geometry|Calculus|Statistics|Physics|Chemistry|Chem|Biology|Bio|Science|"
+    r"History|APUSH|English|Spanish|French|German|Latin|Chinese|Art|Ceramics|Music|Band|Choir|Orchestra|Drama|"
+    r"Theater|Health|Economics|Government|Civics|Engineering|Marketing|Business|Psychology|Geography|Yearbook)\b|"
+    r"(?<!\w)P\.E\.(?!\w)")
 _SUBJECT_IDIOMS = re.compile(r"\bplain English\b")
 # Phrases that may use a school-work noun outside a slot. Kept empty on purpose: "the next test" goes
 # through {next:<id>} or {bucket:<id>}. Add only with a test.
@@ -921,6 +923,12 @@ def _class_forms(name):
     """[(form, is_full)] for a class name: the full name, and short forms of its words ("Geometry H" -> Geometry, Geo)."""
     full = _clean(name)
     forms = [(full.lower(), True)]
+    words = set(re.findall(r"[^\W\d_]+", full.lower()))
+    # Short forms the fixed subject list knows, so a student's own "Physical Education" may be "P.E.".
+    if {"physical", "education"} <= words:
+        forms.append(("p.e.", False))
+    if "history" in words and ({"us", "u"} & words or {"united", "states"} <= words):
+        forms.append(("apush", False))
     for word in re.findall(r"[^\W\d_]+", full.lower()):
         if len(word) < 3 or word in _CLASS_SKIP or _WORK_NOUN_RE.fullmatch(word):
             continue
@@ -948,10 +956,14 @@ def names_reason(text, cited=(), classes=()):
             owners.setdefault((form, is_full), set()).add(cls)
     student_words = {form for form, _ in owners}
     for (form, is_full), who in sorted(owners.items(), key=lambda kv: (-len(kv[0][0]), not kv[0][1])):
-        # A full name of more than one word matches in any case; a one-word name or short form only
-        # capitalized ("Geo", "GEO", "Band"), never "the art of" or "the low band".
-        pattern = (re.compile(rf"(?<!\w){re.escape(form)}(?!\w)", re.I) if is_full and not re.fullmatch(r"[^\W\d_]+", form) else
-                   re.compile(rf"(?<!\w)(?:{re.escape(form.capitalize())}|{re.escape(form.upper())})(?!\w)"))
+        # A full name of more than one word matches in any case; a one-word name or short form capitalized
+        # ("Geo", "GEO", "Band"), or lowercase only at a sentence start or before scores, grade or class
+        # ("physics scores dragged it."), never "the art of" or "the low band".
+        word = re.escape(form)
+        pattern = (re.compile(rf"(?<!\w){word}(?!\w)", re.I) if is_full and not re.fullmatch(r"[^\W\d_]+", form) else
+                   re.compile(rf"(?<!\w)(?:{re.escape(form.capitalize())}|{re.escape(form.upper())})(?!\w)|"
+                              rf"(?:^\s*|(?<=[.!?;:]\s)|(?<=[.!?;:]\s\s)){word}(?!\w)|"
+                              rf"(?<!\w){word}(?=\s+(?:scores?|grades?|class(?:es)?)\b)"))
         for match in list(pattern.finditer(bare)):
             if who <= own and (is_full or len(who) == 1):
                 continue
