@@ -264,38 +264,6 @@ class ChangeSnapshotTests(unittest.TestCase):
         self.assertNotIn("\n", text)
         self.assertEqual(text.count("."), 1)
 
-    def test_model_reply_longer_than_one_short_line_is_discarded(self):
-        events = [{"type": "turned_in", "title": "Quiz", "class_name": "Algebra"}]
-        plain = scraper.phrase_since_yesterday(events)
-        wall = (
-            "Lab (2026-10-02), Quiz (2026-10-01), and Poster (2026-09-18) have lapsed. "
-            "Worksheet was turned in."
-        )
-        long_line = "Quiz in Algebra was turned in, and " + ("more " * 40)
-        kept = "Quiz in Algebra was turned in."
-        cases = {
-            "two sentences": wall,
-            "over 140 characters": long_line.strip(),
-            "iso date": "Lab was due 2026-10-02 and is still open.",
-            "kept": kept,
-        }
-        for name, sentence in cases.items():
-            response = mock.Mock()
-            response.status_code = 200
-            response.json.return_value = {
-                "choices": [{"message": {"content": json.dumps({"sentence": sentence})}}],
-            }
-            with mock.patch.object(scraper, "GROK_API_KEY", "test-key"), \
-                    mock.patch.object(scraper.requests, "post", return_value=response) as post:
-                text = scraper.generate_since_yesterday(events)
-            sent = json.loads(post.call_args.kwargs["json"]["messages"][1]["content"].split("\n", 1)[1])
-            self.assertNotIn("due", sent[0])
-            if name == "kept":
-                self.assertEqual(text, kept)
-            else:
-                self.assertEqual(text, plain, name)
-                self.assertNotIn("2026-", text)
-
     def test_evening_window_is_after_the_afternoon_scrape(self):
         self.assertFalse(scraper.is_evening_snapshot(datetime(2026, 9, 25, 16, 45)))
         self.assertTrue(scraper.is_evening_snapshot(datetime(2026, 9, 25, 20, 7)))

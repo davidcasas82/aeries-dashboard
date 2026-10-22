@@ -3314,7 +3314,6 @@ def ungraded_streak_events(snapshots, today=None):
 
 _ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _SHORT_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-_SINCE_YESTERDAY_MAX_CHARS = 140
 
 
 def _short_due_label(value):
@@ -5104,6 +5103,17 @@ def annotate_class_truth_flags(student_data):
     return student_data
 
 
+def log_grok_usage(label, result):
+    """One line per Grok call with its token counts, until the local writer replaces them."""
+    usage = result.get("usage") if isinstance(result, dict) else None
+    if not isinstance(usage, dict):
+        usage = {}
+    print(
+        f"  Grok usage ({label}): prompt={usage.get('prompt_tokens', '?')} "
+        f"completion={usage.get('completion_tokens', '?')} total={usage.get('total_tokens', '?')}"
+    )
+
+
 def generate_ai_summary(student_data, history_context=None):
     """Call Grok API to generate a unified family daily briefing."""
     # No real grades and no posted work yet — don't invent urgency
@@ -5234,6 +5244,7 @@ Rules:
             return None
 
         result = resp.json()
+        log_grok_usage("briefing", result)
         content = result["choices"][0]["message"]["content"]
         summary = json.loads(content)
         # Strip any legacy parent/student coaching fields if the model still emits them
@@ -5272,95 +5283,6 @@ Rules:
 - Prefer the date_label fields (Sep 18, Oct 2). Do not move a date.
 
 Respond ONLY with JSON: {"sentences": "..."}"""
-
-
-SINCE_YESTERDAY_SYSTEM = """You write one short line a parent can read under a student's name.
-
-CHANGE_EVENTS is the only source. Phrase those events. Do not add a fact, a cause, a habit, or a teacher pattern that is not already an event.
-
-Rules:
-- One sentence, at most 140 characters. No second sentence and no paragraph.
-- Name at most two changes. If other events remain, end with "and N more".
-- Name the class and the assignment title exactly as given.
-- If you mention a date, copy due_label (Oct 2). Never write an ISO date.
-- Do not name a student. No Classroom or Drive links.
-- Do not say why something happened.
-- If CHANGE_EVENTS is empty, reply with an empty sentence.
-
-Respond ONLY with JSON: {"sentence": "..."}"""
-
-
-def _since_yesterday_model_events(events):
-    """Event copy for the model. Dates are due_label (Oct 2), never ISO."""
-    shaped = []
-    for event in events or []:
-        row = {
-            key: event.get(key)
-            for key in ("type", "class_name", "title", "delta", "pct", "mark_code", "days")
-            if event.get(key) not in (None, "")
-        }
-        label = _short_due_label(event.get("due"))
-        if label:
-            row["due_label"] = label
-        shaped.append(row)
-    return shaped
-
-
-def _since_yesterday_model_sentence_ok(sentence):
-    """One sentence, about 140 characters, and no ISO date."""
-    text = (sentence or "").strip()
-    if not text or len(text) > _SINCE_YESTERDAY_MAX_CHARS:
-        return False
-    if "\n" in text or "\r" in text:
-        return False
-    if _ISO_DATE_RE.search(text):
-        return False
-    masked = re.sub(r"\d\.\d", "", text)
-    return len(re.findall(r"[.!?]", masked)) <= 1
-
-
-def generate_since_yesterday(events):
-    """Phrase the evening diff. A long or multi-sentence model reply is discarded."""
-    events = events or []
-    if not events:
-        return ""
-    plain = phrase_since_yesterday(events)
-    if not GROK_API_KEY:
-        return plain
-    context = "CHANGE_EVENTS:\n" + json.dumps(_since_yesterday_model_events(events), indent=2)
-    try:
-        resp = requests.post(
-            GROK_API_URL,
-            headers={
-                "Authorization": f"Bearer {GROK_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": GROK_MODEL,
-                "messages": [
-                    {"role": "system", "content": SINCE_YESTERDAY_SYSTEM},
-                    {"role": "user", "content": context},
-                ],
-                "response_format": {"type": "json_object"},
-                "temperature": 0.2,
-                "max_tokens": 120,
-            },
-            timeout=60,
-        )
-        if resp.status_code != 200:
-            print(f"  WARNING: Grok since-yesterday returned {resp.status_code}")
-            return plain
-        content = resp.json()["choices"][0]["message"]["content"]
-        sentence = (json.loads(content).get("sentence") or "").strip()
-        if not _since_yesterday_model_sentence_ok(sentence):
-            return plain
-        return sentence
-    except requests.exceptions.Timeout:
-        print("  WARNING: Grok since-yesterday timed out")
-        return plain
-    except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
-        print(f"  WARNING: Failed to parse Grok since-yesterday: {exc}")
-        return plain
 
 
 def previous_snapshot(history, student_sn, before_date):
@@ -5472,7 +5394,7 @@ def apply_daily_change_snapshot(history, student_sn, student_name, student_data,
         dated = [snap for snap in dated if snap.get("date") != snapshot.get("date")]
         dated.append(snapshot)
         events.extend(ungraded_streak_events(dated, today))
-        sentence = generate_since_yesterday(events) if events else ""
+        sentence = phrase_since_yesterday(events) if events else ""
         snapshot["since_yesterday"] = sentence
         snapshot["change_note_date"] = snapshot.get("date")
         snapshot["change_events"] = events
@@ -5525,6 +5447,7 @@ def generate_look_next(packet, today=None):
             print(f"  WARNING: Grok look-next returned {resp.status_code}")
             return None
         result = resp.json()
+        log_grok_usage("look next", result)
         content = result["choices"][0]["message"]["content"]
         parsed = json.loads(content)
         text = (parsed.get("sentences") or parsed.get("paragraph") or "").strip()
