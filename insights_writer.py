@@ -134,6 +134,10 @@ _ECHO_RE = re.compile(
     r"\bwhat moved\b|\bof that size\b|\bnext item of\b|\bitem of similar size\b|\bthe next item\b",
     re.I,
 )
+# "Moved to a C" claims the class changed letter; it needs a move that crossed into that letter.
+_LETTER_MOVE_RE = re.compile(
+    r"\b(?i:moved|went|slipped|slid|dropped|fell|rose|climbed|jumped|dipped|changed|fallen|risen|is down|is up)"
+    r" (?i:up |down |back )?to (?:an? )?([A-F])\b(?!\w)")
 _SAME_LETTER_MOVE_RE = re.compile(r"\b(?:moved|went|changed|dropped|fell|rose) from (?:an? )?([A-F]) to (?:an? )?\1\b")
 ROLE_FIELDS = {
     "move": ("delta", "explained", "points", "share"),
@@ -184,6 +188,7 @@ Rules:
 - Every sentence cites the ids it uses. A cause cites its own cause id. Name causes largest share first.
 - "Because", "mainly", "mostly", "due to" or "driven by" only with a cited grade_move or cause.
 - If a grade_move has causes_withheld, say how much it moved but not why.
+- With no grade_move, the grade didn't move: say "Still a C", never "moved to a C".
 - No talk of the next letter without a next_letter fact. A class at an A has no next letter.
 - "Back to" or "again" only when a grade_move shows the class had that letter before.
 - A cause that helped while the grade fell (or hurt while it rose) can be named, but not as the reason.
@@ -699,6 +704,12 @@ def _claims_reason(text, cited, index):
                 if insights.letter_for(m["from_pct"]) != insights.letter_for(m.get("to_pct", m["from_pct"]))}
         if not set(said) & held:
             return "says back to or again with a letter no move shows the class held"
+    for match in _LETTER_MOVE_RE.finditer(bare):
+        crossed = {insights.letter_for(m["to_pct"]) for m in _class_moves(index, cited)
+                   if isinstance(m.get("to_pct"), (int, float))
+                   and insights.letter_for(m["from_pct"]) != insights.letter_for(m["to_pct"])}
+        if match.group(1) not in crossed:
+            return f"says the class moved to {match.group(1)} but no move crossed into that letter"
     for match in _NUMBER_RE.finditer(bare):
         role = _number_role(bare, match.start(), match.end())
         if role == "needed":

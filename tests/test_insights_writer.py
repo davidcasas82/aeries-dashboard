@@ -518,6 +518,23 @@ class BakeoffFindingTests(unittest.TestCase):
         self.assertEqual(w.check_sentence("Down 1.6, so it needs to regain the A.", [CHEM_MOVE], w.fact_index(chem_facts())),
                          "says back to or again with a letter no move shows the class held")
 
+    def test_moved_to_a_letter_needs_a_move_that_crossed_into_it(self):
+        # Re-run finding: "Moved to a C, 0.5 points from a B." for a class with no grade_move at all.
+        line = "Moved to a C, 0.5 points from a B."
+        geo_next = GEO_NEXT
+        self.assertEqual(w.check_sentence(line, [geo_next], w.fact_index(geometry_facts())),
+                         "says the class moved to C but no move crossed into that letter")
+        crossed = geometry_facts() + [{"id": "move:geometry:2026-10-14", "kind": "grade_move", "class": "Geometry",
+                                       "since": "2026-10-14", "from_pct": 81.0, "to_pct": 79.5, "delta": -1.5,
+                                       "explained": None, "coverage": None, "coverage_trimmed": False, "causes": []}]
+        self.assertIsNone(w.check_sentence(line, [geo_next], w.fact_index(crossed)))
+        held = crossed[:-1] + [dict(crossed[-1], from_pct=79.9)]
+        self.assertEqual(w.check_sentence(line, [geo_next], w.fact_index(held)),
+                         "says the class moved to C but no move crossed into that letter")
+        self.assertEqual(w.check_sentence("Slipped to a C this term.", [geo_next], w.fact_index(geometry_facts())),
+                         "says the class moved to C but no move crossed into that letter")
+        self.assertIsNone(w.check_sentence("Still a C, 0.5 points from a B.", [geo_next], w.fact_index(geometry_facts())))
+
     def test_no_next_letter_claim_for_an_a_or_without_a_next_letter_fact(self):
         idx = w.fact_index(chem_facts())
         self.assertEqual(w.check_sentence("A 99 or better on the next test gets it up to an A.", [CHEM_MOVE], idx),
