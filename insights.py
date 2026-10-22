@@ -281,7 +281,7 @@ def what_if_search(model, target, sizes=None):
     for bucket in model.buckets:
         for points in (sizes or {}).get(bucket.name) or _typical_sizes(bucket):
             pct = needed_score(model, bucket.name, points, target)
-            facts.append({
+            fact = {
                 "id": f"whatif:{slug(model.name)}:{slug(bucket.name)}:{points:g}",
                 "kind": "what_if",
                 "class": model.name,
@@ -291,8 +291,23 @@ def what_if_search(model, target, sizes=None):
                 "target": target,
                 "needed_pct": pct,
                 "reachable": pct is not None and pct <= 100.0,
-            })
+            }
+            category = bucket_category(bucket)
+            if category and category != bucket.name:
+                fact["category"] = category
+            if not (sizes or {}).get(bucket.name) and sizes_vary(bucket):
+                fact["sizes_vary"] = True
+            facts.append(fact)
     return facts
+
+
+def bucket_category(bucket):
+    """The Aeries category name of a bucket's scored items when they all share one, else None.
+
+    A summative/formative class files items by kind ("summative"); when every scored item there is one
+    Aeries category ("Summatives"), that is the name a note uses for the bucket's next item."""
+    names = {s.category for s in bucket.scores if s.category}
+    return names.pop() if len(names) == 1 else None
 
 
 def _exact_grade(model):
@@ -435,8 +450,9 @@ def keep_fact(model, pct, upcoming=(), move=None):
 
     Of the candidates (keep_candidates order) that can keep the letter, one that needs a score comes
     first, else one the next item can't cost. Kind keep_letter, never what_if, so no next-letter rule
-    reads it. Only what the class entry doesn't already say: no threshold (the letter's floor), no
-    bucket weight, no target.
+    reads it. Only what the class entry doesn't already say and the bucket's live weight (so the writer
+    can order keep-only buckets): no threshold (the letter's floor), no target. A typical size in a bucket
+    whose past sizes vary (sizes_vary) is marked so, and the writer never says it as an assumed item.
 
     A can't-cost (cannot_lose) fact only for a named upcoming item, worked out at that item's posted
     points: at a typical size it is false whenever the real next item is bigger, so none is made.
@@ -446,6 +462,7 @@ def keep_fact(model, pct, upcoming=(), move=None):
         return None
     letter, floor = held
     named = {(bucket, points) for _due, _title, bucket, points in upcoming or ()}
+    buckets = {b.name: b for b in model.buckets}
     safe = None
     for bucket, points in keep_candidates(model, upcoming, move):
         result = keep_score(model, bucket, points, floor)
@@ -461,12 +478,107 @@ def keep_fact(model, pct, upcoming=(), move=None):
             "points": points,
             "needed_pct": needed,
             "cannot_lose": cannot_lose,
+            "bucket_weight_pct": live_weight_pct(model, bucket),
         }
+        if (bucket, points) not in named and bucket in buckets and sizes_vary(buckets[bucket]):
+            fact["sizes_vary"] = True
         if needed is not None:
             return fact
         if cannot_lose and safe is None and (bucket, points) in named:
             safe = fact
     return safe
+
+
+TYPICAL_KEEP_BUCKETS = 2
+
+
+def typical_keeps(model, pct, have=()):
+    """keep_letter facts for the next item at its typical size in the heaviest weighted buckets.
+
+    The writer's assumed next item: when nothing is posted, "if the next test is worth about 50 points
+    like the last ones" uses the bucket's median points possible (_typical_sizes). Only needed scores:
+    a can't-drop claim is never made about an assumed item, so those (and buckets that can't keep the
+    letter) give no fact. At most TYPICAL_KEEP_BUCKETS buckets, heaviest live weight first (the writer
+    says at most two, in that order). A bucket whose past sizes vary (sizes_vary) has no typical size and is
+    skipped. Ids in `have` (keep_fact's own) aren't repeated. Each carries its Aeries category name when the
+    bucket has one."""
+    held = letter_floor(pct)
+    if held is None:
+        return []
+    letter, floor = held
+    ranked = sorted((b for b in model.buckets if b.scores and not sizes_vary(b)),
+                    key=lambda b: (-live_weight_pct(model, b.name), b.name))
+    facts = []
+    for bucket in ranked[:TYPICAL_KEEP_BUCKETS]:
+        for points in _typical_sizes(bucket):
+            fid = f"keep:{slug(model.name)}:{slug(bucket.name)}:{points:g}"
+            result = keep_score(model, bucket.name, points, floor)
+            if fid in have or result is None or result[0] is None:
+                continue
+            fact = {
+                "id": fid,
+                "kind": "keep_letter",
+                "class": model.name,
+                "letter": letter,
+                "bucket": bucket.name,
+                "points": points,
+                "needed_pct": result[0],
+                "cannot_lose": False,
+                "bucket_weight_pct": live_weight_pct(model, bucket.name),
+            }
+            category = bucket_category(bucket)
+            if category and category != bucket.name:
+                fact["category"] = category
+            facts.append(fact)
+    return facts
+
+
+DRAG_MIN_POINTS = MOVE_MIN_POINTS
+# Float slack for the DRAG_MIN_POINTS bar: a cost of exactly 0.5 can come out 0.49999999.
+DRAG_EPSILON = 1e-9
+# An A this far or more above the B line has nothing pulling it down worth a line.
+DRAG_A_MARGIN = 2.0
+
+
+def biggest_drag(model, name):
+    """The past scored item that costs the class the most points, kind drag, or None.
+
+    Its cost is the leave-one-out change: the grade without that one score minus the grade with it,
+    unrounded. Every scored item is ranked by that cost (ties to the title, then the key), and only the top
+    one can be named: if it is a zero (maybe missing work, which the dashboard lists), untitled or worth no
+    points, or it costs less than DRAG_MIN_POINTS, there is no drag fact. A lower-ranked item is never named
+    in its place."""
+    now = _exact_grade(model)
+    if now is None:
+        return None
+    best = None
+    for bi, bucket in enumerate(model.buckets):
+        for si, score in enumerate(bucket.scores):
+            rest = tuple(s for j, s in enumerate(bucket.scores) if j != si)
+            buckets = tuple(Bucket(b.name, b.weight, rest) if i == bi else b for i, b in enumerate(model.buckets))
+            before = _exact_grade(ClassModel(model.name, model.layout, buckets, model.min_pct, model.max_pct))
+            if before is None:
+                continue
+            cost = before - now
+            key = (-cost, score.title or "", score.key)
+            if best is None or key < best[0]:
+                best = (key, bucket, score, cost)
+    if best is None:
+        return None
+    _key, bucket, score, cost = best
+    if cost < DRAG_MIN_POINTS - DRAG_EPSILON or score.earned <= 0 or score.possible <= 0 or not score.title:
+        return None
+    return {
+        "id": f"drag:{slug(name)}:{score.key}",
+        "kind": "drag",
+        "class": name,
+        "title": score.title,
+        "category": score.category,
+        "bucket": bucket.name,
+        "earned": score.earned,
+        "possible": score.possible,
+        "points": round(cost, 2),
+    }
 
 
 def keep_search(model, pct, sizes=None):
@@ -503,6 +615,17 @@ def _typical_sizes(bucket):
     """The median points-possible of what's scored there, so 'the next test' means a real size."""
     sizes = sorted(s.possible for s in bucket.scores if s.possible > 0)
     return (sizes[len(sizes) // 2],) if sizes else ()
+
+
+# Past sizes spread wider than this (a 10-point quiz and a 50-point test in one bucket) give no assumed size.
+SIZES_VARY_RATIO = 2.0
+
+
+def sizes_vary(bucket):
+    """True when the bucket's past items differ in size by more than SIZES_VARY_RATIO, so "worth about N points
+    like the last ones" wouldn't be true of them."""
+    sizes = [s.possible for s in bucket.scores if s.possible > 0]
+    return bool(sizes) and max(sizes) > SIZES_VARY_RATIO * min(sizes)
 
 
 def revert(model, changes):
@@ -697,8 +820,13 @@ def class_facts(cls, snapshots, prior_snapshot, today):
     broken = scale_break(name, (today.isoformat(), pct, cls.get("mark") or ""), snapshots)
     if broken:
         facts.append(broken)
+    # The shown letter is the Aeries mark's letter, else the percent's letter. prior_shown (was) and now_shown
+    # (shown) go on the move and letter facts; "Still a B" only when they are equal.
+    shown = mark_letter(cls.get("mark")) or letter_for(pct)
+    was = None
     if prior_snapshot:
-        from_pct, _ = _class_point(prior_snapshot, name)
+        from_pct, from_mark = _class_point(prior_snapshot, name)
+        was = (mark_letter(from_mark) or letter_for(from_pct)) if from_pct is not None else None
         if from_pct is not None:
             move = explain_move(
                 model if trusted else None,
@@ -711,6 +839,9 @@ def class_facts(cls, snapshots, prior_snapshot, today):
                 cls.get("scores_trimmed", False),
             )
             if move:
+                # The two shown letters, computed once here: the writer's still/now, opener letter, crossing
+                # wording and checks read only these.
+                move["prior_shown"], move["now_shown"] = was, shown
                 facts.append(move)
     if not trusted or broken:
         facts.append({
@@ -721,8 +852,17 @@ def class_facts(cls, snapshots, prior_snapshot, today):
         })
         return facts
     step = next_letter(name, pct)
+    if step is None and letter_for(pct) == "A":
+        # At an A there's no next letter; the story still opens on the letter it holds.
+        step = {"id": f"letter:{slug(name)}", "kind": "current_letter", "class": name, "pct": pct, "letter": "A"}
+    if step:
+        # "Still" exactly when the shown letter is the one shown last time (no earlier letter: not still).
+        # The opener names now_shown; when that isn't the percent's letter it states no gap.
+        step["prior_shown"], step["now_shown"] = was, shown
     if step:
         facts.append(step)
+    if step and step["kind"] == "current_letter":
+        step = None
     # The posted letter and the letter the rebuilt grade shows (cut at the tenths) must agree before
     # any score is named: otherwise a what-if or keep score is about a grade that isn't on the page.
     posted = mark_letter(cls.get("mark")) or letter_for(pct)
@@ -735,6 +875,11 @@ def class_facts(cls, snapshots, prior_snapshot, today):
     keep = keep_fact(model, pct, _upcoming(cls, model, today), move)
     if keep:
         facts.append(keep)
+    facts.extend(typical_keeps(model, pct, {keep["id"]} if keep else ()))
+    a_floor = dict(SCALE)["A"]
+    drag = biggest_drag(model, name) if letter_for(pct) != "A" or pct - a_floor < DRAG_A_MARGIN else None
+    if drag:
+        facts.append(drag)
     return facts
 
 
@@ -762,28 +907,25 @@ def _pattern_last_seen(log_items):
 
 
 def _kept_what_ifs(facts):
-    """Per class, the one what-if about the next item: the class's keep-fact bucket and size when it
-    has one (the soonest named item, else the drop's or the heaviest bucket), else its heaviest bucket."""
-    keep_ids = {}
-    for f in facts:
-        if f.get("kind") == "keep_letter":
-            keep_ids[f.get("class")] = (f.get("bucket"), f.get("points"))
+    """Per class, the one what-if about the next item: one at the bucket and size of any of the class's keep
+    facts when there is one (keep_fact's pick or a typical keep), else the heaviest bucket's. Ties go to
+    the heavier bucket, then the id, so the same facts in any order keep the same what-if."""
+    keeps = {(f.get("class"), f.get("bucket"), f.get("points")) for f in facts if f.get("kind") == "keep_letter"}
     best = {}
     for f in facts:
         if f.get("kind") != "what_if":
             continue
-        name = f.get("class")
-        if keep_ids.get(name) == (f.get("bucket"), f.get("points")):
-            best[name] = (float("inf"), f["id"])
-        elif best.get(name, (-1.0, ""))[0] < (f.get("bucket_weight_pct") or 0.0):
-            best[name] = (f.get("bucket_weight_pct") or 0.0, f["id"])
-    return {fid for _w, fid in best.values()}
+        key = ((f.get("class"), f.get("bucket"), f.get("points")) not in keeps, -(f.get("bucket_weight_pct") or 0.0),
+               f["id"])
+        if f.get("class") not in best or key < best[f.get("class")]:
+            best[f.get("class")] = key
+    return {key[2] for key in best.values()}
 
 
 def fit_facts(doc, log_items=None, cap=FACTS_CAP_BYTES):
-    """Trim insight_facts to `cap` bytes: keep facts first (last class first), then what-ifs past
-    the next item, then the oldest patterns. grade_move facts and their causes are never trimmed,
-    nor next_letter, scale_break or gate facts. doc["trimmed"] lists the steps that ran. If what's
+    """Trim insight_facts to `cap` bytes: keep facts first (last class first), then drag facts, then
+    what-ifs past the next item, then the oldest patterns. grade_move facts and their causes are never
+    trimmed, nor next_letter, current_letter, scale_break or gate facts. doc["trimmed"] lists the steps that ran. If what's
     left is still over the cap, one ::warning:: line gives the size and the cap, nothing else."""
     if facts_size(doc) <= cap:
         return doc
@@ -792,6 +934,7 @@ def fit_facts(doc, log_items=None, cap=FACTS_CAP_BYTES):
     last_seen = _pattern_last_seen(log_items)
     steps = (
         ("keep_letter", [f["id"] for f in reversed(facts) if f.get("kind") == "keep_letter"]),
+        ("drag", [f["id"] for f in reversed(facts) if f.get("kind") == "drag"]),
         ("what_if", [f["id"] for f in reversed(facts) if f.get("kind") == "what_if" and f["id"] not in keep_next]),
         ("posting_day", [f["id"] for f in sorted((f for f in facts if f.get("kind") == "posting_day"),
                                                  key=lambda f: (last_seen.get(f.get("class"), ""), f["id"]))]),
