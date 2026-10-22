@@ -85,6 +85,10 @@ _SPELLED_RE = re.compile(
     rf"percentage points?|letters?|grades?))?",
     re.I,
 )
+# Plain "up" and "down" as direction words, minus idioms that say nothing about a move: "up to date",
+# "gets it up to a C", "down to the wire", "comes down to", "scores show up Thursdays".
+_UP_WORD = r"(?<!\bshow )(?<!\bshows )(?<!\bshowed )(?<!\bshowing )(?<!\bshown )(?:upwards?|ups?(?!\s+to\b))"
+_DOWN_WORD = r"(?:downwards?|downs?(?!\s+to\b))"
 # Which fact fields a number may come from, by what the words around it say it is.
 _MOVE_BEFORE_RE = re.compile(
     r"\b(?:up|down|by|rose|fell|dropped|dipped|slipped|slid|climbed|jumped|gained|lost|cost|costs|costing|"
@@ -155,7 +159,8 @@ _BACK_RE = re.compile(
     r"\b(?:back(?: up)? to|gets? (?:it |the \w+ |that \w+ )?back|regain\w*|again|return\w* to|wins? back)\b", re.I
 )
 _GRADE_WORDS_RE = re.compile(
-    r"\b(?:grade|down|up|drop|dropped|drops|fell|falls|slipped|slips|rose|climbed|lost|gained|cost|costs|moved|"
+    rf"\b(?:grade|{_DOWN_WORD}|{_UP_WORD}|drop|dropped|drops|fell|falls|slipped|slips|rose|climbed|lost|gained|"
+    r"cost|costs|moved|"
     r"lower|higher|pulled|dragged|hurt)\b",
     re.I,
 )
@@ -201,18 +206,18 @@ _ARTICLE_RE = re.compile(
 # A cause that "helped" has a positive share; one that "hurt" a negative one.
 _UP_VERB_RE = re.compile(
     r"\b(?:help(?:s|ed|ing)?|lift(?:s|ed|ing)?|boost(?:s|ed|ing)?|rais(?:e|es|ed|ing)|sav(?:e|es|ed|ing)|"
-    r"carr(?:y|ies|ied|ying)|rescu(?:e|es|ed|ing)|improv(?:e|es|ed|ing)|up(?:ward)?s?)\b", re.I)
+    r"carr(?:y|ies|ied|ying)|rescu(?:e|es|ed|ing)|improv(?:e|es|ed|ing)|" + _UP_WORD + r")\b", re.I)
 _DOWN_VERB_RE = re.compile(
     r"\b(?:hurt(?:s|ing)?|drag(?:s|ged|ging)?|cost(?:s|ing)?|pull(?:s|ed|ing)?|knock(?:s|ed|ing)?|s[aiu]nk(?:s|ing)?|"
     r"damag(?:e|es|ed|ing)|tank(?:s|ed|ing)?|cut(?:s|ting)?|dent(?:s|ed|ing)?|slash(?:es|ed|ing)?|"
-    r"drop(?:s|ped|ping)?|blam(?:e|es|ed|ing)|fell|fall(?:s|ing|en)?|down(?:ward)?s?)\b", re.I)
+    r"drop(?:s|ped|ping)?|blam(?:e|es|ed|ing)|fell|fall(?:s|ing|en)?|" + _DOWN_WORD + r")\b", re.I)
 # "Pulled it up" and "knocked it up" push up; "pulled it down" pushes down.
 _UP_PARTICLE_AFTER_RE = re.compile(r"^(?:\s+\w+){0,2}\s+up(?:ward)?s?\b", re.I)
 # Words that say which way the grade itself moved. Each needs a cited grade_move (a cited cause cites its
 # move) whose delta has that sign: "Scores dropped." citing only a next_letter or pattern drops.
-_MOVED_UP_RE = re.compile(r"\b(?:rose|risen|climbed|jumped|gained|went up|is up|up(?:ward)?s?)\b", re.I)
-_MOVED_DOWN_RE = re.compile(r"\b(?:fell|fallen|dropped|dipped|slipped|slid|declined|sank|sunk|lost|went down|is down|"
-                            r"down(?:ward)?s?)\b", re.I)
+_MOVED_UP_RE = re.compile(rf"\b(?:rose|risen|climbed|jumped|gained|went up|is up(?!\s+to\b)|{_UP_WORD})\b", re.I)
+_MOVED_DOWN_RE = re.compile(rf"\b(?:fell|fallen|dropped|dipped|slipped|slid|declined|sank|sunk|lost|went down|"
+                            rf"is down(?!\s+to\b)|{_DOWN_WORD})\b", re.I)
 _NEGATED_RE = re.compile(r"\b(?:not|never|n't|didn't|doesn't|did not|does not|wasn't|won't|hardly|barely|scarcely)"
                          r"\s+(?:\w+\s+)?$", re.I)
 # Adjectives on a named cause: "a low {item:...}" says it hurt, "a strong {item:...}" that it helped.
@@ -1232,7 +1237,9 @@ def _claims_reason(text, cited, index, slotted=None):
         return "talks about a move with no grade_move cited"
     # The exact contrast forms ("The {item:...} helped." on a drop, "... hurt." on a rise) are judged by the
     # cause-sentence gate on the cause's own share, never as the reason for the move.
-    contrast_form = bool(slotted and _FORM_CONTRAST_RE.match(slotted.strip()))
+    # The exact contrast forms, and a bucket's weight (no direction at all), may name an offsetting cause.
+    form = (slotted or "").strip()
+    contrast_form = bool(form and (_FORM_CONTRAST_RE.match(form) or _FORM_WEIGHT_RE.match(form)))
     # "Mostly {bucket:...} scores." ranks buckets by net share; the cause-sentence gate checks it.
     bucket_most = bool(slotted and re.match(r"^(?:Mostly (?:from )?(?:one )?\{bucket:|\{bucket:[^{}\s]+\}(?: scores?)? did most)",
                                             slotted.strip()))
@@ -1347,14 +1354,16 @@ _FORM_CONTRAST_RE = re.compile(rf"^(?P<who>{_FORM_LIST}) (?:helped|hurt)\.$")
 # A bucket's weight with no direction in it: "{bucket:<cause>} is 50% of the grade."
 _FORM_WEIGHT_RE = re.compile(r"^\{bucket:[^{}\s]+\}(?: scores)? (?:is|are|counts? for) \d+(?:\.\d+)?% of the grade\.$")
 _DIRECTION_WORDS_RE = re.compile(
-    r"\b(?:up|down|rose|rise[sn]?|fell|fall(?:s|en)?|drop\w*|dip\w*|slip\w*|slid\w*|climb\w*|jump\w*|gain\w*|"
+    rf"\b(?:{_UP_WORD}|{_DOWN_WORD}|rose|rise[sn]?|fell|fall(?:s|en)?|drop\w*|dip\w*|slip\w*|slid\w*|climb\w*|"
+    r"jump\w*|gain\w*|"
     r"lost|los(?:e|es|ing)|moved?|moving|went|cost\w*|pull\w*|push\w*|drag\w*|hurt\w*|help\w*|lift\w*|boost\w*|"
     r"rais\w*|sav\w*|damag\w*|because|due|thanks|driv\w*|caus\w*|mostly|mainly|largely|primarily|chiefly|"
     r"higher|lower|better|worse|back|again)\b", re.I)
 # Direction wording that sends any sentence with an {item:} or {bucket:} slot through the gate, whatever fact
 # the slot names. "Better", "back" and "again" are left out: "A 74 or better on the next {bucket:...} score".
 _SLOT_DIRECTION_RE = re.compile(
-    r"\b(?:up|down|rose|rise[sn]?|risen|fell|fall(?:s|en)?|drop\w*|dip\w*|slip\w*|slid\w*|climb\w*|jump\w*|"
+    rf"\b(?:{_UP_WORD}|{_DOWN_WORD}|rose|rise[sn]?|risen|fell|fall(?:s|en)?|drop\w*|dip\w*|slip\w*|slid\w*|"
+    r"climb\w*|jump\w*|"
     r"gain\w*|lost|los(?:e|es|ing)|moved|cost\w*|pull\w*|push\w*|drag\w*|hurt\w*|help\w*|lift\w*|boost\w*|"
     r"rais\w*|sav\w*|damag\w*|because|due to|thanks|driv\w*|caus\w*|mostly|mainly|largely|primarily|chiefly|"
     r"carr\w*|rescu\w*|improv\w*|tank\w*|cut\w*|dent\w*|slash\w*|blam\w*|sank|sunk)\b", re.I)
@@ -1363,9 +1372,24 @@ CAUSE_FORM_REASON = "cause sentence not in an allowed form"
 BUCKET_MIN_NET = 0.1
 
 
+# Two shares within this of each other tie: neither is "most of" the move.
+TOP_TIE = 1e-6
+
+
 def _top_cause(move, sign):
-    """The move's cause with the largest share of the given sign, or None."""
-    return next((c for c in ranked_causes(move) if (_cause_share(c) or 0) * sign > 0), None)
+    """The move's cause with the largest share of the given sign, or None (also on a tie for the top)."""
+    signed = [c for c in ranked_causes(move) if (_cause_share(c) or 0) * sign > 0]
+    if len(signed) > 1 and abs(_cause_share(signed[0]) - _cause_share(signed[1])) <= TOP_TIE:
+        return None
+    return signed[0] if signed else None
+
+
+def _folded(move):
+    """True when #54 folded some of the move's causes away (other_causes, other_share).
+
+    A folded cause's bucket is gone, so no bucket's net share in the move is known: fail closed.
+    """
+    return (move.get("other_causes") or 0) > 0 or move.get("other_share") not in (None, 0)
 
 
 def _bucket_nets(move):
@@ -1381,14 +1405,23 @@ def _bucket_nets(move):
 def _bucket_net(index, cause):
     """The net share of the bucket a cause sits in, across its move; 0 when |net| < BUCKET_MIN_NET."""
     move = index.get(cause.get("move")) or {}
+    if _folded(move):
+        return 0.0
     net = _bucket_nets(move).get(_bucket_of(cause), 0.0)
     return net if abs(net) >= BUCKET_MIN_NET - 1e-9 else 0.0
 
 
 def _top_bucket(move, sign):
-    """The move's bucket with the largest net in the given direction (|net| >= BUCKET_MIN_NET), or None."""
-    nets = [(b, v) for b, v in _bucket_nets(move).items() if v * sign >= BUCKET_MIN_NET - 1e-9]
-    return max(nets, key=lambda bv: (abs(bv[1]), bv[0]))[0] if nets else None
+    """The move's bucket with the largest net in the given direction (|net| >= BUCKET_MIN_NET), or None.
+
+    None too on a tie for the top, or when the move has folded causes (no bucket net is known).
+    """
+    if _folded(move):
+        return None
+    nets = sorted((abs(v), b) for b, v in _bucket_nets(move).items() if v * sign >= BUCKET_MIN_NET - 1e-9)
+    if len(nets) > 1 and nets[-1][0] - nets[-2][0] <= TOP_TIE:
+        return None
+    return nets[-1][1] if nets else None
 
 
 def _opening_forms(move):

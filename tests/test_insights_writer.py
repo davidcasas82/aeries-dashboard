@@ -1866,6 +1866,140 @@ class GateReviewTests(unittest.TestCase):
         self.assertEqual(w.fill_slots("Mostly one {bucket:cause:g:a} score.", idx), "Mostly one tests score.")
 
 
+def fold_facts(folded=True, other_share=-0.5):
+    """GE's rules6d fold repro: seven Labs at -0.5, Tests t1 +0.3, Tests t2 and t3 at -0.25 each.
+
+    Folded (as #54 keeps the top 8), Tests' kept causes net +0.3 though its real net is -0.2.
+    """
+    def cause(i, bucket, share):
+        return {"id": f"cause:g:{i}", "title": f"Item {i}", "bucket": bucket, "bucket_weight_pct": 30.0,
+                "earned": 5.0, "possible": 10.0, "points": share, "share": share}
+    causes = [cause(f"l{i}", "Labs", -0.5) for i in range(7)] + [cause("t1", "Tests", 0.3), cause("t2", "Tests", -0.25),
+                                                                cause("t3", "Tests", -0.25)]
+    move = {"id": "move:g", "kind": "grade_move", "class": "Geo", "since": "2026-10-14", "from_pct": 72.2,
+            "to_pct": 69.0, "delta": -3.2, "explained": -3.2, "coverage": 1.0, "causes": causes}
+    if folded:
+        move = {**move, "causes": causes[:8], "other_causes": 2, "other_share": other_share}
+    return geo2_facts()[:1] + [move]
+
+
+class FoldedMoveTests(unittest.TestCase):
+    """GE's rules6d on 6d1eb2e: a bucket net can't be known once #54 folds causes away, so none is claimed."""
+
+    BUCKET_CLAIMS = ("{bucket:cause:g:t1} scores helped.", "{bucket:cause:g:t1} scores hurt.",
+                     "{bucket:cause:g:l0} scores hurt.", "{bucket:cause:g:l0} scores dragged it down.",
+                     "Mostly {bucket:cause:g:l0} scores.", "Mostly one {bucket:cause:g:l0} score.",
+                     "{bucket:cause:g:l0} scores did most of the damage.",
+                     "{bucket:cause:g:l0} and {bucket:cause:g:t1} scores hurt.")
+    ITEM_CLAIMS = ("The {item:cause:g:t1} helped.", "The {item:cause:g:l0} hurt.",
+                   "The {item:cause:g:l0} dragged it down.")
+
+    def assert_fails_closed(self, facts):
+        for text in self.BUCKET_CLAIMS:
+            self.assertIsNotNone(gate_check(text, facts), text)
+        for text in self.ITEM_CLAIMS:
+            self.assertIsNone(gate_check(text, facts), text)
+        idx = w.fact_index(w.model_facts(facts))
+        self.assertIsNone(w.check_sentence("{bucket:cause:g:t1} is 30% of the grade.", ["cause:g:t1"], idx, "Geo"))
+
+    def test_a_hand_built_folded_move_claims_no_bucket_direction(self):
+        self.assert_fails_closed(fold_facts())
+        # other_causes alone folds it, even with no exact other_share; so does a non-zero other_share alone.
+        self.assert_fails_closed(fold_facts(other_share=None))
+        facts = fold_facts(folded=False)
+        facts[1] = {**facts[1], "other_share": -0.5}
+        self.assert_fails_closed(facts)
+
+    def test_an_unfolded_move_still_reads_bucket_nets(self):
+        facts = fold_facts(folded=False)
+        self.assertIsNotNone(gate_check("{bucket:cause:g:t1} scores helped.", facts))
+        self.assertIsNone(gate_check("{bucket:cause:g:t1} scores hurt.", facts))
+        self.assertIsNone(gate_check("Mostly {bucket:cause:g:l0} scores.", facts))
+        # No fold: other_causes 0 and other_share 0 or None.
+        for share in (0, 0.0, None):
+            facts = fold_facts(folded=False)
+            facts[1] = {**facts[1], "other_causes": 0, "other_share": share}
+            self.assertIsNone(gate_check("{bucket:cause:g:t1} scores hurt.", facts), share)
+
+    @unittest.skipUnless(hasattr(insights, "fold_causes"), "needs #54's fold_causes")
+    def test_a_move_folded_by_fold_causes_claims_no_bucket_direction(self):
+        facts = fold_facts(folded=False)
+        folded = insights.fold_causes(facts[1])
+        self.assertEqual((len(folded["causes"]), folded["other_causes"], folded["other_share"]), (8, 2, -0.5))
+        facts[1] = folded
+        self.assertIsNotNone(gate_check("{bucket:cause:g:t1} scores helped.", facts))
+        self.assert_fails_closed(facts)
+
+
+class TopTieTests(unittest.TestCase):
+    """No "most of" claim for a bucket or an item that ties for the top (within 1e-6)."""
+
+    def test_buckets_that_tie_for_the_top_claim_no_most(self):
+        for delta, a, b in ((-2.0, -1.0, -1.0), (-2.0, -1.0, -1.0000005), (2.0, 1.0, 1.0)):
+            facts = geo2_facts(delta=delta, neg=a, pos=b)
+            for text in ("Mostly {bucket:cause:g:a} scores.", "Mostly {bucket:cause:g:b} scores."):
+                self.assertIsNotNone(gate_check(text, facts), (text, a, b))
+            if delta < 0:
+                for text in ("{bucket:cause:g:a} scores did most of the damage.",
+                             "{bucket:cause:g:b} scores did most of the damage."):
+                    self.assertIsNotNone(gate_check(text, facts), (text, a, b))
+                self.assertIsNone(gate_check("{bucket:cause:g:a} scores hurt.", facts))
+        facts = geo2_facts(delta=-2.01, neg=-1.0, pos=-1.01)
+        self.assertIsNone(gate_check("Mostly {bucket:cause:g:b} scores.", facts))
+        self.assertIsNone(gate_check("{bucket:cause:g:b} scores did most of the damage.", facts))
+        self.assertIsNotNone(gate_check("Mostly {bucket:cause:g:a} scores.", facts))
+
+    def test_items_that_tie_for_the_top_claim_no_most(self):
+        for delta, a, b in ((-2.0, -1.0, -1.0), (-2.0, -1.0, -1.0000005), (2.0, 1.0, 1.0)):
+            facts = geo2_facts(delta=delta, neg=a, pos=b)
+            facts[1]["causes"][1]["bucket"] = "Tests"
+            for text in ("Mostly the {item:cause:g:a}.", "Mostly from the {item:cause:g:b}."):
+                self.assertIsNotNone(gate_check(text, facts), (text, a, b))
+            if delta < 0:
+                for text in ("The {item:cause:g:a} did most of the damage.",
+                             "The {item:cause:g:b} did most of the damage."):
+                    self.assertIsNotNone(gate_check(text, facts), (text, a, b))
+                self.assertIsNone(gate_check("The {item:cause:g:a} hurt.", facts))
+        for delta, a, b in ((-2.01, -1.0, -1.01), (2.01, 1.0, 1.01)):
+            facts = geo2_facts(delta=delta, neg=a, pos=b)
+            self.assertIsNone(gate_check("Mostly the {item:cause:g:b}.", facts))
+            self.assertIsNotNone(gate_check("Mostly the {item:cause:g:a}.", facts))
+        self.assertIsNone(gate_check("The {item:cause:g:b} did most of the damage.",
+                                     geo2_facts(delta=-2.01, neg=-1.0, pos=-1.01)))
+
+
+class MoveIdiomTests(unittest.TestCase):
+    """"Up to", "down to" and "show up" say nothing about a move; plain up/down and the move verbs still do."""
+
+    def test_idioms_pass_when_nothing_else_is_wrong(self):
+        for facts in (geo2_facts(), geo2_facts(delta=2.5, neg=-0.5, pos=3.0)):
+            idx = w.fact_index(w.model_facts(facts))
+            for text, cites in (("Scores usually post Thursdays, up to date.", ["pat:g"]),
+                                ("Scores usually show up Thursdays.", ["pat:g"]),
+                                ("Scores usually showed up on Thursdays.", ["pat:g"]),
+                                ("Still a D, down to the wire, 1.0 points from a C.", ["next:g"]),
+                                ("Still a D, 1 point from a C; it comes down to the next score.", ["next:g"]),
+                                ("A 74 or better on the next {bucket:whatif:g} score gets it up to a C.", ["whatif:g"]),
+                                ("A 74 or better on the {next:whatif:g} brings it up to a C.", ["whatif:g"])):
+                self.assertIsNone(w.check_sentence(text, cites, idx, "Geo"), text)
+
+    def test_plain_up_down_and_move_verbs_still_need_a_matching_move(self):
+        moved = GateReviewTests.MOVED
+        drop, rise = (w.fact_index(w.model_facts(f)) for f in (geo2_facts(), geo2_facts(delta=2.5, neg=-0.5, pos=3.0)))
+        for text in ("Scores rose up to now.", "Scores went up.", "It is up.", "Scores moved up."):
+            self.assertEqual(claims(text, ["move:g"], drop, "Geo"), moved, text)
+            self.assertEqual(claims(text, ["next:g"], rise, "Geo"), moved, text)
+        for text in ("Scores fell down to now.", "Scores went down.", "It is down.", "Scores moved down."):
+            self.assertEqual(claims(text, ["move:g"], rise, "Geo"), moved, text)
+            self.assertEqual(claims(text, ["next:g"], drop, "Geo"), moved, text)
+        # "Rose up to a C" also claims a letter, so it drops on either count.
+        self.assertIsNotNone(claims("It rose up to a C.", ["move:g"], drop, "Geo"))
+        self.assertIsNotNone(claims("It rose up to a C.", ["next:g"], rise, "Geo"))
+        self.assertNotEqual(claims("It rose up to a C.", ["move:g"], rise, "Geo"), moved)
+        self.assertIsNone(claims("Scores went up.", ["move:g"], rise, "Geo"))
+        self.assertIsNone(claims("Scores went down.", ["move:g"], drop, "Geo"))
+
+
 class ReviewNitTests(unittest.TestCase):
     """GE's nits on #52 8d2bd63: codes without letters or weekdays, natural next fills, no keep ids in {next:}."""
 
