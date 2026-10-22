@@ -472,7 +472,14 @@ class CoverageFieldTests(unittest.TestCase):
         self.assertIsNone(check(self.LINE, [CAUSE], idx))
         self.assertIsNone(check("Down from the Ch.4 Quiz, then HW 3.", [CAUSE, second], idx))
         self.assertEqual(w.check_sentence("Down mainly from HW 3.", [second], idx), "names causes out of share order")
-        self.assertEqual(w.check_sentence("Down from HW 3 and the Ch.4 Quiz.", [second, CAUSE], idx),
+        # Without most-family wording a list of causes may come in any order.
+        self.assertIsNone(check("Down from the {item:%s} and the {item:%s}." % (second, CAUSE), [second, CAUSE], idx))
+        # With it, the named cause must be the top share.
+        for most in ("Mostly the {item:%s}.", "Down mainly from the {item:%s}.", "The {item:%s} did most of the damage.",
+                     "Most of the drop was the {item:%s}.", "The biggest hit was the {item:%s}."):
+            self.assertEqual(w.check_sentence(most % second, [second], idx), "names causes out of share order", most)
+            self.assertIsNone(check(most % CAUSE, [CAUSE], idx), most)
+        self.assertEqual(w.check_sentence("Mostly the {item:%s} and the {item:%s}." % (second, CAUSE), [second, CAUSE], idx),
                          "names causes out of share order")
 
     def test_engine_moves_carry_the_fields_the_writer_reads(self):
@@ -988,15 +995,61 @@ class PolishPassTests(unittest.TestCase):
             up = w.write_up(ScriptedModel({"Math": GOOD}, headline=headline), insight_facts())
             self.assertIsNone(up["headline"], headline["text"])
             self.assertEqual(w.apply_write_up({"headline": "Grok headline"}, up)["headline"], "")
-        for text, cites, out in (("Math: an 88% on the {next:" + WHATIF + "} gets the A back.", [WHATIF],
-                                  "Math: an 88% on the next test gets the A back."),
+        for text, cites, out in (("Math: an 88 or better on the {next:" + WHATIF + "} gets the A back.", [WHATIF],
+                                  "Math: an 88 or better on the next test gets the A back."),
                                  ("The {item:" + CAUSE + "} pulled Math down.", [CAUSE],
                                   "The Ch.4 Quiz (31/50) pulled Math down.")):
             up = w.write_up(ScriptedModel({"Math": GOOD}, headline={"text": text, "cites": cites}), insight_facts())
             self.assertEqual(up["headline"], {"text": out, "cites": cites})
         fixed = w.write_up(ScriptedModel({"Math": GOOD}, headline={
-            "text": "Math: a 88% on the {next:" + WHATIF + "} gets the A back.", "cites": [WHATIF]}), insight_facts())
-        self.assertEqual(fixed["headline"]["text"], "Math: an 88% on the next test gets the A back.")
+            "text": "Math: a 88 or better on the {next:" + WHATIF + "} gets the A back.", "cites": [WHATIF]}), insight_facts())
+        self.assertEqual(fixed["headline"]["text"], "Math: an 88 or better on the next test gets the A back.")
+
+
+class CtoRoundFourTests(unittest.TestCase):
+    """Headline round-up wording, singular bucket fills, and the next-slot prompt."""
+
+    ALG = "whatif:algllbusmang:assessment:10"
+
+    def alg_facts(self):
+        return [{"id": "next:algllbusmang", "kind": "next_letter", "class": "Alg ll Bus Mang", "pct": 79.5, "letter": "C",
+                 "next_letter": "B", "threshold": 80.0, "gap": 0.5},
+                {"id": self.ALG, "kind": "what_if", "class": "Alg ll Bus Mang", "bucket": "Assessment",
+                 "bucket_weight_pct": 50.0, "points": 10.0, "target": 80.0, "needed_pct": 84.3, "reachable": True}]
+
+    def headline(self, text):
+        facts = self.alg_facts()
+        story = [{"class": "Alg ll Bus Mang", "story": "x", "cites": ["next:algllbusmang", self.ALG]}]
+        return w.write_headline(ScriptedModel({}, headline={"text": text, "cites": [self.ALG]}), facts, story)
+
+    def test_a_headline_needed_score_is_the_round_up_or_better(self):
+        # GE's v5 survivor, as the model wrote it (slotted) and as it read after the fill.
+        self.assertIsNone(self.headline("Alg ll Bus Mang: 85 on {next:%s} for a B." % self.ALG))
+        self.assertIsNone(self.headline("Alg ll Bus Mang: 85 on next assessment item for a B."))
+        self.assertIsNone(self.headline("Alg ll Bus Mang: 84.3 on the {next:%s} gets a B." % self.ALG))
+        self.assertIsNone(self.headline("Alg ll Bus Mang: an 86 or better on the {next:%s} gets a B." % self.ALG))
+        ok = self.headline("Alg ll Bus Mang: an 85 or better on the {next:%s} gets a B." % self.ALG)
+        self.assertEqual(ok, {"text": "Alg ll Bus Mang: an 85 or better on the next assessment gets a B.", "cites": [self.ALG]})
+
+    def test_next_fills_for_singular_plural_and_mass_buckets(self):
+        cases = {"Assessment": "assessment", "Assessments": "assessment", "Summative": "summative", "Tests": "test",
+                 "Test": "test", "Quizzes": "quiz", "Labs": "lab", "Projects": "project", "Labs & Activities": "lab & activity",
+                 "Coursework": "coursework item", "Homework": "homework item", "Math Fluency": "math fluency item",
+                 "Participation": "participation item", "Classwork": "classwork item", "Performance": "performance item",
+                 None: "test"}
+        for bucket, noun in cases.items():
+            self.assertEqual(w._bucket_noun(bucket), noun, bucket)
+        idx = w.fact_index(self.alg_facts())
+        self.assertEqual(w.fill_slots("An 85 or better on the {next:%s} gets it to a B." % self.ALG, idx),
+                         "An 85 or better on the next assessment gets it to a B.")
+
+    def test_the_prompt_puts_what_if_and_keep_ids_in_next_slots(self):
+        self.assertIn("{next:", w.DRAFT_SYSTEM)
+        self.assertRegex(w.DRAFT_SYSTEM, r"never in an \{item:")
+        self.assertIn("{next:whatif:", w.DRAFT_SYSTEM)
+        idx = w.fact_index(self.alg_facts())
+        self.assertIn("has no title", w.check_sentence("An 85 or better on the {item:%s} gets it to a B." % self.ALG,
+                                                       [self.ALG], idx))
 
 
 KEEP_LAB, KEEP_TEST = "keep:chem:coursework:10", "keep:chem:tests:50"
@@ -1148,7 +1201,7 @@ class KeepTheLetterWriterTests(unittest.TestCase):
 class HeadlineAndTakeoverTests(unittest.TestCase):
     def test_write_up_headline_and_stories(self):
         model = ScriptedModel({"Math": GOOD}, headline={
-            "text": "Math is 2.1 pts from an A; an 88% on the {next:" + WHATIF + "} gets it back.", "cites": [NEXT, WHATIF]})
+            "text": "Math is 2.1 pts from an A; an 88 or better on the {next:" + WHATIF + "} gets it back.", "cites": [NEXT, WHATIF]})
         up = w.write_up(model, insight_facts())
         self.assertEqual([s["class"] for s in up["stories"]], ["Math"])
         self.assertEqual(up["headline"]["cites"], [NEXT, WHATIF])
