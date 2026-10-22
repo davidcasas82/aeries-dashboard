@@ -3860,31 +3860,83 @@ def _norm_course_name(name):
     return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
 
+def _group_period(group):
+    period = group.get("period")
+    if period is None:
+        period = extract_period_from_label(group.get("class_name") or "")
+    return None if period is None else int(period)
+
+
+def _names_overlap(a, b):
+    return bool(a and b and (a in b or b in a))
+
+
 def assignments_for_class(student_data, class_meta):
-    """Match GradebookDetails groups to a ClassSummary row by period and/or name."""
+    """Match GradebookDetails groups to a ClassSummary row by period, then by name.
+
+    - When the class and a group both have a period, the period decides: same period
+      matches, a different period never does, whatever the names say.
+    - Otherwise the exact normalized name wins. Only when no group matches exactly does a
+      contains match count, and only when it is unambiguous: exactly one group contains
+      (or is contained in) the class name, and no other class row claims that group by
+      exact name or by its own contains match. An ambiguous name lands nowhere.
+
+    So "Math" in period 3 never picks up "AP Math Analysis" in period 5, and without
+    periods "Math" only takes the "Math" group.
+    """
     period = class_meta.get("period") if class_meta else None
+    period = None if period is None else int(period)
     course_n = _norm_course_name((class_meta or {}).get("course_name"))
+    groups = list(student_data.get("assignments_by_class") or [])
+
+    hits = []
+    name_pool = []
+    for ca in groups:
+        group_period = _group_period(ca)
+        if period is not None and group_period is not None:
+            if group_period == period:
+                hits.append(ca)
+            continue
+        name_pool.append(ca)
+
+    if course_n and name_pool:
+        exact = [ca for ca in name_pool if _norm_course_name(ca.get("class_name")) == course_n]
+        if exact:
+            hits.extend(exact)
+        else:
+            loose = [ca for ca in name_pool if _names_overlap(course_n, _norm_course_name(ca.get("class_name")))]
+            loose_keys = {(_group_period(ca), _norm_course_name(ca.get("class_name"))) for ca in loose}
+            if len(loose_keys) == 1 and not _group_claimed_elsewhere(student_data, class_meta, loose[0]):
+                hits.extend(loose)
+
     matched = []
     seen = set()
-    for ca in student_data.get("assignments_by_class") or []:
-        label = ca.get("class_name") or ""
-        group_period = ca.get("period")
-        if group_period is None:
-            group_period = extract_period_from_label(label)
-        name_n = _norm_course_name(label)
-        hit = False
-        if period is not None and group_period is not None and int(group_period) == int(period):
-            hit = True
-        elif course_n and name_n and (course_n in name_n or name_n in course_n):
-            hit = True
-        if not hit:
-            continue
-        key = (group_period, name_n or label)
+    for ca in hits:
+        key = (_group_period(ca), _norm_course_name(ca.get("class_name")) or (ca.get("class_name") or ""))
         if key in seen:
             continue
         seen.add(key)
         matched.extend(ca.get("assignments") or [])
     return matched
+
+
+def _group_claimed_elsewhere(student_data, class_meta, group):
+    """True when another class row could also take this group by name (exact or contains)."""
+    name_n = _norm_course_name(group.get("class_name"))
+    group_period = _group_period(group)
+    own = ((class_meta or {}).get("period"), _norm_course_name((class_meta or {}).get("course_name")))
+    for other in student_data.get("classes") or []:
+        other_n = _norm_course_name(other.get("course_name"))
+        if not other_n or (other.get("period"), other_n) == own:
+            continue
+        other_period = other.get("period")
+        if other_period is not None and group_period is not None:
+            if int(other_period) == group_period:
+                return True  # that class owns the group by period
+            continue
+        if _names_overlap(other_n, name_n):
+            return True
+    return False
 
 
 def assignments_for_period(student_data, period):
