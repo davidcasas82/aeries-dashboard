@@ -56,10 +56,12 @@ def insight_facts():
 
 GOOD = [
     {"text": "Math: B, 2.1 pts from an A.", "cites": [NEXT]},
-    {"text": "Down mainly from a 62% on the Ch.4 Quiz (tests are 60% of the grade).", "cites": [CAUSE]},
+    {"text": "Down mainly from a 62% on the {item:" + CAUSE + "} (60% of the grade).", "cites": [CAUSE]},
     {"text": "Scores mostly post on Fridays.", "cites": [PATTERN]},
-    {"text": "An 88% on the next test gets the A back.", "cites": [WHATIF]},
+    {"text": "An 88% on the {next:" + WHATIF + "} gets the A back.", "cites": [WHATIF]},
 ]
+GOOD_STORY = ("Math: B, 2.1 pts from an A. Down mainly from a 62% on the Ch.4 Quiz (60% of the grade). "
+              "Scores mostly post on Fridays. An 88% on the next test gets the A back.")
 
 
 class ScriptedModel:
@@ -84,10 +86,44 @@ def index(facts=None):
     return w.fact_index(facts or math_facts())
 
 
+def slotted(text, cites, idx):
+    """The slot form a model would write for a plain sentence: each cited title becomes {item:<id>}
+    (any "(a/b)" the sentence wrote stays, for the score check), and "next <bucket>" or the named next
+    item of a cited what_if becomes {next:<id>}."""
+    for fid in cites:
+        fact = idx.get(fid) or {}
+        if fact.get("title"):
+            for name in sorted({fact["title"], w._short_title(fact["title"])}, key=len, reverse=True):
+                text, n = re.subn(re.escape(name), "{item:" + fid + "}", text, flags=re.I)
+                if n:
+                    break
+        if fact.get("class") and cites and fid == cites[0]:
+            text = re.sub(r"(?<![\w{:])" + re.escape(fact["class"]) + r"(?![\w}])", "{class:" + fid + "}", text)
+        if fact.get("kind") == "what_if":
+            names = [re.escape(fact["next_title"])] if fact.get("next_title") else []
+            names.append(r"next (?:test|quiz|project|lab|assessment|assignment)s?")
+            text = re.sub("|".join(names), "{next:" + fid + "}", text, flags=re.I, count=1)
+    return text
+
+
+def check(text, cites, idx, name=None):
+    """check_sentence on the slot form of a plain sentence."""
+    return w.check_sentence(slotted(text, cites, idx), cites, idx, name)
+
+
+def slot_all(sentences, idx):
+    return [{**s, "text": slotted(s["text"], s["cites"], idx)} for s in sentences]
+
+
+def filled(sentences, idx):
+    """The story text the writer gives after filling each sentence's slots."""
+    return " ".join(w.fix_articles(w.fill_slots(s["text"], idx)) for s in sentences)
+
+
 class AcceptanceBarTests(unittest.TestCase):
     def test_a_good_story_passes(self):
         story = w.write_class(ScriptedModel({"Math": GOOD}), math_facts(), "Math")
-        self.assertEqual(story["story"], " ".join(s["text"] for s in GOOD))
+        self.assertEqual(story["story"], GOOD_STORY)
         self.assertEqual(story["cites"], [NEXT, CAUSE, PATTERN, WHATIF])
         self.assertEqual(story["dropped"], [])
 
@@ -144,7 +180,7 @@ class OldSanitizerCaseTests(unittest.TestCase):
 
 class CheckerTests(unittest.TestCase):
     def test_numbers_and_letters_must_be_in_the_cited_facts(self):
-        self.assertIsNone(w.check_sentence(GOOD[0]["text"], [NEXT], index()))
+        self.assertIsNone(check(GOOD[0]["text"], [NEXT], index()))
         self.assertEqual(w.check_sentence("Math: B, 3.4 pts from an A.", [NEXT], index()),
                          "number 3.4 isn't in the cited facts")
         self.assertEqual(w.check_sentence("Math: C, 2.1 pts from an A.", [NEXT], index()),
@@ -160,14 +196,14 @@ class CheckerTests(unittest.TestCase):
                          "fact next:biology is another class")
 
     def test_a_weekday_needs_a_pattern_naming_it(self):
-        self.assertIsNone(w.check_sentence("Scores mostly post on Fridays.", [PATTERN], index()))
+        self.assertIsNone(check("Scores mostly post on Fridays.", [PATTERN], index()))
         self.assertIsNotNone(w.check_sentence("Scores mostly post on Mondays.", [PATTERN], index()))
 
     def test_aeries_truncates_rather_than_rounds(self):
         facts = math_facts()
         facts[0] = {**facts[0], "pct": 87.96, "gap": 2.04}
-        self.assertIsNone(w.check_sentence("Math: B at 87.9%.", [NEXT], w.fact_index(facts)))
-        self.assertIsNone(w.check_sentence("Math: B at 88%.", [NEXT], w.fact_index(facts)))
+        self.assertIsNone(check("Math: B at 87.9%.", [NEXT], w.fact_index(facts)))
+        self.assertIsNone(check("Math: B at 88%.", [NEXT], w.fact_index(facts)))
 
     def test_a_sentence_most_votes_reject_is_dropped(self):
         model = ScriptedModel({"Math": GOOD}, votes=[[True, False, True, True], [True, False, True, True],
@@ -206,7 +242,7 @@ class CauseRuleTests(unittest.TestCase):
                          "states a cause the move's causes don't explain")
         self.assertEqual(w.check_sentence("Down 1.6 pts, mainly from quizzes.", [MOVE], idx),
                          "states a cause the move's causes don't explain")
-        self.assertIsNone(w.check_sentence("Down 1.6 pts since the last check.", [MOVE], idx))
+        self.assertIsNone(check("Down 1.6 pts since the last check.", [MOVE], idx))
 
     def test_no_explained_allows_no_cause(self):
         move = self.move(None)
@@ -216,7 +252,7 @@ class CauseRuleTests(unittest.TestCase):
     def test_explained_close_to_delta_allows_the_cause(self):
         move = self.move(-1.5)
         self.assertTrue(w.cause_allowed(move))
-        self.assertIsNone(w.check_sentence(self.CAUSE_LINE, [CAUSE], w.fact_index([move])))
+        self.assertIsNone(check(self.CAUSE_LINE, [CAUSE], w.fact_index([move])))
 
     def test_the_twenty_percent_edge(self):
         self.assertTrue(w.cause_allowed(self.move(-1.28)))
@@ -242,15 +278,15 @@ class ReviewFindingTests(unittest.TestCase):
                          "number 3 isn't in the cited facts")
         self.assertEqual(w.check_sentence("A ninety-five on the next test gets the A back.", [WHATIF], index()),
                          "number 95 isn't the needed score or a round-up of it")
-        self.assertIsNone(w.check_sentence("An eighty-eight on the next test gets the A back.", [WHATIF], index()))
-        self.assertIsNone(w.check_sentence("Math: B, two point one pts from an A.", [NEXT], index()))
+        self.assertIsNone(check("An eighty-eight on the next test gets the A back.", [WHATIF], index()))
+        self.assertIsNone(check("Math: B, two point one pts from an A.", [NEXT], index()))
         self.assertEqual(w.spelled_to_digits("no one, one of them, twenty one points"),
                          "no one, one of them, 21 points")
 
     def test_a_plus_or_minus_letter_is_rejected(self):
         for text in ("Math is a C+.", "Math is a B-.", "Math is a B+ now.", "Math is a B plus."):
             self.assertIn("whole-letter scale", w.check_sentence(text, [NEXT], index()), text)
-        self.assertIsNone(w.check_sentence("Math is a B.", [NEXT], index()))
+        self.assertIsNone(check("Math is a B.", [NEXT], index()))
 
     def test_cause_wording_must_cite_a_move_or_cause(self):
         self.assertEqual(w.check_sentence("Down mainly because of the Ch.4 Quiz.", [WHATIF], index()),
@@ -258,12 +294,12 @@ class ReviewFindingTests(unittest.TestCase):
         for text in ("Math slipped due to the Ch.4 Quiz.", "The drop was driven by the Ch.4 Quiz."):
             self.assertEqual(w.check_sentence(text, [NEXT], index()),
                              "states a cause without citing a grade_move or cause", text)
-        self.assertIsNone(w.check_sentence("Down mainly because of the Ch.4 Quiz.", [CAUSE], index()))
+        self.assertIsNone(check("Down mainly because of the Ch.4 Quiz.", [CAUSE], index()))
 
     def test_digits_after_a_period_are_checked(self):
         self.assertEqual(w.check_sentence("Down mainly from the Ch.9 quiz.", [CAUSE], index()),
                          "number 9 isn't in the cited facts")
-        self.assertIsNone(w.check_sentence("Down mainly from the Ch.4 Quiz.", [CAUSE], index()))
+        self.assertIsNone(check("Down mainly from the Ch.4 Quiz.", [CAUSE], index()))
 
     def test_a_number_must_match_the_field_the_claim_is_about(self):
         self.assertEqual(w.check_sentence("Math is up 60 percent after the Ch.4 Quiz.", [CAUSE], index()),
@@ -272,11 +308,13 @@ class ReviewFindingTests(unittest.TestCase):
                          "number 60 isn't in the cited facts")
         self.assertEqual(w.check_sentence("Tests are 88% of the grade.", [WHATIF], index()),
                          "number 88 isn't in the cited facts as a weight")
-        self.assertIsNone(w.check_sentence("Tests are 60% of the grade.", [WHATIF], index()))
-        self.assertIsNone(w.check_sentence("Down 2.5 pts since the last check.", [MOVE], index()))
+        # A bucket is school work: outside a slot it's dropped, so the weight can't be said that way.
+        self.assertEqual(w.check_sentence("Tests are 60% of the grade.", [WHATIF], index()),
+                         "names school work (Tests) outside a slot")
+        self.assertIsNone(check("Down 2.5 pts since the last check.", [MOVE], index()))
 
     def test_a_score_fraction_is_not_a_date(self):
-        self.assertIsNone(w.check_sentence("Down mainly from a 31/50 on the Ch.4 Quiz.", [CAUSE], index()))
+        self.assertIsNone(check("Down mainly from a 31/50 on the Ch.4 Quiz.", [CAUSE], index()))
         self.assertEqual(w.check_sentence("An 88% on the next test, after a 31/50.", [WHATIF], index()),
                          "score 31/50 isn't in the cited facts")
         self.assertEqual(w.check_sentence("An 88% on the 10/30 test gets the A back.", [WHATIF], index()),
@@ -332,7 +370,7 @@ class WeekdayRuleTests(unittest.TestCase):
         idx = self.facts_with_item([ch5()])
         self.assertEqual(idx[WHATIF]["next_due_label"], "Oct 30")
         line = "An 88% on the Ch. 5 Test, due Oct 30, gets the A back."
-        self.assertIsNone(w.check_sentence(line, [WHATIF], idx))
+        self.assertIsNone(check(line, [WHATIF], idx))
         self.assertIsNone(w.eval_story([dict(GOOD[0]), {"text": line, "cites": [WHATIF]}], idx))
 
     def test_the_wrong_date_is_dropped(self):
@@ -348,7 +386,7 @@ class WeekdayRuleTests(unittest.TestCase):
     def test_no_due_date_means_the_next_test(self):
         idx = self.facts_with_item([])
         self.assertNotIn("next_due", idx[WHATIF])
-        self.assertIsNone(w.check_sentence("An 88% on the next test gets the A back.", [WHATIF], idx))
+        self.assertIsNone(check("An 88% on the next test gets the A back.", [WHATIF], idx))
         self.assertEqual(w.check_sentence("An 88% on the Ch. 5 Test, due Oct 30, gets the A back.", [WHATIF], idx),
                          "names a date")
 
@@ -357,7 +395,7 @@ class WeekdayRuleTests(unittest.TestCase):
             self.assertNotIn("next_title", self.facts_with_item([item])[WHATIF])
 
     def test_a_posting_day_weekday_needs_the_pattern(self):
-        self.assertIsNone(w.check_sentence("Scores usually post Fridays.", [PATTERN], index()))
+        self.assertIsNone(check("Scores usually post Fridays.", [PATTERN], index()))
         self.assertEqual(w.check_sentence("Scores usually post Fridays.", [NEXT], index()),
                          "names a weekday (Fridays) no pattern backs")
 
@@ -383,7 +421,8 @@ class WeekdayRuleTests(unittest.TestCase):
         for sentence in w.EXAMPLE_NOTE:
             self.assertIsNone(w._RELATIVE_RE.search(sentence["text"]))
             cited = w._cited_facts(sentence["cites"], idx)
-            self.assertIsNone(w._claims_reason(sentence["text"], cited, idx), sentence["text"])
+            self.assertIsNone(w._claims_reason(w.fill_slots(sentence["text"], idx), cited, idx), sentence["text"])
+            self.assertIsNone(w.check_sentence(sentence["text"], sentence["cites"], idx), sentence["text"])
         self.assertIsNone(w.eval_story([dict(s) for s in w.EXAMPLE_NOTE], idx))
 
 
@@ -404,7 +443,7 @@ class CoverageFieldTests(unittest.TestCase):
         self.assertFalse(w.cause_allowed(self.move(explained=-2.4, coverage=-1.0)))
         idx = w.fact_index([self.move(coverage=0.5)])
         self.assertEqual(w.check_sentence(self.LINE, [CAUSE], idx), "states a cause the move's causes don't explain")
-        self.assertIsNone(w.check_sentence(self.LINE, [CAUSE], w.fact_index([self.move(coverage=0.96)])))
+        self.assertIsNone(check(self.LINE, [CAUSE], w.fact_index([self.move(coverage=0.96)])))
 
     def test_a_trimmed_history_allows_no_cause(self):
         move = self.move(coverage=0.96, coverage_trimmed=True)
@@ -413,7 +452,7 @@ class CoverageFieldTests(unittest.TestCase):
         self.assertEqual(w.check_sentence(self.LINE, [CAUSE], idx), "states a cause the move's causes don't explain")
         self.assertEqual(w.check_sentence("Down 2.5 pts, mainly from quizzes.", [MOVE], idx),
                          "states a cause the move's causes don't explain")
-        self.assertIsNone(w.check_sentence("Down 2.5 pts since the last check.", [MOVE], idx))
+        self.assertIsNone(check("Down 2.5 pts since the last check.", [MOVE], idx))
         sent = w.model_facts([move])[0]
         self.assertEqual(sent["causes"], [])
         self.assertIn("trimmed", sent["causes_withheld"])
@@ -430,8 +469,8 @@ class CoverageFieldTests(unittest.TestCase):
         idx = w.fact_index([move])
         self.assertEqual([c["id"] for c in w.ranked_causes(move)], [CAUSE, second])
         self.assertEqual([c["id"] for c in w.model_facts([move])[0]["causes"]], [CAUSE, second])
-        self.assertIsNone(w.check_sentence(self.LINE, [CAUSE], idx))
-        self.assertIsNone(w.check_sentence("Down from the Ch.4 Quiz, then HW 3.", [CAUSE, second], idx))
+        self.assertIsNone(check(self.LINE, [CAUSE], idx))
+        self.assertIsNone(check("Down from the Ch.4 Quiz, then HW 3.", [CAUSE, second], idx))
         self.assertEqual(w.check_sentence("Down mainly from HW 3.", [second], idx), "names causes out of share order")
         self.assertEqual(w.check_sentence("Down from HW 3 and the Ch.4 Quiz.", [second, CAUSE], idx),
                          "names causes out of share order")
@@ -489,8 +528,8 @@ class BakeoffFindingTests(unittest.TestCase):
         self.assertEqual(w.model_facts(geometry_facts())[1]["say_needed"], "85 or better")
         self.assertEqual(w.check_sentence("An 84% on the next test gets the B.", [GEO_WHATIF], idx),
                          "number 84 isn't the needed score or a round-up of it")
-        self.assertIsNone(w.check_sentence("An 85 or better on the next test gets there.", [GEO_WHATIF], idx))
-        self.assertIsNone(w.check_sentence("An 84.2% on the next test gets the B.", [GEO_WHATIF], idx))
+        self.assertIsNone(check("An 85 or better on the next test gets there.", [GEO_WHATIF], idx))
+        self.assertIsNone(check("An 84.2% on the next test gets the B.", [GEO_WHATIF], idx))
         self.assertEqual(w.check_sentence("An 86 or better on the next test gets there.", [GEO_WHATIF], idx),
                          "number 86 isn't the needed score or a round-up of it")
 
@@ -502,7 +541,7 @@ class BakeoffFindingTests(unittest.TestCase):
                          "states a cause without citing a grade_move or cause")
         self.assertEqual(w.check_sentence("The grade is mainly an 84.2% on tests.", [GEO_WHATIF], idx),
                          "states a cause without citing a grade_move or cause")
-        self.assertIsNone(w.check_sentence("Scores mostly post on Fridays.", [PATTERN], index()))
+        self.assertIsNone(check("Scores mostly post on Fridays.", [PATTERN], index()))
 
     def test_back_to_a_letter_needs_a_move_from_that_letter(self):
         line = "An 85 or better on the next test gets it back to a B."
@@ -511,7 +550,7 @@ class BakeoffFindingTests(unittest.TestCase):
         moved = geometry_facts() + [{"id": "move:geometry:2026-10-14", "kind": "grade_move", "class": "Geometry",
                                      "since": "2026-10-14", "from_pct": 81.0, "to_pct": 79.5, "delta": -1.5,
                                      "explained": None, "coverage": None, "coverage_trimmed": False, "causes": []}]
-        self.assertIsNone(w.check_sentence(line, [GEO_WHATIF], w.fact_index(moved)))
+        self.assertIsNone(check(line, [GEO_WHATIF], w.fact_index(moved)))
         self.assertEqual(w.check_sentence("A B again with an 85 or better on the next test.", [GEO_WHATIF],
                                           w.fact_index(geometry_facts())),
                          "says back to or again with a letter no move shows the class held")
@@ -527,7 +566,7 @@ class BakeoffFindingTests(unittest.TestCase):
         crossed = geometry_facts() + [{"id": "move:geometry:2026-10-14", "kind": "grade_move", "class": "Geometry",
                                        "since": "2026-10-14", "from_pct": 81.0, "to_pct": 79.5, "delta": -1.5,
                                        "explained": None, "coverage": None, "coverage_trimmed": False, "causes": []}]
-        self.assertIsNone(w.check_sentence(line, [geo_next, "move:geometry:2026-10-14"], w.fact_index(crossed)))
+        self.assertIsNone(check(line, [geo_next, "move:geometry:2026-10-14"], w.fact_index(crossed)))
         self.assertEqual(w.check_sentence(line, [geo_next], w.fact_index(crossed)),
                          "says the class moved to C but no move crossed into that letter")
         held = crossed[:-1] + [dict(crossed[-1], from_pct=79.9)]
@@ -535,7 +574,7 @@ class BakeoffFindingTests(unittest.TestCase):
                          "says the class moved to C but no move crossed into that letter")
         self.assertEqual(w.check_sentence("Slipped to a C this term.", [geo_next], w.fact_index(geometry_facts())),
                          "says the class moved to C but no move crossed into that letter")
-        self.assertIsNone(w.check_sentence("Still a C, 0.5 points from a B.", [geo_next], w.fact_index(geometry_facts())))
+        self.assertIsNone(check("Still a C, 0.5 points from a B.", [geo_next], w.fact_index(geometry_facts())))
 
     def test_no_next_letter_claim_for_an_a_or_without_a_next_letter_fact(self):
         idx = w.fact_index(chem_facts())
@@ -552,14 +591,14 @@ class BakeoffFindingTests(unittest.TestCase):
         chem = w.fact_index(chem_facts())
         self.assertEqual(w.check_sentence("Down 1.6, mainly due to a 4.0 on the Lab 3 Packet.", [CHEM_MOVE, CHEM_C1], chem),
                          "number 4.0 isn't in the cited facts as a score")
-        self.assertIsNone(w.check_sentence("Down 1.6, mainly due to a 40% on the Lab 3 Packet.", [CHEM_MOVE, CHEM_C1], chem))
-        self.assertIsNone(w.check_sentence("Down 1.6, mainly due to a 4/10 on the Lab 3 Packet.", [CHEM_MOVE, CHEM_C1], chem))
+        self.assertIsNone(check("Down 1.6, mainly due to a 40% on the Lab 3 Packet.", [CHEM_MOVE, CHEM_C1], chem))
+        self.assertIsNone(check("Down 1.6, mainly due to a 4/10 on the Lab 3 Packet.", [CHEM_MOVE, CHEM_C1], chem))
 
     def test_a_title_written_without_its_parenthetical_is_still_a_name(self):
         facts = chem_facts()
         facts[0]["causes"][1]["title"] = "Warm Ups (wk9-10)"
         idx = w.fact_index(facts)
-        self.assertIsNone(w.check_sentence("The Lab 3 Packet (4/10) and Warm Ups (1/3) hurt the grade most.",
+        self.assertIsNone(check("The Lab 3 Packet (4/10) and Warm Ups (1/3) hurt the grade most.",
                                            [CHEM_C1, CHEM_C2], idx))
 
     def test_an_offsetting_cause_may_be_named_but_not_as_the_reason(self):
@@ -568,7 +607,7 @@ class BakeoffFindingTests(unittest.TestCase):
                                    "category": "Coursework", "bucket": "Coursework", "bucket_weight_pct": 10.0,
                                    "change": "new", "earned": 9.0, "possible": 10.0, "points": 0.8, "share": 0.4})
         idx = w.fact_index(facts)
-        self.assertIsNone(w.check_sentence("The Rocket Lab (9/10) helped a little.",
+        self.assertIsNone(check("The Rocket Lab (9/10) helped a little.",
                                            ["cause:chem:2026-10-14:rocketlab"], idx))
         self.assertEqual(w.check_sentence("Down 1.6, mostly from the Rocket Lab (9/10).",
                                           [CHEM_MOVE, "cause:chem:2026-10-14:rocketlab"], idx),
@@ -582,7 +621,7 @@ class BakeoffFindingTests(unittest.TestCase):
                      "The Lab 3 Packet (4/10) and the Rocket Lab (9/10) had the biggest impact."):
             self.assertEqual(w.check_sentence(line, [CHEM_C1, lab], idx),
                              "names an offsetting cause as if it drove the move", line)
-        self.assertIsNone(w.check_sentence("The Lab 3 Packet (4/10) hurt the grade, while the Rocket Lab (9/10) helped.",
+        self.assertIsNone(check("The Lab 3 Packet (4/10) hurt the grade, while the Rocket Lab (9/10) helped.",
                                            [CHEM_C1, lab], idx))
 
     def test_students_wording_is_dropped(self):
@@ -613,20 +652,35 @@ class BakeoffFindingTests(unittest.TestCase):
                 "scores": 10, "window_days": 28}]
         idx = w.fact_index(geo)
         for text, cites in (("The Glaze Test did most of the damage.", ["cause:g:t"]),
-                            ("The Clay Sketch helped.", ["cause:g:t"]),
                             ("Ceramics scores usually post Thursdays.", ["pat:g"]),
                             ("The Final Exam did most of the damage.", ["cause:g:t"]),
                             ("Mostly the Final Exam.", ["cause:g:t"]),
-                            ("Mostly Final Exam (20/40).", ["cause:g:t"])):
-            self.assertIn("which no cited fact has", w.check_sentence(text, cites, idx, "Geo") or "", text)
-        for text, cites in (("The Unit Test (20/40) did most of the damage.", ["cause:g:t"]),
-                            ("Mostly the Unit Test.", ["cause:g:t"]),
-                            ("Geo scores usually post Thursdays.", ["pat:g"]),
-                            ("Scores usually post Thursdays.", ["pat:g"])):
+                            ("Mostly Final Exam (20/40).", ["cause:g:t"]),
+                            ("The Unit Test (20/40) did most of the damage.", ["cause:g:t"])):
+            self.assertIn("outside a slot", w.check_sentence(text, cites, idx, "Geo") or "", text)
+        # Slots: the id must be cited, and an item slot needs a fact with a title.
+        self.assertIn("doesn't cite", w.check_sentence("The {item:cause:g:t} did most of the damage.", ["move:g"], idx))
+        self.assertEqual(w.check_sentence("Mostly the {item:move:g}.", ["move:g"], idx), "item slot move:g has no title")
+        self.assertEqual(w.check_sentence("Mostly the {item:cause:g:t.", ["cause:g:t"], idx), "malformed slot")
+        self.assertIn("isn't a what_if", w.check_sentence("A 74 or better on the {next:cause:g:t}.", ["cause:g:t"], idx))
+        for text, cites in (("The {item:cause:g:t} did most of the damage.", ["cause:g:t"]),
+                            ("Mostly the {item:cause:g:t}.", ["cause:g:t"]),
+                            ("{class:pat:g} scores usually post Thursdays.", ["pat:g"]),
+                            ("Scores usually post Thursdays.", ["pat:g"]),
+                            ("Low scores dragged it.", ["cause:g:t"])):
             self.assertIsNone(w.check_sentence(text, cites, idx, "Geo"), text)
-        self.assertEqual(w._named_items("Mostly the Unit 2 Warm Ups (wk9-10), then the Ch. 5 Test (8/10)."),
-                         ["Unit 2 Warm Ups (wk9-10)", "Ch. 5 Test"])
-        self.assertEqual(w._named_items("A 75 or better on the next assessment keeps the A. Scores post Fridays."), [])
+        self.assertEqual(w.fill_slots("The {item:cause:g:t} did most of the damage.", idx),
+                         "The Unit Test (20/40) did most of the damage.")
+        self.assertEqual(w.fill_slots("{class:pat:g} scores usually post Thursdays.", idx),
+                         "Geo scores usually post Thursdays.")
+        # A score the model writes after the slot is its own, and checked.
+        self.assertEqual(w.fill_slots("The {item:cause:g:t} (20/40) hurt.", idx), "The Unit Test (20/40) hurt.")
+        self.assertEqual(w.check_sentence("The {item:cause:g:t} (21/40) hurt.", ["cause:g:t"], idx),
+                         "score 21/40 isn't in the cited facts")
+        # The whitelist is empty: "the next test" without a slot is dropped.
+        self.assertEqual(w.NOUN_WHITELIST, ())
+        self.assertEqual(w.work_noun_outside_slot("A 74 or better on the next test gets it to a C."), "test")
+        self.assertEqual(w.work_noun_outside_slot('The "Final Exam" hurt.'), "Final")
 
     def test_physics_bar_sentences_pass_the_names_check(self):
         phys = [{"id": "move:p", "kind": "grade_move", "class": "Physics & Eng", "since": "2026-10-14",
@@ -648,8 +702,14 @@ class BakeoffFindingTests(unittest.TestCase):
                              ["cause:p:packet", "cause:p:warmups"]),
                             ("The Balloon Rocket Lab (9/10) helped.", ["cause:p:lab"]),
                             ("Physics & Eng scores dropped 1.6.", ["move:p"])):
-            self.assertIsNone(w.check_sentence(text, cites, idx, "Physics & Eng"), text)
-        self.assertEqual(w._named_items("A 75 or better on the next assessment keeps the A."), [])
+            self.assertIsNone(check(text, cites, idx, "Physics & Eng"), text)
+        draft = [{"text": "Still an A, down 1.6 since Oct 14.", "cites": ["move:p"]},
+                 {"text": "The {item:cause:p:packet} did most of the damage.", "cites": ["cause:p:packet"]},
+                 {"text": "The {item:cause:p:lab} helped.", "cites": ["cause:p:lab"]}]
+        self.assertEqual(filled(draft, idx), "Still an A, down 1.6 since Oct 14. The Unit 2 Packet (4/10) did most "
+                                             "of the damage. The Balloon Rocket Lab (9/10) helped.")
+        self.assertEqual(w.fill_slots("A 75 or better on the {next:whatif:p:assessments:10}.", idx),
+                         "A 75 or better on the next assessment.")
 
     def test_review_nits_scores_quarters_and_dashes(self):
         clay = [{"id": "move:c", "kind": "grade_move", "class": "Clay", "since": "2026-10-14", "from_pct": 71.0,
@@ -658,15 +718,25 @@ class BakeoffFindingTests(unittest.TestCase):
                              "earned": 11.0, "possible": 20.0, "points": -2.0, "share": -2.0}]}]
         idx = w.fact_index(clay)
         # "(11/20)" is a score in parentheses, never Nov 20.
-        self.assertIsNone(w.check_sentence("The Glaze Test (11/20) did most of the damage.", ["cause:c:glaze"], idx))
+        self.assertIsNone(check("The Glaze Test (11/20) did most of the damage.", ["cause:c:glaze"], idx))
         self.assertEqual(w.check_sentence("The Glaze Test (12/20) did most of the damage.", ["cause:c:glaze"], idx),
                          "score 12/20 isn't in the cited facts")
         self.assertEqual(w.spelled_to_digits("three-quarters of a point"), "0.75 point")
         near = [{"id": "next:q", "kind": "next_letter", "class": "Q", "pct": 69.25, "letter": "D", "next_letter": "C",
                  "threshold": 70.0, "gap": 0.75}]
-        self.assertIsNone(w.check_sentence("Still a D, three-quarters of a point from a C.", ["next:q"], w.fact_index(near)))
+        self.assertIsNone(check("Still a D, three-quarters of a point from a C.", ["next:q"], w.fact_index(near)))
         dash = [dict(near[0], pct=68.6, gap=1.4)]
-        self.assertIsNone(w.check_sentence("Still a D, 1.4 points from a C--one more test.", ["next:q"], w.fact_index(dash)))
+        for text in ("Still a D, 1.4 points from a C--one more score.", "Still a D, 1.4 points from a C–one more score."):
+            self.assertIsNone(check(text, ["next:q"], w.fact_index(dash)), text)
+        self.assertEqual(w.spelled_to_digits("one and three quarters points"), "1.75 points")
+        quarters = [dict(near[0], pct=68.25, gap=1.75)]
+        self.assertIsNone(check("Still a D, one and three quarters points from a C.", ["next:q"], w.fact_index(quarters)))
+        # "down 2.5 (10/14)": a pair that is the cited since date reads as that date, not a score.
+        moved = clay[0]
+        self.assertIsNone(check("Still a D, down 2 (10/14).", ["move:c"], w.fact_index([moved])))
+        # Any other pair in parentheses is read as a score, and no fact backs it.
+        self.assertEqual(w.check_sentence("Still a D, down 2 (10/15).", ["move:c"], w.fact_index([moved])),
+                         "score 10/15 isn't in the cited facts")
         self.assertIn("whole-letter", w.check_sentence("Still a D, 1.4 points from a C-.", ["next:q"], w.fact_index(dash)))
 
     def test_example_wording_on_real_facts_passes(self):
@@ -683,15 +753,15 @@ class BakeoffFindingTests(unittest.TestCase):
                   "share": 0.8, "scores": 10, "window_days": 28}]
         idx = w.fact_index(facts)
         self.assertEqual(w.model_facts(facts)[0]["say_opening"], "Slipped to a D since Sep 9, down 2.3.")
-        self.assertIsNone(w.check_sentence("Slipped to a D since Sep 9, down 2.3.", ["move:art:2026-09-09"], idx, "Art"))
-        self.assertIsNone(w.check_sentence("Scores usually post Tuesdays.", ["pattern:posting_day:art"], idx, "Art"))
-        self.assertIsNone(w.check_sentence("A 74 or better on the next project gets it to a C.",
+        self.assertIsNone(check("Slipped to a D since Sep 9, down 2.3.", ["move:art:2026-09-09"], idx, "Art"))
+        self.assertIsNone(check("Scores usually post Tuesdays.", ["pattern:posting_day:art"], idx, "Art"))
+        self.assertIsNone(check("A 74 or better on the next project gets it to a C.",
                                            ["whatif:art:projects:20"], idx, "Art"))
         draft = [{"text": "Slipped to a D since Sep 9, down 2.3.", "cites": ["move:art:2026-09-09"]},
                  {"text": "Mostly the Mural (11/20).", "cites": ["cause:art:2026-09-09:mural"]},
                  {"text": "Scores usually post Tuesdays.", "cites": ["pattern:posting_day:art"]},
                  {"text": "A 74 or better on the next project gets it to a C.", "cites": ["whatif:art:projects:20"]}]
-        story = w.write_class(ScriptedModel({"Art": draft}), facts, "Art")
+        story = w.write_class(ScriptedModel({"Art": slot_all(draft, idx)}), facts, "Art")
         self.assertEqual(story["story"], " ".join(s["text"] for s in draft))
         self.assertEqual(story["dropped"], [])
         # A needed 73.0 is said "73 or better" (round up only), and that full story passes too.
@@ -699,7 +769,7 @@ class BakeoffFindingTests(unittest.TestCase):
         self.assertEqual(w.model_facts(exact)[1]["say_needed"], "73 or better")
         draft73 = draft[:3] + [{"text": "A 73 or better on the next project gets it to a C.",
                                 "cites": ["whatif:art:projects:20"]}]
-        story = w.write_class(ScriptedModel({"Art": draft73}), exact, "Art")
+        story = w.write_class(ScriptedModel({"Art": slot_all(draft73, w.fact_index(exact))}), exact, "Art")
         self.assertEqual((story["story"], story["dropped"]), (" ".join(s["text"] for s in draft73), []))
 
     def test_example_numbers_and_dates_are_never_markers(self):
@@ -717,14 +787,14 @@ class BakeoffFindingTests(unittest.TestCase):
         draft = [{"text": mf[0]["say_opening"], "cites": ["move:geo:2026-10-14"]},
                  {"text": "Mostly the Unit Test (20/40).", "cites": ["cause:geo:2026-10-14:unittest"]},
                  {"text": "A 74 or better on the next test gets it to a C.", "cites": ["whatif:geo:tests:40"]}]
-        story = w.write_class(ScriptedModel({"Geo": draft}), facts, "Geo")
+        story = w.write_class(ScriptedModel({"Geo": slot_all(draft, w.fact_index(facts))}), facts, "Geo")
         self.assertEqual(story["story"], "Slipped to a D since Oct 14, down 2.5. Mostly the Unit Test (20/40). "
                                          "A 74 or better on the next test gets it to a C.")
         # Review repro: a real move since Sep 9 gets the code's own opener, which must pass.
         sep = [dict(facts[0], id="move:geo:2026-09-09", since="2026-09-09", causes=[])]
         opener = w.model_facts(sep)[0]["say_opening"]
         self.assertEqual(opener, "Slipped to a D since Sep 9, down 2.5.")
-        self.assertIsNone(w.check_sentence(opener, ["move:geo:2026-09-09"], w.fact_index(sep), "Geo"))
+        self.assertIsNone(check(opener, ["move:geo:2026-09-09"], w.fact_index(sep), "Geo"))
         for number in ("68.8", "71.1", "73.4"):
             self.assertNotIn("copies", w.check_sentence(f"An {number}% on the next test gets it to a C.",
                                                         ["whatif:geo:tests:40"], w.fact_index(facts)) or "")
@@ -740,27 +810,27 @@ class BakeoffFindingTests(unittest.TestCase):
                          "1.5 points, 0.5 point, 2.5, 3.5")
         half = [dict(bio[0], pct=79.5, gap=0.5)]
         for text in ("Still a C, a half point from a B.", "Still a C, half a point from a B."):
-            self.assertIsNone(w.check_sentence(text, ["next:bio"], w.fact_index(half)), text)
+            self.assertIsNone(check(text, ["next:bio"], w.fact_index(half)), text)
         onehalf = [dict(bio[0], pct=78.5, gap=1.5)]
-        self.assertIsNone(w.check_sentence("Still a C, one and a half points from a B.", ["next:bio"],
+        self.assertIsNone(check("Still a C, one and a half points from a B.", ["next:bio"],
                                            w.fact_index(onehalf)))
         # Hyphenated spoken numbers are read the same way.
         self.assertEqual(w.spelled_to_digits("one-and-a-half points, a half-point, twenty-one"),
                          "1.5 points, 0.5 point, 21")
         self.assertIn("isn't in the cited facts",
                       w.check_sentence("Still a C, one-and-a-half points from a B.", ["next:bio"], idx) or "")
-        self.assertIsNone(w.check_sentence("Still a C, one-and-a-half points from a B.", ["next:bio"],
+        self.assertIsNone(check("Still a C, one-and-a-half points from a B.", ["next:bio"],
                                            w.fact_index(onehalf)))
         self.assertIn("isn't in the cited facts",
                       w.check_sentence("Still a C, a half-point from a B.", ["next:bio"], idx) or "")
-        self.assertIsNone(w.check_sentence("Still a C, a half-point from a B.", ["next:bio"], w.fact_index(half)))
+        self.assertIsNone(check("Still a C, a half-point from a B.", ["next:bio"], w.fact_index(half)))
 
     def test_review_nits(self):
         geo = w.fact_index(geometry_facts())
         self.assertIn("echoes the prompt", w.check_sentence("Moved from a C to a C.", [GEO_NEXT], geo))
         self.assertEqual(w.check_sentence("Mainly the Unit 2 Test.", [GEO_NEXT], geo),
                          "states a cause without citing a grade_move or cause")
-        self.assertIsNone(w.check_sentence("Scores mostly post on Fridays.", [PATTERN], index()))
+        self.assertIsNone(check("Scores mostly post on Fridays.", [PATTERN], index()))
         # "Moved to" is checked against the move the sentence cites, not any move in the class.
         two = geometry_facts() + [
             {"id": "move:geometry:2026-10-14", "kind": "grade_move", "class": "Geometry", "since": "2026-10-14",
@@ -770,7 +840,7 @@ class BakeoffFindingTests(unittest.TestCase):
              "from_pct": 79.9, "to_pct": 79.5, "delta": -0.4, "explained": None, "coverage": None,
              "coverage_trimmed": False, "causes": []}]
         idx = w.fact_index(two)
-        self.assertIsNone(w.check_sentence("Slipped to a C since Oct 14.", ["move:geometry:2026-10-14"], idx))
+        self.assertIsNone(check("Slipped to a C since Oct 14.", ["move:geometry:2026-10-14"], idx))
         self.assertEqual(w.check_sentence("Slipped to a C since Oct 20.", ["move:geometry:2026-10-20"], idx),
                          "says the class moved to C but no move crossed into that letter")
         # An unclosed <think> holds no answer.
@@ -799,22 +869,22 @@ class NoteStyleTests(unittest.TestCase):
         self.assertIn("2.5 points", w.spelled_to_digits("two and a half points from a B"))
         self.assertIn("1.5 points", w.spelled_to_digits("a point and a half from a B"))
         idx = w.fact_index(geometry_facts())
-        self.assertIsNone(w.check_sentence("Half a point from a B.", [GEO_NEXT], idx))
+        self.assertIsNone(check("Half a point from a B.", [GEO_NEXT], idx))
         self.assertEqual(w.check_sentence("A point and a half from a B.", [GEO_NEXT], idx),
                          "number 1.5 isn't in the cited facts")
         quarter = [dict(geometry_facts()[0], gap=0.25, pct=79.75)]
-        self.assertIsNone(w.check_sentence("A quarter point from a B.", [GEO_NEXT], w.fact_index(quarter)))
+        self.assertIsNone(check("A quarter point from a B.", [GEO_NEXT], w.fact_index(quarter)))
 
     def test_the_good_notes_pass(self):
         geo = w.fact_index(geometry_facts())
-        self.assertIsNone(w.check_sentence("Half a point from a B.", [GEO_NEXT], geo))
-        self.assertIsNone(w.check_sentence("An 85 or better on the next test gets there.", [GEO_WHATIF], geo))
+        self.assertIsNone(check("Half a point from a B.", [GEO_NEXT], geo))
+        self.assertIsNone(check("An 85 or better on the next test gets there.", [GEO_WHATIF], geo))
         self.assertIsNone(w.eval_story([{"text": "Half a point from a B.", "cites": [GEO_NEXT]},
                                         {"text": "An 85 or better on the next test gets there.",
                                          "cites": [GEO_WHATIF]}], geo))
         chem = w.fact_index(chem_facts())
         line = "Still an A, down 1.6 since Oct 14, mostly from the Lab 3 Packet (4/10)."
-        self.assertIsNone(w.check_sentence(line, [CHEM_MOVE, CHEM_C1], chem))
+        self.assertIsNone(check(line, [CHEM_MOVE, CHEM_C1], chem))
         self.assertEqual(w.check_sentence("Still an A, down 1.6 since Oct 13.", [CHEM_MOVE], chem), "names a date")
         self.assertEqual(w.model_facts(chem_facts())[0]["since_label"], "Oct 14")
 
@@ -852,7 +922,7 @@ class PolishPassTests(unittest.TestCase):
         for advice in ("Redoing the Lab 3 Packet would help.", "Focus on the next lab.",
                        "It should come back with steady work.", "Kid A needs to turn in cleaner Warm Ups."):
             self.assertEqual(w.check_sentence(advice, [CHEM_C1], chem), "gives advice no what_if backs", advice)
-        self.assertIsNone(w.check_sentence("Aim for an 88% on the next test to get the A back.", [WHATIF], index()))
+        self.assertIsNone(check("Aim for an 88% on the next test to get the A back.", [WHATIF], index()))
 
     def test_talk_of_a_move_needs_one_and_nothing_is_said_about_what_isnt_there(self):
         geo = w.fact_index(geometry_facts())
@@ -863,7 +933,7 @@ class PolishPassTests(unittest.TestCase):
         for line in ("No pattern data available.", "No major cause identified.", "Scores: none identified."):
             self.assertEqual(w.check_sentence(line, [GEO_NEXT], geo), "says what isn't there", line)
         chem = w.fact_index(chem_facts())
-        self.assertIsNone(w.check_sentence("The Lab 3 Packet (4/10) drove the drop.", [CHEM_C1], chem))
+        self.assertIsNone(check("The Lab 3 Packet (4/10) drove the drop.", [CHEM_C1], chem))
 
     def test_the_model_gets_a_ready_opening_and_each_causes_effect(self):
         geo = w.model_facts(geometry_facts())
@@ -877,10 +947,10 @@ class PolishPassTests(unittest.TestCase):
         self.assertEqual(w.say_opening(w._say_fields(risen)), "Up to a B since Oct 14, up 1.6.")
         # The ready openings pass the checker and the opening rule as written.
         gidx, cidx = w.fact_index(geometry_facts()), w.fact_index(chem_facts())
-        self.assertIsNone(w.check_sentence(geo[0]["say_opening"], [GEO_NEXT], gidx))
+        self.assertIsNone(check(geo[0]["say_opening"], [GEO_NEXT], gidx))
         self.assertIsNone(w.eval_story([{"text": geo[0]["say_opening"], "cites": [GEO_NEXT]},
                                         {"text": "An 85 or better on the next test gets there.", "cites": [GEO_WHATIF]}], gidx))
-        self.assertIsNone(w.check_sentence(chem[0]["say_opening"], [CHEM_MOVE], cidx))
+        self.assertIsNone(check(chem[0]["say_opening"], [CHEM_MOVE], cidx))
         self.assertIsNone(w.eval_story([{"text": chem[0]["say_opening"], "cites": [CHEM_MOVE]}], cidx))
         lab = dict(chem_facts()[0])
         lab["causes"] = lab["causes"] + [{"id": "cause:chem:2026-10-14:rocketlab", "title": "Rocket Lab", "share": 0.4,
@@ -906,7 +976,7 @@ class PolishPassTests(unittest.TestCase):
             {"text": "A 85 or better on the next test gets there.", "cites": [GEO_WHATIF]}]}))
         self.assertEqual(drafted[0]["text"], "An 85 or better on the next test gets there.")
         geo = w.fact_index(geometry_facts())
-        self.assertIsNone(w.check_sentence(drafted[0]["text"], drafted[0]["cites"], geo))
+        self.assertIsNone(check(drafted[0]["text"], drafted[0]["cites"], geo))
         self.assertEqual(w.check_sentence(w.fix_articles("A 84 or better on the next test gets there."), [GEO_WHATIF], geo),
                          "number 84 isn't the needed score or a round-up of it")
 
@@ -918,19 +988,21 @@ class PolishPassTests(unittest.TestCase):
             up = w.write_up(ScriptedModel({"Math": GOOD}, headline=headline), insight_facts())
             self.assertIsNone(up["headline"], headline["text"])
             self.assertEqual(w.apply_write_up({"headline": "Grok headline"}, up)["headline"], "")
-        for text, cites in (("Math: an 88% on the next test gets the A back.", [WHATIF]),
-                            ("The Ch.4 Quiz pulled Math down.", [CAUSE])):
+        for text, cites, out in (("Math: an 88% on the {next:" + WHATIF + "} gets the A back.", [WHATIF],
+                                  "Math: an 88% on the next test gets the A back."),
+                                 ("The {item:" + CAUSE + "} pulled Math down.", [CAUSE],
+                                  "The Ch.4 Quiz (31/50) pulled Math down.")):
             up = w.write_up(ScriptedModel({"Math": GOOD}, headline={"text": text, "cites": cites}), insight_facts())
-            self.assertEqual(up["headline"], {"text": text, "cites": cites})
+            self.assertEqual(up["headline"], {"text": out, "cites": cites})
         fixed = w.write_up(ScriptedModel({"Math": GOOD}, headline={
-            "text": "Math: a 88% on the next test gets the A back.", "cites": [WHATIF]}), insight_facts())
+            "text": "Math: a 88% on the {next:" + WHATIF + "} gets the A back.", "cites": [WHATIF]}), insight_facts())
         self.assertEqual(fixed["headline"]["text"], "Math: an 88% on the next test gets the A back.")
 
 
 class HeadlineAndTakeoverTests(unittest.TestCase):
     def test_write_up_headline_and_stories(self):
         model = ScriptedModel({"Math": GOOD}, headline={
-            "text": "Math is 2.1 pts from an A; an 88% on the next test gets it back.", "cites": [NEXT, WHATIF]})
+            "text": "Math is 2.1 pts from an A; an 88% on the {next:" + WHATIF + "} gets it back.", "cites": [NEXT, WHATIF]})
         up = w.write_up(model, insight_facts())
         self.assertEqual([s["class"] for s in up["stories"]], ["Math"])
         self.assertEqual(up["headline"]["cites"], [NEXT, WHATIF])
@@ -1000,6 +1072,51 @@ class WriterWorkTests(unittest.TestCase):
         put.assert_not_called()
 
 
+class FoldedCausesAndKeepFactTests(unittest.TestCase):
+    """#54's fields: other_share/other_causes are never a number to say; keep_letter facts stay hidden here."""
+
+    def folded(self, other_share):
+        move = {**math_facts()[1], "other_causes": 3, "other_share": other_share}
+        return [math_facts()[0], move] + math_facts()[2:]
+
+    def test_other_share_and_other_causes_are_never_a_claim(self):
+        idx = w.fact_index(self.folded(6.44))
+        self.assertIn("isn't in the cited facts",
+                      w.check_sentence("The other 3 scores account for 6.44 of it.", [MOVE], idx))
+        self.assertIn("isn't in the cited facts", w.check_sentence("Down 6.44 since Oct 15.", [MOVE], idx))
+        # An all-new night: other_share is null and nothing breaks.
+        facts = self.folded(None)
+        sent = w.model_facts(facts)[1]
+        self.assertEqual((sent["other_share"], sent["other_causes"]), (None, 3))
+        story = w.write_class(ScriptedModel({"Math": GOOD}), facts, "Math")
+        self.assertEqual(story["story"], GOOD_STORY)
+
+    def test_the_model_never_sees_keep_letter_facts_on_this_branch(self):
+        keep = {"id": "keep:math:tests:50", "kind": "keep_letter", "class": "Math", "letter": "B", "bucket": "Tests",
+                "points": 50.0, "needed_pct": 41.2, "cannot_lose": False}
+        facts = math_facts() + [keep]
+        self.assertNotIn("keep_letter", [f["kind"] for f in w.model_facts(facts)])
+        self.assertFalse(w.worth_saying([keep]))
+
+    @unittest.skipUnless(hasattr(insights, "keep_fact"), "needs #54's keep_letter engine")
+    def test_engine_keep_facts_never_reach_the_model_prompt(self):
+        from test_insights import POG_ROWS, POG_TOTALS, class_input, snapshot, TODAY
+
+        prior = snapshot("2026-10-21", {"Biology": (91.8, "A")})
+        cls = class_input("Biology", POG_TOTALS, POG_ROWS, 85.2, "B", new_keys=["unit2test"])
+        facts = insights.class_facts(cls, [prior], prior, TODAY)
+        sent = []
+
+        class Spy:
+            def complete(self, system, user):
+                sent.append(user)
+                return json.dumps({"sentences": [], "backed": []})
+
+        w.write_class(Spy(), facts, "Biology")
+        self.assertTrue(sent)
+        self.assertNotIn("keep_letter", " ".join(sent))
+
+
 class EngineFactsTests(unittest.TestCase):
     """Facts from the real engine (synthetic gradebook) go through the checker unchanged."""
 
@@ -1013,11 +1130,11 @@ class EngineFactsTests(unittest.TestCase):
         step = next(f for f in facts if f["kind"] == "next_letter")
         move = next(f for f in facts if f["kind"] == "grade_move")
         line = f"Biology: {step['letter']}, {step['gap']:g} pts from an {step['next_letter']}."
-        self.assertIsNone(w.check_sentence(line, [step["id"]], idx, "Biology"))
+        self.assertIsNone(check(line, [step["id"]], idx, "Biology"))
         cause = move["causes"][0]
         said = f"Down mainly from a {cause['earned'] / cause['possible'] * 100:.0f}% on the {cause['title']}."
         expected = None if w.cause_allowed(move) else "states a cause the move's causes don't explain"
-        self.assertEqual(w.check_sentence(said, [cause["id"]], idx, "Biology"), expected)
+        self.assertEqual(check(said, [cause["id"]], idx, "Biology"), expected)
 
 
 if __name__ == "__main__":

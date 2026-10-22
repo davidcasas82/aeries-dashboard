@@ -71,7 +71,8 @@ _NUMBER_RE = re.compile(r"(?<!\w)(?<!\d\.)\d+(?:\.\d+)?")
 _LETTER_RE = re.compile(r"(?<![\w'’])([A-DF])(?![\w'’+-])")
 # The scale is whole letters only, so any plus or minus letter is wrong on its face.
 # "C--one more test" is a dash, not a C-.
-_PLUS_MINUS_RE = re.compile(r"(?<![\w'’])([A-DF])(?:[+−–](?![-−–])|-(?![A-Za-z0-9-])| ?-?(?:plus|minus)\b)", re.I)
+# "C–one more test" with an en dash is a dash too.
+_PLUS_MINUS_RE = re.compile(r"(?<![\w'’])([A-DF])(?:\+|[−–](?![-−–\w])|-(?![A-Za-z0-9-])| ?-?(?:plus|minus)\b)", re.I)
 
 _ONES = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen "
          "sixteen seventeen eighteen nineteen").split()
@@ -115,6 +116,8 @@ _FRACTION_WORDS = (
     (re.compile(r"\b(?:a|one) (point|percent|percentage point)(?! (?:five|\d))\b", re.I), r"1 \1"),
 )
 _QUARTERS_RE = re.compile(r"\b(one|two|three|1|2|3) quarters? of (?:a|one) (point|percent)\b", re.I)
+# "one and three quarters" -> 1.75, "two and a quarter" -> 2.25.
+_AND_QUARTERS_RE = re.compile(rf"\b(\d+(?:\.\d+)?|{_W}(?: {_W})?) and (a|one|three) quarters?\b", re.I)
 _AND_A_HALF_RE = re.compile(rf"\b(\d+(?:\.\d+)?|{_W}(?: {_W})?) and a half\b", re.I)
 # Hyphens inside a spoken number ("one-and-a-half", "a half-point", "twenty-one") read as spaces.
 _NUMBER_PARTS = set(_WORD_VALUE) | {"a", "and", "half", "halves", "quarter", "quarters", "third", "thirds",
@@ -189,7 +192,8 @@ ROLE_FIELDS = {
 }
 # Ratios and weights are never a general number: a weight needs weight words around it.
 # A needed score is checked on its own rule (exact, or rounded up), never by plain rounding.
-_NOT_GENERAL = ("bucket_weight_pct", "coverage", "needed_pct")
+# other_share/other_causes (#54) describe causes folded away; no sentence can name or count them.
+_NOT_GENERAL = ("bucket_weight_pct", "coverage", "needed_pct", "other_share", "other_causes")
 
 # The made-up example: a class, items, numbers and a weekday that match no real class.
 EXAMPLE_FACTS = [
@@ -212,20 +216,28 @@ EXAMPLE_FACTS = [
 ]
 EXAMPLE_NOTE = [
     {"text": "Slipped to a D since Sep 9, down 2.3.", "cites": ["move:ceramics:2026-09-09"]},
-    {"text": "The Glaze Test (11/20) did most of the damage.", "cites": ["cause:ceramics:2026-09-09:glazetest"]},
-    {"text": "The Clay Sketch (19/20) helped.", "cites": ["cause:ceramics:2026-09-09:claysketch"]},
+    {"text": "The {item:cause:ceramics:2026-09-09:glazetest} did most of the damage.",
+     "cites": ["cause:ceramics:2026-09-09:glazetest"]},
+    {"text": "The {item:cause:ceramics:2026-09-09:claysketch} helped.", "cites": ["cause:ceramics:2026-09-09:claysketch"]},
     {"text": "Scores usually post Tuesdays.", "cites": ["pattern:posting_day:ceramics"]},
-    {"text": "A 74 or better on the next project gets it to a C.", "cites": ["whatif:ceramics:projects:20"]},
+    {"text": "A 74 or better on the {next:whatif:ceramics:projects:20} gets it to a C.",
+     "cites": ["whatif:ceramics:projects:20"]},
 ]
-DRAFT_SYSTEM = """You write a short note to a parent about one class, the way a sharp teacher would.
+DRAFT_SYSTEM = """You write a short note to a parent about one class (the class story), the way a sharp teacher would.
 You get FACTS as JSON. Every fact has an id. Use only those facts.
+
+Name assignments and classes ONLY with slots, which code fills in with the real name:
+- {item:<cause id>} for a cause (code adds its score, like "(6/10)"; don't write the score yourself).
+- {next:<what_if id>} for the item a what_if is about (code writes "next test" or the item's title).
+- {class:<fact id>} for the class name.
+Never write an assignment word yourself (test, quiz, exam, lab, project, packet, homework, essay, report, assessment, ...), not even "the next test". A sentence that does is thrown away.
 
 Write 1 to 4 short, plain sentences:
 - Open with say_opening, word for word: from the grade_move if there is one, else from the next_letter. Cite that fact.
-- Then why it moved: the causes whose effect matches the move ("hurt" on a drop, "helped" on a rise), largest first, with the score as earned/possible: "Mostly the Lab Report (6/10)."
-- A cause with the opposite effect only as a contrast, in its own words: "The Rocket Lab (9/10) helped." Never as part of the reason.
+- Then why it moved: the causes whose effect matches the move ("hurt" on a drop, "helped" on a rise), largest first, each as its slot: "Mostly the {item:<cause id>}."
+- A cause with the opposite effect only as a contrast, in its own words: "The {item:<cause id>} helped." Never as part of the reason.
 - Then a pattern, only if FACTS has a posting_day fact, naming its weekday.
-- End with one next step, only from a what_if fact, using its say_needed: "An 85 or better on the next test gets it to a B."
+- End with one next step, only from a what_if fact, using its say_step word for word: "An 85 or better on the {next:<what_if id>} gets it to a B."
 - With no what_if fact, end without a next step. Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
 
 Rules:
@@ -241,7 +253,7 @@ Rules:
 - Numbers come from the cited facts, written as digits. A needed score is say_needed ("85 or better"), never rounded down.
 - Whole letters only: A, B, C, D, F. Never a plus or minus.
 - Don't mention missing, late, past-due, turned-in or awaiting work. The dashboard lists that.
-- No relative days ("today", "tomorrow", "this week", "next Friday"). The only dates: since_label on a grade_move, or next_due_label on a what_if ("the Ch. 5 Test, due Oct 30"). Otherwise "the next test" or "the next quiz".
+- No relative days ("today", "tomorrow", "this week", "next Friday"). The only dates: since_label on a grade_move, or next_due_label on a what_if ("the {next:<what_if id>}, due Oct 30").
 - A weekday only in a posting_day pattern, citing that fact.
 - Never call a 0% a grade.
 - Never write "the student", "the letter is", "next letter", "distance", "what-if", "what moved", or "moved from A to A".
@@ -260,7 +272,8 @@ Reply with JSON only: {"backed": [true or false, one per sentence, in order]}"""
 HEADLINE_SYSTEM = """You write the one-line headline of a parent's grade briefing from the class STORIES (JSON).
 Pick the single most useful insight. One sentence, under 120 characters.
 Use only numbers, letters and classes in the stories, and cite the fact ids of the story you use.
-Say something concrete: a number, a letter or an assignment name from the story. No vague lines like "Next scores matter".
+Say something concrete: a number, a letter or an assignment from the story. No vague lines like "Next scores matter".
+Name assignments and classes only with the story's slots, copied as is: {item:<id>}, {next:<id>}, {class:<id>}. Never write a test, quiz, lab or other assignment word yourself.
 Don't mention missing, late, past-due, turned-in or awaiting work. No dates, weekdays or relative days ("tomorrow", "next Friday").
 Reply with JSON only: {"text": "...", "cites": ["fact id", ...]}"""
 
@@ -334,6 +347,9 @@ def model_facts(class_facts):
     """What the model sees: a move whose causes don't explain it is sent without them."""
     out = []
     for fact in class_facts:
+        # keep_letter facts (#54) wait for the keep-a wiring: the model never sees them on this branch.
+        if fact.get("kind") == "keep_letter":
+            continue
         if fact.get("kind") == "grade_move" and fact.get("coverage_trimmed"):
             fact = {**fact, "causes": [], "causes_withheld": "the earlier scores were trimmed, so the cause is unknown"}
         elif fact.get("kind") == "grade_move" and fact.get("causes"):
@@ -380,6 +396,9 @@ def _say_fields(fact):
     say_opening, and each cause's effect ("hurt" or "helped") on the grade."""
     if fact.get("kind") == "what_if" and isinstance(fact.get("needed_pct"), (int, float)) and fact.get("reachable"):
         fact = {**fact, "say_needed": say_needed(fact["needed_pct"])}
+        if isinstance(fact.get("target"), (int, float)):
+            to = insights.letter_for(fact["target"])
+            fact["say_step"] = fix_articles(f"A {fact['say_needed']} on the {{next:{fact['id']}}} gets it to a {to}.")
     if fact.get("kind") == "grade_move" and fact.get("since"):
         try:
             fact = {**fact, "since_label": due_label(fact["since"])}
@@ -389,7 +408,7 @@ def _say_fields(fact):
         def effect(cause):
             size = cause.get("share") if cause.get("share") is not None else cause.get("points")
             return "hurt" if (size or 0) < 0 else "helped"
-        fact = {**fact, "causes": [{**c, "effect": effect(c)} for c in fact["causes"]]}
+        fact = {**fact, "causes": [{**c, "effect": effect(c), "slot": f"{{item:{c['id']}}}"} for c in fact["causes"]]}
     opening = say_opening(fact)
     if opening:
         fact = {**fact, "say_opening": opening}
@@ -585,6 +604,12 @@ def spelled_to_digits(text):
     text = _unhyphen_numbers(text)
     text = _QUARTERS_RE.sub(lambda m: f"{({'one': 1, 'two': 2, 'three': 3}.get(m.group(1).lower()) or int(m.group(1))) * 0.25:g} "
                                       f"{m.group(2)}", text)
+    def quarters(match):
+        whole = match.group(1)
+        value = float(whole) if whole[0].isdigit() else float(_words_value(whole))
+        return f"{value + (0.75 if match.group(2).lower() == 'three' else 0.25):g}"
+
+    text = _AND_QUARTERS_RE.sub(quarters, text)
     text = _AND_A_HALF_RE.sub(half, text)
     text = _SPELLED_RE.sub(swap, text)
     for pattern, value in _FRACTION_WORDS:
@@ -628,6 +653,10 @@ def _dates_in(text, cited):
     for match in _SLASH_RE.finditer(text):
         n, m = float(match.group(1)), float(match.group(2))
         in_parens = text[: match.start()].endswith("(") and text[match.end():].startswith(")")
+        # "down 2.5 (10/14)": a pair that is a cited since/due date reads as that date.
+        if in_parens and n == int(n) and m == int(m) and (int(n), int(m)) in _due_days(cited) and (n, m) not in scores:
+            spans.append((match.start(), match.end(), (int(n), int(m))))
+            continue
         if (n, m) in scores:
             spans.append((match.start(), match.end(), None))
         elif in_parens:
@@ -699,75 +728,105 @@ def check_sentence(text, cites, index, name=None):
         if name is not None and fact.get("class") != name:
             return f"fact {fid} is another class"
         cited.append(fact)
-    echo = _ECHO_RE.search(text) or _SAME_LETTER_MOVE_RE.search(text)
-    if echo:
-        return f"echoes the prompt ({echo.group(0)})"
-    reason = _claims_reason(text, cited, index)
+    reason = slot_reason(text, cites, index)
     if reason:
         return reason
-    unbacked = _unbacked_name(text, cited)
-    return f"names {unbacked}, which no cited fact has" if unbacked else None
+    filled = fill_slots(text, index)
+    echo = _ECHO_RE.search(filled) or _SAME_LETTER_MOVE_RE.search(filled)
+    if echo:
+        return f"echoes the prompt ({echo.group(0)})"
+    reason = _claims_reason(filled, cited, index)
+    if reason:
+        return reason
+    # Last, so the claim checks keep their own reasons: any school-work noun must sit in a slot.
+    noun = work_noun_outside_slot(text, cited)
+    return f"names school work ({noun}) outside a slot" if noun else None
 
 
-# Named items and classes: "the Unit Test", "Unit Test (20/40)", "Geo scores ...". A run of capitalized
-# words (digits, "&" and short joiners allowed inside), with a trailing "(wk9-10)" but never a "(20/40)".
-_CAP = r"(?:[A-Z][\w'’.&-]*|\d[\w.-]*|&)"
-_NAME_RUN = rf"[A-Z][\w'’.&-]*(?:\s+(?:(?:of|and|for|to|in|on)\s+)?{_CAP})*(?:\s*\((?!\s*\d+(?:\.\d+)?\s*/)[^)]*\))?"
-_NAMED_RES = (
-    re.compile(rf"\b(?i:the)\s+({_NAME_RUN})"),
-    re.compile(rf"({_NAME_RUN})\s*\(\s*\d+(?:\.\d+)?\s*/\s*\d+"),
-    re.compile(rf"(?:^|[.!?;:]\s+|\b(?i:mostly|mainly|largely|partly|because of|from|after)\s+)({_NAME_RUN})"
-               r"(?=\s+(?i:scores?|grades?|class|did|helped|hurt|pulled|dragged|lifted|cost|knocked|brought)\b|\s*[.!?]?$)"),
-)
-_NAME_STARTERS = {"mostly", "mainly", "largely", "partly", "still", "slipped", "up", "down", "scores", "score", "a", "an",
-                  "the", "it", "its", "that", "this", "and", "but", "then", "because", "after", "from", "with", "most",
-                  "biggest", "only", "next", "both", "his", "her", "their", "grades", "grade"}
-_NOT_NAMES = set(WEEKDAY_NAMES) | {w + "s" for w in WEEKDAY_NAMES} | set(MONTHS)
+# ── Slots ─────────────────────────────────────────────────────────────────────
+# The model names items and classes only through slots, which code fills after the checks:
+#   {item:<cause id>}   the cause's title, plus "(earned/possible)" unless the model wrote a "(...)" after it
+#   {next:<what_if id>} the named next item's title, else "next <bucket>" ("next test", "next coursework item")
+#   {class:<fact id>}   the class name
+# Outside a slot, a sentence may not use a school-work noun at all: no name guessing.
+SLOT_RE = re.compile(r"\{(item|next|class):([^{}\s]+)\}")
+SLOT_KINDS = {"next": ("what_if",)}
+_WORK_NOUN_RE = re.compile(
+    r"\b(?:tests?|exams?|quiz(?:zes)?|labs?|projects?|packets?|assignments?|homework|warm[- ]?ups?|essays?|"
+    r"reports?|summatives?|formatives?|assessments?|coursework|classwork|worksheets?|finals?|midterms?|papers?|"
+    r"presentations?|notebooks?|practicals?|retakes?|sketch(?:es)?|drawings?|portfolios?|journals?|posters?|"
+    r"units?|chapters?|ch\.)(?![\w])", re.I)
+# Subjects: a class is named through {class:<id>}. A subject word outside a slot passes only when it is
+# part of the cited class's own name ("Math: B, 2.1 points from an A." for Math).
+_SUBJECT_RE = re.compile(
+    r"\b(?:math(?:s|ematics)?|algebra|geometry|geo|calculus|calc|statistics|stats|physics|chemistry|chem|biology|bio|"
+    r"science|history|english|spanish|french|german|latin|chinese|art|ceramics|music|band|choir|orchestra|drama|"
+    r"theater|health|economics|government|civics|engineering|marketing|business|computer|coding|psychology|"
+    r"geography)\b", re.I)
+# Phrases that may use a school-work noun outside a slot. Kept empty on purpose: "the next test" goes
+# through {next:<id>}. Add only with a test.
+NOUN_WHITELIST = ()
 
 
-def _named_items(text):
-    """Item and class names a sentence uses, however written: "the X", "X (a/b)", "Mostly the X",
-    "Mostly X", "Ceramics scores ...". Letters, weekdays and months aren't names."""
-    out = []
-    for pattern in _NAMED_RES:
-        for match in pattern.finditer(text):
-            words = match.group(1).rstrip(".,;:!?").split()
-            while words and words[0].lower().rstrip(".,") in _NAME_STARTERS:
-                words = words[1:]
-            if not words:
-                continue
-            first = words[0].lower().rstrip(".,'’s")
-            if re.fullmatch(r"[A-F](?:['’]s)?[+-]?", words[0]) or first[:3] in _NOT_NAMES or first in _NOT_NAMES \
-                    or words[0][0].isdigit():
-                continue
-            out.append(" ".join(words))
-    return list(dict.fromkeys(out))
+def _short_title(title):
+    return re.sub(r"\s*\([^)]*\)\s*$", "", str(title)).strip() or str(title)
 
 
-def _name_key(text):
-    return " " + re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip() + " "
+def _bucket_noun(bucket):
+    """ "Assessments" -> "assessment"; a mass noun like "Coursework" -> "coursework item"."""
+    bucket = str(bucket or "test").strip().lower()
+    return bucket[:-1] if bucket.endswith("s") and not bucket.endswith("ss") else f"{bucket} item"
 
 
-def _unbacked_name(text, cited):
-    """The first named item or class no cited fact carries, or None. Names only, never numbers or dates.
-
-    Matched like _concrete_headline: a cited cause title, next_title, bucket or class name, with or
-    without its trailing parenthetical; a shortened name ("the Packet") counts when a title holds it."""
-    allowed = set()
-    for fact in cited:
-        causes = fact.get("causes") if fact.get("kind") == "grade_move" else []
-        for item in [fact] + list(causes or []):
-            for key in ("title", "next_title", "class", "bucket", "category"):
-                if item.get(key):
-                    allowed.add(str(item[key]))
-                    allowed.add(re.sub(r"\s*\([^)]*\)\s*$", "", str(item[key])))
-    keys = {_name_key(a) for a in allowed if a.strip()}
-    for name in _named_items(text):
-        said = _name_key(name)
-        short = _name_key(re.sub(r"\s*\([^)]*\)\s*$", "", name))
-        if not any(said in k or short in k or k in said for k in keys):
-            return name
+def slot_reason(text, cites, index):
+    """None if every slot names one of the sentence's cited facts, of the right kind, else why not."""
+    for kind, fid in SLOT_RE.findall(text):
+        if fid not in (cites or []):
+            return f"slot {{{kind}:{fid}}} names a fact the sentence doesn't cite"
+        fact = index.get(fid) or {}
+        if kind == "item" and not fact.get("title"):
+            return f"item slot {fid} has no title"
+        if kind == "class" and not fact.get("class"):
+            return f"class slot {fid} has no class"
+        if kind in SLOT_KINDS and fact.get("kind") not in SLOT_KINDS[kind]:
+            return f"{kind} slot {fid} isn't a {' or '.join(SLOT_KINDS[kind])} fact"
+    if re.search(r"[{}]", SLOT_RE.sub(" ", text)):
+        return "malformed slot"
     return None
+
+
+def work_noun_outside_slot(text, cited=()):
+    """The first school-work noun or other class's subject outside a slot, quotes ignored, or None."""
+    bare = SLOT_RE.sub(" ", text)
+    bare = re.sub(r"[\"“”‘’'`]", "", bare)
+    for phrase in NOUN_WHITELIST:
+        bare = re.sub(re.escape(phrase), " ", bare, flags=re.I)
+    hit = _WORK_NOUN_RE.search(bare)
+    if hit:
+        return hit.group(0)
+    own = " ".join(str(f.get("class") or "") for f in cited).lower()
+    for match in _SUBJECT_RE.finditer(bare):
+        if not re.search(rf"\b{re.escape(match.group(0).lower())}\b", own):
+            return match.group(0)
+    return None
+
+
+def fill_slots(text, index):
+    """The sentence with each slot replaced by the real name from its fact."""
+    def fill(match):
+        kind, fid = match.group(1), match.group(2)
+        fact = index.get(fid) or {}
+        if kind == "class":
+            return str(fact.get("class") or "")
+        if kind == "next":
+            return str(fact["next_title"]) if fact.get("next_title") else f"next {_bucket_noun(fact.get('bucket'))}"
+        title = str(fact.get("title") or "")
+        rest = text[match.end():]
+        has_score = isinstance(fact.get("earned"), (int, float)) and isinstance(fact.get("possible"), (int, float))
+        if has_score and not re.match(r"\s*\(", rest):
+            return f"{_short_title(title)} ({fact['earned']:g}/{fact['possible']:g})"
+        return title if not has_score else _short_title(title)
+    return SLOT_RE.sub(fill, text)
 
 
 def _class_moves(index, cited):
@@ -1048,7 +1107,10 @@ def write_class(model, facts, name, votes=VOTES):
     kept, dropped = [], []
     for sentence in drafted:
         reason = check_sentence(sentence["text"], sentence["cites"], index, name)
-        (dropped.append({**sentence, "reason": reason}) if reason else kept.append(sentence))
+        if reason:
+            dropped.append({**sentence, "reason": reason})
+        else:
+            kept.append({**sentence, "slots": sentence["text"], "text": fix_articles(fill_slots(sentence["text"], index))})
     voted = vote(model, kept, class_facts, votes)
     dropped += [{**s, "reason": "vote"} for s in kept if s not in voted]
     if eval_story([dict(s) for s in voted], index):
@@ -1056,6 +1118,7 @@ def write_class(model, facts, name, votes=VOTES):
     return {
         "class": name,
         "story": " ".join(s["text"] for s in voted),
+        "slotted": " ".join(s.get("slots", s["text"]) for s in voted),
         "cites": [c for s in voted for c in s["cites"]],
         "dropped": [d["reason"] for d in dropped],
     }
@@ -1066,7 +1129,8 @@ def write_headline(model, facts, stories):
     if not stories:
         return None
     index = fact_index(facts)
-    user = json.dumps([{"class": s["class"], "story": s["story"], "cites": s["cites"]} for s in stories], indent=1)
+    user = json.dumps([{"class": s["class"], "story": s.get("slotted", s["story"]), "cites": s["cites"]} for s in stories],
+                      indent=1)
     parsed = _json(model.complete(HEADLINE_SYSTEM, user)) or {}
     text = fix_articles((parsed.get("text") or "").strip()) if isinstance(parsed.get("text"), str) else ""
     cites = [c for c in parsed.get("cites") or [] if isinstance(c, str)]
@@ -1074,6 +1138,7 @@ def write_headline(model, facts, stories):
     # A headline cites a fact from the stories and says something concrete, or there is none.
     if not text or not cites or not set(cites) <= used or check_sentence(text, cites, index):
         return None
+    text = fix_articles(fill_slots(text, index))
     if _story_basics([{"text": text, "cites": cites}], index) or not _concrete_headline(text, cites, index):
         return None
     return {"text": text, "cites": cites}
