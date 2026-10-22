@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Template only. Fill __PYTHON__, __REPO__ and __HOME__, then load it after the CTO's go. -->
+<!-- Template only. Fill __REPO__ and __HOME__, then load it after the CTO's go.
+     The interpreter is pinned to the SSD venv's full path, never python3 or a PATH lookup.
+     launchd passes each <string> as one argument, so the space in "David C SSD" needs no quoting. -->
 <plist version="1.0">
 <dict>
     <key>Label</key>
@@ -9,8 +11,9 @@
     <array>
         <string>/usr/sbin/taskpolicy</string>
         <string>-b</string>
-        <string>__PYTHON__</string>
-        <string>__REPO__/insights_runner.py</string>
+        <string>/bin/sh</string>
+        <string>__REPO__/deploy/grade-insights-tick.sh</string>
+        <string>/Volumes/David C SSD/grade-insights/venv/bin/python</string>
     </array>
     <key>WorkingDirectory</key>
     <string>__REPO__</string>

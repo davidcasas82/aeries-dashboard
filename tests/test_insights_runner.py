@@ -1,5 +1,7 @@
 import json
+import os
 import re
+import subprocess
 import sys
 import tempfile
 import types
@@ -620,6 +622,81 @@ class TemplateTests(unittest.TestCase):
             (plist["Label"], plist["StartInterval"], plist["RunAtLoad"], plist["ProcessType"], plist["ProgramArguments"][:2]),
             ("com.davidcasas.grade-insights", 300, False, "Background", ["/usr/sbin/taskpolicy", "-b"]),
         )
+
+    def test_plist_pins_the_ssd_venv_python(self):
+        import plistlib
+
+        path = REPO / "deploy" / "com.davidcasas.grade-insights.plist.template"
+        args = plistlib.loads(path.read_bytes())["ProgramArguments"]
+        self.assertEqual(args, ["/usr/sbin/taskpolicy", "-b", "/bin/sh", "__REPO__/deploy/grade-insights-tick.sh",
+                                str(runner.venv_python(runner.DEFAULT_SSD))])
+        self.assertEqual(args[-1], "/Volumes/David C SSD/grade-insights/venv/bin/python")
+        assert_no_loose_python(self, path.read_text())
+
+    def test_tick_script_pins_the_same_python(self):
+        text = TICK.read_text()
+        self.assertEqual(text.count(f"PINNED='{runner.venv_python(runner.DEFAULT_SSD)}'"), 1)
+        assert_no_loose_python(self, text)
+        self.assertTrue(os.access(TICK, os.X_OK))
+
+
+REPO = Path(__file__).resolve().parents[1]
+TICK = REPO / "deploy" / "grade-insights-tick.sh"
+PINNED = "/Volumes/David C SSD/grade-insights/venv/bin/python"
+
+
+def assert_no_loose_python(case, text):
+    """No bare python3, no env lookup: once the pinned SSD venv path is taken out, no interpreter is left."""
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith(("#", "<!--", "The ", "launchd ")))
+    case.assertNotIn("/usr/bin/env", code)
+    case.assertNotIn("__PYTHON__", code)
+    case.assertRegex(code, re.escape(PINNED))
+    loose = re.findall(r"(?<![\w.])(?:\S*/)?python(?:3(?:\.\d+)?)?(?![\w.])", code.replace(PINNED, ""))
+    case.assertEqual(loose, [])
+
+
+class TickScriptTests(unittest.TestCase):
+    """deploy/grade-insights-tick.sh, run against a copy pinned to a fake SSD with a space in its name.
+
+    The real runner never starts: the fake interpreter only prints the arguments it got."""
+
+    def setUp(self):
+        import shutil
+        import tempfile
+
+        self.tmp = Path(tempfile.mkdtemp(prefix="tick test "))
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.fake = self.tmp / "Fake C SSD" / "venv" / "bin" / "python"
+        (self.tmp / "repo" / "deploy").mkdir(parents=True)
+        self.script = self.tmp / "repo" / "deploy" / "grade-insights-tick.sh"
+        self.script.write_text(TICK.read_text().replace(PINNED, str(self.fake)))
+        self.home = self.tmp / "state dir"
+
+    def tick(self, *args):
+        env = {"HOME": str(self.tmp), "GRADE_INSIGHTS_HOME": str(self.home)}
+        return subprocess.run(["/bin/sh", str(self.script), *args], capture_output=True, text=True, env=env, timeout=30)
+
+    def test_no_ssd_skips_with_one_line_a_day(self):
+        first = self.tick(str(self.fake))
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertRegex(first.stdout, r"^grade-insights: \d{4}-\d{2}-\d{2} skipped, the SSD is not mounted\n$")
+        again = self.tick(str(self.fake))
+        self.assertEqual((again.returncode, again.stdout), (0, ""))
+        self.assertFalse((self.home / "state.json").exists())
+
+    def test_mounted_ssd_execs_the_pinned_python_on_the_runner(self):
+        self.fake.parent.mkdir(parents=True)
+        self.fake.write_text('#!/bin/sh\nprintf "%s|" "$0" "$@"\n')
+        self.fake.chmod(0o755)
+        out = self.tick(str(self.fake))
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(out.stdout, f"{self.fake}|{(self.tmp / 'repo').resolve()}/insights_runner.py|")
+        self.assertEqual(self.tick().stdout, out.stdout)  # no argument: the pinned path too
+
+    def test_any_other_interpreter_is_refused(self):
+        for other in ("python3", "/usr/bin/python3", "/usr/bin/env python3", str(self.fake) + " "):
+            out = self.tick(other)
+            self.assertEqual((out.returncode, out.stdout), (64, ""), other)
 
 
 if __name__ == "__main__":
