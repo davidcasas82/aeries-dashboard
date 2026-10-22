@@ -8,8 +8,8 @@ Each class runs as a pipeline:
   1. No filler: a class with no grade move, no reachable what-if and no pattern gets no story
      and no model call.
   2. The model drafts sentences, and each sentence cites fact ids.
-  3. check_sentence (code) drops any sentence whose numbers, letters, weekdays or wording
-     aren't backed by the facts it cites.
+  3. check_sentence (code) drops any sentence whose numbers, letters, dates, weekdays or wording
+     aren't backed by the facts it cites. Spelled-out numbers are read as numbers first.
   4. A vote pass asks the model, several times, whether each surviving sentence is backed;
      a sentence needs a majority.
   5. eval_story (code) rejects the story unless it cites a grade_move, what_if or pattern
@@ -20,7 +20,7 @@ import json
 import math
 import os
 import re
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Protocol
 
@@ -31,18 +31,31 @@ INSIGHT_KINDS = ("grade_move", "what_if", "posting_day")
 ORDER = {"next_letter": 0, "scale_break": 0, "grade_move": 1, "what_if": 2, "posting_day": 3}
 VOTES = 3
 # A move's causes may be stated only when they explain it: same sign, within 20% of delta.
+# The engine's coverage field (explained / delta) carries both: 0.8 <= coverage <= 1.2.
 CAUSE_TOLERANCE = 0.20
 _CAUSE_CLAIM_RE = re.compile(
-    r"\b(mainly|mostly|largely|because|due to|thanks to|driven by|pulled|dragged|cost|after an? \d|from an? \d)",
+    r"\b((?:mainly|mostly|largely|primarily|chiefly)\s+(?:\w+\s+)?(?:from|because|due|thanks|owing|driven|"
+    r"caused|after|by)|because|due to|owing to|thanks to|driven by|caused by|"
+    r"result of|as a result|on account of|pulled|dragged|hurt|lifted|boosted|cost|came from|comes from|"
+    r"after an? \d|from an? \d)",
     re.I,
 )
 PUBLISH_FLAG = "GRADE_INSIGHTS_PUBLISH"
 
 WEEKDAY_NAMES = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 _WEEKDAY_RE = re.compile(r"\b(mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?s?\b", re.I)
-_DATE_RE = re.compile(
-    r"\b\d{1,2}/\d{1,2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.? \d{1,2}\b"
-    r"|\b(today|tomorrow|tonight|yesterday)\b",
+MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+SHORT_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_MONTH_DATE_RE = re.compile(
+    r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.? (\d{1,2})(?:st|nd|rd|th)?\b", re.I
+)
+# N/M is a date only when it reads as month/day and isn't a cited score (31/50 is a score).
+_SLASH_RE = re.compile(r"(?<![\w/.])(\d+(?:\.\d+)?) ?/ ?(\d+(?:\.\d+)?)(?![\w/])")
+# Relative days never appear: the write-up is read on a later day than it was written.
+_RELATIVE_RE = re.compile(
+    r"\b(today|tomorrow|tonight|yesterday|(?:this|next|last) (?:week(?:end)?|month)|"
+    r"(?:next|this|last|coming|upcoming) (?:mon|tues|wednes|thurs|fri|satur|sun)day|"
+    r"in (?:\d+|a few|two|three|four|five|six) days)\b",
     re.I,
 )
 # Restating the to-do list is a FAIL: that list is code, not story.
@@ -52,8 +65,40 @@ _RESTATE_RE = re.compile(
     re.I,
 )
 _ZERO_GRADE_RE = re.compile(r"(?<![\d.])0(?:\.0+)?\s?%")
-_NUMBER_RE = re.compile(r"(?<![\w.])\d+(?:\.\d+)?")
+# Digits after a bare period count too ("Ch.9"); a decimal's tail is part of its number.
+_NUMBER_RE = re.compile(r"(?<!\w)(?<!\d\.)\d+(?:\.\d+)?")
 _LETTER_RE = re.compile(r"(?<![\w'’])([A-DF])(?![\w'’+-])")
+# The scale is whole letters only, so any plus or minus letter is wrong on its face.
+_PLUS_MINUS_RE = re.compile(r"(?<![\w'’])([A-DF])(?:[+−–]|-(?![A-Za-z0-9])| ?-?(?:plus|minus)\b)", re.I)
+
+_ONES = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen "
+         "sixteen seventeen eighteen nineteen").split()
+_TENS = "twenty thirty forty fifty sixty seventy eighty ninety".split()
+_WORD_VALUE = {**{w: i for i, w in enumerate(_ONES)}, **{w: 20 + 10 * i for i, w in enumerate(_TENS)}}
+_W = r"(?:%s)" % "|".join(sorted(_WORD_VALUE, key=len, reverse=True))
+_SPELLED_RE = re.compile(
+    rf"\b(?:(?:a|one) hundred|{_W}(?:[- ]{_W})?)(?: point(?: {_W})+)?\b(?P<unit>\s*(?:-?points?|pts|percent|%|"
+    rf"percentage points?|letters?|grades?))?",
+    re.I,
+)
+# Which fact fields a number may come from, by what the words around it say it is.
+_MOVE_BEFORE_RE = re.compile(
+    r"\b(?:up|down|by|rose|fell|dropped|dipped|slipped|slid|climbed|jumped|gained|lost|cost|costs|costing|"
+    r"moved|took|knocked)\s+(?:about |nearly |almost |roughly |just |over |under )?$",
+    re.I,
+)
+_WEIGHT_AFTER_RE = re.compile(r"^\s*(?:%|percent)\s+of\s+(?:the |its |their )?(?:grade|class|total|mark)\b", re.I)
+_WEIGHT_BEFORE_RE = re.compile(r"\b(?:worth|weighted|weight(?:ed)? (?:at|of)|weighs|counts?(?: for)?)\s+$", re.I)
+_DISTANCE_AFTER_RE = re.compile(
+    r"^\s*(?:%|percent|percentage points?|points?|pts\.?)?\s*(?:from|away|short|shy|below|under|to go|off)\b", re.I
+)
+ROLE_FIELDS = {
+    "move": ("delta", "explained", "points", "share"),
+    "weight": ("bucket_weight_pct",),
+    "distance": ("gap",),
+}
+# Ratios and weights are never a general number: a weight needs weight words around it.
+_NOT_GENERAL = ("bucket_weight_pct", "coverage")
 
 DRAFT_SYSTEM = """You write one short class story for a parent's grade dashboard.
 You get FACTS as JSON. Every fact has an id. Use only those facts.
@@ -66,15 +111,20 @@ Write 1 to 4 sentences, in this order, skipping any part with no fact:
 
 Rules:
 - Every sentence cites the ids it uses. A cause cites its own cause id.
+- Any "because", "mainly", "due to" or "driven by" wording cites the grade_move or cause it is about.
+- Name causes in the order they are listed, largest share first. "Mainly" is only for the first cause.
 - If a grade_move has causes_withheld, state the move (from, to, delta) but give no cause for it.
-- Use only numbers that appear in the cited facts. Round to one decimal at most.
-- Don't mention missing, late, past-due, turned-in or awaiting work, or anything due. The dashboard lists that separately.
-- No dates or weekdays, except the weekday in a cited posting_day fact. Call the next item "the next test" or "the next quiz", not by date.
+- Use only numbers that appear in the cited facts, written as digits. Round to one decimal at most.
+- Letters are whole letters only (A, B, C, D, F). Never write a plus or minus grade.
+- Don't mention missing, late, past-due, turned-in or awaiting work. The dashboard lists that separately.
+- Never write a relative day: no "today", "tomorrow", "this Thursday" or "next Friday".
+- If a what_if fact has next_title and next_due_label, name that item with its date: "the Ch. 5 Test, due Oct 30". Otherwise say "the next test" or "the next quiz". No other dates.
+- A weekday appears only in a posting-day pattern ("usually posts Fridays"), citing that posting_day fact.
 - Never call a 0% a grade.
 - If nothing here is worth saying, return {"sentences": []}.
 
-MADE-UP EXAMPLE, to show the shape only. These are not this student's facts; never copy its numbers or class:
-"Math: B, 2.1 pts from an A. Down mainly from a 62% on the Ch.4 quiz (tests are 60% of the grade). An 88% on next Friday's test gets the A back. Third straight week of slipping, all from quizzes."
+MADE-UP EXAMPLE, to show the shape only. These are not this student's facts; never copy its numbers, titles, dates or class:
+"Math: B, 2.1 pts from an A. Down mainly from a 62% on the Ch.4 Quiz (tests are 60% of the grade). An 88% on the Ch. 5 Test, due Oct 30, gets the A back. Scores usually post Fridays."
 
 Reply with JSON only: {"sentences": [{"text": "...", "cites": ["fact id", ...]}]}"""
 
@@ -85,7 +135,7 @@ Reply with JSON only: {"backed": [true or false, one per sentence, in order]}"""
 HEADLINE_SYSTEM = """You write the one-line headline of a parent's grade briefing from the class STORIES (JSON).
 Pick the single most useful insight. One sentence, under 120 characters.
 Use only numbers, letters and classes in the stories, and cite the fact ids of the story you use.
-Don't mention missing, late, past-due, turned-in or awaiting work, or anything due. No dates or weekdays.
+Don't mention missing, late, past-due, turned-in or awaiting work. No dates, weekdays or relative days ("tomorrow", "next Friday").
 Reply with JSON only: {"text": "...", "cites": ["fact id", ...]}"""
 
 
@@ -129,23 +179,104 @@ def facts_for(facts, name):
 
 
 def cause_allowed(move):
-    """True when the move's causes explain it: explained has delta's sign and is within 20% of it.
+    """True when the move's causes explain it: the engine's coverage (explained / delta) is within 20% of 1.
 
-    Missed causes leave explained short or even the wrong sign, so then the writer may state
-    the move but not a cause.
+    A coverage in [0.8, 1.2] means explained has delta's sign and is within 20% of it. Missed causes
+    leave coverage short, negative or None, so then the writer may state the move but not a cause.
+    A move whose prior score map was trimmed (coverage_trimmed) never allows a cause.
     """
-    explained, delta = move.get("explained"), move.get("delta")
-    if explained is None or not delta or explained * delta <= 0:
+    if move.get("coverage_trimmed"):
+        # The prior score map was trimmed to fit, so the causes can't be known.
         return False
-    return abs(explained - delta) <= CAUSE_TOLERANCE * abs(delta)
+    coverage = move.get("coverage")
+    if isinstance(coverage, bool) or not isinstance(coverage, (int, float)):
+        return False
+    return 1 - CAUSE_TOLERANCE - 1e-9 <= coverage <= 1 + CAUSE_TOLERANCE + 1e-9
+
+
+def ranked_causes(move):
+    """A move's causes, largest share of the move first (points when there's no share)."""
+    def size(cause):
+        value = cause.get("share") if cause.get("share") is not None else cause.get("points")
+        return -abs(value or 0.0)
+
+    return sorted(move.get("causes") or [], key=lambda c: (size(c), c.get("id", "")))
 
 
 def model_facts(class_facts):
     """What the model sees: a move whose causes don't explain it is sent without them."""
     out = []
     for fact in class_facts:
-        if fact.get("kind") == "grade_move" and fact.get("causes") and not cause_allowed(fact):
-            fact = {**fact, "causes": [], "causes_withheld": "they don't explain the move"}
+        if fact.get("kind") == "grade_move" and fact.get("coverage_trimmed"):
+            fact = {**fact, "causes": [], "causes_withheld": "the earlier scores were trimmed, so the cause is unknown"}
+        elif fact.get("kind") == "grade_move" and fact.get("causes"):
+            if cause_allowed(fact):
+                fact = {**fact, "causes": ranked_causes(fact)}
+            else:
+                fact = {**fact, "causes": [], "causes_withheld": "they don't explain the move"}
+        out.append(fact)
+    return out
+
+
+def _parse_due(value):
+    raw = str(value or "").strip()
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"):
+        try:
+            return datetime.strptime(raw[:10] if fmt == "%Y-%m-%d" else raw, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def due_label(iso):
+    """Oct 30 from 2026-10-30."""
+    day = date.fromisoformat(iso)
+    return f"{SHORT_MONTHS[day.month - 1]} {day.day}"
+
+
+def upcoming_items(classes, as_of):
+    """Unscored work due on or after as_of, by class and grade bucket, earliest first.
+
+    classes are the per-class inputs the scrape builds for the facts engine (name, counted_insight,
+    assignments). An item lands in a bucket the same way the engine files a scored one.
+    """
+    today = date.fromisoformat(as_of) if isinstance(as_of, str) else as_of
+    items = []
+    for cls in classes or []:
+        counted = cls.get("counted_insight") or {}
+        categories = [c for c in counted.get("categories") or [] if c.get("name")]
+        summative = (counted.get("layout") or "percent_of_grade") == "summative_formative"
+        for a in cls.get("assignments") or []:
+            if a.get("points_earned") is not None or not a.get("points_possible"):
+                continue
+            due = _parse_due(a.get("due_date") or a.get("due"))
+            title = (a.get("description") or a.get("title") or "").strip()
+            cat = insights._category_bucket(categories, a.get("category"))
+            if due is None or due < today or not title or cat is None:
+                continue
+            bucket = cat.get("kind") if summative else cat["name"]
+            if not bucket:
+                continue
+            items.append({"class": cls.get("name"), "bucket": bucket, "title": title,
+                          "due": due.isoformat(), "points": float(a["points_possible"])})
+    items.sort(key=lambda i: (i["due"], i["title"]))
+    return items
+
+
+def attach_next_items(facts, upcoming):
+    """Copy of facts where each what-if names the real next item it describes, if there is one.
+
+    A what-if is about the next item of one size in one bucket, so it takes the earliest upcoming
+    item with that class, bucket and points possible. Any other what-if stays "the next test".
+    """
+    out = []
+    for fact in facts or []:
+        if fact.get("kind") == "what_if":
+            match = next((i for i in upcoming or [] if i["class"] == fact.get("class")
+                          and i["bucket"] == fact.get("bucket") and i["points"] == fact.get("points")), None)
+            if match:
+                fact = {**fact, "next_title": match["title"], "next_due": match["due"],
+                        "next_due_label": due_label(match["due"])}
         out.append(fact)
     return out
 
@@ -166,17 +297,41 @@ def worth_saying(class_facts):
 # ── Code checks ──────────────────────────────────────────────────────────────
 
 
-def _numbers_of(fact):
+def _number_role(text, start, end):
+    """What a number in a sentence is: a move, a weight, a distance to a letter, or a general value."""
+    before, after = text[max(0, start - 30):start], text[end:end + 40]
+    if _MOVE_BEFORE_RE.search(before):
+        return "move"
+    if _WEIGHT_AFTER_RE.match(after) or _WEIGHT_BEFORE_RE.search(before):
+        return "weight"
+    if _DISTANCE_AFTER_RE.match(after):
+        return "distance"
+    return "general"
+
+
+def _add(values, value):
+    values.add(float(value))
+    values.add(abs(float(value)))
+
+
+def _numbers_of(fact, role="general"):
+    """The numbers a fact backs for one kind of claim. A move's size never backs a weight, and so on."""
     values = set()
+    if role in ROLE_FIELDS:
+        for key in ROLE_FIELDS[role]:
+            value = fact.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                _add(values, value)
+        return values
     for key, value in fact.items():
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
+        if key in _NOT_GENERAL or isinstance(value, bool) or not isinstance(value, (int, float)):
             continue
-        values.add(float(value))
-        values.add(abs(float(value)))
-        if key == "share":
-            values.add(round(value * 100, 1))
-    if fact.get("possible"):
-        values.add(round(fact["earned"] / fact["possible"] * 100, 1))
+        _add(values, value)
+    if fact.get("kind") == "posting_day" and isinstance(fact.get("share"), (int, float)):
+        values.add(round(fact["share"] * 100, 1))
+    for earned, possible in (("earned", "possible"), ("prior_earned", "prior_possible")):
+        if fact.get(possible):
+            values.add(round(fact[earned] / fact[possible] * 100, 1))
     for key in ("from_pct", "to_pct", "pct"):
         if isinstance(fact.get(key), (int, float)):
             values.add(round(fact[key], 1))
@@ -198,16 +353,108 @@ def _number_ok(text_number, allowed):
     return any(abs(n - v) < 0.051 or (n == int(n) and round(v) == n) for v in allowed)
 
 
+def _words_value(phrase):
+    """95 from "ninety-five", 2.1 from "two point one"."""
+    whole, _, tail = phrase.lower().partition(" point ")
+    if "hundred" in whole:
+        total = 100
+    else:
+        total = sum(_WORD_VALUE[w] for w in re.split(r"[- ]", whole) if w)
+    if tail:
+        digits = "".join(str(_WORD_VALUE[w]) for w in tail.split() if _WORD_VALUE.get(w, 10) < 10)
+        return f"{total}.{digits}" if digits else str(total)
+    return str(total)
+
+
+def spelled_to_digits(text):
+    """Spelled-out numbers as digits, so the number check sees them. A bare "one" is left alone
+    ("no one", "one of"); "one point" or "one percent" is a number."""
+    def swap(match):
+        unit = match.group("unit") or ""
+        phrase = match.group(0)[: len(match.group(0)) - len(unit)]
+        if phrase.lower() == "one" and not unit:
+            return match.group(0)
+        return _words_value(phrase) + unit
+
+    return _SPELLED_RE.sub(swap, text)
+
+
 def _strip_names(text, cited):
     """Remove class names, item titles and bucket names, whose digits aren't claims."""
     names = set()
     for fact in cited:
-        for key in ("class", "title", "category", "bucket"):
+        for key in ("class", "title", "category", "bucket", "next_title"):
             if fact.get(key):
                 names.add(str(fact[key]))
     for name in sorted(names, key=len, reverse=True):
         text = re.sub(re.escape(name), " ", text, flags=re.I)
     return text
+
+
+def _score_pairs(cited):
+    pairs = set()
+    for fact in cited:
+        for earned, possible in (("earned", "possible"), ("prior_earned", "prior_possible")):
+            if isinstance(fact.get(possible), (int, float)) and isinstance(fact.get(earned), (int, float)):
+                pairs.add((float(fact[earned]), float(fact[possible])))
+    return pairs
+
+
+def _dates_in(text, cited):
+    """[(start, end, (month, day) or None)] for each date-like span. None marks a score like 31/50."""
+    spans = []
+    for match in _MONTH_DATE_RE.finditer(text):
+        spans.append((match.start(), match.end(), (MONTHS.index(match.group(1).lower()[:3]) + 1, int(match.group(2)))))
+    scores = _score_pairs(cited)
+    for match in _SLASH_RE.finditer(text):
+        n, m = float(match.group(1)), float(match.group(2))
+        if (n, m) in scores:
+            spans.append((match.start(), match.end(), None))
+        elif n == int(n) and m == int(m) and 1 <= n <= 12 and 1 <= m <= 31:
+            spans.append((match.start(), match.end(), (int(n), int(m))))
+        else:
+            spans.append((match.start(), match.end(), "score"))
+    return sorted(spans)
+
+
+def _due_days(cited):
+    days = set()
+    for fact in cited:
+        if fact.get("next_due"):
+            day = date.fromisoformat(fact["next_due"])
+            days.add((day.month, day.day))
+    return days
+
+
+def _mask_allowed_dates(text, cited):
+    """(text with each backed due date blanked, the dates no cited item backs, the scores N/M).
+
+    A date is backed only when it is a cited what-if's next item due date. "due Oct 30" then is the
+    item's name, not a to-do entry, so its "due" goes too.
+    """
+    allowed = _due_days(cited)
+    unbacked, scores = [], []
+    out, last = [], 0
+    for start, end, value in _dates_in(text, cited):
+        if start < last:
+            continue
+        if value is None or value == "score":
+            scores.append((text[start:end], value))
+            out.append(text[last:start] + " ")
+        elif value in allowed:
+            head = text[last:start]
+            head = re.sub(r"\bdue,?\s*(?:on\s+)?$", "", head, flags=re.I)
+            out.append(head + " ")
+        else:
+            unbacked.append(text[start:end])
+            out.append(text[last:start] + " ")
+        last = end
+    out.append(text[last:])
+    return "".join(out), unbacked, scores
+
+
+def _cited_facts(cites, index):
+    return [index[c] for c in cites or [] if c in index]
 
 
 def check_sentence(text, cites, index, name=None):
@@ -225,26 +472,49 @@ def check_sentence(text, cites, index, name=None):
         if name is not None and fact.get("class") != name:
             return f"fact {fid} is another class"
         cited.append(fact)
-    if _RESTATE_RE.search(text):
-        return "restates the to-do list"
-    if _ZERO_GRADE_RE.search(text):
-        return "0% as a grade"
-    if _DATE_RE.search(text):
+    text = spelled_to_digits(text)
+    masked, unbacked_dates, scores = _mask_allowed_dates(text, cited)
+    if unbacked_dates:
         return "names a date"
+    if _RESTATE_RE.search(masked):
+        return "restates the to-do list"
+    if _ZERO_GRADE_RE.search(masked) or re.search(r"(?<![\d.])0(?:\.0+)? percent\b", masked, re.I):
+        return "0% as a grade"
+    relative = _RELATIVE_RE.search(masked)
+    if relative:
+        return f"names a relative day ({relative.group(0)})"
     pattern_days = {f.get("weekday", "").lower() for f in cited if f.get("kind") == "posting_day"}
-    for match in _WEEKDAY_RE.finditer(text):
+    for match in _WEEKDAY_RE.finditer(masked):
         day = next((d for d in WEEKDAY_NAMES if d.startswith(match.group(1).lower()[:3])), None)
         if day not in pattern_days:
             return f"names a weekday ({match.group(0)}) no pattern backs"
-    moves = [index.get(f["move"]) or {} if f.get("move") else f for f in cited if f.get("kind") == "grade_move"]
-    claims_cause = any(f.get("move") for f in cited) or (moves and _CAUSE_CLAIM_RE.search(text))
+    move_ids = [f["move"] if f.get("move") else f["id"] for f in cited if f.get("kind") == "grade_move"]
+    moves = [index.get(m) or {} for m in dict.fromkeys(move_ids)]
+    if _CAUSE_CLAIM_RE.search(masked) and not moves:
+        return "states a cause without citing a grade_move or cause"
+    claims_cause = any(f.get("move") for f in cited) or (moves and _CAUSE_CLAIM_RE.search(masked))
     if claims_cause and not all(cause_allowed(m) for m in moves):
         return "states a cause the move's causes don't explain"
-    bare = _strip_names(text, cited)
-    allowed = set().union(*(_numbers_of(f) for f in cited))
-    for number in _NUMBER_RE.findall(bare):
-        if not _number_ok(number, allowed):
-            return f"number {number} isn't in the cited facts"
+    for move in moves:
+        said = [f["id"] for f in cited if f.get("move") == move.get("id")]
+        if said and said != [c["id"] for c in ranked_causes(move)][: len(said)]:
+            return "names causes out of share order"
+    pairs = _score_pairs(cited)
+    for raw, kind in scores:
+        if kind == "score":
+            n, m = (float(x) for x in re.split(r" ?/ ?", raw))
+            if (n, m) not in pairs:
+                return f"score {raw} isn't in the cited facts"
+    plus_minus = _PLUS_MINUS_RE.search(masked)
+    if plus_minus:
+        return f"letter {plus_minus.group(0).strip()} isn't on the whole-letter scale"
+    bare = _strip_names(masked, cited)
+    for match in _NUMBER_RE.finditer(bare):
+        role = _number_role(bare, match.start(), match.end())
+        allowed = set().union(*(_numbers_of(f, role) for f in cited))
+        if not _number_ok(match.group(0), allowed):
+            suffix = f" as a {role}" if role in ("move", "weight") else ""
+            return f"number {match.group(0)} isn't in the cited facts{suffix}"
     letters = set().union(*(_letters_of(f) for f in cited))
     for match in _LETTER_RE.finditer(bare):
         before = bare[: match.start()].rstrip()
@@ -265,7 +535,8 @@ def eval_story(sentences, index):
         return "no story"
     kinds = []
     for sentence in sentences:
-        if _RESTATE_RE.search(sentence.get("text") or ""):
+        masked, _, _ = _mask_allowed_dates(sentence.get("text") or "", _cited_facts(sentence.get("cites"), index))
+        if _RESTATE_RE.search(masked):
             return "restates past-due or missing work"
         ranks = [ORDER.get((index.get(fid) or {}).get("kind"), 9) for fid in sentence.get("cites") or []]
         kinds.extend((index.get(fid) or {}).get("kind") for fid in sentence.get("cites") or [])
@@ -355,9 +626,12 @@ def write_headline(model, facts, stories):
     return {"text": text, "cites": cites}
 
 
-def write_up(model, insight_facts, log_items=None, votes=VOTES):
-    """The whole write-up for one student: {"as_of", "headline", "stories"}."""
-    facts = merged_facts(insight_facts, log_items)
+def write_up(model, insight_facts, log_items=None, votes=VOTES, upcoming=None):
+    """The whole write-up for one student: {"as_of", "headline", "stories"}.
+
+    upcoming (from upcoming_items) lets a what-if name the real next item and its due date.
+    """
+    facts = attach_next_items(merged_facts(insight_facts, log_items), upcoming)
     stories = [s for s in (write_class(model, facts, name, votes) for name in class_names(facts)) if s]
     return {
         "as_of": (insight_facts or {}).get("as_of"),
@@ -376,14 +650,33 @@ def apply_write_up(ai_summary, local):
     is replaced only when the write-up has one.
     """
     summary = dict(ai_summary or {})
-    stories = {s["class"]: s["story"] for s in (local or {}).get("stories") or []}
+    stories = (local or {}).get("stories") or []
     if (local or {}).get("headline"):
         summary["headline"] = local["headline"]["text"]
     classes = []
     for cls in summary.get("classes") or []:
-        classes.append({**cls, "story": stories.get(cls.get("class_name"), "")})
+        match = match_story(stories, cls.get("class_name"))
+        classes.append({**cls, "story": match["story"] if match else ""})
     summary["classes"] = classes
     return summary
+
+
+def normalize_name(text):
+    """index.html normalizeName: lowercase, letters and digits only."""
+    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
+
+
+def match_story(stories, class_name):
+    """index.html findAiClass: either name contains the other once normalized; the longest match wins."""
+    want = normalize_name(class_name)
+    best, best_len = None, 0
+    for story in stories or []:
+        have = normalize_name(story.get("class"))
+        if not have:
+            continue
+        if (want in have or have in want) and len(have) > best_len:
+            best, best_len = story, len(have)
+    return best
 
 
 def publish_enabled(env=None):
@@ -407,7 +700,8 @@ def publish_write_up(local, put, env=None):
 class WriterWork:
     """NightWork for the runner: one step per student write-up, then a publish step.
 
-    load() returns [{"insight_facts": ..., "log_items": [...]}] in a stable order. Results are
+    load() returns [{"insight_facts": ..., "log_items": [...], "upcoming": [...]}] in a stable order;
+    "upcoming" (from upcoming_items) is optional. Results are
     saved under store/<night>/ by step, so a repeated step does nothing.
     """
 
@@ -433,7 +727,8 @@ class WriterWork:
             result = {"published": published}
         else:
             student = self.load()[int(step.split(":")[1])]
-            result = write_up(self.model, student.get("insight_facts"), student.get("log_items"), self.votes)
+            result = write_up(self.model, student.get("insight_facts"), student.get("log_items"), self.votes,
+                              student.get("upcoming"))
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(result, indent=1))
         tmp.replace(path)
