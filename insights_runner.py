@@ -9,6 +9,8 @@ because the Worker replaces the whole doc on a PUT. No notes beat wrong numbers:
 entries for the changed students, the last published entry verbatim only for unchanged students, and a
 student missing from the grades for at most MAX_MISSED_SYNCS syncs. A changed student whose write-up
 comes out empty is left out, and their fingerprint doesn't move, so the next sync writes them again.
+When those two rules (and only they) empty a doc that wasn't empty, the runner sends {"students": {}}
+so the dashboard shows no notes rather than stale ones. A failed load or any error never clears.
 """
 
 import fcntl
@@ -307,10 +309,12 @@ class InsightsPublisher:
         self._base = base.rstrip("/")
         self._open = opener or _open_request
 
-    def put(self, write_ups):
-        """True after a 200. False, with nothing sent, when no write-up has a student key."""
+    def put(self, write_ups, clear=False):
+        """True after a 200. False, with nothing sent, when no write-up has a student key, unless clear is
+        True: then an empty doc, {"students": {}}, is sent to clear the stored notes. run_sync asks for that
+        only when its drop or age-out rule emptied a doc that wasn't empty."""
         doc = insights_doc(write_ups)
-        if not doc["students"]:
+        if not doc["students"] and not clear:
             return False
         body = insights_body(doc)
         request = urllib.request.Request(
@@ -801,12 +805,22 @@ def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, e
         row (counted in missed.json, reset when they come back); after that they are aged out of the doc.
     A sync with no changed student and nobody to age out is a skip (the missed counts are still saved).
 
+    Clearing: when the drop and age-out rules leave nobody and the last published doc had someone, the PUT
+    is {"students": {}} and the run ends "published". Only those two rules can clear. A failed load (a
+    scrape or GET error, or any exception) raises out of here before anything is sent or saved, so the
+    stored notes stay; main() logs the exception type only. A load that succeeds with zero students is not
+    a failure: every student in the last doc is then missing, carried for MAX_MISSED_SYNCS syncs, then aged out.
+
     Returns one of HANDLED: "published", "published_partial" when a changed student was left out or a
     missing student was carried, or "waiting_for_machine" when a render starts or memory runs low between
     students (the next start picks up from WriterWork's saved steps). Logs carry counts and outcomes only:
     no names, keys or scores.
     """
+    # A failed load raises here: nothing sent, no state saved, the current notes stay.
     students = load()
+    if not isinstance(students, list):
+        raise FamilyDataError("the grade load returned no student list")
+    # A successful load may hold zero students; then everyone in the last doc takes the missing path below.
     published_path = Path(prints_path).with_name(PUBLISHED_FILE)
     missed_path = Path(prints_path).with_name(MISSED_FILE)
     last_doc = read_published(published_path)
@@ -844,10 +858,17 @@ def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, e
             fresh.update(insights_doc([up])["students"])
         merged = dict(keep)
         merged.update({sn: fresh[sn] for sn in changed_sns if sn in fresh})
-        doc = insights_doc([{"sn": sn, **entry} for sn, entry in sorted(merged.items())])
-        sent = {"students": doc["students"],
+        # Who the drop rule (changed, no fresh output) and the age-out rule take out of the last doc.
+        removed = [sn for sn in last_doc if sn not in merged]
+        # Clear only when those rules emptied a doc that wasn't empty. A doc emptied any other way (the
+        # publish limits) sends nothing.
+        clear = not merged and bool(last_doc) and bool(removed)
+        doc = {"students": {}} if clear else insights_doc([{"sn": sn, **e} for sn, e in sorted(merged.items())])
+        sent = {"students": doc["students"], "cleared": clear,
                 "fresh": sorted(sn for sn in changed_sns if sn in fresh and sn in doc["students"])}
         write_private(run_dir / "merged.json", json.dumps(sent, ensure_ascii=False))
+        if clear:
+            return put([], clear=True)
         return put([{"sn": sn, **entry} for sn, entry in doc["students"].items()])
 
     work = work_class(lambda: changed, model, store, put=merged_put if put else None, env=env)
@@ -865,6 +886,10 @@ def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, e
         write_fingerprints(prints_path, prints)
         write_missed(missed_path, missed)
         dropped = len(changed) - len(sent["fresh"])
+        if sent.get("cleared"):
+            log(f"grade-insights: published an empty doc; {dropped} changed left out until the next sync, "
+                f"{len(aged)} missing aged out")
+            return "published"
         if not dropped and not carried_missing and not aged:
             log("grade-insights: published")
             return "published"
@@ -874,8 +899,10 @@ def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, e
     if put is None:
         log("grade-insights: publish is off, nothing sent")
         return "publish_off"
-    # Nobody to send: nothing was sent, the stored notes stay, and no state moves, so the next sync tries again.
-    log("grade-insights: nothing to send, the stored notes stay")
+    # Nobody to send and nothing to clear: nothing was sent, the stored notes stay, and no state moves, so
+    # the next sync tries again. "due to be removed" counts the last doc's students the rules would take out.
+    due = sum(1 for sn in last_doc if sn not in keep)
+    log(f"grade-insights: nothing to send, the stored notes stay; {due} due to be removed")
     return "nothing_to_send"
 
 
