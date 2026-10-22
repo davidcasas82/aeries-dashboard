@@ -596,13 +596,43 @@ class BakeoffFindingTests(unittest.TestCase):
             self.assertEqual(w._json(raw), json.loads(body), raw)
         self.assertEqual(w._sentences(f"```json\n{body}\n```"), [{"text": "x", "cites": ["a"]}])
         self.assertIsNone(w._json("```json\nnot json\n```"))
+        # "<think>" inside a JSON string is the answer, not a think block.
+        self.assertEqual(w._json('{"a":"<think>"}'), {"a": "<think>"})
+        self.assertEqual(w._json('```json\n{"a":"x <think> y"}\n```'), {"a": "x <think> y"})
+        self.assertIsNone(w._json("<think>x"))
 
-    def test_a_sentence_copied_from_the_example_is_dropped(self):
-        idx = w.fact_index(geometry_facts())
-        for text in ("The Glaze Test (11/20) did most of the damage.", "The Clay Sketch (19/20) helped.",
-                     "Ceramics slipped to a C.", "Scores usually post Tuesdays.",
-                     "A 74 or better on the next project gets it to a C."):
-            self.assertIn("copies", w.check_sentence(text, [GEO_NEXT, GEO_WHATIF], idx) or "", text)
+    def test_example_wording_on_real_facts_passes(self):
+        # Review repros: the example-copy check is gone, so real lines that match the example pass.
+        facts = [{"id": "move:art:2026-09-09", "kind": "grade_move", "class": "Art", "since": "2026-09-09",
+                  "from_pct": 71.1, "to_pct": 68.8, "delta": -2.3, "explained": -2.3, "coverage": 1.0,
+                  "coverage_trimmed": False, "causes": [
+                      {"id": "cause:art:2026-09-09:mural", "title": "Mural", "category": "Projects", "bucket": "Projects",
+                       "bucket_weight_pct": 50.0, "change": "new", "earned": 11.0, "possible": 20.0, "points": -2.3,
+                       "share": -2.3}]},
+                 {"id": "whatif:art:projects:20", "kind": "what_if", "class": "Art", "bucket": "Projects",
+                  "bucket_weight_pct": 50.0, "points": 20.0, "target": 70.0, "needed_pct": 73.4, "reachable": True},
+                 {"id": "pattern:posting_day:art", "kind": "posting_day", "class": "Art", "weekday": "Tuesday",
+                  "share": 0.8, "scores": 10, "window_days": 28}]
+        idx = w.fact_index(facts)
+        self.assertEqual(w.model_facts(facts)[0]["say_opening"], "Slipped to a D since Sep 9, down 2.3.")
+        self.assertIsNone(w.check_sentence("Slipped to a D since Sep 9, down 2.3.", ["move:art:2026-09-09"], idx, "Art"))
+        self.assertIsNone(w.check_sentence("Scores usually post Tuesdays.", ["pattern:posting_day:art"], idx, "Art"))
+        self.assertIsNone(w.check_sentence("A 74 or better on the next project gets it to a C.",
+                                           ["whatif:art:projects:20"], idx, "Art"))
+        draft = [{"text": "Slipped to a D since Sep 9, down 2.3.", "cites": ["move:art:2026-09-09"]},
+                 {"text": "Mostly the Mural (11/20).", "cites": ["cause:art:2026-09-09:mural"]},
+                 {"text": "Scores usually post Tuesdays.", "cites": ["pattern:posting_day:art"]},
+                 {"text": "A 74 or better on the next project gets it to a C.", "cites": ["whatif:art:projects:20"]}]
+        story = w.write_class(ScriptedModel({"Art": draft}), facts, "Art")
+        self.assertEqual(story["story"], " ".join(s["text"] for s in draft))
+        self.assertEqual(story["dropped"], [])
+        # A needed 73.0 is said "73 or better" (round up only), and that full story passes too.
+        exact = [dict(f, needed_pct=73.0) if f["kind"] == "what_if" else f for f in facts]
+        self.assertEqual(w.model_facts(exact)[1]["say_needed"], "73 or better")
+        draft73 = draft[:3] + [{"text": "A 73 or better on the next project gets it to a C.",
+                                "cites": ["whatif:art:projects:20"]}]
+        story = w.write_class(ScriptedModel({"Art": draft73}), exact, "Art")
+        self.assertEqual((story["story"], story["dropped"]), (" ".join(s["text"] for s in draft73), []))
 
     def test_example_numbers_and_dates_are_never_markers(self):
         # Review repro: a needed 73.2 says "74 or better", the same words as the example.
@@ -646,6 +676,16 @@ class BakeoffFindingTests(unittest.TestCase):
         onehalf = [dict(bio[0], pct=78.5, gap=1.5)]
         self.assertIsNone(w.check_sentence("Still a C, one and a half points from a B.", ["next:bio"],
                                            w.fact_index(onehalf)))
+        # Hyphenated spoken numbers are read the same way.
+        self.assertEqual(w.spelled_to_digits("one-and-a-half points, a half-point, twenty-one"),
+                         "1.5 points, 0.5 point, 21")
+        self.assertIn("isn't in the cited facts",
+                      w.check_sentence("Still a C, one-and-a-half points from a B.", ["next:bio"], idx) or "")
+        self.assertIsNone(w.check_sentence("Still a C, one-and-a-half points from a B.", ["next:bio"],
+                                           w.fact_index(onehalf)))
+        self.assertIn("isn't in the cited facts",
+                      w.check_sentence("Still a C, a half-point from a B.", ["next:bio"], idx) or "")
+        self.assertIsNone(w.check_sentence("Still a C, a half-point from a B.", ["next:bio"], w.fact_index(half)))
 
     def test_review_nits(self):
         geo = w.fact_index(geometry_facts())
