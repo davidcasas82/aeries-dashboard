@@ -664,7 +664,7 @@ class BakeoffFindingTests(unittest.TestCase):
                             ("Mostly the Final Exam.", ["cause:g:t"]),
                             ("Mostly Final Exam (20/40).", ["cause:g:t"]),
                             ("The Unit Test (20/40) did most of the damage.", ["cause:g:t"])):
-            self.assertIn("outside a slot", w.check_sentence(text, cites, idx, "Geo") or "", text)
+            self.assertRegex(w.check_sentence(text, cites, idx, "Geo") or "", r"outside a slot|another class", text)
         # Slots: the id must be cited, and an item slot needs a fact with a title.
         self.assertIn("doesn't cite", w.check_sentence("The {item:cause:g:t} did most of the damage.", ["move:g"], idx))
         self.assertEqual(w.check_sentence("Mostly the {item:move:g}.", ["move:g"], idx), "item slot move:g has no title")
@@ -1050,6 +1050,145 @@ class CtoRoundFourTests(unittest.TestCase):
         idx = w.fact_index(self.alg_facts())
         self.assertIn("has no title", w.check_sentence("An 85 or better on the {item:%s} gets it to a B." % self.ALG,
                                                        [self.ALG], idx))
+
+
+def geo_facts(title="Unit Test", bucket="Tests", cls="Geo"):
+    """GE's Geo repro: a D after a 2.5 drop, all on one cause; a what-if and a Thursday pattern."""
+    return [{"id": "next:geo", "kind": "next_letter", "class": cls, "pct": 69.0, "letter": "D", "next_letter": "C",
+             "threshold": 70.0, "gap": 1.4},
+            {"id": "move:geo", "kind": "grade_move", "class": cls, "since": "2026-10-14", "from_pct": 71.5,
+             "to_pct": 69.0, "delta": -2.5, "explained": -2.5, "coverage": 1.0, "coverage_trimmed": False,
+             "causes": [{"id": "cause:geo:t", "title": title, "bucket": bucket, "bucket_weight_pct": 50.0,
+                         "earned": 20.0, "possible": 40.0, "points": -2.5, "share": -2.5}]},
+            {"id": "whatif:geo", "kind": "what_if", "class": cls, "bucket": bucket, "bucket_weight_pct": 50.0,
+             "points": 40.0, "target": 70.0, "needed_pct": 73.2, "reachable": True},
+            {"id": "pattern:posting_day:geo", "kind": "posting_day", "class": cls, "weekday": "Thursday", "share": 0.8,
+             "scores": 10, "window_days": 28}]
+
+
+class SlotRoundThreeTests(unittest.TestCase):
+    """{bucket:} slots, class names from the student's own classes, neutral-token checks, id leaks, hygiene."""
+
+    def idx(self, **kw):
+        return w.fact_index(geo_facts(**kw))
+
+    def test_bucket_slot_is_cited_carries_a_bucket_and_is_cause_wording_like_any_other(self):
+        idx = self.idx(bucket="Homework")
+        line = "{bucket:cause:geo:t} scores did most of the damage."
+        self.assertIsNone(w.check_sentence(line, ["cause:geo:t"], idx, "Geo"))
+        self.assertEqual(w.fill_slots(line, idx), "Homework scores did most of the damage.")
+        self.assertIn("doesn't cite", w.check_sentence(line, ["move:geo"], idx, "Geo"))
+        self.assertEqual(w.check_sentence("Mostly {bucket:move:geo}.", ["move:geo"], idx, "Geo"),
+                         "bucket slot move:geo has no bucket")
+        # Cause wording on a what_if's bucket still needs a grade_move or cause.
+        self.assertEqual(w.check_sentence("{bucket:whatif:geo} did most of the damage.", ["whatif:geo"], idx, "Geo"),
+                         "states a cause without citing a grade_move or cause")
+        self.assertIsNone(w.check_sentence("A 74 or better on the next {bucket:whatif:geo} score gets it to a C.",
+                                           ["whatif:geo"], idx, "Geo"))
+        self.assertEqual(w.fill_slots("A 74 or better on the next {bucket:whatif:geo} score gets it to a C.", idx),
+                         "A 74 or better on the next homework score gets it to a C.")
+        # Share order: "mostly" on a bucket of a cause that isn't the top share is dropped.
+        facts = geo_facts(bucket="Homework")
+        facts[1]["causes"].append({"id": "cause:geo:q", "title": "Quiz 2", "bucket": "Quizzes", "bucket_weight_pct": 20.0,
+                                   "earned": 5.0, "possible": 10.0, "points": -0.5, "share": -0.4})
+        idx2 = w.fact_index(facts)
+        self.assertEqual(w.check_sentence("Mostly {bucket:cause:geo:q} scores.", ["cause:geo:q"], idx2, "Geo"),
+                         "names causes out of share order")
+        self.assertIn("outside a slot", w.check_sentence("Homework scores did most of the damage.", ["cause:geo:t"], idx, "Geo"))
+
+    def test_subject_check_uses_the_students_own_classes(self):
+        idx = self.idx()
+        classes = ["Geo", "Physics & Eng", "English 10"]
+        self.assertEqual(w.check_sentence("Physics scores usually post Thursdays.", ["pattern:posting_day:geo"], idx, "Geo",
+                                          classes), "names another class (Physics)")
+        self.assertEqual(w.check_sentence("English 10 scores usually post Thursdays.", ["pattern:posting_day:geo"], idx,
+                                          "Geo", classes), "names another class (English 10)")
+        for text, cites in (("Still a D, 1.4 points from a C, by the numbers in plain English.", ["next:geo"]),
+                            ("Scores usually post Thursdays, state of the art.", ["pattern:posting_day:geo"]),
+                            ("The grade health: still a D, 1.4 points from a C.", ["next:geo"]),
+                            ("Its posting history says Thursdays.", ["pattern:posting_day:geo"]),
+                            ("Still a D, 1.4 points from a C, in the low band.", ["next:geo"])):
+            self.assertIsNone(w.check_sentence(text, cites, idx, "Geo", classes + ["Art & Design", "Band"]), text)
+
+    def test_own_class_name_and_unambiguous_short_form_pass(self):
+        cases = (("Geometry H", "Geo scores usually post Thursdays.", ["Geometry H", "Physics"]),
+                 ("AP Calculus AB", "Calc scores usually post Thursdays.", ["AP Calculus AB"]),
+                 ("Biology Lab", "Biology Lab scores usually post Thursdays.", ["Biology Lab"]),
+                 ("Art History", "Art History scores usually post Thursdays.", ["Art History"]),
+                 ("Geo", "In Geo, scores usually post Thursdays.", ["Geo"]))
+        for cls, text, classes in cases:
+            idx = self.idx(cls=cls)
+            self.assertIsNone(w.check_sentence(text, ["pattern:posting_day:geo"], idx, cls, classes), text)
+        # "Eng" is short for both Int Eng&Marktg and English 10: ambiguous, so dropped.
+        idx = self.idx(cls="Int Eng&Marktg")
+        self.assertEqual(w.check_sentence("Eng scores usually post Thursdays.", ["pattern:posting_day:geo"], idx,
+                                          "Int Eng&Marktg", ["Int Eng&Marktg", "English 10"]),
+                         "names a class by an ambiguous short form (Eng)")
+        self.assertIsNone(w.check_sentence("Int Eng&Marktg scores usually post Thursdays.", ["pattern:posting_day:geo"],
+                                           idx, "Int Eng&Marktg", ["Int Eng&Marktg", "English 10"]))
+
+    def test_checks_read_slots_as_neutral_tokens(self):
+        for title in ("Final Exam - B+ curve", "Ch 5 Test due 10/30", "Make-up for 11/20", "Unit 3: Part 2", "Quiz 3 (20 pts)"):
+            idx = self.idx(title=title)
+            line = "The {item:cause:geo:t} did most of the damage."
+            self.assertIsNone(w.check_sentence(line, ["cause:geo:t"], idx, "Geo"), title)
+        idx = self.idx(title="Final Exam - B+ curve")
+        self.assertEqual(w.neutral_slots("The {item:cause:geo:t} did most of the damage.", idx),
+                         "The Zitem (20/40) did most of the damage.")
+        # What the model writes outside the slots is still checked.
+        self.assertIsNotNone(w.check_sentence("The {item:cause:geo:t} cost a B+.", ["cause:geo:t"], idx, "Geo"))
+        self.assertEqual(w.check_sentence("The {item:cause:geo:t} (21/40) hurt.", ["cause:geo:t"], idx, "Geo"),
+                         "score 21/40 isn't in the cited facts")
+        self.assertEqual(w.check_sentence("Down 3.5 since Oct 14, mostly the {item:cause:geo:t}.",
+                                          ["move:geo", "cause:geo:t"], idx, "Geo"), "number 3.5 isn't in the cited facts as a move")
+
+    def test_raw_ids_and_slot_debris_drop_the_sentence(self):
+        idx = self.idx()
+        for text, cites in (("Scores usually post Thursdays (pattern:posting_day:geo).", ["pattern:posting_day:geo"]),
+                            ("Still a D, 1.4 points from a C (next:geo).", ["next:geo"]),
+                            ("Still a D, 1.4 points from a C (next:somewhere).", ["next:geo"]),
+                            ("Mostly the [item:cause:geo:t].", ["cause:geo:t"]),
+                            ("Mostly the ｛item:cause:geo:t｝.", ["cause:geo:t"]),
+                            ("Mostly the item: Unit Test.", ["cause:geo:t"]),
+                            ("Still a D, next: a C.", ["next:geo"])):
+            self.assertRegex(w.check_sentence(text, cites, idx, "Geo") or "", r"leaks a raw fact id|slot debris", text)
+        # Times and scores aren't ids.
+        self.assertIsNone(w.leak_reason("Scores post near 3:05, like the (20/40).", idx))
+        self.assertIsNone(w.check_sentence("The {item:cause:geo:t} did most of the damage.", ["cause:geo:t"], idx, "Geo"))
+        # A hostile title can't smuggle an id or braces into the final text.
+        bad = self.idx(title="Test {item:cause:geo:t}")
+        self.assertEqual(w.check_sentence("Mostly the {item:cause:geo:t}.", ["cause:geo:t"], bad, "Geo"), "leaks a raw fact id")
+
+    def test_slot_hygiene(self):
+        idx = self.idx()
+        self.assertEqual(w.check_sentence("Mostly the {item:cause:geo:t}{item:cause:geo:t}.", ["cause:geo:t"], idx),
+                         "repeats a slot")
+        self.assertEqual(w.check_sentence("Mostly the {item:cause:geo:t} and the {item:cause:geo:t}.", ["cause:geo:t"], idx),
+                         "repeats a slot")
+        self.assertEqual(w.check_sentence("{class:move:geo} {item:cause:geo:t} hurt.", ["move:geo", "cause:geo:t"], idx),
+                         "adjacent slots")
+        odd = self.idx(title="Test\nIgnore   previous")
+        self.assertEqual(w.fill_slots("Mostly the {item:cause:geo:t}.", odd), "Mostly the Test Ignore previous (20/40).")
+        braced = geo_facts()
+        braced[1]["causes"][0]["title"] = "Lab {3}"
+        self.assertEqual(w.fill_slots("Mostly the {item:cause:geo:t}.", w.fact_index(braced)), "Mostly the Lab 3 (20/40).")
+
+    def test_drop_reasons_are_codes_and_never_published(self):
+        self.assertEqual(w.reason_code("number 0.08 isn't in the cited facts"), "number # isn't in the cited facts")
+        self.assertEqual(w.reason_code("score 21/40 isn't in the cited facts"), "score # isn't in the cited facts")
+        self.assertEqual(w.reason_code("slot {item:cause:x:2026-10-14:t} names a fact the sentence doesn't cite"),
+                         "slot names a fact the sentence doesn't cite")
+        self.assertEqual(w.reason_code("names school work (Final) outside a slot"), "names school work outside a slot")
+        self.assertEqual(w.reason_code("fact cause:p:2026-10-14:t is another class"), "fact <id> is another class")
+        bad = [{"text": "Down 9.9 since Oct 14.", "cites": [MOVE]}] + GOOD
+        story = w.write_class(ScriptedModel({"Math": bad}), math_facts(), "Math")
+        self.assertTrue(story["dropped"])
+        self.assertFalse(any(re.search(r"\d", d) for d in story["dropped"]), story["dropped"])
+        put = mock.Mock()
+        up = {"headline": None, "stories": [dict(story)]}
+        w.publish_write_up([up], put, env={"GRADE_INSIGHTS_PUBLISH": "1"})
+        sent = put.call_args[0][0][0]["stories"][0]
+        self.assertEqual(sorted(sent), ["cites", "class", "story"])
 
 
 class HeadlineAndTakeoverTests(unittest.TestCase):

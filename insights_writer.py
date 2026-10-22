@@ -37,7 +37,7 @@ CAUSE_TOLERANCE = 0.20
 _CAUSE_CLAIM_RE = re.compile(
     r"\b((?:mainly|mostly|largely|primarily|chiefly)\s+(?:\w+\s+)?(?:from|because|due|thanks|owing|driven|"
     r"caused|after|by)|because|due to|owing to|thanks to|driven by|caused by|"
-    r"result of|as a result|on account of|pulled|dragged|hurt|lifted|boosted|cost|came from|comes from|"
+    r"result of|as a result|on account of|pulled|dragged|hurt|lifted|boosted|cost|came from|comes from|damage|"
     r"after an? \d|from an? \d)",
     re.I,
 )
@@ -232,11 +232,12 @@ You get FACTS as JSON. Every fact has an id. Use only those facts.
 Name assignments and classes ONLY with slots, which code fills in with the real name:
 - {item:<cause id>} ONLY for a cause inside a grade_move's causes (it has a title). Code adds its score, like "(6/10)"; don't write the score yourself.
 - {next:<what_if id>} or {next:<keep_letter id>} for the coming item a what_if or keep_letter fact is about. Code writes "next test", "next assessment" or the item's title.
-- {class:<fact id>} for the class name.
+- {bucket:<fact id>} for the bucket or category of a cause, what_if or keep_letter fact ("{bucket:<cause id>} scores dragged it."). Code writes the name, like "Homework".
+- {class:<fact id>} for the class name. You may also write the class's own name as FACTS gives it; never another class.
 A what_if or keep_letter id goes in a {next:} slot, never in an {item:} slot: the next item has no title yet.
   Right: "An 85 or better on the {next:whatif:art:projects:20} gets it to a B."
   Wrong: "An 85 or better on the {item:whatif:art:projects:20} gets it to a B."
-Never write an assignment word yourself (test, quiz, exam, lab, project, packet, homework, essay, report, assessment, ...), not even "the next test". A sentence that does is thrown away.
+Never write an assignment word yourself (test, quiz, exam, lab, project, packet, homework, essay, report, assessment, ...), not even "the next test": use {next:<id>} or {bucket:<id>}. Never write a fact id outside the braces, and nothing but these slots in braces. A sentence that does is thrown away.
 
 Write 1 to 4 short, plain sentences:
 - Open with say_opening, word for word: from the grade_move if there is one, else from the next_letter. Cite that fact.
@@ -280,7 +281,7 @@ Pick the single most useful insight. One sentence, under 120 characters.
 Use only numbers, letters and classes in the stories, and cite the fact ids of the story you use.
 Say something concrete: a number, a letter or an assignment from the story. No vague lines like "Next scores matter".
 A needed score is written exactly as the story says it, with "or better" ("an 85 or better on the {next:<id>}"), never a bare "85".
-Name assignments and classes only with the story's slots, copied as is: {item:<id>}, {next:<id>}, {class:<id>}. Never write a test, quiz, lab or other assignment word yourself.
+Name assignments and classes only with the story's slots, copied as is: {item:<id>}, {next:<id>}, {bucket:<id>}, {class:<id>}. Never write a test, quiz, lab or other assignment word yourself.
 Don't mention missing, late, past-due, turned-in or awaiting work. No dates, weekdays or relative days ("tomorrow", "next Friday").
 Reply with JSON only: {"text": "...", "cites": ["fact id", ...]}"""
 
@@ -720,8 +721,11 @@ def _cited_facts(cites, index):
     return [index[c] for c in cites or [] if c in index]
 
 
-def check_sentence(text, cites, index, name=None):
-    """None if the sentence is backed by the facts it cites, else the reason it's dropped."""
+def check_sentence(text, cites, index, name=None, classes=None):
+    """None if the sentence is backed by the facts it cites, else the reason it's dropped.
+
+    classes is the student's class names (write_class passes them); the index's own classes are added.
+    """
     text = (text or "").strip()
     if not text:
         return "empty"
@@ -735,49 +739,80 @@ def check_sentence(text, cites, index, name=None):
         if name is not None and fact.get("class") != name:
             return f"fact {fid} is another class"
         cited.append(fact)
-    reason = slot_reason(text, cites, index)
+    reason = slot_reason(text, cites, index) or leak_reason(text, index)
     if reason:
         return reason
-    filled = fill_slots(text, index)
-    echo = _ECHO_RE.search(filled) or _SAME_LETTER_MOVE_RE.search(filled)
+    # The claim checks read each slot as a neutral token plus its score, so a title's own dates,
+    # letters or "B+" never trip them; what the model wrote outside the slots is checked as usual.
+    neutral = neutral_slots(text, index)
+    echo = _ECHO_RE.search(neutral) or _SAME_LETTER_MOVE_RE.search(neutral)
     if echo:
         return f"echoes the prompt ({echo.group(0)})"
-    reason = _claims_reason(filled, cited, index)
+    reason = _claims_reason(neutral, cited, index)
     if reason:
         return reason
-    # Last, so the claim checks keep their own reasons: any school-work noun must sit in a slot.
-    noun = work_noun_outside_slot(text, cited)
-    return f"names school work ({noun}) outside a slot" if noun else None
+    # Last, so the claim checks keep their own reasons: any school-work noun must sit in a slot, and a
+    # class is named only by its own name or an unambiguous short form of it.
+    all_classes = list(dict.fromkeys([*(classes or ()), *(f.get("class") for f in index.values() if f.get("class"))]))
+    reason = names_reason(text, cited, all_classes)
+    if reason:
+        return reason
+    # Whatever the fill produces must not carry a raw id or a brace either.
+    return leak_reason(fill_slots(text, index), index, filled=True)
 
 
 # ── Slots ─────────────────────────────────────────────────────────────────────
-# The model names items and classes only through slots, which code fills after the checks:
-#   {item:<cause id>}   the cause's title, plus "(earned/possible)" unless the model wrote a "(...)" after it
-#   {next:<what_if id>} the named next item's title, else "next <bucket>" ("next test", "next assessment",
-#                       "next coursework item")
-#   {class:<fact id>}   the class name
+# The model names items, buckets and classes only through slots, which code fills after the checks:
+#   {item:<cause id>}     the cause's title, plus "(earned/possible)" unless the model wrote a "(...)" after it
+#   {next:<what_if id>}   the named next item's title, else "next <bucket>" ("next test", "next assessment",
+#                         "next coursework item")
+#   {bucket:<fact id>}    the bucket or category name of a cause, what_if or keep fact ("Homework")
+#   {class:<fact id>}     the class name
 # Outside a slot, a sentence may not use a school-work noun at all: no name guessing.
-SLOT_RE = re.compile(r"\{(item|next|class):([^{}\s]+)\}")
+SLOT_RE = re.compile(r"\{(item|next|class|bucket):([^{}\s]+)\}")
 SLOT_KINDS = {"next": ("what_if",)}
+# What the claim checks see in place of each slot.
+NEUTRAL = {"item": "Zitem", "next": "next Znext", "class": "Zclass", "bucket": "Zbucket"}
 _WORK_NOUN_RE = re.compile(
     r"\b(?:tests?|exams?|quiz(?:zes)?|labs?|projects?|packets?|assignments?|homework|warm[- ]?ups?|essays?|"
     r"reports?|summatives?|formatives?|assessments?|coursework|classwork|worksheets?|finals?|midterms?|papers?|"
     r"presentations?|notebooks?|practicals?|retakes?|sketch(?:es)?|drawings?|portfolios?|journals?|posters?|"
     r"units?|chapters?|ch\.)(?![\w])", re.I)
-# Subjects: a class is named through {class:<id>}. A subject word outside a slot passes only when it is
-# part of the cited class's own name ("Math: B, 2.1 points from an A." for Math).
+# A capitalized school subject that isn't one of the student's classes ("Physics scores dragged it." in a
+# Geo note). Title case only, so "the low band", "state of the art" or "posting history" never trip it.
 _SUBJECT_RE = re.compile(
-    r"\b(?:math(?:s|ematics)?|algebra|geometry|geo|calculus|calc|statistics|stats|physics|chemistry|chem|biology|bio|"
-    r"science|history|english|spanish|french|german|latin|chinese|art|ceramics|music|band|choir|orchestra|drama|"
-    r"theater|health|economics|government|civics|engineering|marketing|business|computer|coding|psychology|"
-    r"geography)\b", re.I)
+    r"\b(?:Math(?:s|ematics)?|Algebra|Geometry|Calculus|Statistics|Physics|Chemistry|Biology|Science|History|"
+    r"English|Spanish|French|German|Latin|Chinese|Art|Ceramics|Music|Band|Choir|Orchestra|Drama|Theater|Health|"
+    r"Economics|Government|Civics|Engineering|Marketing|Business|Psychology|Geography)\b")
+_SUBJECT_IDIOMS = re.compile(r"\bplain English\b")
 # Phrases that may use a school-work noun outside a slot. Kept empty on purpose: "the next test" goes
-# through {next:<id>}. Add only with a test.
+# through {next:<id>} or {bucket:<id>}. Add only with a test.
 NOUN_WHITELIST = ()
+# A raw id ("pattern:posting_day:geo"), a bracketed or bare slot word, a fullwidth or stray brace.
+_ID_LIKE_RE = re.compile(r"\b[a-z_]+:[\w:.-]+")
+_SLOT_DEBRIS_RE = re.compile(r"[\[(<]\s*(?:item|next|class|bucket|pattern)\s*:|\b(?:item|next|class|bucket|pattern)\s*:|[{}｛｝]",
+                             re.I)
+# Short forms of class-name words ("Geometry H" -> "Geo").
+_CLASS_ABBREV = {"geometry": "geo", "calculus": "calc", "chemistry": "chem", "biology": "bio", "statistics": "stats",
+                 "mathematics": "math", "algebra": "alg", "physics": "phys", "history": "hist", "spanish": "span",
+                 "economics": "econ", "government": "gov", "psychology": "psych", "engineering": "eng",
+                 "english": "eng", "marketing": "mktg"}
+_CLASS_SKIP = {"ap", "ib", "hon", "honors", "adv", "advanced", "int", "intro", "course", "and", "of", "the", "for",
+               "ll", "lll", "ii", "iii", "iv", "cp", "ab", "bc", "sl", "hl"}
+
+
+def _clean(value):
+    """A title or name as one plain line: no braces, no newlines or runs of whitespace."""
+    return re.sub(r"\s+", " ", re.sub(r"[{}｛｝]", "", str(value or ""))).strip()
 
 
 def _short_title(title):
-    return re.sub(r"\s*\([^)]*\)\s*$", "", str(title)).strip() or str(title)
+    title = _clean(title)
+    return re.sub(r"\s*\([^)]*\)\s*$", "", title).strip() or title
+
+
+def _bucket_of(fact):
+    return fact.get("bucket") or fact.get("category")
 
 
 # Bucket words a "next ..." fill can stand on alone ("the next assessment"). Anything else that isn't a
@@ -814,7 +849,8 @@ def _bucket_noun(bucket):
 
 def slot_reason(text, cites, index):
     """None if every slot names one of the sentence's cited facts, of the right kind, else why not."""
-    for kind, fid in SLOT_RE.findall(text):
+    found = SLOT_RE.findall(text)
+    for kind, fid in found:
         if fid not in (cites or []):
             return f"slot {{{kind}:{fid}}} names a fact the sentence doesn't cite"
         fact = index.get(fid) or {}
@@ -822,44 +858,130 @@ def slot_reason(text, cites, index):
             return f"item slot {fid} has no title"
         if kind == "class" and not fact.get("class"):
             return f"class slot {fid} has no class"
+        if kind == "bucket" and not _bucket_of(fact):
+            return f"bucket slot {fid} has no bucket"
         if kind in SLOT_KINDS and fact.get("kind") not in SLOT_KINDS[kind]:
             return f"{kind} slot {fid} isn't a {' or '.join(SLOT_KINDS[kind])} fact"
+    if len(set(found)) < len(found):
+        return "repeats a slot"
+    if re.search(r"\}\s*\{", text):
+        return "adjacent slots"
     if re.search(r"[{}]", SLOT_RE.sub(" ", text)):
         return "malformed slot"
     return None
 
 
-def work_noun_outside_slot(text, cited=()):
-    """The first school-work noun or other class's subject outside a slot, quotes ignored, or None."""
-    bare = SLOT_RE.sub(" ", text)
-    bare = re.sub(r"[\"“”‘’'`]", "", bare)
-    for phrase in NOUN_WHITELIST:
-        bare = re.sub(re.escape(phrase), " ", bare, flags=re.I)
-    hit = _WORK_NOUN_RE.search(bare)
-    if hit:
-        return hit.group(0)
-    own = " ".join(str(f.get("class") or "") for f in cited).lower()
-    for match in _SUBJECT_RE.finditer(bare):
-        if not re.search(rf"\b{re.escape(match.group(0).lower())}\b", own):
-            return match.group(0)
+def leak_reason(text, index, filled=False):
+    """Why the text still carries a raw fact id or slot debris once the real slots are out, or None.
+
+    Times ("3:05") and scores ("11/20") aren't ids. On filled text only real ids and braces count, so a
+    title like "Unit 3: Part 2" is fine.
+    """
+    bare = text if filled else SLOT_RE.sub(" ", text)
+    for fid in sorted(index, key=len, reverse=True):
+        if ":" in fid and fid in bare:
+            return "leaks a raw fact id"
+    if filled:
+        return "leaves slot debris" if re.search(r"[{}｛｝]", bare) else None
+    if _ID_LIKE_RE.search(bare):
+        return "leaks a raw fact id"
+    if _SLOT_DEBRIS_RE.search(bare):
+        return "leaves slot debris"
     return None
 
 
+def neutral_slots(text, index):
+    """The sentence with each slot as a neutral token; an item slot keeps its score, as the fill would."""
+    def swap(match):
+        kind, fid = match.group(1), match.group(2)
+        fact = index.get(fid) or {}
+        token = NEUTRAL[kind]
+        if kind == "item" and _has_score(fact) and not re.match(r"\s*\(", text[match.end():]):
+            return f"{token} ({fact['earned']:g}/{fact['possible']:g})"
+        return token
+    return SLOT_RE.sub(swap, text)
+
+
+def _has_score(fact):
+    return isinstance(fact.get("earned"), (int, float)) and isinstance(fact.get("possible"), (int, float))
+
+
+def _class_forms(name):
+    """[(form, is_full)] for a class name: the full name, and short forms of its words ("Geometry H" -> Geometry, Geo)."""
+    full = _clean(name)
+    forms = [(full.lower(), True)]
+    for word in re.findall(r"[^\W\d_]+", full.lower()):
+        if len(word) < 3 or word in _CLASS_SKIP or _WORK_NOUN_RE.fullmatch(word):
+            continue
+        forms.append((word, False))
+        if word in _CLASS_ABBREV:
+            forms.append((_CLASS_ABBREV[word], False))
+    return forms
+
+
+def names_reason(text, cited=(), classes=()):
+    """Why the sentence names school work or a class outside a slot, or None.
+
+    The cited class's own full name, or a short form that maps to it alone, may be written out; another of
+    the student's classes, an ambiguous short form, a capitalized subject that isn't the student's own, or
+    any school-work noun drops the sentence. Quotes are ignored.
+    """
+    bare = SLOT_RE.sub(" ", text)
+    bare = _SUBJECT_IDIOMS.sub(" ", re.sub(r"[\"“”‘’'`]", "", bare))
+    for phrase in NOUN_WHITELIST:
+        bare = re.sub(re.escape(phrase), " ", bare, flags=re.I)
+    own = {f.get("class") for f in cited if f.get("class")}
+    owners = {}
+    for cls in classes or ():
+        for form, is_full in _class_forms(cls):
+            owners.setdefault((form, is_full), set()).add(cls)
+    student_words = {form for form, _ in owners}
+    for (form, is_full), who in sorted(owners.items(), key=lambda kv: (-len(kv[0][0]), not kv[0][1])):
+        # A full name of more than one word matches in any case; a one-word name or short form only
+        # capitalized ("Geo", "GEO", "Band"), never "the art of" or "the low band".
+        pattern = (re.compile(rf"(?<!\w){re.escape(form)}(?!\w)", re.I) if is_full and not re.fullmatch(r"[^\W\d_]+", form) else
+                   re.compile(rf"(?<!\w)(?:{re.escape(form.capitalize())}|{re.escape(form.upper())})(?!\w)"))
+        for match in list(pattern.finditer(bare)):
+            if who <= own and (is_full or len(who) == 1):
+                continue
+            if who & own:
+                return f"names a class by an ambiguous short form ({match.group(0)})"
+            return f"names another class ({match.group(0)})"
+        if who <= own and (is_full or len(who) == 1):
+            bare = pattern.sub(" ", bare)
+    hit = _WORK_NOUN_RE.search(bare)
+    if hit:
+        return f"names school work ({hit.group(0)}) outside a slot"
+    for match in _SUBJECT_RE.finditer(bare):
+        if match.group(0).lower() not in student_words:
+            return f"names another class ({match.group(0)})"
+    return None
+
+
+def work_noun_outside_slot(text, cited=(), classes=()):
+    """The word names_reason objects to, or None. Kept for callers and probes."""
+    reason = names_reason(text, cited, classes or [f.get("class") for f in cited if f.get("class")])
+    return re.search(r"\(([^)]*)\)", reason).group(1) if reason else None
+
+
 def fill_slots(text, index):
-    """The sentence with each slot replaced by the real name from its fact."""
+    """The sentence with each slot replaced by the real name from its fact, on one line, without braces."""
     def fill(match):
         kind, fid = match.group(1), match.group(2)
         fact = index.get(fid) or {}
         if kind == "class":
-            return str(fact.get("class") or "")
+            return _clean(fact.get("class"))
+        if kind == "bucket":
+            name = _clean(_bucket_of(fact))
+            # "Homework scores dragged it." at the start; "the next homework score" inside a sentence.
+            at_start = not text[:match.start()].strip() or text[:match.start()].rstrip().endswith((".", "!", "?"))
+            return name if at_start or name.isupper() else name.lower()
         if kind == "next":
-            return str(fact["next_title"]) if fact.get("next_title") else f"next {_bucket_noun(fact.get('bucket'))}"
-        title = str(fact.get("title") or "")
-        rest = text[match.end():]
-        has_score = isinstance(fact.get("earned"), (int, float)) and isinstance(fact.get("possible"), (int, float))
-        if has_score and not re.match(r"\s*\(", rest):
+            return _clean(fact["next_title"]) if fact.get("next_title") else f"next {_bucket_noun(_clean(fact.get('bucket')))}"
+        title = _clean(fact.get("title"))
+        if _has_score(fact) and not re.match(r"\s*\(", text[match.end():]):
             return f"{_short_title(title)} ({fact['earned']:g}/{fact['possible']:g})"
-        return title if not has_score else _short_title(title)
+        return title if not _has_score(fact) else _short_title(title)
     return SLOT_RE.sub(fill, text)
 
 
@@ -1149,6 +1271,14 @@ def vote(model, sentences, class_facts, votes=VOTES):
     return [s for s, n in zip(sentences, tally) if n * 2 > votes]
 
 
+def reason_code(reason):
+    """A drop reason without its numbers, ids, quotes or words: safe to log or store ("number # isn't in the cited facts")."""
+    code = re.sub(r"\{[^}]*\}|\([^)]*\)|\"[^\"]*\"", "", str(reason or ""))
+    code = re.sub(r"\b[\w.-]*:[\w:.-]+", "<id>", code)
+    code = re.sub(r"\d+(?:[./]\d+)?", "#", code)
+    return re.sub(r"\s+", " ", code).strip()
+
+
 def write_class(model, facts, name, votes=VOTES):
     """{"class", "story", "cites", "dropped"} or None when there's nothing worth saying."""
     class_facts = facts_for(facts, name)
@@ -1159,7 +1289,7 @@ def write_class(model, facts, name, votes=VOTES):
     drafted = _sentences(model.complete(DRAFT_SYSTEM, user))
     kept, dropped = [], []
     for sentence in drafted:
-        reason = check_sentence(sentence["text"], sentence["cites"], index, name)
+        reason = check_sentence(sentence["text"], sentence["cites"], index, name, class_names(facts))
         if reason:
             dropped.append({**sentence, "reason": reason})
         else:
@@ -1173,7 +1303,8 @@ def write_class(model, facts, name, votes=VOTES):
         "story": " ".join(s["text"] for s in voted),
         "slotted": " ".join(s.get("slots", s["text"]) for s in voted),
         "cites": [c for s in voted for c in s["cites"]],
-        "dropped": [d["reason"] for d in dropped],
+        # Reason codes only: the full reasons quote grade numbers, so they stay out of stores and logs.
+        "dropped": [reason_code(d["reason"]) for d in dropped],
     }
 
 
@@ -1277,8 +1408,19 @@ def publish_write_up(local, put, env=None):
     """
     if not publish_enabled(env):
         return False
-    put(local)
+    put(public_write_up(local))
     return True
+
+
+def public_write_up(local):
+    """The write-ups as published: headline and each story's class, text and cites; no drop reasons or slots."""
+    def one(up):
+        up = dict(up or {})
+        if "stories" in up:
+            up["stories"] = [{k: s[k] for k in ("class", "story", "cites") if k in s} for s in up.get("stories") or []]
+        return up
+
+    return one(local) if isinstance(local, dict) else [one(up) for up in local or []]
 
 
 # ── Nightly steps for the mini runner ────────────────────────────────────────
