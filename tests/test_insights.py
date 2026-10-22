@@ -111,11 +111,14 @@ class PercentOfGradeGoldenTests(unittest.TestCase):
                 "category": "Tests",
                 "bucket": "Tests",
                 "bucket_weight_pct": 60.0,
+                "change": "new",
                 "earned": 34.0,
                 "possible": 50.0,
                 "points": -6.6,
+                "share": -6.6,
             }],
             "explained": -6.6,
+            "coverage": 1.0,
         }])
 
     def test_distance_to_the_next_letter(self):
@@ -337,6 +340,193 @@ class ScraperWiringTests(unittest.TestCase):
         data = {"students": [{"sn": "1", "insight_facts": facts}]}
         scraper.fit_payload_for_family_data(data, today=TODAY)
         self.assertEqual(data["students"][0]["insight_facts"], facts)
+
+
+def student_for(name, totals, rows, pct, mark):
+    meta = {"period": 3, "course_name": name, "percent": str(pct), "mark": mark}
+    meta["counted_insight"] = scraper.build_counted_insight(totals, rows, posted_pct=pct, posted_mark=mark)
+    return {"classes": [meta], "assignments_by_class": [{"class_name": f"3 {name}", "period": 3, "assignments": rows}]}
+
+
+def moves_for(name, totals, rows, pct, mark, prior_row, prior_day="2026-10-14"):
+    prior = {"date": prior_day, "classes": {name: prior_row}}
+    history = {"students": {"k1": {"snapshots": [prior]}}}
+    facts = scraper.attach_insight_facts(student_for(name, totals, rows, pct, mark), history, "k1", today=TODAY)
+    return by_kind(facts["facts"], "grade_move")
+
+
+# Anonymized shape of a real -1.6 move: an A class, Assessments 95% / Coursework 5%, where three
+# coursework scores posted in a week. Two were open in the prior list; one was never listed at all.
+LAB_TOTALS = {
+    "parse_ok": True,
+    "layout": "percent_of_grade",
+    "categories": [
+        cat("Assessments", 95.0, 24.5, 25.0, 98.0),
+        cat("Formative", 0.0, 4.0, 6.0, 66.7),
+        cat("Coursework", 5.0, 17.0, 26.0, 65.4),
+    ],
+}
+LAB_ROWS = [
+    row("Unit Exam 1", "Assessments", 10.0, 10.0, "09/24/2026"),
+    row("Lab Practical", "Assessments", 4.5, 5.0, "10/09/2026"),
+    row("Unit Exam 2", "Assessments", 10.0, 10.0, "10/08/2026"),
+    row("Warmup Set", "Formative", 3.0, 3.0, "10/10/2026"),
+    row("Exit Ticket", "Formative", 1.0, 3.0, "10/13/2026"),
+    row("Safety Contract", "Coursework", 3.0, 3.0, "09/18/2026"),
+    row("Lab Writeup A", "Coursework", 1.0, 3.0, "10/16/2026"),
+    row("Lab Writeup B", "Coursework", 9.0, 10.0, "10/17/2026"),
+    row("Design Brief", "Coursework", 4.0, 10.0, "10/16/2026"),
+    row("Next Exam", "Assessments", None, 10.0, "10/30/2026"),
+]
+LAB_PRIOR_ITEMS = [
+    {"title": "Lab Practical", "due": "2026-10-09", "state": "marked"},
+    {"title": "Unit Exam 2", "due": "2026-10-08", "state": "marked"},
+    {"title": "Warmup Set", "due": "2026-10-10", "state": "marked"},
+    {"title": "Exit Ticket", "due": "2026-10-13", "state": "marked"},
+    {"title": "Lab Writeup A", "due": "2026-10-16", "state": "open"},
+    {"title": "Lab Writeup B", "due": "2026-10-17", "state": "open"},
+    {"title": "Next Exam", "due": "2026-10-30", "state": "open"},
+]
+
+# Anonymized shape of a real +14.7 move: Assessments 70% / Assignments 20% / Presentations 10%,
+# where the one assessment was rescored. It was marked the whole time, never open or missing.
+STUDIO_TOTALS = {
+    "parse_ok": True,
+    "layout": "percent_of_grade",
+    "categories": [
+        cat("Assessments", 70.0, 9.2, 10.0, 92.0),
+        cat("Assignments", 20.0, 55.5, 56.0, 99.1),
+        cat("Presentations", 10.0, 16.5, 20.0, 82.5),
+    ],
+}
+STUDIO_ROWS = [
+    row("Portfolio Review", "Assessments", 9.2, 10.0, "10/02/2026"),
+    row("Brief 1", "Assignments", 10.0, 10.0, "09/22/2026"),
+    row("Brief 2", "Assignments", 10.0, 10.0, "09/29/2026"),
+    row("Brief 3", "Assignments", 9.5, 10.0, "10/06/2026"),
+    row("Brief 4", "Assignments", 10.0, 10.0, "10/09/2026"),
+    row("Brief 5", "Assignments", 10.0, 10.0, "10/13/2026"),
+    row("Sketch Check", "Assignments", 5.0, 5.0, "10/14/2026"),
+    row("Sticker Check", "Assignments", 1.0, 1.0, "10/14/2026"),
+    row("Pitch 1", "Presentations", 8.5, 10.0, "10/01/2026"),
+    row("Pitch 2", "Presentations", 8.0, 10.0, "10/12/2026"),
+]
+
+
+class MoveCoverageTests(unittest.TestCase):
+    """A cause is any score that is new or changed since the prior snapshot."""
+
+    def assert_covered(self, move, delta):
+        self.assertEqual(move["delta"], delta)
+        self.assertAlmostEqual(move["coverage"], move["explained"] / delta, places=2)
+        self.assertLessEqual(abs(move["coverage"] - 1.0), 0.2)
+        shares = sum(c["share"] for c in move["causes"])
+        self.assertAlmostEqual(shares, move["explained"], delta=0.02 * len(move["causes"]))
+
+    def test_lab_drop_counts_a_score_the_prior_list_never_showed(self):
+        prior_row = {"pct": 98.1, "mark": "A", "items": LAB_PRIOR_ITEMS}
+        [move] = moves_for("Lab Science", LAB_TOTALS, LAB_ROWS, 96.4, "A", prior_row)
+        self.assert_covered(move, -1.7)
+        self.assertEqual(move["explained"], -1.73)
+        causes = [(c["category"], c["change"], c["earned"], c["possible"]) for c in move["causes"]]
+        self.assertEqual(causes, [
+            ("Coursework", "new", 4.0, 10.0),
+            ("Coursework", "new", 1.0, 3.0),
+            ("Coursework", "new", 9.0, 10.0),
+        ])
+        # Leave-one-out stays as it was: undo one score, rebuild.
+        design = move["causes"][0]
+        self.assertEqual(design["points"], -0.79)
+        self.assertEqual([c["share"] for c in move["causes"]], [-1.36, -0.75, 0.38])
+
+    def test_lab_drop_with_a_score_map_sees_a_rescored_assessment(self):
+        scores = scraper.snapshot_scores_for_class(LAB_ROWS)
+        for key in ("labwriteupa", "labwriteupb", "designbrief"):
+            scores.pop(key)
+        scores["labpractical"] = [5.0, 5.0]
+        prior_row = {"pct": 99.9, "mark": "A", "items": LAB_PRIOR_ITEMS, "scores": scores}
+        [move] = moves_for("Lab Science", LAB_TOTALS, LAB_ROWS, 96.4, "A", prior_row)
+        self.assert_covered(move, -3.5)
+        changed = [c for c in move["causes"] if c["change"] == "changed"]
+        self.assertEqual([(c["category"], c["prior_earned"], c["earned"]) for c in changed], [("Assessments", 5.0, 4.5)])
+        self.assertEqual(changed[0]["points"], -1.9)
+        self.assertEqual(sorted(c["change"] for c in move["causes"]), ["changed", "new", "new", "new"])
+
+    def test_studio_jump_from_a_rescored_assessment_that_was_never_open(self):
+        scores = scraper.snapshot_scores_for_class(STUDIO_ROWS)
+        scores["portfolioreview"] = [7.1, 10.0]
+        items = [{"title": "Portfolio Review", "due": "2026-10-02", "state": "marked"}]
+        prior_row = {"pct": 77.7, "mark": "C", "items": items, "scores": scores}
+        [move] = moves_for("Studio Design", STUDIO_TOTALS, STUDIO_ROWS, 92.4, "A", prior_row)
+        self.assert_covered(move, 14.7)
+        [cause] = move["causes"]
+        self.assertEqual(
+            (cause["category"], cause["bucket_weight_pct"], cause["change"], cause["prior_earned"], cause["earned"]),
+            ("Assessments", 70.0, "changed", 7.1, 9.2),
+        )
+        self.assertEqual((cause["points"], cause["share"]), (14.7, 14.7))
+
+    def test_studio_jump_with_only_an_item_list_stays_unexplained(self):
+        items = [
+            {"title": r["description"], "due": scraper._snapshot_due_iso(r), "state": "marked"}
+            for r in STUDIO_ROWS
+            if r["due_date"] >= "09/30/2026"
+        ]
+        [move] = moves_for("Studio Design", STUDIO_TOTALS, STUDIO_ROWS, 92.4, "A", {"pct": 77.7, "mark": "C", "items": items})
+        self.assertEqual((move["causes"], move["explained"], move["coverage"]), ([], None, None))
+
+    def test_studio_jump_from_an_assessment_posted_and_scored_the_same_day(self):
+        scores = scraper.snapshot_scores_for_class(STUDIO_ROWS)
+        scores.pop("portfolioreview")
+        prior_row = {"pct": 93.6, "mark": "A", "items": [], "scores": scores}
+        [move] = moves_for("Studio Design", STUDIO_TOTALS, STUDIO_ROWS, 92.4, "A", prior_row)
+        self.assertEqual([(c["category"], c["change"]) for c in move["causes"]], [("Assessments", "new")])
+        self.assertLessEqual(abs(move["coverage"] - 1.0), 0.2)
+
+
+class ScoreChangeTests(unittest.TestCase):
+    def test_old_scores_missing_from_the_list_are_not_new(self):
+        new_keys, prior_scores = scraper.score_changes({"items": LAB_PRIOR_ITEMS}, LAB_ROWS, "2026-10-14")
+        self.assertEqual(sorted(new_keys), ["designbrief", "labwriteupa", "labwriteupb"])
+        self.assertEqual(prior_scores, {})
+
+    def test_a_full_list_proves_nothing_about_absent_scores(self):
+        full = LAB_PRIOR_ITEMS + [{"title": f"Filler {i}", "due": "2026-10-10", "state": "marked"} for i in range(5)]
+        new_keys, _ = scraper.score_changes({"items": full}, LAB_ROWS, "2026-10-14")
+        self.assertEqual(sorted(new_keys), ["labwriteupa", "labwriteupb"])
+
+    def test_no_item_list_no_changes(self):
+        self.assertEqual(scraper.score_changes({"pct": 90.0}, LAB_ROWS, "2026-10-14"), ([], {}))
+
+    def test_score_map_lives_on_the_newest_three_days(self):
+        history = {"students": {}}
+        for day in ("2026-10-15", "2026-10-17", "2026-10-18", "2026-10-19"):
+            snap = {"date": day, "classes": {"Lab": {"pct": 90.0, "items": [], "scores": {"a": [1, 1]}}}}
+            scraper.upsert_student_snapshot(history, "1", "", snap)
+        rows = [s["classes"]["Lab"] for s in history["students"]["1"]["snapshots"]]
+        self.assertEqual(["scores" in r for r in rows], [False, True, True, True])
+        self.assertTrue(all("items" in r for r in rows))
+
+    def test_a_daytime_scrape_keeps_the_evening_score_map(self):
+        history = {"students": {}}
+        evening = {"date": "2026-10-19", "classes": {"Lab": {"pct": 90.0, "items": [], "scores": {"a": [1, 1]}}}}
+        scraper.upsert_student_snapshot(history, "1", "", evening)
+        later = {"date": "2026-10-19", "classes": {"Lab": {"pct": 91.0}}}
+        scraper.upsert_student_snapshot(history, "1", "", later, replace_items=False)
+        row = history["students"]["1"]["snapshots"][0]["classes"]["Lab"]
+        self.assertEqual((row["pct"], row["scores"]), (91.0, {"a": [1, 1]}))
+
+
+class NoFooterGateTests(unittest.TestCase):
+    def test_a_class_with_no_footer_gets_its_own_gate_reason(self):
+        cls = {"name": "PE", "pct": 98.4, "mark": "A", "counted_insight": None, "assignments": POG_ROWS, "new_keys": []}
+        facts = insights.class_facts(cls, [], None, TODAY)
+        self.assertEqual(facts, [{"id": "gate:pe", "kind": "no_raise_math", "class": "PE", "reason": "no_footer_weights"}])
+
+    def test_a_footer_that_misses_keeps_the_mismatch_reason(self):
+        cls = class_input("Biology", POG_TOTALS, POG_ROWS, 80.0, "B")
+        facts = insights.class_facts(cls, [], None, TODAY)
+        self.assertEqual(by_kind(facts, "no_raise_math")[0]["reason"], "weights_do_not_match_posted")
 
 
 if __name__ == "__main__":

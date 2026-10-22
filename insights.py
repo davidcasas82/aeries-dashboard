@@ -7,12 +7,15 @@ Scale is plain 90/80/70/60 with whole letters; +/- marks count as the bare lette
 import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from itertools import combinations
+from math import factorial
 
 SCALE = (("A", 90.0), ("B", 80.0), ("C", 70.0), ("D", 60.0))
 SCALE_LABEL = "90/80/70/60"
 MATCH_TOLERANCE = 0.51
 MOVE_MIN_POINTS = 0.5
 CAUSE_MIN_POINTS = 0.05
+SHARE_MAX_CAUSES = 10
 PATTERN_WINDOW_DAYS = 28
 PATTERN_MIN_SCORES = 8
 PATTERN_MIN_SHARE = 0.6
@@ -288,8 +291,61 @@ def _typical_sizes(bucket):
     return (sizes[len(sizes) // 2],) if sizes else ()
 
 
-def explain_move(model, name, from_pct, to_pct, since, new_keys):
-    """Why the posted % moved since `since`: each newly scored item's cost in grade points."""
+def revert(model, changes):
+    """The class as it stood before `changes`: {key: None} drops a new score, {key: (earned, possible)} restores an old one."""
+    buckets = []
+    for b in model.buckets:
+        scores = []
+        for s in b.scores:
+            if s.key not in changes:
+                scores.append(s)
+            elif changes[s.key] is not None:
+                earned, possible = changes[s.key]
+                scores.append(Score(s.key, s.title, s.category, float(earned), float(possible)))
+        buckets.append(Bucket(b.name, b.weight, tuple(scores)))
+    return ClassModel(model.name, model.layout, tuple(buckets), model.min_pct, model.max_pct)
+
+
+def _shares(model, changes):
+    """Each change's order-averaged share of the move (Shapley). The shares sum to `explained` exactly.
+
+    Leave-one-out costs (a cause's `points`) don't add up when a bucket gains several scores at once,
+    so the shares are what a "down mainly from" sentence should rank by. None past SHARE_MAX_CAUSES.
+    """
+    keys = sorted(changes)
+    n = len(keys)
+    if n == 0 or n > SHARE_MAX_CAUSES:
+        return None
+    memo = {}
+
+    def value(applied):
+        if applied not in memo:
+            memo[applied] = grade(revert(model, {k: changes[k] for k in keys if k not in applied}))
+        return memo[applied]
+
+    weights = [factorial(size) * factorial(n - size - 1) / factorial(n) for size in range(n)]
+    shares = {}
+    for key in keys:
+        others = [k for k in keys if k != key]
+        total = 0.0
+        for size in range(n):
+            for subset in combinations(others, size):
+                with_key, without_key = value(frozenset(subset + (key,))), value(frozenset(subset))
+                if with_key is None or without_key is None:
+                    return None
+                total += weights[size] * (with_key - without_key)
+        shares[key] = total
+    return shares
+
+
+def explain_move(model, name, from_pct, to_pct, since, new_keys, prior_scores=None):
+    """Why the posted % moved since `since`: each new or changed score's cost in grade points.
+
+    new_keys: scores that weren't there at `since`. prior_scores: {key: (earned, possible)} for scores
+    that were there but have changed since. A cause's `points` is the leave-one-out cost (undo that one
+    change and rebuild); `share` is its order-averaged part of `explained`; `explained` is the move that
+    undoing every change gives back; `coverage` is explained / delta.
+    """
     delta = round(to_pct - from_pct, 2)
     if abs(delta) < MOVE_MIN_POINTS:
         return None
@@ -303,36 +359,50 @@ def explain_move(model, name, from_pct, to_pct, since, new_keys):
         "delta": delta,
         "causes": [],
         "explained": None,
+        "coverage": None,
     }
-    if model is None or not new_keys:
+    if model is None:
         return fact
-    now = grade(model)
     present = {s.key for b in model.buckets for s in b.scores}
-    keys = [k for k in new_keys if k in present]
-    if now is None or not keys:
+    changes = {k: None for k in new_keys or [] if k in present}
+    for key, old in (prior_scores or {}).items():
+        if key in present and key not in changes and old is not None:
+            changes[key] = (float(old[0]), float(old[1]))
+    now = grade(model)
+    if now is None or not changes:
         return fact
+    before_all = grade(revert(model, changes))
+    shares = _shares(model, changes) if before_all is not None else None
+    seen = set()
     for bucket in model.buckets:
         for score in bucket.scores:
-            if score.key not in keys:
+            if score.key not in changes or score.key in seen:
                 continue
-            before = grade(without(model, [score.key]))
+            seen.add(score.key)
+            before = grade(revert(model, {score.key: changes[score.key]}))
             cost = round(now - before, 2) if before is not None else round(now - from_pct, 2)
-            if abs(cost) < CAUSE_MIN_POINTS:
+            share = round(shares[score.key], 2) if shares else None
+            if abs(cost) < CAUSE_MIN_POINTS and (share is None or abs(share) < CAUSE_MIN_POINTS):
                 continue
-            fact["causes"].append({
+            cause = {
                 "id": f"cause:{slug(name)}:{since}:{score.key}",
                 "title": score.title,
                 "category": score.category,
                 "bucket": bucket.name,
                 "bucket_weight_pct": live_weight_pct(model, bucket.name),
+                "change": "new" if changes[score.key] is None else "changed",
                 "earned": score.earned,
                 "possible": score.possible,
                 "points": cost,
-            })
-    fact["causes"].sort(key=lambda c: (-abs(c["points"]), c["id"]))
-    before_all = grade(without(model, keys))
+                "share": share,
+            }
+            if changes[score.key] is not None:
+                cause["prior_earned"], cause["prior_possible"] = changes[score.key]
+            fact["causes"].append(cause)
+    fact["causes"].sort(key=lambda c: (-abs(c["share"] if c["share"] is not None else c["points"]), c["id"]))
     if before_all is not None:
         fact["explained"] = round(now - before_all, 2)
+        fact["coverage"] = round(fact["explained"] / delta, 2)
     return fact
 
 
@@ -371,8 +441,16 @@ def find_patterns(log_items, today, window_days=PATTERN_WINDOW_DAYS):
     return facts
 
 
+def gate_reason(model, broken):
+    if broken:
+        return "scale_break"
+    if model is None:
+        return "no_footer_weights"
+    return "weights_do_not_match_posted"
+
+
 def class_facts(cls, snapshots, prior_snapshot, today):
-    """Facts for one class. cls: name, pct, mark, counted_insight, assignments, new_keys."""
+    """Facts for one class. cls: name, pct, mark, counted_insight, assignments, new_keys, prior_scores."""
     name, pct = cls["name"], cls["pct"]
     model = build_class_model(name, cls.get("counted_insight"), cls.get("assignments"))
     model_pct = grade(model) if model else None
@@ -386,7 +464,13 @@ def class_facts(cls, snapshots, prior_snapshot, today):
         from_pct, _ = _class_point(prior_snapshot, name)
         if from_pct is not None:
             move = explain_move(
-                model if trusted else None, name, from_pct, pct, prior_snapshot.get("date"), cls.get("new_keys") or []
+                model if trusted else None,
+                name,
+                from_pct,
+                pct,
+                prior_snapshot.get("date"),
+                cls.get("new_keys") or [],
+                cls.get("prior_scores"),
             )
             if move:
                 facts.append(move)
@@ -395,7 +479,7 @@ def class_facts(cls, snapshots, prior_snapshot, today):
             "id": f"gate:{slug(name)}",
             "kind": "no_raise_math",
             "class": name,
-            "reason": "scale_break" if broken else "weights_do_not_match_posted",
+            "reason": gate_reason(model, broken),
         })
         return facts
     step = next_letter(name, pct)
