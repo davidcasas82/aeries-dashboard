@@ -11,6 +11,7 @@ import importlib
 import json
 import os
 import plistlib
+import re
 import subprocess
 import sys
 import urllib.error
@@ -43,6 +44,12 @@ BLOCKED = (
 # The parent PIN is a generic password in the mini's login Keychain. Code only for now.
 PIN_KEYCHAIN_SERVICE = "family-data-parent-pin"
 PIN_KEYCHAIN_ACCOUNT = "aeries"
+# The insights write secret (family-data AERIES_INSIGHTS_SECRET) is a second generic password.
+# It can write the insights record and nothing else; the runner never prints or logs it.
+INSIGHTS_KEYCHAIN_SERVICE = "family-data-insights-write"
+INSIGHTS_KEYCHAIN_ACCOUNT = "aeries"
+INSIGHTS_PATH = "/v1/grades/insights"
+PUBLISH_FLAG = "GRADE_INSIGHTS_PUBLISH"
 SSD_VOLUME_NAME = "David C SSD"
 DEFAULT_SSD = f"/Volumes/{SSD_VOLUME_NAME}"
 # Installed on the SSD with mlx-lm 0.32.2. Smoke-test peaks: Qwen 5.2 GB at 32 tok/s, Gemma 8.1 GB at 20 tok/s.
@@ -239,7 +246,7 @@ class ReadOnlyFamilyData:
 
     The Keychain PIN is the family PIN, so its session has the write role. This client can
     send exactly one non-GET, the unlock POST, and has no put, post, patch or delete methods.
-    Publishing (PR5) uses the separate AERIES_INSIGHTS_SECRET bearer, never this session.
+    Publishing uses InsightsPublisher and the separate AERIES_INSIGHTS_SECRET bearer, never this session.
     """
 
     UNLOCK_PATH = "/auth/unlock"
@@ -291,6 +298,212 @@ class ReadOnlyFamilyData:
             headers={"User-Agent": USER_AGENT, "Accept": "application/json", **headers},
         )
         return self._open(request)
+
+
+def insights_secret():
+    """The insights write secret from the login Keychain. Read only when a publish is sent."""
+    return keychain_secret(INSIGHTS_KEYCHAIN_SERVICE, INSIGHTS_KEYCHAIN_ACCOUNT)
+
+
+class InsightsPublisher:
+    """Sends the published write-ups to family-data: one PUT to /v1/grades/insights, nothing else.
+
+    Authenticates with the AERIES_INSIGHTS_SECRET bearer from the Keychain, never the PIN session.
+    No redirects are followed. Errors carry the status only.
+    """
+
+    def __init__(self, secret=insights_secret, base=FAMILY_DATA_URL, opener=None):
+        self._secret = secret
+        self._base = base.rstrip("/")
+        self._open = opener or _open_request
+
+    def put(self, write_ups):
+        """True after a 200. False, with nothing sent, when no write-up has a student key."""
+        doc = insights_doc(write_ups)
+        if not doc["students"]:
+            return False
+        body = insights_body(doc)
+        request = urllib.request.Request(
+            self._base + INSIGHTS_PATH,
+            data=body,
+            method="PUT",
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._secret()}",
+            },
+        )
+        status, _ = self._open(request)
+        if status != 200:
+            raise FamilyDataError(f"PUT {INSIGHTS_PATH} returned {status}")
+        return True
+
+
+# A per-student port of family-data src/insights.js cleanInsights/cleanLine (pinned copy and a real-
+# Worker test in tests/fixtures/family_data_insights.js), plus the Worker's 256 KB body cap. The Worker
+# rejects the whole body on one bad field; this never does. It drops the bad line, then a student
+# left with nothing, then stories until the body fits. Limits are inclusive and lengths are UTF-16
+# code units, as in JS.
+PUBLISH_MAX_BYTES = 256 * 1024
+PUBLISH_MAX_STUDENTS = 8
+PUBLISH_MAX_STORIES = 40
+PUBLISH_MAX_TEXT = 600
+PUBLISH_MAX_CITES = 12
+PUBLISH_MAX_CITE = 120
+PUBLISH_MAX_CLASS = 120
+PUBLISH_MAX_AS_OF = 40
+PUBLISH_STORY_TAGS = ("easiest_win", "biggest_risk")
+STUDENT_KEY_RE = re.compile(r"[A-Za-z0-9-]{1,32}", re.ASCII)
+# String.prototype.trim's set: WhiteSpace (incl. U+FEFF and Zs) and LineTerminator. Not Python's strip().
+JS_WHITESPACE = ("\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008"
+                 "\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff")
+
+
+def _has_surrogate(text):
+    """A lone surrogate can't be encoded, so a string holding one never fits."""
+    return any("\ud800" <= ch <= "\udfff" for ch in text)
+
+
+def _js_len(text):
+    return sum(2 if ord(ch) > 0xFFFF else 1 for ch in text)
+
+
+def _is_text(value, limit):
+    """cleanInsights isText: a string, not blank by JS trim, at most `limit` UTF-16 units."""
+    return (isinstance(value, str) and not _has_surrogate(value) and value.strip(JS_WHITESPACE) != ""
+            and _js_len(value) <= limit)
+
+
+def _clean_line(value, field):
+    """cleanLine, with cites deduped in order and at least one required. None drops the line whole."""
+    if not isinstance(value, dict) or not _is_text(value.get(field), PUBLISH_MAX_TEXT):
+        return None
+    raw = value.get("cites")
+    if not isinstance(raw, list):
+        return None
+    cites = []
+    for cite in raw:
+        if not _is_text(cite, PUBLISH_MAX_CITE):
+            return None
+        if cite not in cites:
+            cites.append(cite)
+    if not cites or len(cites) > PUBLISH_MAX_CITES:
+        return None
+    return {field: value[field], "cites": cites}
+
+
+def _clean_student(up):
+    """One student as the Worker stores it, or None when nothing of it survives."""
+    if not isinstance(up, dict):
+        return None
+    as_of = up.get("as_of")
+    stories = []
+    raw = up.get("stories")
+    for story in raw if isinstance(raw, list) else []:
+        line = _clean_line(story, "story")
+        if line and _is_text(story.get("class"), PUBLISH_MAX_CLASS):
+            kept = {"class": story["class"], **line}
+            # cleanInsights keeps tags from the fixed set, one of each; bad tags go alone, the story stays.
+            if _is_tags(story.get("tags")) and story["tags"]:
+                kept["tags"] = list(story["tags"])
+            stories.append(kept)
+    # Sorted (class name, then a stable tie-break) before the story cap, so input order never changes the bytes.
+    stories = sorted(stories, key=_story_order)[:PUBLISH_MAX_STORIES]
+    _one_of_each_tag(stories)
+    if not stories:
+        return None
+    return {"as_of": as_of if _is_text(as_of, PUBLISH_MAX_AS_OF) else None, "stories": stories}
+
+
+def _story_order(story):
+    """Publish order, the same as insights_writer.story_order (the writer loads lazily, so it isn't imported
+    here): class name, then the story's own text, cites and tags as a stable tie-break."""
+    return (str(story.get("class")), str(story.get("story")),
+            json.dumps(story.get("cites"), sort_keys=True), json.dumps(story.get("tags"), sort_keys=True))
+
+
+def _one_of_each_tag(stories):
+    """At most one easiest_win and one biggest_risk per kid: the first story in publish order keeps each,
+    later stories lose it, and a story left with no tag has no tags key (as cleanInsights stores it)."""
+    seen = set()
+    for story in stories:
+        if "tags" not in story:
+            continue
+        story["tags"] = [tag for tag in story["tags"] if tag not in seen]
+        seen.update(story["tags"])
+        if not story["tags"]:
+            del story["tags"]
+
+
+def _is_tags(value):
+    return (isinstance(value, list) and all(isinstance(tag, str) and tag in PUBLISH_STORY_TAGS for tag in value)
+            and len(set(value)) == len(value))
+
+
+def insights_body(doc):
+    """The exact bytes InsightsPublisher sends for `doc`."""
+    return json.dumps(doc).encode("utf-8")
+
+
+def _fit_body(doc):
+    """Drop stories until the body is within PUBLISH_MAX_BYTES: always the last story of the largest
+    student (ties go to the later student); a student left with no story goes."""
+    students = doc["students"]
+    size = len(insights_body(doc))
+    sizes = {key: len(json.dumps(up)) for key, up in students.items()}
+    while size > PUBLISH_MAX_BYTES and students:
+        order = list(students)
+        key = max(order, key=lambda k: (sizes[k], order.index(k)))
+        up = students[key]
+        up["stories"].pop()
+        if not up["stories"]:
+            del students[key], sizes[key]
+            size = len(insights_body(doc))
+            continue
+        new = len(json.dumps(up))
+        size += new - sizes[key]
+        sizes[key] = new
+    if len(insights_body(doc)) > PUBLISH_MAX_BYTES:
+        # Can't happen with the drops above; if it ever does, send nothing rather than fail the night.
+        students.clear()
+    return doc
+
+
+def insights_doc(write_ups):
+    """{"students": {sn: {"as_of", "stories"}}} that the Worker's cleanInsights accepts unchanged.
+
+    A write-up whose student key isn't 1-32 ASCII letters, digits or dashes is skipped, as is one with
+    nothing left after its bad lines are dropped. At most 8 students; the body stays under 256 KB.
+    """
+    students = {}
+    past_cap = 0
+    for up in write_ups or []:
+        sn = (up or {}).get("sn") if isinstance(up, dict) else None
+        if isinstance(sn, bool) or not isinstance(sn, (str, int)):
+            continue
+        sn = str(sn).strip(JS_WHITESPACE)
+        if not STUDENT_KEY_RE.fullmatch(sn) or sn in students:
+            continue
+        clean = _clean_student(up)
+        if clean is None:
+            continue
+        if len(students) == PUBLISH_MAX_STUDENTS:
+            past_cap += 1
+            continue
+        students[sn] = clean
+    if past_cap:
+        # The count only: no student keys, names or scores.
+        print(f"grade-insights: publish keeps {PUBLISH_MAX_STUDENTS} students; {past_cap} more left out",
+              file=sys.stderr)
+    return _fit_body({"students": students})
+
+
+def publisher_put(env=None, publisher=None):
+    """The publish callable for WriterWork, or None while GRADE_INSIGHTS_PUBLISH is not "1"."""
+    if (env if env is not None else os.environ).get(PUBLISH_FLAG) != "1":
+        return None
+    return (publisher or InsightsPublisher()).put
 
 
 class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
@@ -371,7 +584,7 @@ def writer_upcoming(log=print):
 
 
 def load_students(client, upcoming_items=None, log=print):
-    """[{"insight_facts", "log_items", "upcoming"}] per student with facts, for the writer.
+    """[{"sn", "insight_facts", "log_items", "upcoming"}] per student with facts, for the writer.
 
     Two GETs on the read-only session: the latest grades and the scored log. Students are
     matched to their log by the same key the scrape writes under; nothing here is logged.
@@ -390,7 +603,8 @@ def load_students(client, upcoming_items=None, log=print):
             continue
         entry = logged.get(str(student.get("sn"))) or {}
         upcoming = build(class_inputs(student), facts["as_of"]) if build and facts.get("as_of") else []
-        students.append({"insight_facts": facts, "log_items": entry.get("items") or [], "upcoming": upcoming})
+        students.append({"sn": str(student.get("sn") or ""), "insight_facts": facts,
+                         "log_items": entry.get("items") or [], "upcoming": upcoming})
     return students
 
 

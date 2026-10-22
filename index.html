@@ -1859,6 +1859,54 @@
             letter-spacing: 0;
         }
         .glance-look-next li { margin: 0 0 3px; }
+        .glance-insights { margin-bottom: 14px; min-width: 0; max-width: 100%; }
+        .glance-insights > *, .glance-insight-list, .glance-insight-row,
+        .glance-drawer-top > div { min-width: 0; }
+        .glance-insight-class,
+        .glance-insight-story,
+        .glance-local-story {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: normal;
+            max-width: 100%;
+        }
+        .glance-insight-list { padding: 0 24px 18px; }
+        .glance-insight-row {
+            padding: 10px 0;
+            border-top: 1px solid rgba(111, 128, 118, .16);
+        }
+        .glance-insight-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 8px;
+            min-width: 0;
+        }
+        .glance-insight-class {
+            display: block;
+            color: var(--g-ink);
+            font-size: var(--g-fs-note);
+            font-weight: 750;
+        }
+        .glance-insight-tag {
+            flex: none;
+            padding: 1px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 750;
+            line-height: 1.5;
+            white-space: nowrap;
+        }
+        .glance-insight-tag.win { color: var(--g-forest); background: var(--g-forest-soft); }
+        .glance-insight-tag.risk { color: var(--g-amber); background: var(--g-amber-soft); }
+        .glance-insight-story,
+        .glance-local-story {
+            margin: 3px 0 0;
+            color: var(--g-muted);
+            font-size: var(--g-fs-sub);
+            line-height: 1.45;
+        }
+        .glance-local-story { margin: 8px 0 0; color: var(--g-ink); }
         .glance-look-next.is-empty {
             margin-left: 0;
             padding-left: 24px;
@@ -2434,6 +2482,7 @@
                 <p class="glance-drawer-kicker" id="glanceDrawerKicker">Verified detail</p>
                 <h2 id="glanceDrawerTitle">Item details</h2>
                 <p class="glance-drawer-class" id="glanceDrawerClass"></p>
+                <p class="glance-local-story" id="glanceLocalStory" hidden></p>
             </div>
             <button class="glance-close" id="glanceClose" type="button" aria-label="Close details">×</button>
         </div>
@@ -2560,6 +2609,8 @@
         let lastPaintedStamp = null;
         let glanceStore = {};
         let glanceLastFocus = null;
+        // The mini's local write-ups from GET /v1/grades/insights, or null.
+        let localInsights = null;
 
         async function loadData() {
             if (location.protocol === 'file:') {
@@ -2590,6 +2641,7 @@
                     return null;
                 }
                 if (!resp.ok) throw new Error(payload.error || 'No data');
+                localInsights = await loadLocalInsights(token);
                 return payload.latest || payload;
             } catch (e) {
                 document.getElementById('dashboards').innerHTML = `
@@ -3282,6 +3334,9 @@
             const classes = student.ai_summary?.classes;
             if (!classes) return null;
             const cn = normalizeName(courseName);
+            // Exact normalized name first; containment only when no class matches exactly.
+            const exact = cn ? classes.find(cls => normalizeName(cls.class_name) === cn) : null;
+            if (exact) return exact;
             let best = null;
             let bestLen = 0;
             for (const cls of classes) {
@@ -5567,6 +5622,154 @@
             </div>`;
         }
 
+        // ── Local grade notes (the mini's write-ups) ─────────────────────────
+        // Every story, tag and class title below goes in with textContent only, never as markup.
+
+        async function loadLocalInsights(token) {
+            try {
+                const resp = await fetch(apiBase() + '/v1/grades/insights', {
+                    cache: 'no-store',
+                    headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
+                });
+                if (!resp.ok) return null;
+                const body = await resp.json().catch(() => ({}));
+                const doc = body && body.insights;
+                return doc && typeof doc === 'object' && doc.students && typeof doc.students === 'object' ? doc : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function localWriteUpFor(student, insights = localInsights) {
+            const all = insights && insights.students;
+            if (!all || typeof all !== 'object' || !student || student.sn == null) return null;
+            const up = all[String(student.sn)];
+            if (!up || typeof up !== 'object' || !Array.isArray(up.stories)) return null;
+            return up;
+        }
+
+        // Same rule as insights_writer.match_stories: exact normalized name first; a contains match only
+        // when exactly one untaken story fits the class and that story fits no other unmatched class.
+        function matchLocalStories(stories, classNames) {
+            const keyed = (stories || [])
+                .map(s => [normalizeName(s && s.class), s])
+                .filter(([name]) => name);
+            const wants = (classNames || []).map(n => normalizeName(n));
+            const taken = new Set();
+            const picks = wants.map(want => {
+                const hit = keyed.find(([name, s]) => want && name === want && !taken.has(s));
+                if (!hit) return null;
+                taken.add(hit[1]);
+                return hit[1];
+            });
+            const loose = new Map();
+            wants.forEach((want, i) => {
+                if (picks[i] === null && want) {
+                    loose.set(i, keyed.filter(([name, s]) => !taken.has(s) && (want.includes(name) || name.includes(want)))
+                        .map(([, s]) => s));
+                }
+            });
+            for (const [i, hits] of loose) {
+                if (hits.length !== 1) continue;
+                const rivals = [...loose].some(([j, other]) => j !== i && other.includes(hits[0]));
+                if (!rivals) picks[i] = hits[0];
+            }
+            return picks;
+        }
+
+        // Once a local write-up exists, no class shows the Grok story, status or going-well/going-wrong text.
+        function withLocalWriteUp(student, insights = localInsights) {
+            if (!localWriteUpFor(student, insights)) return student;
+            const blank = cls => ({ ...cls, story: '', status: '', going_well: '', going_wrong: '' });
+            const out = { ...student };
+            if (student.ai_summary) {
+                out.ai_summary = { ...student.ai_summary, classes: (student.ai_summary.classes || []).map(blank) };
+            }
+            if (student.view && Array.isArray(student.view.classes)) {
+                out.view = { ...student.view, classes: student.view.classes.map(blank) };
+            }
+            return out;
+        }
+
+        // "2026-10-21" -> "Oct 21". Anything else, an impossible date like Feb 31 included -> ''
+        // (the card then says "From the posted grades"; never an ISO date on the page).
+        function shortPostedDate(asOf) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(asOf || ''));
+            if (!m) return '';
+            const month = Number(m[2]);
+            const day = Number(m[3]);
+            const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const check = new Date(Date.UTC(Number(m[1]), month - 1, day));
+            if (month < 1 || month > 12 || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return '';
+            return `${names[month - 1]} ${day}`;
+        }
+
+        function textEl(tag, className, text) {
+            const el = document.createElement(tag);
+            if (className) el.className = className;
+            el.textContent = text == null ? '' : String(text);
+            return el;
+        }
+
+        function buildLocalInsights(up, courses) {
+            const picks = matchLocalStories(up.stories, courses);
+            const section = document.createElement('section');
+            section.className = 'glance-card glance-insights';
+            section.setAttribute('aria-label', 'Grade notes');
+            const head = document.createElement('div');
+            head.className = 'glance-section-head';
+            const titles = document.createElement('div');
+            titles.appendChild(textEl('h2', '', 'Grade notes'));
+            const through = shortPostedDate(up.as_of);
+            titles.appendChild(textEl('p', '', through ? `From grades posted through ${through}` : 'From the posted grades'));
+            head.appendChild(titles);
+            section.appendChild(head);
+            // Code tags (the writer's story_tags): tagged classes first, Easiest win then Biggest risk, each
+            // with its tag after the class name. The other classes keep their order. One of each per kid, as the
+            // runner sends them: if a payload ever carries more, the first class shown with a story keeps it.
+            const tagOrder = [['easiest_win', 'Easiest win', 'win'], ['biggest_risk', 'Biggest risk', 'risk']];
+            const shown = new Set();
+            const rows = courses.map((course, i) => {
+                const pick = picks[i];
+                const story = pick && typeof pick.story === 'string' ? pick.story.trim() : '';
+                const sent = story && pick && Array.isArray(pick.tags) ? pick.tags : [];
+                const tags = tagOrder.filter(([tag]) => sent.includes(tag) && !shown.has(tag));
+                tags.forEach(([tag]) => shown.add(tag));
+                const rank = tags.length ? tagOrder.indexOf(tags[0]) : tagOrder.length;
+                return { course, story, tags, rank };
+            }).filter(row => row.story);
+            rows.sort((a, b) => a.rank - b.rank);
+            const list = document.createElement('div');
+            list.className = 'glance-insight-list';
+            rows.forEach(({ course, story, tags }) => {
+                const row = document.createElement('div');
+                row.className = 'glance-insight-row';
+                const line = document.createElement('div');
+                line.className = 'glance-insight-head';
+                line.appendChild(textEl('span', 'glance-insight-class', course));
+                tags.forEach(([, label, tone]) => line.appendChild(textEl('span', `glance-insight-tag ${tone}`, label)));
+                row.appendChild(line);
+                row.appendChild(textEl('p', 'glance-insight-story', story));
+                list.appendChild(row);
+            });
+            if (!list.childNodes.length) list.appendChild(textEl('p', 'glance-insight-story', 'No class notes tonight.'));
+            section.appendChild(list);
+            return { section, picks };
+        }
+
+        function mountLocalInsights(dashboard, student, idx) {
+            const up = localWriteUpFor(student);
+            const g = glanceStore[idx];
+            const before = dashboard.querySelector('.glance-standing');
+            if (!up || !g || !before) return;
+            const standing = g.standing || [];
+            const { section, picks } = buildLocalInsights(up, standing.map(card => card.course));
+            standing.forEach((card, i) => {
+                card.local_story = picks[i] && typeof picks[i].story === 'string' ? picks[i].story.trim() : '';
+            });
+            before.parentNode.insertBefore(section, before);
+        }
+
         function glanceItemById(idx, id) {
             const g = glanceStore[idx];
             if (!g) return null;
@@ -5589,6 +5792,9 @@
             }
             document.getElementById('glanceDrawerTitle').textContent = (item.drawer && item.drawer.title) || item.title || item.course;
             document.getElementById('glanceDrawerClass').textContent = (item.drawer && item.drawer.course) || item.course || '';
+            const localStoryEl = document.getElementById('glanceLocalStory');
+            localStoryEl.textContent = item.local_story || '';
+            localStoryEl.hidden = !item.local_story;
             const work = item.drawer && Array.isArray(item.drawer.work) ? item.drawer.work : null;
             const itemDepth = document.getElementById('glanceItemDepth');
             const workList = document.getElementById('glanceWorkList');
@@ -5890,7 +6096,8 @@
                 const dashboard = document.createElement('div');
                 dashboard.className = `dashboard ${i === keepIndex ? 'active' : ''}`;
                 dashboard.id = `dashboard-${i}`;
-                dashboard.innerHTML = renderStudent(student, i);
+                dashboard.innerHTML = renderStudent(withLocalWriteUp(student), i);
+                mountLocalInsights(dashboard, student, i);
                 dashboardsEl.appendChild(dashboard);
             });
 

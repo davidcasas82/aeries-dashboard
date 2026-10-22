@@ -367,8 +367,13 @@ class ReadOnlyClientTests(unittest.TestCase):
     def test_the_runner_source_sends_nothing_else(self):
         """Fails if any code path in the runner gains another non-GET."""
         source = Path(runner.__file__).read_text()
-        self.assertNotRegex(source, r"\b(PUT|PATCH|DELETE)\b")
+        self.assertNotRegex(source, r"\b(PATCH|DELETE)\b")
         self.assertEqual(re.findall(r'"POST"', source), ['"POST"', '"POST"'])
+        # The one PUT is InsightsPublisher's, to the insights path only.
+        self.assertEqual(re.findall(r'"PUT"', source), ['"PUT"'])
+        publisher = source[source.index("class InsightsPublisher"):source.index("def insights_doc")]
+        self.assertIn('method="PUT"', publisher)
+        self.assertIn("self._base + INSIGHTS_PATH", publisher)
         self.assertNotIn("requests", re.findall(r"^import (\w+)", source, re.M))
         self.assertEqual(re.findall(r"urlopen\(", source), ["urlopen("])
         self.assertEqual(re.findall(r"\.open\(", source), [".open("])
@@ -458,6 +463,7 @@ class LoaderTests(unittest.TestCase):
         self.assertEqual(students[0]["upcoming"][0]["title"], "Ch. 5 Test")
         self.assertEqual(students[0]["log_items"], [{"class": "Math", "first_seen": "2026-10-16"}])
         self.assertEqual(students[0]["insight_facts"]["as_of"], "2026-10-22")
+        self.assertEqual(students[0]["sn"], "9001")
         classes, as_of = seen[0]
         self.assertEqual(as_of, "2026-10-22")
         self.assertEqual([c["name"] for c in classes], ["Math"])
@@ -581,6 +587,253 @@ class LoaderTests(unittest.TestCase):
         self.assertEqual(client.calls, ["latest", "log"])
         whatif = next(f for f in drafts[0]["facts"] if f["kind"] == "what_if")
         self.assertEqual((whatif["next_title"], whatif["next_due"]), ("Ch. 5 Test", "2026-10-30"))
+
+
+SECRET_STANDIN = "insights-secret-standin-not-real"
+
+
+class FakeOpener:
+    def __init__(self, status=200):
+        self.status, self.requests = status, []
+
+    def __call__(self, request):
+        self.requests.append(request)
+        return self.status, b'{"ok": true}'
+
+
+def worker_accepts(body):
+    """A mirror of family-data cleanInsights (src/insights.js): True when the Worker would take it."""
+    def js_len(text):
+        return len(text.encode("utf-16-le")) // 2
+
+    def text_ok(value, limit):
+        return isinstance(value, str) and value.strip() != "" and js_len(value) <= limit
+
+    def line_ok(value, field):
+        cites = value.get("cites") or []
+        return (isinstance(value, dict) and text_ok(value.get(field), 600) and len(cites) <= 12
+                and all(text_ok(c, 120) for c in cites))
+
+    students = body.get("students")
+    if not isinstance(students, dict) or len(students) > 8:
+        return False
+    for key, up in students.items():
+        if not re.fullmatch(r"[A-Za-z0-9-]{1,32}", key) or len(up.get("stories") or []) > 40:
+            return False
+        if up.get("as_of") is not None and not text_ok(up["as_of"], 40):
+            return False
+        if "headline" in up:
+            return False
+        if not all(line_ok(s, "story") and text_ok(s.get("class"), 120) for s in up.get("stories") or []):
+            return False
+    return True
+
+
+class InsightsPublisherTests(unittest.TestCase):
+    """PR5's write path. The network is always a fake: no real PUT ever leaves a test."""
+
+    UPS = [
+        {"sn": "9001", "as_of": "2026-10-22",
+         "stories": [{"class": "Math", "story": "Still a B, 2.1 points from an A.", "cites": ["gap:math"],
+                      "tags": ["easiest_win"], "dropped": ["kept local"]}]},
+        {"as_of": "2026-10-22", "stories": []},
+    ]
+
+    def test_the_keychain_item_is_its_own_service(self):
+        self.assertEqual(runner.INSIGHTS_KEYCHAIN_SERVICE, "family-data-insights-write")
+        self.assertNotEqual(runner.INSIGHTS_KEYCHAIN_SERVICE, runner.PIN_KEYCHAIN_SERVICE)
+        with mock.patch.object(runner, "keychain_secret", return_value=SECRET_STANDIN) as read:
+            self.assertEqual(runner.insights_secret(), SECRET_STANDIN)
+        read.assert_called_once_with("family-data-insights-write", "aeries")
+
+    def test_put_sends_one_bearer_put_to_the_insights_path_only(self):
+        opener = FakeOpener()
+        reads = []
+        publisher = runner.InsightsPublisher(secret=lambda: reads.append(1) or SECRET_STANDIN,
+                                             base="https://family-data.example/", opener=opener)
+        self.assertEqual(reads, [])
+        self.assertTrue(publisher.put(self.UPS))
+        self.assertEqual(len(opener.requests), 1)
+        request = opener.requests[0]
+        self.assertEqual(request.get_method(), "PUT")
+        self.assertEqual(request.full_url, "https://family-data.example/v1/grades/insights")
+        self.assertEqual(request.get_header("Authorization"), f"Bearer {SECRET_STANDIN}")
+        body = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(list(body["students"]), ["9001"])
+        self.assertEqual(body["students"]["9001"]["stories"],
+                         [{"class": "Math", "story": "Still a B, 2.1 points from an A.", "cites": ["gap:math"],
+                           "tags": ["easiest_win"]}])
+        self.assertNotIn("kept local", request.data.decode("utf-8"))
+        self.assertEqual(reads, [1])
+
+    def test_a_failed_put_reports_the_status_only(self):
+        publisher = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=FakeOpener(status=404))
+        with self.assertRaises(runner.FamilyDataError) as caught:
+            publisher.put(self.UPS)
+        self.assertEqual(str(caught.exception), "PUT /v1/grades/insights returned 404")
+        self.assertNotIn(SECRET_STANDIN, str(caught.exception))
+
+    def test_a_redirect_is_never_followed(self):
+        """Through the real opener and _RefuseRedirects: a 302 is an error and the target gets nothing."""
+        import http.server
+        import threading
+
+        hits = {"origin": [], "elsewhere": []}
+
+        def handler(name, redirect_to=None):
+            class Handler(http.server.BaseHTTPRequestHandler):
+                def _any(self):
+                    length = int(self.headers.get("Content-Length") or 0)
+                    if length:
+                        self.rfile.read(length)
+                    hits[name].append((self.command, self.path, self.headers.get("Authorization")))
+                    if redirect_to:
+                        self.send_response(302)
+                        self.send_header("Location", f"http://127.0.0.1:{redirect_to()}/collect")
+                    else:
+                        self.send_response(200)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+
+                do_PUT = do_GET = do_POST = _any
+
+                def log_message(self, *args):
+                    pass
+
+            return Handler
+
+        elsewhere = http.server.HTTPServer(("127.0.0.1", 0), handler("elsewhere"))
+        origin = http.server.HTTPServer(("127.0.0.1", 0), handler("origin", lambda: elsewhere.server_port))
+        threads = [threading.Thread(target=srv.serve_forever, daemon=True) for srv in (origin, elsewhere)]
+        for thread in threads:
+            thread.start()
+        try:
+            publisher = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN,
+                                                 base=f"http://127.0.0.1:{origin.server_port}")
+            with self.assertRaises(runner.FamilyDataError) as caught:
+                publisher.put(self.UPS)
+        finally:
+            for srv, thread in zip((origin, elsewhere), threads):
+                srv.shutdown()
+                srv.server_close()
+                thread.join(timeout=5)
+        self.assertEqual(str(caught.exception), "PUT /v1/grades/insights returned 302")
+        self.assertEqual(hits["origin"], [("PUT", "/v1/grades/insights", f"Bearer {SECRET_STANDIN}")])
+        self.assertEqual(hits["elsewhere"], [])
+
+    def test_no_student_key_means_no_put_at_all(self):
+        opener = FakeOpener()
+        reads = []
+        publisher = runner.InsightsPublisher(secret=lambda: reads.append(1) or SECRET_STANDIN, opener=opener)
+        for ups in ([{"stories": []}], [], None, [{"sn": "", "stories": []}, {"as_of": "2026-10-22"}]):
+            self.assertIs(publisher.put(ups), False)
+        self.assertEqual(opener.requests, [])
+        self.assertEqual(reads, [])
+
+    def test_the_payload_is_capped_and_deduped_right_before_the_put(self):
+        cites12 = [f"fact:{i}" for i in range(12)]
+        ups = [{"sn": "9001", "as_of": "2026-10-22",
+                "headline": {"text": "h" * 601, "cites": ["fact:0"]},
+                "stories": [
+                    {"class": "Math", "story": "Dup cites.", "cites": ["a", "b", "a", "b", "a"]},
+                    {"class": "Art", "story": "No cites."},
+                    {"class": "Art", "story": "Empty cites.", "cites": []},
+                    {"class": "Biology", "story": "Too many.", "cites": cites12 + ["fact:12"]},
+                    {"class": "Biology", "story": "x" * 601, "cites": ["fact:0"]},
+                    {"class": "Chem", "story": "y" * 600, "cites": cites12 + cites12},
+                    {"class": "Spanish", "story": "Long cite.", "cites": ["c" * 121]},
+                ]}]
+        opener = FakeOpener()
+        runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener).put(ups)
+        body = json.loads(opener.requests[0].data.decode("utf-8"))
+        kid = body["students"]["9001"]
+        self.assertNotIn("headline", kid)
+        # Sorted by class name before publishing.
+        self.assertEqual(kid["stories"], [
+            {"class": "Chem", "story": "y" * 600, "cites": cites12},
+            {"class": "Math", "story": "Dup cites.", "cites": ["a", "b"]},
+        ])
+        self.assertTrue(worker_accepts(body))
+
+    def test_the_guard_holds_in_behavior_too(self):
+        client = runner.ReadOnlyFamilyData(pin=lambda: "0000", opener=FakeOpener())
+        for method in ("PUT", "PATCH", "DELETE", "POST"):
+            with self.assertRaises(runner.FamilyDataError):
+                client._send(method, "/v1/grades/insights", {})
+        opener = FakeOpener()
+        runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener).put(self.UPS)
+        self.assertEqual([(r.get_method(), r.full_url.split("/", 3)[3]) for r in opener.requests],
+                         [("PUT", "v1/grades/insights")])
+
+    def test_publishing_is_off_unless_the_flag_is_exactly_1(self):
+        fake = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=FakeOpener())
+        for env in ({}, {"GRADE_INSIGHTS_PUBLISH": ""}, {"GRADE_INSIGHTS_PUBLISH": "0"},
+                    {"GRADE_INSIGHTS_PUBLISH": "true"}):
+            self.assertIsNone(runner.publisher_put(env, fake), env)
+        self.assertEqual(runner.publisher_put({"GRADE_INSIGHTS_PUBLISH": "1"}, fake), fake.put)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(runner.publisher_put())
+
+    @unittest.skipUnless(writer_has_upcoming(), "needs the writer's WriterWork (PR #52)")
+    def test_the_nightly_publish_step_puts_the_write_ups_keyed_by_student(self):
+        class Model:
+            def complete(self, system, user):
+                return json.dumps({"sentences": []})
+
+        import insights_writer
+
+        def one_story(model, facts, log_items=None, votes=None, upcoming=None):
+            return {"as_of": facts["as_of"], "stories": [
+                {"class": "Math", "story": "Still a B, 2.1 points from an A.", "cites": ["whatif:math:tests:50"],
+                 "slotted": "x", "dropped": ["vote"]}]}
+
+        opener = FakeOpener()
+        fake = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener)
+        env = {"GRADE_INSIGHTS_PUBLISH": "1"}
+        lines = []
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(insights_writer, "write_up", one_story):
+            work = runner.writer_work(FakeClient(), Model(), tmp, put=runner.publisher_put(env, fake), env=env,
+                                      log=lines.append)
+            for step in work.plan("2026-10-22"):
+                work.run_step("2026-10-22", step)
+        self.assertEqual(len(opener.requests), 1)
+        body = json.loads(opener.requests[0].data.decode("utf-8"))
+        self.assertEqual(list(body["students"]), ["9001"])
+        self.assertEqual(body["students"]["9001"]["as_of"], "2026-10-22")
+        self.assertFalse(any(SECRET_STANDIN in line for line in lines))
+
+    @unittest.skipUnless(writer_has_upcoming(), "needs the writer's WriterWork (PR #52)")
+    def test_a_night_with_no_surviving_lines_sends_nothing(self):
+        class Model:
+            def complete(self, system, user):
+                return json.dumps({"sentences": []})
+
+        opener = FakeOpener()
+        fake = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener)
+        env = {"GRADE_INSIGHTS_PUBLISH": "1"}
+        with tempfile.TemporaryDirectory() as tmp:
+            work = runner.writer_work(FakeClient(), Model(), tmp, put=runner.publisher_put(env, fake), env=env)
+            for step in work.plan("2026-10-22"):
+                work.run_step("2026-10-22", step)
+            published = json.loads((Path(tmp) / "2026-10-22" / "publish.json").read_text())
+        self.assertEqual(opener.requests, [])
+        self.assertEqual(published, {"published": False})
+
+    @unittest.skipUnless(writer_has_upcoming(), "needs the writer's WriterWork (PR #52)")
+    def test_with_the_flag_unset_the_publish_step_sends_nothing(self):
+        class Model:
+            def complete(self, system, user):
+                return json.dumps({"sentences": []})
+
+        opener = FakeOpener()
+        fake = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener)
+        with tempfile.TemporaryDirectory() as tmp:
+            work = runner.writer_work(FakeClient(), Model(), tmp, put=runner.publisher_put({}, fake), env={})
+            for step in work.plan("2026-10-22"):
+                work.run_step("2026-10-22", step)
+            published = json.loads((Path(tmp) / "2026-10-22" / "publish.json").read_text())
+        self.assertEqual(opener.requests, [])
+        self.assertEqual(published, {"published": False})
 
 
 class FreshnessTests(unittest.TestCase):
