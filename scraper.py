@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 
 import classroom
 import glance
+import insights
 
 load_dotenv()
 
@@ -5072,6 +5073,44 @@ def previous_snapshot(history, student_sn, before_date):
     return best
 
 
+def newly_scored_keys(prior_class_row, assignments):
+    """Title keys scored now that the previous evening's item list had as not yet scored."""
+    before = {
+        _history_item_key(item.get("title")): item.get("state")
+        for item in (prior_class_row or {}).get("items") or []
+    }
+    keys = []
+    for assignment in assignments:
+        key = _history_item_key(assignment.get("description"))
+        if assignment.get("points_earned") is not None and before.get(key) in ("open", "turned_in", "missing"):
+            keys.append(key)
+    return keys
+
+
+def attach_insight_facts(student_data, history, student_sn, today=None):
+    """student_data["insight_facts"]: grade facts the insights writer may restate, by id."""
+    today = today or pacific_today()
+    entry = (history.get("students") or {}).get(str(student_sn)) or {}
+    snapshots = entry.get("snapshots") or []
+    prior = previous_snapshot(history, student_sn, today)
+    classes = []
+    for class_meta in student_data.get("classes") or []:
+        name = (class_meta.get("course_name") or "").strip()
+        assignments = assignments_for_class(student_data, class_meta)
+        if not name or not class_has_real_grade(class_meta, assignments):
+            continue
+        classes.append({
+            "name": name,
+            "pct": safe_float(class_meta.get("percent")),
+            "mark": (class_meta.get("mark") or "").strip(),
+            "counted_insight": class_meta.get("counted_insight"),
+            "assignments": assignments,
+            "new_keys": newly_scored_keys(((prior or {}).get("classes") or {}).get(name), assignments),
+        })
+    student_data["insight_facts"] = insights.student_facts(classes, snapshots, prior, today)
+    return student_data["insight_facts"]
+
+
 def apply_daily_change_snapshot(history, student_sn, student_name, student_data, class_list, now=None):
     """Write today's snapshot. Only the evening scrape records the assignment diff."""
     now = now or pacific_now()
@@ -5427,6 +5466,11 @@ def scrape_all():
                 )
 
             attach_student_view(student_data, history_context=history_context)
+            try:
+                facts = attach_insight_facts(student_data, history, student["sn"])
+                print(f"  Insight facts: {len(facts['facts'])}")
+            except Exception as exc:
+                print(f"::warning::insight facts skipped for {label} ({exc})")
 
             # One snapshot per Pacific day. The evening scrape records the assignment
             # diff and the Since yesterday sentence. Earlier scrapes keep that note.
