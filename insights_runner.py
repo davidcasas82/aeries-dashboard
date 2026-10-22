@@ -353,6 +353,7 @@ PUBLISH_MAX_CITES = 12
 PUBLISH_MAX_CITE = 120
 PUBLISH_MAX_CLASS = 120
 PUBLISH_MAX_AS_OF = 40
+PUBLISH_STORY_TAGS = ("easiest_win", "biggest_risk")
 STUDENT_KEY_RE = re.compile(r"[A-Za-z0-9-]{1,32}", re.ASCII)
 # String.prototype.trim's set: WhiteSpace (incl. U+FEFF and Zs) and LineTerminator. Not Python's strip().
 JS_WHITESPACE = ("\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008"
@@ -397,24 +398,26 @@ def _clean_student(up):
     if not isinstance(up, dict):
         return None
     as_of = up.get("as_of")
-    headline = _clean_line(up.get("headline"), "text")
-    if headline is not None:
-        # cleanInsights keeps an optional headline class under the story-class rule; a bad one goes alone.
-        cls = up["headline"].get("class")
-        if _is_text(cls, PUBLISH_MAX_CLASS):
-            headline["class"] = cls
     stories = []
     raw = up.get("stories")
     for story in raw if isinstance(raw, list) else []:
         line = _clean_line(story, "story")
         if line and _is_text(story.get("class"), PUBLISH_MAX_CLASS):
-            stories.append({"class": story["class"], **line})
+            kept = {"class": story["class"], **line}
+            # cleanInsights keeps tags from the fixed set, one of each; bad tags go alone, the story stays.
+            if _is_tags(story.get("tags")) and story["tags"]:
+                kept["tags"] = list(story["tags"])
+            stories.append(kept)
         if len(stories) == PUBLISH_MAX_STORIES:
             break
-    if headline is None and not stories:
+    if not stories:
         return None
-    return {"as_of": as_of if _is_text(as_of, PUBLISH_MAX_AS_OF) else None, "headline": headline,
-            "stories": stories}
+    return {"as_of": as_of if _is_text(as_of, PUBLISH_MAX_AS_OF) else None, "stories": stories}
+
+
+def _is_tags(value):
+    return (isinstance(value, list) and all(isinstance(tag, str) and tag in PUBLISH_STORY_TAGS for tag in value)
+            and len(set(value)) == len(value))
 
 
 def insights_body(doc):
@@ -424,7 +427,7 @@ def insights_body(doc):
 
 def _fit_body(doc):
     """Drop stories until the body is within PUBLISH_MAX_BYTES: always the last story of the largest
-    student (ties go to the later student), then a student left with only a headline loses it and goes."""
+    student (ties go to the later student); a student left with no story goes."""
     students = doc["students"]
     size = len(insights_body(doc))
     sizes = {key: len(json.dumps(up)) for key, up in students.items()}
@@ -432,11 +435,8 @@ def _fit_body(doc):
         order = list(students)
         key = max(order, key=lambda k: (sizes[k], order.index(k)))
         up = students[key]
-        if up["stories"]:
-            up["stories"].pop()
-        else:
-            up["headline"] = None
-        if up["headline"] is None and not up["stories"]:
+        up["stories"].pop()
+        if not up["stories"]:
             del students[key], sizes[key]
             size = len(insights_body(doc))
             continue
@@ -450,7 +450,7 @@ def _fit_body(doc):
 
 
 def insights_doc(write_ups):
-    """{"students": {sn: {"as_of", "headline", "stories"}}} that the Worker's cleanInsights accepts unchanged.
+    """{"students": {sn: {"as_of", "stories"}}} that the Worker's cleanInsights accepts unchanged.
 
     A write-up whose student key isn't 1-32 ASCII letters, digits or dashes is skipped, as is one with
     nothing left after its bad lines are dropped. At most 8 students; the body stays under 256 KB.

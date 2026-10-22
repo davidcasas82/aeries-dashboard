@@ -70,9 +70,8 @@ class LocalNotesPageTests(unittest.TestCase):
     def test_malicious_class_and_assignment_titles_render_as_plain_text(self):
         up = {
             "as_of": "2026-10-21",
-            "headline": {"text": f"{SCRIPT_TITLE}: a 90 or better on {IMG_TITLE} gets it to an A."},
             "stories": [
-                {"class": SCRIPT_TITLE, "story": f"Still a B. The {IMG_TITLE} (4/10) hurt."},
+                {"class": SCRIPT_TITLE, "story": f"Still a B. The {IMG_TITLE} (4/10) hurt.", "tags": ["biggest_risk"]},
                 {"class": "Biology", "story": f"Still an A. The {SCRIPT_TITLE} Lab (9/10) helped."},
             ],
         }
@@ -90,7 +89,7 @@ class LocalNotesPageTests(unittest.TestCase):
         self.assertNotIn("SCRIPT", got["tags"])
         self.assertNotIn("IMG", got["tags"])
         self.assertIn(SCRIPT_TITLE, got["texts"])
-        self.assertIn(up["headline"]["text"], got["texts"])
+        self.assertIn("Biggest risk", got["texts"])
         self.assertIn(up["stories"][0]["story"], got["texts"])
         self.assertIn(up["stories"][1]["story"], got["texts"])
 
@@ -136,7 +135,7 @@ class LocalNotesPageTests(unittest.TestCase):
         kid_a = {"sn": "9001", "ai_summary": {"headline": "Grok briefing", "classes": [grok]},
                  "view": {"classes": [{"course_name": "Art", "story": "Grok view story"}]}}
         kid_b = {"sn": "9002", "ai_summary": {"classes": [grok]}}
-        insights = {"students": {"9001": {"headline": None, "stories": []}}}
+        insights = {"students": {"9001": {"stories": []}}}
         got = run_page(
             "process.stdout.write(JSON.stringify([withLocalWriteUp(data.a, data.i), withLocalWriteUp(data.b, data.i),"
             " withLocalWriteUp(data.a, null)]));",
@@ -163,49 +162,72 @@ class LocalNotesPageTests(unittest.TestCase):
         self.assertEqual(got["sub"], ["From grades posted through Oct 21", "From the posted grades"])
 
     def test_notes_and_drawer_story_text_wrap(self):
-        css = HTML[HTML.index(".glance-insights-headline,\n"):]
+        css = HTML[HTML.index(".glance-insight-class,\n"):]
         css = css[:css.index("}") + 1]
         for rule in ("white-space: normal", "overflow-wrap: anywhere", ".glance-local-story", ".glance-insight-story"):
             self.assertIn(rule, css)
         self.assertRegex(HTML, r"\.glance-insight-row,\s*\n\s*\.glance-drawer-top > div \{ min-width: 0; \}")
 
-    def test_the_headline_is_label_then_class_line_then_sentence(self):
-        sentence = "A 97 or better on the next summative gets it to a B."
-        ups = [{"headline": {"class": "Int Eng&Marktg", "text": sentence, "cites": ["w"]}, "stories": []},
-               {"headline": {"text": sentence, "cites": ["w"]}, "stories": []},
-               {"headline": {"class": "  ", "text": sentence, "cites": ["w"]}, "stories": []},
-               {"headline": {"class": SCRIPT_TITLE, "text": IMG_TITLE, "cites": ["w"]}, "stories": []},
-               {"headline": {"class": "Art", "text": "  ", "cites": ["w"]}, "stories": []}]
+    def rows(self, up, courses):
         got = run_page(
-            "process.stdout.write(JSON.stringify({writes: innerHtmlWrites, tops: data.ups.map(up => {"
-            "  const top = walk(buildLocalInsights(up, []).section).find(n => n.className === 'glance-insights-headline');"
-            "  return top ? top.childNodes.map(n => [n.tagName, n.className, n._text]) : null; })}));",
-            {"ups": ups},
+            "const rows = walk(buildLocalInsights(data.up, data.courses).section)"
+            "  .filter(n => n.className === 'glance-insight-row')"
+            "  .map(r => r.childNodes.map(n => n.childNodes.length ? n.childNodes.map(c => [c.className, c._text])"
+            "    : [n.className, n._text]));\n"
+            "process.stdout.write(JSON.stringify({writes: innerHtmlWrites, rows}));",
+            {"up": up, "courses": courses},
         )
-        label = ["SPAN", "glance-insights-label", "Top focus area"]
-        self.assertEqual(got["tops"][0], [label, ["SPAN", "glance-insight-class glance-insights-class", "Int Eng&Marktg"],
-                                          ["P", "glance-insights-sentence", sentence]])
-        self.assertEqual(got["tops"][1], [label, ["P", "glance-insights-sentence", sentence]])
-        self.assertEqual(got["tops"][2], [label, ["P", "glance-insights-sentence", sentence]])
-        self.assertEqual(got["tops"][3][1][2], SCRIPT_TITLE)
-        self.assertEqual(got["tops"][3][2][2], IMG_TITLE)
-        self.assertIsNone(got["tops"][4])
         self.assertEqual(got["writes"], [])
-        self.assertNotIn("Top move", HTML)
+        return got["rows"]
 
-    def test_the_headline_label_is_small_and_the_sentence_normal_weight(self):
+    def test_tagged_classes_come_first_with_the_tag_after_the_class_name(self):
+        story = lambda cls, tags=None: {"class": cls, "story": f"{cls} note.", **({"tags": tags} if tags else {})}
+        courses = ["Spanish", "Algebra", "Physics", "Marketing", "Art"]
+        win, risk = ["glance-insight-tag win", "Easiest win"], ["glance-insight-tag risk", "Biggest risk"]
+        rows = self.rows({"stories": [story("Spanish"), story("Algebra", ["easiest_win"]), story("Physics"),
+                                      story("Marketing", ["biggest_risk"]), story("Art")]}, courses)
+        self.assertEqual(rows, [
+            [[["glance-insight-class", "Algebra"], win], ["glance-insight-story", "Algebra note."]],
+            [[["glance-insight-class", "Marketing"], risk], ["glance-insight-story", "Marketing note."]],
+            [[["glance-insight-class", "Spanish"]], ["glance-insight-story", "Spanish note."]],
+            [[["glance-insight-class", "Physics"]], ["glance-insight-story", "Physics note."]],
+            [[["glance-insight-class", "Art"]], ["glance-insight-story", "Art note."]],
+        ])
+        # Risk listed before win in the payload still shows win first; one class with both shows both, in order.
+        both = self.rows({"stories": [story("Spanish"), story("Art", ["biggest_risk", "easiest_win"])]}, ["Spanish", "Art"])
+        self.assertEqual(both[0][0], [["glance-insight-class", "Art"], win, risk])
+        flipped = self.rows({"stories": [story("Spanish", ["biggest_risk"]), story("Art", ["easiest_win"])]},
+                            ["Spanish", "Art"])
+        self.assertEqual([r[0][0][1] for r in flipped], ["Art", "Spanish"])
+        # No tags: the current order, no tag and no separate top line.
+        plain = self.rows({"stories": [story("Spanish"), story("Art")]}, ["Spanish", "Art"])
+        self.assertEqual([r[0] for r in plain], [[["glance-insight-class", "Spanish"]], [["glance-insight-class", "Art"]]])
+        self.assertNotIn("Top focus area", HTML)
+        self.assertNotIn("glance-insights-headline", HTML)
+
+    def test_tags_render_only_their_fixed_labels_as_text(self):
+        rows = self.rows({"stories": [{"class": SCRIPT_TITLE, "story": IMG_TITLE,
+                                       "tags": [SCRIPT_TITLE, "easiest_win", IMG_TITLE, "<b>biggest_risk</b>"]},
+                                      {"class": "Art", "story": "Fine.", "tags": "easiest_win"}]}, [SCRIPT_TITLE, "Art"])
+        self.assertEqual(rows, [
+            [[["glance-insight-class", SCRIPT_TITLE], ["glance-insight-tag win", "Easiest win"]],
+             ["glance-insight-story", IMG_TITLE]],
+            [[["glance-insight-class", "Art"]], ["glance-insight-story", "Fine."]],
+        ])
+
+    def test_the_tag_is_small_and_tinted_with_theme_colors(self):
         def rule(selector):
             css = HTML[HTML.index(selector + " {"):]
             return css[:css.index("}") + 1]
-        label, sentence, action = rule(".glance-insights-label"), rule(".glance-insights-sentence"), rule(".glance-action-label")
-        for prop in ("color: var(--g-muted)", "font-size: var(--g-fs-label)", "font-weight: 800"):
-            self.assertIn(prop, label)
-            self.assertIn(prop, action)
-        self.assertIn("font-weight: 400", sentence)
-        self.assertNotIn("font-weight", rule(".glance-insights-headline"))
+        tag = rule(".glance-insight-tag")
+        for prop in ("font-size: 12px", "border-radius: 999px", "white-space: nowrap"):
+            self.assertIn(prop, tag)
+        self.assertIn("var(--g-forest-soft)", rule(".glance-insight-tag.win"))
+        self.assertIn("var(--g-amber-soft)", rule(".glance-insight-tag.risk"))
+        self.assertIn("flex-wrap: wrap", rule(".glance-insight-head"))
 
     def test_a_class_without_a_local_story_gets_no_row(self):
-        up = {"headline": None, "stories": [{"class": "Biology", "story": "Still an A."}]}
+        up = {"stories": [{"class": "Biology", "story": "Still an A."}]}
         got = run_page(
             "const { section, picks } = buildLocalInsights(data.up, data.courses);\n"
             "process.stdout.write(JSON.stringify({rows: walk(section).filter(n => n.className === "

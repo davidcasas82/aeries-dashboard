@@ -10,6 +10,7 @@ const MAX_STUDENTS = 8;
 const MAX_STORIES = 40;
 const MAX_TEXT = 600;
 const MAX_CITES = 12;
+const STORY_TAGS = ["easiest_win", "biggest_risk"];
 const STUDENT_KEY = /^[A-Za-z0-9-]{1,32}$/;
 const UPSERT = `INSERT INTO docs (app, key, payload, version, updated_at)
   VALUES (?, ?, ?, 1, ?)
@@ -60,9 +61,9 @@ export async function getInsights(env) {
   return json(200, { insights: doc, updatedAt: row.updated_at });
 }
 
-// Only the published fields are kept: per student, as_of, the headline text and cites (plus its
-// class when one is sent), and each story's class, text and cites. Anything else in the body (drop
-// reasons, slots) is not stored.
+// Only the published fields are kept: per student, as_of and each story's class, text and cites, plus
+// its tags when code tagged it ("easiest_win", "biggest_risk"). Anything else in the body (a headline,
+// drop reasons, slots) is not stored.
 export function cleanInsights(body) {
   if (!isObject(body) || !isObject(body.students)) return { error: "Send { students: { ... } }." };
   const entries = Object.entries(body.students);
@@ -73,28 +74,30 @@ export function cleanInsights(body) {
     if (!isObject(up)) return { error: `students.${key} must be an object.` };
     const stories = up.stories == null ? [] : up.stories;
     if (!Array.isArray(stories) || stories.length > MAX_STORIES) return { error: `students.${key}.stories must be a short list.` };
-    const out = { as_of: null, headline: null, stories: [] };
+    const out = { as_of: null, stories: [] };
     if (up.as_of != null) {
       if (!isText(up.as_of, 40)) return { error: `students.${key}.as_of must be a short string.` };
       out.as_of = up.as_of;
     }
-    if (up.headline != null) {
-      const headline = cleanLine(up.headline, "text");
-      if (!headline) return { error: `students.${key}.headline must have text.` };
-      if (up.headline.class != null) {
-        if (!isText(up.headline.class, 120)) return { error: `students.${key}.headline.class must be a short string.` };
-        headline.class = up.headline.class;
-      }
-      out.headline = headline;
-    }
     for (const story of stories) {
       const line = cleanLine(story, "story");
       if (!line || !isText(story.class, 120)) return { error: `students.${key}.stories needs class and story text.` };
-      out.stories.push({ class: story.class, story: line.story, cites: line.cites });
+      const kept = { class: story.class, story: line.story, cites: line.cites };
+      if (story.tags != null) {
+        if (!isTags(story.tags)) return { error: `students.${key}.stories tags must be easiest_win or biggest_risk.` };
+        if (story.tags.length) kept.tags = [...story.tags];
+      }
+      out.stories.push(kept);
     }
     students[key] = out;
   }
   return { students };
+}
+
+// At most one of each tag, from the fixed set.
+function isTags(value) {
+  return Array.isArray(value) && value.length <= STORY_TAGS.length && new Set(value).size === value.length
+    && value.every((tag) => STORY_TAGS.includes(tag));
 }
 
 function cleanLine(value, field) {

@@ -622,7 +622,7 @@ def worker_accepts(body):
             return False
         if up.get("as_of") is not None and not text_ok(up["as_of"], 40):
             return False
-        if up.get("headline") is not None and not line_ok(up["headline"], "text"):
+        if "headline" in up:
             return False
         if not all(line_ok(s, "story") and text_ok(s.get("class"), 120) for s in up.get("stories") or []):
             return False
@@ -634,10 +634,9 @@ class InsightsPublisherTests(unittest.TestCase):
 
     UPS = [
         {"sn": "9001", "as_of": "2026-10-22",
-         "headline": {"text": "Math: an 88 or better on the next test gets it to an A.", "cites": ["whatif:math"]},
          "stories": [{"class": "Math", "story": "Still a B, 2.1 points from an A.", "cites": ["gap:math"],
-                      "dropped": ["kept local"]}]},
-        {"as_of": "2026-10-22", "headline": None, "stories": []},
+                      "tags": ["easiest_win"], "dropped": ["kept local"]}]},
+        {"as_of": "2026-10-22", "stories": []},
     ]
 
     def test_the_keychain_item_is_its_own_service(self):
@@ -662,7 +661,8 @@ class InsightsPublisherTests(unittest.TestCase):
         body = json.loads(request.data.decode("utf-8"))
         self.assertEqual(list(body["students"]), ["9001"])
         self.assertEqual(body["students"]["9001"]["stories"],
-                         [{"class": "Math", "story": "Still a B, 2.1 points from an A.", "cites": ["gap:math"]}])
+                         [{"class": "Math", "story": "Still a B, 2.1 points from an A.", "cites": ["gap:math"],
+                           "tags": ["easiest_win"]}])
         self.assertNotIn("kept local", request.data.decode("utf-8"))
         self.assertEqual(reads, [1])
 
@@ -747,7 +747,7 @@ class InsightsPublisherTests(unittest.TestCase):
         runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=opener).put(ups)
         body = json.loads(opener.requests[0].data.decode("utf-8"))
         kid = body["students"]["9001"]
-        self.assertIsNone(kid["headline"])
+        self.assertNotIn("headline", kid)
         self.assertEqual(kid["stories"], [
             {"class": "Math", "story": "Dup cites.", "cites": ["a", "b"]},
             {"class": "Chem", "story": "y" * 600, "cites": cites12},
@@ -782,7 +782,7 @@ class InsightsPublisherTests(unittest.TestCase):
         import insights_writer
 
         def one_story(model, facts, log_items=None, votes=None, upcoming=None):
-            return {"as_of": facts["as_of"], "headline": None, "stories": [
+            return {"as_of": facts["as_of"], "stories": [
                 {"class": "Math", "story": "Still a B, 2.1 points from an A.", "cites": ["whatif:math:tests:50"],
                  "slotted": "x", "dropped": ["vote"]}]}
 

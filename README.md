@@ -69,4 +69,4 @@ The mini's runner (`insights_runner.py`) publishes the local write-ups with `PUT
 - service `family-data-insights-write`, account `aeries`
 - read only when a publish is sent, never printed or logged
 
-Publishing is off unless `GRADE_INSIGHTS_PUBLISH=1`. With it unset, the publish step records `{"published": false}` and sends nothing. The dashboard reads the write-ups with `GET /v1/grades/insights` on the same PIN session as the grades and shows them under **Grade notes**, as plain text only.
+Publishing is off unless `GRADE_INSIGHTS_PUBLISH=1`. With it unset, the publish step records `{"published": false}` and sends nothing. The dashboard reads the write-ups with `GET /v1/grades/insights` on the same PIN session as the grades and shows them under **Grade notes**, as plain text only. The writer's code tags each kid's easiest win and biggest risk; those classes come first, with an **Easiest win** or **Biggest risk** tag after the class name.

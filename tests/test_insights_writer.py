@@ -66,11 +66,20 @@ GOOD_STORY = ("Still a B, 2.1 points from an A. Mostly the Ch.4 Quiz (31/50). "
               "Scores usually post Fridays. An 88 or better on the next test gets it to an A.")
 
 
-class ScriptedModel:
-    """Answers by prompt: drafts by class, votes, and a headline. Records every call."""
+# The prompt example's numbers are impossible on purpose (ExampleNumbersTests): every sentence passes the
+# checks except its step, whose 104 is over 100 and so drops as a needed score no real fact can have.
+NEEDED_OVER_100 = "number 104 isn't the needed score or a round-up of it"
 
-    def __init__(self, drafts, votes=None, headline=None):
-        self.drafts, self.votes, self.headline = drafts, votes, headline
+
+def example_check_reasons(idx, name=None):
+    return [w.check_sentence(s["text"], s["cites"], idx, name) for s in w.EXAMPLE_NOTE]
+
+
+class ScriptedModel:
+    """Answers by prompt: drafts by class and votes. Records every call; any other prompt is a test failure."""
+
+    def __init__(self, drafts, votes=None):
+        self.drafts, self.votes = drafts, votes
         self.calls = []
 
     def complete(self, system, user):
@@ -81,7 +90,7 @@ class ScriptedModel:
             count = len(json.loads(user)["sentences"])
             votes = self.votes.pop(0) if self.votes else [True] * count
             return json.dumps({"backed": votes})
-        return json.dumps(self.headline or {})
+        raise AssertionError("the writer sent a prompt other than the draft and the vote")
 
 
 def index(facts=None):
@@ -402,21 +411,11 @@ class PublishLimitTests(unittest.TestCase):
         bare = {"class": "Spanish", "story": "No cites.", "cites": []}
         stories = iter([ok, edge, many, long, bare])
         with mock.patch.object(w, "class_names", return_value=["Math", "Art", "Biology", "Chem", "Spanish"]), \
-                mock.patch.object(w, "write_class", side_effect=lambda *a, **k: next(stories)), \
-                mock.patch.object(w, "write_headline", return_value=None):
+                mock.patch.object(w, "write_class", side_effect=lambda *a, **k: next(stories)):
             up = w.write_up(None, {"as_of": "2026-10-22", "facts": []})
         self.assertEqual([s["class"] for s in up["stories"]], ["Math", "Art"])
-        public = w.public_write_up({**up, "stories": [ok, edge, many, long, bare],
-                                    "headline": {"text": "h" * 601, "cites": ["a"]}})
+        public = w.public_write_up({**up, "stories": [ok, edge, many, long, bare]})
         self.assertEqual([s["class"] for s in public["stories"]], ["Math", "Art"])
-        self.assertIsNone(public["headline"])
-
-    def test_headlines_follow_the_same_limits(self):
-        self.assertTrue(w.headline_fits({"text": "h" * 600, "cites": ["a"]}))
-        self.assertFalse(w.headline_fits({"text": "h" * 601, "cites": ["a"]}))
-        self.assertFalse(w.headline_fits({"text": "Fine.", "cites": [f"f{i}" for i in range(13)]}))
-        self.assertFalse(w.headline_fits({"text": "Fine.", "cites": []}))
-
 
 def ch5(due="2026-10-30", points=50.0, bucket="Tests"):
     return {"class": "Math", "bucket": bucket, "title": "Ch. 5 Test", "due": due, "points": points}
@@ -485,12 +484,13 @@ class WeekdayRuleTests(unittest.TestCase):
 
     def test_the_prompt_example_has_no_relative_day_and_passes_the_claim_checks(self):
         idx = w.fact_index(w.EXAMPLE_FACTS)
+        reasons = []
         for sentence in w.EXAMPLE_NOTE:
             self.assertIsNone(w._RELATIVE_RE.search(sentence["text"]))
             cited = w._cited_facts(sentence["cites"], idx)
-            self.assertIsNone(w._claims_reason(w.fill_slots(sentence["text"], idx), cited, idx, slotted=sentence["text"]),
-                              sentence["text"])
-            self.assertIsNone(w.check_sentence(sentence["text"], sentence["cites"], idx), sentence["text"])
+            reasons.append(w._claims_reason(w.fill_slots(sentence["text"], idx), cited, idx, slotted=sentence["text"]))
+        self.assertEqual(reasons, [None, None, None, NEEDED_OVER_100])
+        self.assertEqual(example_check_reasons(idx), [None, None, None, NEEDED_OVER_100])
         self.assertIsNone(w.eval_story([dict(s) for s in w.EXAMPLE_NOTE], idx))
 
 
@@ -1059,37 +1059,8 @@ class PolishPassTests(unittest.TestCase):
         self.assertEqual(w.check_sentence(w.fix_articles("A 84 or better on the next test gets there."), [GEO_WHATIF], geo),
                          "number 84 isn't the needed score or a round-up of it")
 
-    def test_a_headline_cites_a_fact_and_says_something_concrete_or_there_is_none(self):
-        vague = ({"text": "Next test scores impact Math significantly.", "cites": [WHATIF]},
-                 {"text": "Math: B, 2.1 pts from an A.", "cites": []},
-                 {"text": "Math needs the Ch.4 Quiz improved.", "cites": [CAUSE]})
-        for headline in vague:
-            up = w.write_up(ScriptedModel({"Math": GOOD}, headline=headline), insight_facts())
-            self.assertIsNone(up["headline"], headline["text"])
-            self.assertEqual(w.apply_write_up({"headline": "Grok headline"}, up)["headline"], "")
-        # Published as the cited what-if's class plus the sentence without the class lead.
-        for text, cites, out in (("Math: an 88 or better on the {next:" + WHATIF + "} gets it to an A.", [WHATIF],
-                                  "An 88 or better on the next test gets it to an A."),
-                                 ("An 88 or better on the {next:" + WHATIF + "} gets it to an A.", [WHATIF],
-                                  "An 88 or better on the next test gets it to an A."),
-                                 ("{class:" + WHATIF + "} is 2.1 pts from an A; an 88 or better on the {next:" + WHATIF
-                                  + "} gets it to an A.", [NEXT, WHATIF],
-                                  "2.1 pts from an A; an 88 or better on the next test gets it to an A.")):
-            up = w.write_up(ScriptedModel({"Math": GOOD}, headline={"text": text, "cites": cites}), insight_facts())
-            self.assertEqual(up["headline"], {"class": "Math", "text": out, "cites": cites})
-        # Only the headline forms: a cause line, or the step reworded, is no headline.
-        for text, cites in (("The {item:" + CAUSE + "} did most of the damage.", [CAUSE]),
-                            ("Math: an 88 or better on the {next:" + WHATIF + "} gets the A back.", [WHATIF])):
-            up = w.write_up(ScriptedModel({"Math": GOOD}, headline={"text": text, "cites": cites}), insight_facts())
-            self.assertIsNone(up["headline"], text)
-        fixed = w.write_up(ScriptedModel({"Math": GOOD}, headline={
-            "text": "Math: a 88 or better on the {next:" + WHATIF + "} gets it to an A.", "cites": [WHATIF]}), insight_facts())
-        self.assertEqual((fixed["headline"]["class"], fixed["headline"]["text"]),
-                         ("Math", "An 88 or better on the next test gets it to an A."))
-
-
 class CtoRoundFourTests(unittest.TestCase):
-    """Headline round-up wording, singular bucket fills, and the next-slot prompt."""
+    """Singular bucket fills and the next-slot prompt."""
 
     ALG = "whatif:algllbusmang:assessment:10"
 
@@ -1098,22 +1069,6 @@ class CtoRoundFourTests(unittest.TestCase):
                  "next_letter": "B", "threshold": 80.0, "gap": 0.5},
                 {"id": self.ALG, "kind": "what_if", "class": "Alg ll Bus Mang", "bucket": "Assessment",
                  "bucket_weight_pct": 50.0, "points": 10.0, "target": 80.0, "needed_pct": 84.3, "reachable": True}]
-
-    def headline(self, text):
-        facts = self.alg_facts()
-        story = [{"class": "Alg ll Bus Mang", "story": "x", "cites": ["next:algllbusmang", self.ALG]}]
-        return w.write_headline(ScriptedModel({}, headline={"text": text, "cites": [self.ALG]}), facts, story)
-
-    def test_a_headline_needed_score_is_the_round_up_or_better(self):
-        # GE's v5 survivor, as the model wrote it (slotted) and as it read after the fill.
-        self.assertIsNone(self.headline("Alg ll Bus Mang: 85 on {next:%s} for a B." % self.ALG))
-        self.assertIsNone(self.headline("Alg ll Bus Mang: 85 on next assessment item for a B."))
-        self.assertIsNone(self.headline("Alg ll Bus Mang: 84.3 on the {next:%s} gets a B." % self.ALG))
-        self.assertIsNone(self.headline("Alg ll Bus Mang: an 86 or better on the {next:%s} gets it to a B." % self.ALG))
-        self.assertIsNone(self.headline("Alg ll Bus Mang: an 85 or better on the {next:%s} gets a B." % self.ALG))
-        ok = self.headline("Alg ll Bus Mang: an 85 or better on the {next:%s} gets it to a B." % self.ALG)
-        self.assertEqual(ok, {"class": "Alg ll Bus Mang", "text": "An 85 or better on the next assessment gets it to a B.",
-                              "cites": [self.ALG]})
 
     def test_next_fills_for_singular_plural_and_mass_buckets(self):
         cases = {"Assessment": "assessment", "Assessments": "assessment", "Summative": "summative", "Tests": "test",
@@ -1443,39 +1398,31 @@ class SlotRoundThreeTests(unittest.TestCase):
         self.assertEqual(sorted(sent), ["cites", "class", "story"])
 
 
-class HeadlineAndTakeoverTests(unittest.TestCase):
-    def test_write_up_headline_and_stories(self):
-        model = ScriptedModel({"Math": GOOD}, headline={
-            "text": "Math is 2.1 pts from an A; an 88 or better on the {next:" + WHATIF + "} gets it to an A.",
-            "cites": [NEXT, WHATIF]})
-        up = w.write_up(model, insight_facts())
-        self.assertEqual([s["class"] for s in up["stories"]], ["Math"])
-        self.assertEqual(up["headline"]["cites"], [NEXT, WHATIF])
-        self.assertEqual(model.calls.count(w.DRAFT_SYSTEM), 1)
-
-    def test_a_headline_that_restates_or_cites_outside_the_stories_is_dropped(self):
-        for headline in ({"text": "Math has 2 missing assignments.", "cites": [WHATIF]},
-                         {"text": "Biology: B, 6 pts from an A.", "cites": ["next:biology"]},
-                         {"text": "Math: B, 2.1 pts from an A.", "cites": [NEXT]}):
-            up = w.write_up(ScriptedModel({"Math": GOOD}, headline=headline), insight_facts())
-            self.assertIsNone(up["headline"], headline["text"])
-
-    def test_the_write_up_takes_the_headline_and_every_story_slot(self):
-        summary = {"headline": "Grok headline", "focus_tonight": "Math: Worksheet", "classes": [
+class TakeoverTests(unittest.TestCase):
+    def test_the_write_up_takes_every_story_slot_and_clears_the_model_headline(self):
+        summary = {"headline": "Grok headline", "status": "Grok status", "focus_tonight": "Math: Worksheet", "classes": [
             {"class_name": "Math", "story": "Grok story", "snap": "s"},
             {"class_name": "Biology", "story": "Grok filler", "snap": "t"},
         ]}
-        local = {"headline": {"text": "Local headline", "cites": [NEXT]},
+        # An old stored write-up with a headline: it is never shown, rebuilt or led by its class.
+        local = {"headline": {"class": "Geo", "text": "1.4 pts from a C; a 74 or better on the next test gets it to a C.",
+                              "cites": [NEXT, WHATIF]},
                  "stories": [{"class": "Math", "story": "Local story", "cites": [WHATIF]}]}
         out = w.apply_write_up(summary, local)
-        self.assertEqual(out["headline"], "Local headline")
+        self.assertEqual(out["headline"], "")
+        self.assertNotIn("status", out)
         self.assertEqual([c["story"] for c in out["classes"]], ["Local story", ""])
         self.assertEqual(out["focus_tonight"], "Math: Worksheet")
         self.assertEqual(summary["headline"], "Grok headline")
-        # No local headline means no headline at all: never the model's, never its status line.
-        bare = w.apply_write_up({**summary, "status": "Grok status"}, {"headline": None, "stories": []})
-        self.assertEqual(bare["headline"], "")
-        self.assertNotIn("status", bare)
+        self.assertEqual(w.apply_write_up(summary, {"stories": []})["headline"], "")
+
+    def test_the_writer_has_no_headline_step(self):
+        model = ScriptedModel({"Math": GOOD})
+        up = w.write_up(model, insight_facts())
+        self.assertEqual(sorted(up), ["as_of", "stories"])
+        self.assertEqual(set(model.calls), {w.DRAFT_SYSTEM, w.VOTE_SYSTEM})
+        for name in ("write_headline", "HEADLINE_SYSTEM", "headline_fits", "_headline_forms", "_headline_parts"):
+            self.assertFalse(hasattr(w, name), name)
 
 
 class PatternFromLogTests(unittest.TestCase):
@@ -1655,8 +1602,7 @@ class DirectionTests(unittest.TestCase):
 
     def test_the_made_up_example_still_passes(self):
         idx = w.fact_index(w.model_facts(w.EXAMPLE_FACTS))
-        for sentence in w.EXAMPLE_NOTE:
-            self.assertIsNone(w.check_sentence(sentence["text"], sentence["cites"], idx, "Ceramics"), sentence["text"])
+        self.assertEqual(example_check_reasons(idx, "Ceramics"), [None, None, None, NEEDED_OVER_100])
 
 
 def geo2_facts(delta=-2.5, neg=-3.0, pos=0.5, zero=False):
@@ -1837,9 +1783,7 @@ class CauseFormGateTests(unittest.TestCase):
         example = {f["id"]: f for f in w.EXAMPLE_FACTS}
         for fid, field in (("whatif:ceramics:projects:20", "say_step"),):
             self.assertEqual(example[fid][field], model[fid][field])
-        self.assertIn("Copy the slots as the story has them. Any other headline is thrown away.", w.HEADLINE_SYSTEM)
-        for sentence in w.EXAMPLE_NOTE:
-            self.assertIsNone(w.check_sentence(sentence["text"], sentence["cites"], idx, "Ceramics"), sentence["text"])
+        self.assertEqual(example_check_reasons(idx, "Ceramics"), [None, None, None, NEEDED_OVER_100])
 
 
 def bucket_net_facts(delta=-2.0, a=-1.0, c=2.0, b=-3.0):
@@ -2290,8 +2234,8 @@ class EngineFactsTests(unittest.TestCase):
 
 
 class CtoRulingFiveTests(unittest.TestCase):
-    """The CTO's ruling on #52 5bc7884: every sentence cites a fact, headline steps with or without the letter,
-    weekdays only from a computed pattern, and one parser leniency (extra trailing braces)."""
+    """The CTO's ruling on #52 5bc7884: every sentence cites a fact, weekdays only from a computed pattern,
+    and one parser leniency (extra trailing braces)."""
 
     def idx(self, delta=-2.5):
         facts = geo2_facts() if delta < 0 else geo2_facts(delta=2.5, neg=-0.5, pos=3.0)
@@ -2303,29 +2247,10 @@ class CtoRulingFiveTests(unittest.TestCase):
                      "Mostly steady.", "Still a D.", "Scores usually post Thursdays.",
                      "A 74 or better on the next test gets it to a C."):
             self.assertEqual(w.check_sentence(text, [], idx, "Geo", ["Geo"]), w.UNCITED_REASON, text)
-            self.assertEqual(w.check_sentence(text, [], idx, headline=True), w.UNCITED_REASON, text)
+            self.assertEqual(w.check_sentence(text, [], idx), w.UNCITED_REASON, text)
         self.assertFalse(hasattr(w, "free_reason"))
         self.assertFalse(hasattr(w, "FREE_REASON"))
         self.assertIn("Every sentence cites at least one fact", w.DRAFT_SYSTEM)
-
-    def test_headline_steps_pass_with_or_without_the_letter(self):
-        idx = self.idx()
-        step = w.model_facts(geo2_facts())[2]["say_step"]
-        lower = step[0].lower() + step[1:]
-        for cites in (["whatif:g"], ["next:g", "whatif:g"]):
-            for text in (step, "Geo: " + lower, "{class:whatif:g}: " + lower):
-                self.assertIsNone(w.check_sentence(text, cites, idx, headline=True), (text, cites))
-        gap = "{class:whatif:g} is 1 pts from a C; " + lower
-        self.assertIsNone(w.check_sentence(gap, ["next:g", "whatif:g"], idx, headline=True))
-        self.assertIsNotNone(w.check_sentence(gap, ["whatif:g"], idx, headline=True))
-        # Anything beside the step and its own class's letter still drops.
-        self.assertEqual(w.check_sentence(step, ["whatif:g", "pat:g"], idx, headline=True), w.FORM_REASON)
-        self.assertEqual(w.check_sentence(step, ["whatif:g", "move:g"], idx, headline=True), w.FORM_REASON)
-        other = {**idx, "next:o": {"id": "next:o", "kind": "next_letter", "class": "Art", "letter": "B",
-                                   "next_letter": "A", "gap": 1.0, "pct": 89.0, "threshold": 90.0}}
-        self.assertEqual(w.check_sentence(step, ["next:o", "whatif:g"], other, headline=True), w.FORM_REASON)
-        self.assertEqual(w.check_sentence("Geo: " + lower.replace("gets it to", "brings it to"), ["next:g", "whatif:g"],
-                                          idx, headline=True), w.FORM_REASON)
 
     def test_a_weekday_only_from_the_cited_computed_pattern(self):
         idx = self.idx()
@@ -2351,7 +2276,6 @@ class CtoRulingFiveTests(unittest.TestCase):
                 self.assertEqual(w.DRAFT_SYSTEM.lower().count(day), 1)
                 continue
             self.assertNotIn(day, w.DRAFT_SYSTEM.lower(), day)
-            self.assertNotIn(day, w.HEADLINE_SYSTEM.lower(), day)
         self.assertFalse([f for f in w.EXAMPLE_FACTS if f.get("kind") == "posting_day"])
 
     def test_the_parser_strips_extra_trailing_braces_only(self):
@@ -2371,116 +2295,6 @@ def art_facts():
              "threshold": 80.0, "gap": 1.0},
             {"id": "whatif:a", "kind": "what_if", "class": "Art", "bucket": "Projects", "bucket_weight_pct": 40.0,
              "points": 20.0, "target": 80.0, "needed_pct": 84.1, "reachable": True}]
-
-
-class CrossClassHeadlineTests(unittest.TestCase):
-    """GE's must-fix on #52 a458198: a headline put one class's {class:} lead on another class's step."""
-
-    def setUp(self):
-        self.facts = geo2_facts() + art_facts()
-        model = {f["id"]: f for f in w.model_facts(self.facts)}
-        self.geo_step, self.art_step = model["whatif:g"]["say_step"], model["whatif:a"]["say_step"]
-        self.stories = [{"class": "Geo", "story": "...", "slotted": self.geo_step, "cites": ["next:g", "whatif:g"]},
-                        {"class": "Art", "story": "...", "slotted": self.art_step, "cites": ["next:a", "whatif:a"]}]
-
-    def headline(self, text, cites):
-        class Stub:
-            def complete(self, system, user):
-                return json.dumps({"text": text, "cites": cites})
-        return w.write_headline(Stub(), self.facts, self.stories)
-
-    def forms(self, step, lead_id, letter_id, gap):
-        lower = step[0].lower() + step[1:]
-        return [(step, []), ("{class:%s}: %s" % (lead_id, lower), []),
-                ("{class:%s} is %s; %s" % (lead_id, gap, lower), [letter_id])]
-
-    def test_two_what_ifs_from_different_classes_drop_in_every_form_and_order(self):
-        geo_gap, art_gap = "1 pts from a C", "1 pts from a B"
-        for step, own, other, letter, gap in ((self.geo_step, "whatif:g", "whatif:a", "next:g", geo_gap),
-                                              (self.art_step, "whatif:a", "whatif:g", "next:a", art_gap)):
-            for lead in (own, other):
-                for text, extra in self.forms(step, lead, letter, gap):
-                    for cites in ([own, other] + extra, [other, own] + extra, extra + [other, own]):
-                        self.assertIsNone(self.headline(text, cites), (text, cites))
-                        self.assertEqual(w.check_sentence(text, cites, w.fact_index(self.facts), headline=True),
-                                         w.FORM_REASON, (text, cites))
-
-    def test_ges_repro_drops(self):
-        for text, cites in (("{class:whatif:a}: a 74 or better on the {next:whatif:g} gets it to a C.", ["whatif:g", "whatif:a"]),
-                            ("{class:whatif:a} is 1.4 pts from a C; a 74 or better on the {next:whatif:g} gets it to a C.",
-                             ["next:g", "whatif:g", "whatif:a"]),
-                            ("{class:whatif:g}: an 85 or better on the {next:whatif:a} gets it to a B.", ["whatif:a", "whatif:g"])):
-            self.assertIsNone(self.headline(text, cites), text)
-
-    def test_a_class_lead_or_gap_from_another_class_drops(self):
-        lower = self.geo_step[0].lower() + self.geo_step[1:]
-        for text, cites in (("{class:next:a}: " + lower, ["next:a", "whatif:g"]),
-                            ("{class:whatif:g} is 1 pts from a B; " + lower, ["next:a", "whatif:g"]),
-                            ("{class:whatif:g} is 1 pts from a C; " + lower, ["next:a", "whatif:g"]),
-                            ("{class:next:a} is 1 pts from a B; " + lower, ["next:a", "whatif:g"]),
-                            (self.geo_step, ["next:a", "whatif:g"]), ("Art: " + lower, ["whatif:g"]),
-                            ("Art: " + lower, ["next:a", "whatif:g"])):
-            self.assertIsNone(self.headline(text, cites), (text, cites))
-
-    def test_the_same_class_headlines_pass(self):
-        for step, wid, letter, gap, name in ((self.geo_step, "whatif:g", "next:g", "1 pts from a C", "Geo"),
-                                             (self.art_step, "whatif:a", "next:a", "1 pts from a B", "Art")):
-            lower = step[0].lower() + step[1:]
-            for text, cites in ((step, [wid]), (step, [letter, wid]), ("{class:%s}: %s" % (wid, lower), [wid]),
-                                ("{class:%s}: %s" % (letter, lower), [letter, wid]), ("%s: %s" % (name, lower), [wid]),
-                                ("{class:%s} is %s; %s" % (wid, gap, lower), [letter, wid]),
-                                ("%s is %s; %s" % (name, gap, lower), [wid, letter])):
-                got = self.headline(text, cites)
-                self.assertIsNotNone(got, (text, cites))
-                self.assertNotIn("{", got["text"])
-                self.assertEqual(got["class"], name, (text, cites))
-                self.assertFalse(got["text"].startswith(name), (text, cites))
-        self.assertEqual(self.headline("{class:whatif:g}: " + self.geo_step[0].lower() + self.geo_step[1:], ["whatif:g"]),
-                         {"class": "Geo", "text": "A 74 or better on the next test gets it to a C.", "cites": ["whatif:g"]})
-
-    def test_the_headline_class_comes_from_the_cited_what_if_not_the_words(self):
-        lower = self.art_step[0].lower() + self.art_step[1:]
-        # The step alone still carries its what-if's class; the sentence never repeats it.
-        self.assertEqual(self.headline(self.art_step, ["whatif:a"])["class"], "Art")
-        got = self.headline("{class:next:a} is 1 pts from a B; " + lower, ["next:a", "whatif:a"])
-        self.assertEqual(got["class"], "Art")
-        self.assertTrue(got["text"].startswith("1 pts from a B; "), got["text"])
-        # A class the Worker wouldn't keep publishes the led form with no class.
-        long_name = "A" * 121
-        for f in self.facts:
-            if f.get("class") == "Art":
-                f["class"] = long_name
-        self.stories[1]["class"] = long_name
-        got = self.headline("{class:whatif:a}: " + lower, ["whatif:a"])
-        self.assertEqual(set(got), {"text", "cites"})
-        self.assertTrue(got["text"].startswith(long_name + ": "))
-
-    def test_the_masthead_still_reads_the_led_headline(self):
-        local = {"headline": {"class": "Art", "text": "An 85 or better on the next project gets it to a B.", "cites": ["w"]},
-                 "stories": []}
-        self.assertEqual(w.apply_write_up({}, local)["headline"], "Art: an 85 or better on the next project gets it to a B.")
-        self.assertEqual(w.public_write_up(local)["headline"], local["headline"])
-
-    def test_a_story_class_prefix_is_its_own_facts_class(self):
-        # GE: the story prefix is safe. A {class:} slot may only be the cited fact's own; another class's drops.
-        idx = w.fact_index(w.model_facts(self.facts))
-        model = {f["id"]: f for f in w.model_facts(self.facts)}
-        def low(t):
-            return t[0].lower() + t[1:]
-        for own, text in (("next:g", model["next:g"]["say_opening"]), ("move:g", model["move:g"]["say_opening"]),
-                          ("pat:g", "Scores usually post Thursdays."), ("whatif:g", self.geo_step)):
-            prefixed = "{class:%s} %s" % (own, low(text))
-            if own != "whatif:g":
-                self.assertIsNone(w.check_sentence(prefixed, [own], idx, "Geo", ["Geo", "Art"]), prefixed)
-            for other in ("next:a", "whatif:a"):
-                swapped = "{class:%s} %s" % (other, low(text))
-                for cites in ([own], [own, other], [other, own]):
-                    self.assertIsNotNone(w.check_sentence(swapped, cites, idx, "Geo", ["Geo", "Art"]), (swapped, cites))
-                    self.assertIsNotNone(w.check_sentence(swapped, cites, idx, "Art", ["Geo", "Art"]), (swapped, cites))
-            # A same-class {class:} slot from a different fact is off the form too.
-            for same in ("next:g", "move:g", "pat:g", "whatif:g"):
-                if same != own:
-                    self.assertIsNotNone(w.check_sentence("{class:%s} %s" % (same, low(text)), [own, same], idx, "Geo"))
 
 
 class HostileTitleFillTests(unittest.TestCase):
@@ -2596,6 +2410,166 @@ class CannotDropWriterTests(unittest.TestCase):
             self.assertTrue(insights.holds(m, keep["bucket"], insights._score_range(m)[0], float(real), floor),
                             (keep, real))
         self.assertGreater(emitted, 50)
+
+
+def tag_class(name, pct, needed=None, keep=None, due="2026-10-27", points=50.0, named=True, cannot_lose=False,
+              reachable=None, keep_named=None):
+    """One synthetic class as the engine emits it: its next_letter (insights.next_letter), a what_if on Tests at
+    `points` needing `needed` and a keep_letter needing `keep`, plus the upcoming item that names both."""
+    slug = insights.slug(name)
+    facts = []
+    step = insights.next_letter(name, pct)
+    if step:
+        facts.append(step)
+    if needed is not None and step:
+        facts.append({"id": f"whatif:{slug}:tests:{points:g}", "kind": "what_if", "class": name, "bucket": "Tests",
+                      "bucket_weight_pct": 50.0, "points": points, "target": step["threshold"], "needed_pct": needed,
+                      "reachable": needed <= 100 if reachable is None else reachable})
+    if keep is not None or cannot_lose:
+        facts.append({"id": f"keep:{slug}:tests:{points:g}", "kind": "keep_letter", "class": name,
+                      "letter": insights.letter_for(pct), "bucket": "Tests", "points": points,
+                      "needed_pct": None if cannot_lose else keep, "cannot_lose": cannot_lose})
+    upcoming = []
+    if named:
+        upcoming.append({"class": name, "bucket": "Tests", "title": f"{name} Unit Test", "due": due, "points": points})
+    elif keep_named:
+        upcoming.append({"class": name, "bucket": "Tests", "title": f"{name} Unit Test", "due": due, "points": points})
+    return facts, upcoming
+
+
+def tag_facts(*classes):
+    facts, upcoming = [], []
+    for f, u in classes:
+        facts += f
+        upcoming += u
+    return w.attach_next_items(facts, upcoming)
+
+
+class StoryTagTests(unittest.TestCase):
+    """Code tags each kid's classes: Easiest win (lowest needed on the next named item that reaches the next
+    letter) and Biggest risk (highest keep_letter needed on a named item at its posted points)."""
+
+    def test_easiest_win_is_the_lowest_needed_score_not_the_model_pick(self):
+        # The v10 shape: Algebra needs an 85, Marketing a 97; the code picks Algebra whatever order they come in.
+        alg, mkt = tag_class("Algebra", 79.5, needed=84.3), tag_class("Marketing", 76.3, needed=96.2)
+        for order in ((alg, mkt), (mkt, alg)):
+            self.assertEqual(w.easiest_win(tag_facts(*order)), "Algebra")
+
+    def test_easiest_win_ties_go_to_the_smaller_gap_then_the_name(self):
+        # 84.1 and 84.9 are both said "85 or better": a tie on the note's number.
+        self.assertEqual(w.easiest_win(tag_facts(tag_class("Art", 77.0, needed=84.1),
+                                                 tag_class("Biology", 78.5, needed=84.9))), "Biology")
+        self.assertEqual(w.easiest_win(tag_facts(tag_class("Chem", 78.5, needed=84.9),
+                                                 tag_class("Biology", 78.5, needed=84.1))), "Biology")
+        self.assertEqual(w.easiest_win(tag_facts(tag_class("Chem", 78.5, needed=84.0),
+                                                 tag_class("Biology", 78.5, needed=84.0))), "Biology")
+
+    def test_easiest_win_skips_a_class_that_cant_move_up_on_its_next_named_item(self):
+        cases = {
+            "unnamed: no upcoming item at the what_if's size": tag_facts(tag_class("Art", 79.5, needed=81.0, named=False)),
+            "unreachable": tag_facts(tag_class("Art", 79.5, needed=104.0)),
+            "an A has no next letter": tag_facts(tag_class("Art", 95.0, needed=50.0)),
+            "no what_if": tag_facts(tag_class("Art", 79.5)),
+        }
+        for why, facts in cases.items():
+            self.assertIsNone(w.easiest_win(facts), why)
+        # Only the soonest named item counts: a later reachable one doesn't rescue an unreachable next one.
+        soon = tag_class("Art", 79.5, needed=101.0, due="2026-10-23", points=50.0)
+        later = tag_class("Art", 79.5, needed=81.0, due="2026-10-30", points=20.0)
+        facts = tag_facts((soon[0] + later[0][1:], soon[1] + later[1]), tag_class("Biology", 71.0, needed=99.0))
+        self.assertEqual(w.easiest_win(facts), "Biology")
+
+    def test_biggest_risk_is_the_highest_keep_score_on_a_named_item(self):
+        facts = tag_facts(tag_class("Art", 92.0, keep=62.0), tag_class("Biology", 81.0, keep=78.6),
+                          tag_class("Chem", 85.0, keep=99.0, named=False))
+        self.assertEqual(w.biggest_risk(facts), "Biology")
+        safe = tag_facts(tag_class("Art", 99.0, cannot_lose=True), tag_class("Chem", 85.0, keep=99.0, named=False))
+        self.assertIsNone(w.biggest_risk(safe))
+        self.assertIsNone(w.biggest_risk(tag_facts(tag_class("Art", 79.5, needed=84.3))))
+
+    def test_biggest_risk_needs_the_item_s_posted_points(self):
+        facts = tag_facts(tag_class("Art", 81.0, keep=90.0))
+        keep = next(f for f in facts if f["kind"] == "keep_letter")
+        self.assertEqual(w.biggest_risk(facts), "Art")
+        for points in (None, 0, 0.0, -5.0, True, "50"):
+            self.assertIsNone(w.biggest_risk([{**keep, "points": points}]), points)
+        self.assertIsNone(w.biggest_risk([{**keep, "next_title": ""}]))
+
+    def test_biggest_risk_ties_go_to_the_smaller_cushion_then_the_name(self):
+        # 78.2 and 78.9 are both said "79 or better". Chem sits 0.5 above its B floor, Art 4.0.
+        self.assertEqual(w.biggest_risk(tag_facts(tag_class("Art", 84.0, keep=78.2),
+                                                  tag_class("Chem", 80.5, keep=78.9))), "Chem")
+        self.assertEqual(w.biggest_risk(tag_facts(tag_class("Chem", 80.5, keep=78.9),
+                                                  tag_class("Biology", 80.5, keep=78.9))), "Biology")
+        # An A with no move has no percent among its facts: its cushion is unknown, so it loses the tie.
+        self.assertEqual(w.biggest_risk(tag_facts(tag_class("Art", 95.0, keep=78.9),
+                                                  tag_class("Chem", 89.5, keep=78.9))), "Chem")
+
+    def test_one_class_can_carry_both_tags_in_order(self):
+        facts = tag_facts(tag_class("Art", 79.5, needed=81.0, keep=70.0), tag_class("Biology", 72.0, needed=99.0, keep=40.0))
+        self.assertEqual(w.story_tags(facts), {"Art": ["easiest_win", "biggest_risk"]})
+        self.assertEqual(w.story_tags(tag_facts(tag_class("Art", 95.0))), {})
+
+    def test_write_up_puts_tags_on_stories_only(self):
+        risk = tag_class("Biology", 81.0, keep=78.6)
+        facts = {"as_of": "2026-10-22", "facts": math_facts() + risk[0]}
+        upcoming = [{"class": "Math", "bucket": "Tests", "title": "Ch. 5 Test", "due": "2026-10-30", "points": 50.0}]
+        up = w.write_up(ScriptedModel({"Math": GOOD}), facts, upcoming=upcoming + risk[1])
+        # Math has a story and the tag; Biology is the risk but has no story, so its tag shows nowhere.
+        self.assertEqual([(s["class"], s.get("tags")) for s in up["stories"]], [("Math", ["easiest_win"])])
+        self.assertEqual(w.public_write_up(up)["stories"][0]["tags"], ["easiest_win"])
+
+
+class ExampleNumbersTests(unittest.TestCase):
+    """The prompt's example numbers can't be a real fact, so a copied one is never true and never published."""
+
+    QUOTED = re.compile(r'"([^"{}]*(?:\{[^"{}]*\}[^"{}]*)*\d[^"]*?\.)"')
+
+    def example_sentences(self):
+        quoted = [m.group(1) for m in self.QUOTED.finditer(w.DRAFT_SYSTEM.split("MADE-UP EXAMPLE")[0])]
+        return [s["text"] for s in w.EXAMPLE_NOTE] + [f["say_opening"] for f in w.EXAMPLE_FACTS if f.get("say_opening")] \
+            + [f["say_step"] for f in w.EXAMPLE_FACTS if f.get("say_step")] + quoted
+
+    def impossible(self, text):
+        """Why the sentence can't be a fact on the 90/80/70/60 scale, or None."""
+        for n in re.findall(r"\b(\d+) or better\b", text):
+            if int(n) > 100:
+                return "needed score over 100"
+        m = re.search(r"\bStill an? ([BCD]), (\d+(?:\.\d+)?) points from an? ([ABC])\b", text)
+        if m and float(m.group(2)) > 10:
+            return "more than a letter band from the next letter"
+        m = re.search(r"\bStill an? ([BCD]), (?:down|up) (\d+(?:\.\d+)?)\b", text)
+        if m and float(m.group(2)) >= 10:
+            return "a move of a band or more that kept its letter"
+        m = re.search(r"\bis (\d+(?:\.\d+)?)% of the grade\b", text)
+        if m and float(m.group(1)) > 100:
+            return "a bucket over 100% of the grade"
+        return None
+
+    def test_every_example_sentence_with_a_number_is_impossible(self):
+        sentences = [t for t in self.example_sentences() if re.search(r"\d", re.sub(r"\{[^}]*\}", "", t))]
+        self.assertGreaterEqual(len(sentences), 8)
+        for text in sentences:
+            self.assertIsNotNone(self.impossible(text), text)
+        for n in re.findall(r"\b(\d+) or better\b", w.DRAFT_SYSTEM):
+            self.assertGreater(int(n), 100)
+
+    def test_no_example_sentence_equals_a_fact_sentence_from_the_fixtures(self):
+        fixtures = (math_facts() + quiet_facts() + geo_facts() + geo2_facts() + art_facts() + chem_keep_facts()
+                    + chem_keep_facts(cannot_lose=True))
+        fixtures += [f for name, pct, needed, keep in (("Algebra", 79.5, 84.3, 74.0), ("Marketing", 76.3, 96.2, 71.5),
+                                                        ("Physics", 92.0, None, 62.0))
+                     for f in tag_class(name, pct, needed=needed, keep=keep)[0]]
+        said = set()
+        for fact in w.model_facts(fixtures):
+            for key in ("say_opening", "say_step", "say_keep", "say_pattern"):
+                if fact.get(key):
+                    said.add(re.sub(r"\{(\w+):[^}]*\}", r"{\1}", fact[key]))
+        self.assertGreater(len(said), 10)
+        for fact in fixtures:
+            self.assertIsNone(self.impossible(w.say_opening(fact) or ""), fact["id"])
+        for text in self.example_sentences():
+            self.assertNotIn(re.sub(r"\{(\w+):[^}]*\}", r"{\1}", text), said, text)
 
 
 if __name__ == "__main__":

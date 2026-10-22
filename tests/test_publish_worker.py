@@ -1,7 +1,7 @@
 """The runner's publish payload against family-data's real cleanInsights.
 
 tests/fixtures/family_data_insights.js is a verbatim copy of family-data src/insights.js (PR #27 head
-82260d6, branch cursor/grade-insights-write-path). The sha256 pin below fails if the copy is edited;
+d637245, branch cursor/grade-insights-write-path). The sha256 pin below fails if the copy is edited;
 when family-data changes that file, copy it again and update the pin. node loads the copy as an ES
 module with only its two import lines swapped for stubs (cleanInsights uses neither), so the check runs
 the Worker's own code, not a hand port. No network, no cross-repo runtime dependency.
@@ -22,7 +22,7 @@ import insights_runner as runner  # noqa: E402
 import insights_writer  # noqa: E402
 
 WORKER = Path(__file__).resolve().parent / "fixtures" / "family_data_insights.js"
-WORKER_SHA256 = "7a22b4ef8bee9ce1818e538c551ba02a3512ca4834d5d848e36f725eb6d939a5"
+WORKER_SHA256 = "127cd18e2377aaefb700d2ed1ae9d2b767bb8ed59a70db5dbcc8c9b078b01108"
 
 NODE_CHECK = r"""
 const fs = require('fs');
@@ -63,6 +63,10 @@ def text(rng, lo, hi):
     return ("é" if rng.random() < 0.3 else "x") * n
 
 
+TAG_CHOICES = [["easiest_win"], ["biggest_risk"], ["easiest_win", "biggest_risk"], ["biggest_risk", "easiest_win"], [],
+               None, "easiest_win", ["easiest_win", "easiest_win"], ["Easiest win"], [7], [None], {"easiest_win": 1}]
+
+
 def random_ups(rng):
     keys = ["9001", "9002", "ab_c", "k" * 32, "k" * 33, "٩٠٠١", 9003, True, None, "a-b", " 9004 ", "9001"]
     ups = []
@@ -70,29 +74,29 @@ def random_ups(rng):
         up = {"sn": rng.choice(keys) if rng.random() < 0.6 else str(rng.randint(1, 99999))}
         if rng.random() < 0.9:
             up["as_of"] = rng.choice(["2026-10-22", "", "\ufeff", "x" * 41, None, 5, "2026-10-22T00:00"])
-        if rng.random() < 0.6:
-            up["headline"] = {"text": text(rng, 1, 620), "cites": [text(rng, 1, 125) for _ in range(rng.randint(0, 14))]}
-            if rng.random() < 0.7:
-                up["headline"]["class"] = rng.choice([text(rng, 0, 125), None, 7, ["B"]])
+        if rng.random() < 0.3:
+            # An old write-up's headline: the runner never sends it.
+            up["headline"] = {"text": text(rng, 1, 620), "cites": ["a"], "class": text(rng, 0, 125)}
         stories = []
         for _ in range(rng.randint(0, 45)):
             n = rng.randint(0, 15)
             cites = [rng.choice(["a", "b", "c", 7, None, text(rng, 1, 125)]) for _ in range(n)]
-            stories.append({"class": text(rng, 0, 125), "story": text(rng, 1, 620), "cites": cites,
-                            "slotted": "x", "dropped": ["vote"]})
+            story = {"class": text(rng, 0, 125), "story": text(rng, 1, 620), "cites": cites,
+                     "slotted": "x", "dropped": ["vote"]}
+            if rng.random() < 0.5:
+                story["tags"] = rng.choice(TAG_CHOICES)
+            stories.append(story)
         up["stories"] = stories if rng.random() < 0.95 else "not a list"
         ups.append(up)
     return ups
 
 
 def full_ups():
-    """8 students x 40 stories at the line maximums: 600-unit text, 12 cites of 120, 120-unit class."""
+    """8 students x 40 stories at the line maximums: 600-unit text, 12 cites of 120, 120-unit class, both tags."""
     def story(i, j):
         return {"class": f"{i}{j}".ljust(120, "c"), "story": f"{i}-{j} ".ljust(600, "s"),
-                "cites": [f"{i}-{j}-{k}".ljust(120, "f") for k in range(12)]}
-    return [{"sn": f"90{i:02d}", "as_of": "2026-10-22", "headline": {"class": "k" * 120, "text": "h" * 600,
-                                                                           "cites": ["f" * 120] * 12},
-             "stories": [story(i, j) for j in range(40)]} for i in range(8)]
+                "cites": [f"{i}-{j}-{k}".ljust(120, "f") for k in range(12)], "tags": ["easiest_win", "biggest_risk"]}
+    return [{"sn": f"90{i:02d}", "as_of": "2026-10-22", "stories": [story(i, j) for j in range(40)]} for i in range(8)]
 
 
 def run_worker(bodies):
@@ -140,8 +144,9 @@ class RealWorkerTests(unittest.TestCase):
             {"students": {"9001": {"as_of": "\ufeff", "stories": []}}},
             {"students": {"9001": {"stories": [{"class": "\u3000", "story": "x", "cites": ["a"]}]}}},
             {"students": {"9001": {"stories": [{"class": "B", "story": "x" * 601, "cites": ["a"]}]}}},
-            {"students": {"9001": {"headline": {"class": "\u3000", "text": "x", "cites": ["a"]}}}},
-            {"students": {"9001": {"headline": {"class": "k" * 121, "text": "x", "cites": ["a"]}}}},
+            {"students": {"9001": {"stories": [{"class": "B", "story": "x", "cites": ["a"], "tags": "easiest_win"}]}}},
+            {"students": {"9001": {"stories": [{"class": "B", "story": "x", "cites": ["a"], "tags": ["easiest_win"] * 2}]}}},
+            {"students": {"9001": {"stories": [{"class": "B", "story": "x", "cites": ["a"], "tags": ["Easiest win"]}]}}},
         ]
         result = run_worker([json.dumps(doc) for doc in raw])
         self.assertEqual(len(result["failures"]), len(raw))
@@ -161,12 +166,12 @@ class PayloadRuleTests(unittest.TestCase):
 
     def test_blank_means_blank_to_js_trim(self):
         for blank in ["\ufeff", "\u00a0", "\u2028\u2029", "\u1680", "\u2000\u200a", "\u202f", "\u205f", "\u3000", " \t"]:
-            up = {"sn": "9001", "as_of": blank, "headline": {"text": blank, "cites": ["a"]},
+            up = {"sn": "9001", "as_of": blank,
                   "stories": [self.STORY, {"class": blank, "story": "x", "cites": ["a"]},
                               {"class": "B", "story": blank, "cites": ["a"]},
                               {"class": "B", "story": "x", "cites": [blank]}]}
             kid = self.doc([up])["9001"]
-            self.assertEqual((kid["as_of"], kid["headline"], kid["stories"]), (None, None, [self.STORY]), repr(blank))
+            self.assertEqual(kid, {"as_of": None, "stories": [self.STORY]}, repr(blank))
             self.assertFalse(insights_writer._fits_text(blank, 600), repr(blank))
         # Python strips "\x85" but JS trim keeps it, so it is text to the Worker.
         self.assertEqual(self.doc([{"sn": "9001", "stories": [{**self.STORY, "story": "\x85"}]}])["9001"]["stories"][0]
@@ -201,7 +206,7 @@ class PayloadRuleTests(unittest.TestCase):
         self.assertEqual(list(doc["students"]), [up["sn"] for up in ups])
         for up in ups:
             kept = doc["students"][up["sn"]]["stories"]
-            self.assertEqual(kept, [{k: s[k] for k in ("class", "story", "cites")} for s in up["stories"][:len(kept)]])
+            self.assertEqual(kept, [{k: s[k] for k in ("class", "story", "cites", "tags")} for s in up["stories"][:len(kept)]])
         counts = [len(doc["students"][up["sn"]]["stories"]) for up in ups]
         self.assertLessEqual(max(counts) - min(counts), 1)
         self.assertEqual(runner.insights_body(runner.insights_doc(full_ups())), body)
@@ -224,19 +229,22 @@ class PayloadRuleTests(unittest.TestCase):
             self.doc(ups[:8])
         self.assertEqual(err.write.call_args_list, [])
 
-    def test_a_headline_class_is_kept_only_when_it_passes_the_story_class_rule(self):
-        line = {"text": "An 88 or better on the next test gets it to an A.", "cites": ["w"]}
-        for cls, kept in (("Int Eng&Marktg", True), ("k" * 120, True), ("\U0001F600" * 60, True), (None, False),
-                          ("", False), ("\u3000", False), ("k" * 121, False), ("\U0001F600" * 61, False),
-                          ("ok \ud83d", False), (7, False), (["B"], False)):
-            got = self.doc([{"sn": "9001", "headline": {**line, "class": cls, "slots": "x"}}])["9001"]["headline"]
-            self.assertEqual(got, {**line, "class": cls} if kept else line, repr(cls))
-        self.assertEqual(self.doc([{"sn": "9001", "headline": line}])["9001"]["headline"], line)
+    def test_tags_are_kept_only_from_the_fixed_set_and_a_headline_never_goes(self):
+        for tags, kept in ((["easiest_win"], ["easiest_win"]), (["biggest_risk", "easiest_win"], ["biggest_risk", "easiest_win"]),
+                           ([], None), (None, None), ("easiest_win", None), (["easiest_win", "easiest_win"], None),
+                           (["Easiest win"], None), (["top_focus"], None), ([7], None), ({"easiest_win": 1}, None)):
+            got = self.doc([{"sn": "9001", "headline": {"text": "Old.", "cites": ["w"]},
+                             "stories": [{**self.STORY, "tags": tags}]}])["9001"]
+            self.assertEqual(got, {"as_of": None, "stories": [{**self.STORY, "tags": kept} if kept else self.STORY]},
+                             repr(tags))
+        # A student with only an old headline has nothing to publish.
+        self.assertEqual(self.doc([{"sn": "9001", "headline": {"text": "Old.", "cites": ["w"]}, "stories": []}]), {})
 
     @unittest.skipUnless(shutil.which("node"), "node not installed")
-    def test_the_real_worker_keeps_the_headline_class(self):
-        doc = runner.insights_doc([{"sn": "9001", "headline": {"class": "Int Eng&Marktg", "text": "A 97 or better.",
-                                                               "cites": ["w"]}}])
+    def test_the_real_worker_keeps_the_tags(self):
+        doc = runner.insights_doc([{"sn": "9001", "stories": [{**self.STORY, "tags": ["easiest_win", "biggest_risk"]},
+                                                              {**self.STORY, "class": "Art", "tags": ["biggest_risk"]}]}])
+        self.assertEqual(doc["students"]["9001"]["stories"][0]["tags"], ["easiest_win", "biggest_risk"])
         self.assertEqual(run_worker([runner.insights_body(doc).decode()]), {"checked": 1, "failures": []})
 
     def test_a_body_still_over_the_cap_is_dropped_not_raised(self):

@@ -1862,8 +1862,6 @@
         .glance-insights { margin-bottom: 14px; min-width: 0; max-width: 100%; }
         .glance-insights > *, .glance-insight-list, .glance-insight-row,
         .glance-drawer-top > div { min-width: 0; }
-        .glance-insights-headline,
-        .glance-insights-sentence,
         .glance-insight-class,
         .glance-insight-story,
         .glance-local-story {
@@ -1872,30 +1870,17 @@
             word-break: normal;
             max-width: 100%;
         }
-        .glance-insights-headline {
-            margin: 0;
-            padding: 0 24px 14px;
-        }
-        .glance-insights-label {
-            display: block;
-            margin-bottom: 2px;
-            color: var(--g-muted);
-            font-size: var(--g-fs-label);
-            font-weight: 800;
-            letter-spacing: .01em;
-            line-height: 1.35;
-        }
-        .glance-insights-sentence {
-            margin: 3px 0 0;
-            color: var(--g-ink);
-            font-size: var(--g-fs-sub);
-            font-weight: 400;
-            line-height: 1.45;
-        }
         .glance-insight-list { padding: 0 24px 18px; }
         .glance-insight-row {
             padding: 10px 0;
             border-top: 1px solid rgba(111, 128, 118, .16);
+        }
+        .glance-insight-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 8px;
+            min-width: 0;
         }
         .glance-insight-class {
             display: block;
@@ -1903,6 +1888,17 @@
             font-size: var(--g-fs-note);
             font-weight: 750;
         }
+        .glance-insight-tag {
+            flex: none;
+            padding: 1px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 750;
+            line-height: 1.5;
+            white-space: nowrap;
+        }
+        .glance-insight-tag.win { color: var(--g-forest); background: var(--g-forest-soft); }
+        .glance-insight-tag.risk { color: var(--g-amber); background: var(--g-amber-soft); }
         .glance-insight-story,
         .glance-local-story {
             margin: 3px 0 0;
@@ -5627,7 +5623,7 @@
         }
 
         // ── Local grade notes (the mini's write-ups) ─────────────────────────
-        // Every story, headline and class title below goes in with textContent only, never as markup.
+        // Every story, tag and class title below goes in with textContent only, never as markup.
 
         async function loadLocalInsights(token) {
             try {
@@ -5728,27 +5724,28 @@
             titles.appendChild(textEl('p', '', through ? `From grades posted through ${through}` : 'From the posted grades'));
             head.appendChild(titles);
             section.appendChild(head);
-            // The top focus area: a small label, the class on its own line (from the headline's class field,
-            // never split out of the text), then the sentence. With no class, the label and sentence only.
-            const hl = up.headline && typeof up.headline === 'object' ? up.headline : null;
-            const sentence = hl && typeof hl.text === 'string' ? hl.text.trim() : '';
-            if (sentence) {
-                const top = document.createElement('div');
-                top.className = 'glance-insights-headline';
-                top.appendChild(textEl('span', 'glance-insights-label', 'Top focus area'));
-                const cls = typeof hl.class === 'string' ? hl.class.trim() : '';
-                if (cls) top.appendChild(textEl('span', 'glance-insight-class glance-insights-class', cls));
-                top.appendChild(textEl('p', 'glance-insights-sentence', sentence));
-                section.appendChild(top);
-            }
+            // Code tags (the writer's story_tags): tagged classes first, Easiest win then Biggest risk, each
+            // with its tag after the class name. The other classes keep their order.
+            const tagOrder = [['easiest_win', 'Easiest win', 'win'], ['biggest_risk', 'Biggest risk', 'risk']];
+            const rows = courses.map((course, i) => {
+                const pick = picks[i];
+                const story = pick && typeof pick.story === 'string' ? pick.story.trim() : '';
+                const sent = pick && Array.isArray(pick.tags) ? pick.tags : [];
+                const tags = tagOrder.filter(([tag]) => sent.includes(tag));
+                const rank = tags.length ? tagOrder.indexOf(tags[0]) : tagOrder.length;
+                return { course, story, tags, rank };
+            }).filter(row => row.story);
+            rows.sort((a, b) => a.rank - b.rank);
             const list = document.createElement('div');
             list.className = 'glance-insight-list';
-            courses.forEach((course, i) => {
-                const story = picks[i] && typeof picks[i].story === 'string' ? picks[i].story.trim() : '';
-                if (!story) return;
+            rows.forEach(({ course, story, tags }) => {
                 const row = document.createElement('div');
                 row.className = 'glance-insight-row';
-                row.appendChild(textEl('span', 'glance-insight-class', course));
+                const line = document.createElement('div');
+                line.className = 'glance-insight-head';
+                line.appendChild(textEl('span', 'glance-insight-class', course));
+                tags.forEach(([, label, tone]) => line.appendChild(textEl('span', `glance-insight-tag ${tone}`, label)));
+                row.appendChild(line);
                 row.appendChild(textEl('p', 'glance-insight-story', story));
                 list.appendChild(row);
             });
