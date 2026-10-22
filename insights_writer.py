@@ -86,9 +86,11 @@ _SPELLED_RE = re.compile(
     re.I,
 )
 # Plain "up" and "down" as direction words, minus idioms that say nothing about a move: "up to date",
-# "gets it up to a C", "down to the wire", "comes down to", "scores show up Thursdays".
-_UP_WORD = r"(?<!\bshow )(?<!\bshows )(?<!\bshowed )(?<!\bshowing )(?<!\bshown )(?:upwards?|ups?(?!\s+to\b))"
-_DOWN_WORD = r"(?:downwards?|downs?(?!\s+to\b))"
+# "down to the wire", "comes down to the next score", "scores show up Thursdays". "Up to"/"down to" a grade
+# ("up to a C", "down to 69", "down to 2.5 points") still says which way the grade went.
+_TO_NO_GRADE = r"(?!\s+to\b(?!\s+(?:an?\s+)?(?:(?-i:[A-F])[+-]?(?![\w'’])|\d)))"
+_UP_WORD = rf"(?<!\bshow )(?<!\bshows )(?<!\bshowed )(?<!\bshowing )(?<!\bshown )(?:upwards?|ups?{_TO_NO_GRADE})"
+_DOWN_WORD = rf"(?:downwards?|downs?{_TO_NO_GRADE})"
 # Which fact fields a number may come from, by what the words around it say it is.
 _MOVE_BEFORE_RE = re.compile(
     r"\b(?:up|down|by|rose|fell|dropped|dipped|slipped|slid|climbed|jumped|gained|lost|cost|costs|costing|"
@@ -205,9 +207,9 @@ _DOWN_VERB_RE = re.compile(
 _UP_PARTICLE_AFTER_RE = re.compile(r"^(?:\s+\w+){0,2}\s+up(?:ward)?s?\b", re.I)
 # Words that say which way the grade itself moved. Each needs a cited grade_move (a cited cause cites its
 # move) whose delta has that sign: "Scores dropped." citing only a next_letter or pattern drops.
-_MOVED_UP_RE = re.compile(rf"\b(?:rose|risen|climbed|jumped|gained|went up|is up(?!\s+to\b)|{_UP_WORD})\b", re.I)
+_MOVED_UP_RE = re.compile(rf"\b(?:rose|risen|climbed|jumped|gained|went up|is up{_TO_NO_GRADE}|{_UP_WORD})\b", re.I)
 _MOVED_DOWN_RE = re.compile(rf"\b(?:fell|fallen|dropped|dipped|slipped|slid|declined|sank|sunk|lost|went down|"
-                            rf"is down(?!\s+to\b)|{_DOWN_WORD})\b", re.I)
+                            rf"is down{_TO_NO_GRADE}|{_DOWN_WORD})\b", re.I)
 _NEGATED_RE = re.compile(r"\b(?:not|never|n't|didn't|doesn't|did not|does not|wasn't|won't|hardly|barely|scarcely)"
                          r"\s+(?:\w+\s+)?$", re.I)
 # Adjectives on a named cause: "a low {item:...}" says it hurt, "a strong {item:...}" that it helped.
@@ -1292,6 +1294,7 @@ TOP_TIE = 1e-6
 
 def _top_cause(move, sign):
     """The move's cause with the largest share of the given sign, or None (also on a tie for the top)."""
+    # Safe under #54's fold: it sorts causes by |share| before folding, so no folded cause outranks the top one.
     signed = [c for c in ranked_causes(move) if (_cause_share(c) or 0) * sign > 0]
     if len(signed) > 1 and abs(_cause_share(signed[0]) - _cause_share(signed[1])) <= TOP_TIE:
         return None
