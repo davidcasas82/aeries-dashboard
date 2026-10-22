@@ -477,8 +477,8 @@ def is_keep(fact):
 def pick_keep(class_facts):
     """The one keep what-if a drop story may end on, or None.
 
-    Only a class whose grade dropped gets one. Of its reachable keep facts: the bucket with the
-    soonest named next item, else the bucket of the largest cause that pulled it down, else the
+    Only a class whose grade dropped gets one. Of its reachable keep facts, those that need a score
+    (an item that could cost the letter) come first; among them: the bucket with the soonest named next item, else the bucket of the largest cause that pulled it down, else the
     bucket that carries the most weight.
     """
     facts = [f for f in class_facts if not f.get("move")]
@@ -486,6 +486,9 @@ def pick_keep(class_facts):
     keeps = [f for f in facts if is_keep(f) and f.get("reachable")]
     if not drops or not keeps:
         return None
+    # An item that can cost the letter matters more than one that can't.
+    scored = [f for f in keeps if isinstance(f.get("needed_pct"), (int, float))]
+    keeps = scored or keeps
     named = sorted((f for f in keeps if f.get("next_due")), key=lambda f: (f["next_due"], f["id"]))
     if named:
         return named[0]
@@ -503,8 +506,10 @@ def say_keep(fact):
     letter = fact.get("letter")
     if not letter:
         return None
-    where = f"the {fact['next_title']}" if fact.get("next_title") else \
-        f"the next {str(fact.get('bucket') or 'test').lower()} item"
+    bucket = str(fact.get("bucket") or "test").lower()
+    # "Assessments" -> "the next assessment"; a mass noun like "Coursework" -> "the next coursework item".
+    noun = bucket[:-1] if bucket.endswith("s") and not bucket.endswith("ss") else f"{bucket} item"
+    where = f"the {fact['next_title']}" if fact.get("next_title") else f"the next {noun}"
     if fact.get("cannot_lose"):
         return f"{where[0].upper()}{where[1:]} can't drop it below {_article(letter)} {letter}."
     if isinstance(fact.get("needed_pct"), (int, float)):

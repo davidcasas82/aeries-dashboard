@@ -827,11 +827,13 @@ def chem_keep_facts(cannot_lose=False):
     lab = {"id": KEEP_LAB, "kind": "what_if", "target": "keep", "class": "Chem", "letter": "A", "threshold": 90.0,
            "bucket": "Coursework", "bucket_weight_pct": 10.0, "points": 10.0, "needed_pct": 61.3,
            "cannot_lose": False, "reachable": True}
-    if cannot_lose:
-        lab.update(needed_pct=None, cannot_lose=True)
     test = {"id": KEEP_TEST, "kind": "what_if", "target": "keep", "class": "Chem", "letter": "A", "threshold": 90.0,
             "bucket": "Tests", "bucket_weight_pct": 60.0, "points": 50.0, "needed_pct": 72.0,
             "cannot_lose": False, "reachable": True}
+    if cannot_lose:
+        lab.update(needed_pct=None, cannot_lose=True)
+    if cannot_lose == "both":
+        test.update(needed_pct=None, cannot_lose=True)
     return chem_facts() + [lab, test]
 
 
@@ -846,8 +848,11 @@ class KeepTheLetterWriterTests(unittest.TestCase):
         seen = [f for f in w.model_facts(chem_keep_facts()) if w.is_keep(f)]
         self.assertEqual([f["id"] for f in seen], [KEEP_LAB])  # the bucket of the cause that pulled it down
         self.assertEqual(seen[0]["say_keep"], "A 62 or better on the next coursework item keeps the A.")
-        safe = [f for f in w.model_facts(chem_keep_facts(cannot_lose=True)) if w.is_keep(f)]
+        safe = [f for f in w.model_facts(chem_keep_facts(cannot_lose="both")) if w.is_keep(f)]
         self.assertEqual(safe[0]["say_keep"], "The next coursework item can't drop it below an A.")
+        # An item that can cost the A wins over one that can't, even outside the cause's bucket.
+        mixed = [f for f in w.model_facts(chem_keep_facts(cannot_lose=True)) if w.is_keep(f)]
+        self.assertEqual((mixed[0]["id"], mixed[0]["say_keep"]), (KEEP_TEST, "A 72 or better on the next test keeps the A."))
         # A named next item wins, by its due date.
         upcoming = [{"class": "Chem", "bucket": "Tests", "title": "Unit 4 Test", "due": "2026-10-28", "points": 50.0}]
         named = w.attach_next_items(chem_keep_facts(), upcoming)
@@ -878,12 +883,12 @@ class KeepTheLetterWriterTests(unittest.TestCase):
                          "says the next item can't cost the letter, but the keep what-if needs a score")
 
     def test_a_next_item_that_cannot_cost_the_letter_is_optional_and_plain(self):
-        idx = w.fact_index(chem_keep_facts(cannot_lose=True))
+        idx = w.fact_index(chem_keep_facts(cannot_lose="both"))
         line = {"text": "The next coursework item can't drop it below an A.", "cites": [KEEP_LAB]}
         self.assertIsNone(w.check_sentence(line["text"], line["cites"], idx, "Chem"))
         self.assertEqual(w.check_sentence(line["text"], [CHEM_MOVE], idx, "Chem"),
                          "says the letter holds with no keep what-if cited")
-        # The tests bucket still needs a 72, but the picked keep fact is the coursework one, so no step is owed.
+        # No item can cost the A, so no step is owed.
         self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE)], idx))
         self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE), dict(line)], idx))
 
