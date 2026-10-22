@@ -1,11 +1,14 @@
 """Grade-insights runner for the Mac mini. launchd starts it a few minutes after each grade sync.
 
 A start checks that a fresh sync landed (the public freshness stamp), then reads the grades once
-(one unlock, GETs only) and fingerprints what the engine uses, per student. When every fingerprint
-matches the last successful run it logs "skip: no change" and stops: no model, no PUT, the stored
-notes stay. Otherwise the writer (WriterWork) writes each student's write-up and publishes them
-through InsightsPublisher, which sends only with GRADE_INSIGHTS_PUBLISH=1. The fingerprint is saved
-only after a publish or a deliberate no-op, so a failed run tries again on the next start.
+(GETs only; one unlock, and a second only if a GET answers 401) and fingerprints what the engine uses,
+per student. When every fingerprint matches the last successful run it logs "skip: no change" and
+stops: no model, no PUT, the stored notes stay. Otherwise the writer (WriterWork) writes only the
+changed students, and InsightsPublisher sends the whole doc (only with GRADE_INSIGHTS_PUBLISH=1):
+fresh entries for the changed students and, verbatim, the last published entry for everyone else.
+The Worker replaces the whole doc on a PUT, so a student is never dropped by a partial run. A
+student's fingerprint moves only when that student got fresh, published output, so anyone left on
+their last entry is written again at the next sync.
 """
 
 import fcntl
@@ -32,14 +35,19 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 FAMILY_DATA_URL = "https://family-data.davidcasas.workers.dev"
 FRESHNESS_URL = f"{FAMILY_DATA_URL}/v1/grades/freshness"
 USER_AGENT = "grade-insights-runner/1"
-# A sync is fresh for this long after it lands. launchd starts the runner about 10 and 40 minutes after
-# the 4:45 PM and 8:07 PM PT scrapes (deploy/com.davidcasas.grade-insights.plist), so the 2 AM scrapes
-# are always older than this by then and never start a run.
+# A sync is fresh for this long after it lands. launchd starts the runner at 4:55 and 5:25 PM and at 8:20
+# and 8:50 PM Pacific (deploy/com.davidcasas.grade-insights.plist). The after-school scrape lands at about
+# 4:45 PM Pacific all year; the evening scrape's cron is fixed in UTC (03:07), so it lands at about 8:08 PM
+# in daylight time and about 7:08 PM in standard time. Both evening starts stay inside this window either
+# way (at most about 1 h 45 min after a standard-time scrape), and the 2 AM scrapes never start a run.
 FRESH_FOR = timedelta(hours=2)
 CLOCK_SKEW = timedelta(minutes=5)
 # How a start that reached the work can end. Each of these marks the sync handled; anything else
 # (waiting for the machine, a crash) leaves it for the next start.
-HANDLED = ("no_change", "published", "nothing_to_send", "publish_off")
+HANDLED = ("no_change", "published", "published_partial", "nothing_to_send", "publish_off")
+# The SSD state files under <SSD>/grade-insights/state/: the per-student hashes and the last published doc.
+FINGERPRINT_FILE = "fingerprint.json"
+PUBLISHED_FILE = "published.json"
 # The parent PIN is a generic password in the mini's login Keychain.
 PIN_KEYCHAIN_SERVICE = "family-data-parent-pin"
 PIN_KEYCHAIN_ACCOUNT = "aeries"
@@ -113,23 +121,39 @@ class State:
         self.save()
 
     def save(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.data, indent=2))
-        os.replace(tmp, self.path)
+        write_private(self.path, json.dumps(self.data, indent=2))
+
+
+def write_private(path, text):
+    """Write text atomically, mode 600: a temp file, fsync, rename, then fsync the folder."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as out:
+        os.fchmod(out.fileno(), 0o600)
+        out.write(text)
+        out.flush()
+        os.fsync(out.fileno())
+    os.replace(tmp, path)
+    folder = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(folder)
+    finally:
+        os.close(folder)
 
 
 def tick(state, machine, run_sync, log=print):
     """One launchd start. run_sync(stamp) does the work for a fresh sync and returns how it ended.
 
-    A sync that isn't fresh, or was already handled, ends the start quietly. A missing SSD skips the
-    sync with one line and keeps the last good write-up. A busy machine waits for the next start.
+    A sync that isn't fresh, or was already handled, ends the start quietly. A missing SSD skips this
+    start with one line and keeps the last good write-up; the sync stays unhandled, so the retry start
+    tries again. A busy machine waits for the next start.
     """
     stamp = machine.freshness()
     if not fresh_sync(stamp, machine.now(), state.get("handled")):
         return "waiting_for_sync"
     if not machine.ssd_mounted():
-        state.mark(handled=stamp, status="skipped_no_ssd")
+        state.mark(status="skipped_no_ssd")
         log("grade-insights: sync skipped, the SSD is not mounted; the last write-up stays")
         return "skipped_no_ssd"
     if not machine_free(machine):
@@ -188,7 +212,7 @@ def keychain_secret(service, account):
 
 
 def parent_pin():
-    """The parent PIN from the login Keychain, for ReadOnlyFamilyData's one unlock. Never printed."""
+    """The parent PIN from the login Keychain, read once per ReadOnlyFamilyData unlock (at most two). Never printed."""
     return keychain_secret(PIN_KEYCHAIN_SERVICE, PIN_KEYCHAIN_ACCOUNT)
 
 
@@ -200,17 +224,21 @@ class ReadOnlyFamilyData:
     """The runner's only family-data client for the PIN session. GET-only by construction.
 
     The Keychain PIN is the family PIN, so its session has the write role. This client can
-    send exactly one non-GET, the unlock POST, and has no put, post, patch or delete methods.
+    send exactly one kind of non-GET, the unlock POST, and has no put, post, patch or delete methods.
+    It unlocks at most MAX_UNLOCKS (2) times: once, and once more only when a GET answers 401 (an
+    expired session). Each unlock reads the PIN from the Keychain. A 401 after the second unlock is an error.
     Publishing uses InsightsPublisher and the separate AERIES_INSIGHTS_SECRET bearer, never this session.
     """
 
     UNLOCK_PATH = "/auth/unlock"
+    MAX_UNLOCKS = 2
 
     def __init__(self, pin=parent_pin, base=FAMILY_DATA_URL, opener=None):
         self._pin = pin
         self._base = base.rstrip("/")
         self._open = opener or _open_request
         self._token = None
+        self._unlocks = 0
 
     def latest_grades(self):
         return self._get("/v1/grades/latest")
@@ -224,8 +252,8 @@ class ReadOnlyFamilyData:
         if self._token is None:
             self._unlock()
         status, body = self._send("GET", path, {"Authorization": f"Bearer {self._token}"})
-        if status == 401:
-            # One fresh session for an expired token; a second 401 falls through to the error below.
+        if status == 401 and self._unlocks < self.MAX_UNLOCKS:
+            # One fresh session for an expired token; any later 401 falls through to the error below.
             self._token = None
             self._unlock()
             status, body = self._send("GET", path, {"Authorization": f"Bearer {self._token}"})
@@ -234,6 +262,9 @@ class ReadOnlyFamilyData:
         return json.loads(body.decode("utf-8")) if body else {}
 
     def _unlock(self):
+        if self._unlocks >= self.MAX_UNLOCKS:
+            raise FamilyDataError("unlock limit reached")
+        self._unlocks += 1
         payload = json.dumps({"pin": self._pin(), "keepUnlocked": False}).encode("utf-8")
         status, body = self._send("POST", self.UNLOCK_PATH, {"Content-Type": "application/json"}, payload)
         if status != 200:
@@ -541,7 +572,7 @@ def writer_upcoming(log=print):
 def load_students(client, upcoming_items=None, log=print):
     """[{"sn", "insight_facts", "log_items", "upcoming", "fingerprint"}] per student with facts, for the writer.
 
-    Two GETs on the read-only session: the latest grades and the scored log. Students are
+    Two GETs on the read-only session (one unlock, two at most): the latest grades and the scored log. Students are
     matched to their log by the same key the scrape writes under; nothing here is logged.
     upcoming is [] until the writer provides upcoming_items.
     """
@@ -571,7 +602,7 @@ def writer_work(client, model, store, put=None, env=None, log=print):
 
     Same import rule as writer_attr: quiet when the writer isn't in the checkout, one
     type-only warning when it is there but broken. None means there is no writer to run.
-    The load is read once per runner process, so a run unlocks at most once.
+    The load is read once per runner process, so a run unlocks at most twice (ReadOnlyFamilyData.MAX_UNLOCKS).
     """
     work_class = writer_attr("WriterWork", log)
     if work_class is None:
@@ -661,37 +692,73 @@ def student_fingerprint(sn, classes, insight_facts, log_items, upcoming, code=""
     unscored assignments, the engine's facts, the scored log and the upcoming items, plus the code version.
 
     The facts' as_of date is left out, so a new day with nothing new is no change; an item that falls due
-    still changes the upcoming list. Only the hash is kept, never what went into it.
+    still changes the upcoming list. Every list is sorted first (canonical), so the same items in another
+    order are no change. Only the hash is kept, never what went into it.
     """
     facts = {k: v for k, v in (insight_facts or {}).items() if k != "as_of"}
-    material = {"v": 1, "sn": sn, "classes": classes, "facts": facts, "log_items": log_items,
+    material = {"v": 2, "sn": sn, "classes": classes, "facts": facts, "log_items": log_items,
                 "upcoming": upcoming, "code": code}
-    text = json.dumps(material, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return hashlib.sha256(_canonical_json(canonical(material)).encode("utf-8")).hexdigest()
+
+
+def _canonical_json(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+
+
+def canonical(value):
+    """value with every dict's values and every list made canonical, and every list sorted by its JSON."""
+    if isinstance(value, dict):
+        return {str(k): canonical(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return sorted((canonical(v) for v in value), key=_canonical_json)
+    return value
+
+
+def student_key(sn):
+    """The fingerprint file's key for a student: a hash of the student key, so the file holds hashes only."""
+    return hashlib.sha256(b"grade-insights-student\0" + str(sn).encode("utf-8")).hexdigest()
+
+
+def _state_folder(path):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    return path
 
 
 def read_fingerprints(path):
-    """The sorted per-student hashes from the last successful run, or None (no file, or unreadable)."""
+    """{student_key: fingerprint} for each student's last published write-up, or {} (no file, an older
+    format, or unreadable), which makes every student a change."""
+    try:
+        data = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+    prints = data.get("students") if isinstance(data, dict) and data.get("v") == 2 else None
+    if not isinstance(prints, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in prints.items()):
+        return {}
+    return dict(prints)
+
+
+def write_fingerprints(path, prints):
+    """Save {student_key: fingerprint} on the SSD: mode 600 in a 700 folder, atomic. Hashes only."""
+    write_private(_state_folder(path), json.dumps({"v": 2, "students": dict(sorted(prints.items()))}))
+
+
+def read_published(path):
+    """{sn: {"as_of", "stories"}} as last sent to the Worker, or None (no file or unreadable)."""
     try:
         data = json.loads(Path(path).read_text())
     except (OSError, ValueError):
         return None
-    hashes = data.get("students") if isinstance(data, dict) else None
-    if not isinstance(hashes, list) or not all(isinstance(h, str) for h in hashes):
+    students = data.get("students") if isinstance(data, dict) and data.get("v") == 1 else None
+    if not isinstance(students, dict) or not all(isinstance(v, dict) for v in students.values()):
         return None
-    return sorted(hashes)
+    return students
 
 
-def write_fingerprints(path, hashes):
-    """Save the hashes on the SSD: mode 600 in a 700 folder, written atomically. Hashes only."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    os.chmod(path.parent, 0o700)
-    tmp = path.with_suffix(".tmp")
-    tmp.touch(mode=0o600)
-    os.chmod(tmp, 0o600)
-    tmp.write_text(json.dumps({"v": 1, "students": sorted(hashes)}))
-    os.replace(tmp, path)
+def write_published(path, students):
+    """Save the doc just sent (story text, no grades) on the SSD: mode 600 in a 700 folder, atomic."""
+    write_private(_state_folder(path), json.dumps({"v": 1, "students": students}, ensure_ascii=False))
 
 
 def run_id(stamp):
@@ -700,37 +767,72 @@ def run_id(stamp):
 
 
 def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, env=None, log=print):
-    """One fresh sync: the change check, then either a skip or the write-ups and the publish.
+    """One fresh sync: the change check, then either a skip or the changed students' write-ups and the publish.
 
-    load() is load_students on the read-only session (one unlock, two GETs). Returns one of HANDLED, or
-    "waiting_for_machine" when a render starts or memory runs low between students (the next start picks
-    up from WriterWork's saved steps). Logs carry counts and outcomes only: no names, keys or scores.
+    load() is load_students on the read-only session. Only students whose fingerprint changed go to the
+    writer. The Worker replaces the whole doc on a PUT, so the PUT carries everyone with an entry: the
+    changed students' fresh write-ups, and the last published entry, verbatim, for unchanged students,
+    for a changed student whose write-up came out empty, and for a student missing from the load. A
+    student with neither is left out. A student's fingerprint moves only with fresh, published output.
+
+    Returns one of HANDLED: "published" when every changed student got fresh output and nobody is
+    missing, "published_partial" when someone kept their last entry or was left out. Or
+    "waiting_for_machine" when a render starts or memory runs low between students (the next start
+    picks up from WriterWork's saved steps). Logs carry counts and outcomes only: no names, keys or scores.
     """
     students = load()
-    hashes = sorted(s["fingerprint"] for s in students)
-    last = read_fingerprints(prints_path)
-    if hashes == last:
+    published_path = Path(prints_path).with_name(PUBLISHED_FILE)
+    last_doc = read_published(published_path)
+    # Without the last published doc nothing can be carried forward, so every student is written again.
+    last = read_fingerprints(prints_path) if last_doc is not None else {}
+    last_doc = last_doc or {}
+    changed = [s for s in students if last.get(student_key(s["sn"])) != s["fingerprint"]]
+    if not changed:
         log("grade-insights: skip: no change")
         return "no_change"
-    changed = len(set(hashes) - set(last or []))
-    log(f"grade-insights: {len(hashes)} students, {changed} changed; writing")
-    run = run_id(stamp)
-    work = work_class(lambda: students, model, store, put=put, env=env)
-    for step in work.plan(run):
+    log(f"grade-insights: {len(students)} students, {len(changed)} changed; writing")
+    run_dir = Path(store) / run_id(stamp)
+    changed_sns = [str(s["sn"]) for s in changed]
+
+    def merged_put(write_ups):
+        fresh = {}
+        for up in write_ups or []:
+            fresh.update(insights_doc([up])["students"])
+        merged = dict(last_doc)
+        merged.update({sn: fresh[sn] for sn in changed_sns if sn in fresh})
+        doc = insights_doc([{"sn": sn, **entry} for sn, entry in sorted(merged.items())])
+        sent = {"students": doc["students"],
+                "fresh": sorted(sn for sn in changed_sns if sn in fresh and sn in doc["students"])}
+        write_private(run_dir / "merged.json", json.dumps(sent, ensure_ascii=False))
+        return put([{"sn": sn, **entry} for sn, entry in doc["students"].items()])
+
+    work = work_class(lambda: changed, model, store, put=merged_put if put else None, env=env)
+    for step in work.plan(run_dir.name):
         if not machine_free(machine):
             return "waiting_for_machine"
-        work.run_step(run, step)
+        work.run_step(run_dir.name, step)
     # WriterWork saves the publish step's result as <store>/<run>/publish.json.
-    published = json.loads((Path(store) / run / "publish.json").read_text()).get("published")
+    published = json.loads((run_dir / "publish.json").read_text()).get("published")
     if published:
-        write_fingerprints(prints_path, hashes)
-        log("grade-insights: published")
-        return "published"
+        sent = json.loads((run_dir / "merged.json").read_text())
+        write_published(published_path, sent["students"])
+        prints = dict(last)
+        prints.update({student_key(s["sn"]): s["fingerprint"] for s in changed if str(s["sn"]) in sent["fresh"]})
+        write_fingerprints(prints_path, prints)
+        kept = len(changed) - len(sent["fresh"])
+        present = {str(s["sn"]) for s in students}
+        missing = sum(1 for sn in last_doc if sn not in present)
+        if not kept and not missing:
+            log("grade-insights: published")
+            return "published"
+        log(f"grade-insights: published; {kept} changed kept their last notes or were left out, "
+            f"{missing} missing kept their last notes")
+        return "published_partial"
     if put is None:
         log("grade-insights: publish is off, nothing sent")
         return "publish_off"
-    # The writer left nothing publishable: nothing was sent, the stored notes stay, and that is final for these grades.
-    write_fingerprints(prints_path, hashes)
+    # No fresh write-up and nothing to carry: nothing was sent, the stored notes stay, and no fingerprint
+    # moves, so the next sync writes these students again.
     log("grade-insights: nothing to send, the stored notes stay")
     return "nothing_to_send"
 
@@ -809,13 +911,13 @@ def main(argv=None, machine=None, client=None, model=None, publisher=None, env=N
             reader = client or ReadOnlyFamilyData()
             loaded = []
 
-            def load():  # once per process: one unlock, two GETs
+            def load():  # once per process: two GETs, one unlock (two at most, see ReadOnlyFamilyData)
                 if not loaded:
                     loaded.append(load_students(reader))
                 return loaded[0]
 
             return run_sync(stamp, load, work_class, model or MlxModel(ssd), publisher_put(env, publisher),
-                            machine, model_dir(ssd) / "runs", model_dir(ssd) / "state" / "fingerprint.json",
+                            machine, model_dir(ssd) / "runs", model_dir(ssd) / "state" / FINGERPRINT_FILE,
                             env=env)
 
         try:

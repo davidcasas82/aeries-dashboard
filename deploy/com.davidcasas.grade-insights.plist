@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Grade insights trial: one start about 10 and 40 minutes after each school-day grade sync.
-     The scrapes run in GitHub Actions (dispatched by family-data at 4:45 PM and 8:07 PM PT) and finish
-     in about a minute; nothing lands on the mini, so the runner checks the public freshness stamp and
-     only a sync that landed in the last 2 hours and hasn't been handled starts work. The second start in
-     each pair is the retry for a late scrape or a busy machine. Times are the mini's clock (Pacific).
+<!-- Grade insights trial: two starts after each school-day grade sync, at 4:55 and 5:25 PM and at 8:20
+     and 8:50 PM on the mini's clock (Pacific). The scrapes run in GitHub Actions, dispatched by family-data:
+     the after-school one at 4:45 PM Pacific all year, the evening one on a fixed UTC cron (03:07 UTC, so
+     about 8:07 PM in daylight time and about 7:07 PM in standard time). Nothing lands on the mini, so the
+     runner checks the public freshness stamp and only a sync that landed in the last 2 hours and hasn't
+     been handled starts work; both evening starts are inside that window in either season. The second
+     start in each pair is the retry for a late scrape, a busy machine or a missing SSD.
      The interpreter is pinned to the SSD venv's full path, never python3 or a PATH lookup.
      launchd passes each <string> as one argument, so the space in "David C SSD" needs no quoting.
      The repo checkout and logs sit on the internal disk, so a missing SSD still logs its skip line.

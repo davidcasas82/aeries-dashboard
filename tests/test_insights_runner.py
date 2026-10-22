@@ -115,17 +115,26 @@ class TickTests(unittest.TestCase):
                 self.assertEqual(self.tick(fake, status), "waiting_for_sync")
                 self.assertEqual(self.runs, [AFTERNOON_STAMP])
 
-    def test_missing_ssd_skips_the_sync_with_one_line_and_keeps_the_last_write_up(self):
+    def test_missing_ssd_skips_the_start_and_the_retry_start_tries_again(self):
+        fake = FakeMachine(at(22, 16, 55), ssd=False)
+        self.assertEqual(self.tick(fake), "skipped_no_ssd")
+        self.assertEqual(self.runs, [])
+        self.assertIsNone(runner.State(self.path).get("handled"))
+        self.assertEqual(self.logs, ["grade-insights: sync skipped, the SSD is not mounted; the last write-up stays"])
+        fake.clock, fake.ssd = at(22, 17, 25), True
+        self.assertEqual(self.tick(fake), "published")
+        self.assertEqual(self.runs, [AFTERNOON_STAMP])
+        self.assertEqual(runner.State(self.path).get("handled"), AFTERNOON_STAMP)
+
+    def test_missing_ssd_on_both_starts_leaves_the_sync_unrun(self):
         fake = FakeMachine(at(22, 16, 55), ssd=False)
         self.assertEqual(self.tick(fake), "skipped_no_ssd")
         fake.clock = at(22, 17, 25)
-        self.assertEqual(self.tick(fake), "waiting_for_sync")
-        fake.ssd = True
-        self.assertEqual(self.tick(fake), "waiting_for_sync")
+        self.assertEqual(self.tick(fake), "skipped_no_ssd")
         self.assertEqual(self.runs, [])
-        self.assertEqual(self.logs, ["grade-insights: sync skipped, the SSD is not mounted; the last write-up stays"])
-        fake.clock, fake.stamp = at(22, 20, 20), EVENING_STAMP
+        fake.clock, fake.stamp, fake.ssd = at(22, 20, 20), EVENING_STAMP, True
         self.assertEqual(self.tick(fake), "published")
+        self.assertEqual(self.runs, [EVENING_STAMP])
 
     def test_waits_for_a_render_or_low_memory(self):
         fake = FakeMachine(at(22, 16, 55), busy=True)
@@ -242,6 +251,26 @@ class ReadOnlyClientTests(unittest.TestCase):
         self.assertIn("401", str(caught.exception))
         self.assertEqual([r.get_method() for r in self.sent], ["POST", "GET", "POST", "GET"])
 
+    def test_never_more_than_two_unlocks(self):
+        # First GET: 401, a second unlock, then 200. Second GET: 401 again; no third unlock, an error.
+        client = self.client([(200, b'{"token": "t1"}'), (401, b""), (200, b'{"token": "t2"}'), (200, b"{}"),
+                              (401, b"")])
+        client.latest_grades()
+        with self.assertRaises(runner.FamilyDataError) as caught:
+            client.scored_log()
+        self.assertIn("401", str(caught.exception))
+        self.assertEqual([r.get_method() for r in self.sent], ["POST", "GET", "POST", "GET", "GET"])
+        self.assertEqual(runner.ReadOnlyFamilyData.MAX_UNLOCKS, 2)
+
+    def test_the_pin_is_read_once_per_unlock(self):
+        pin = mock.Mock(return_value="0000")
+        replies = iter([(200, b'{"token": "t1"}'), (401, b""), (200, b'{"token": "t2"}'), (200, b"{}"),
+                        (200, b"{}")])
+        client = runner.ReadOnlyFamilyData(pin=pin, opener=lambda request: next(replies))
+        client.latest_grades()
+        client.scored_log()
+        self.assertEqual(pin.call_count, 2)
+
     def _two_servers(self):
         """A family-data stand-in that redirects to a second server on another port. Both record hits."""
         import http.server
@@ -349,7 +378,11 @@ class ReadOnlyClientTests(unittest.TestCase):
         self.assertIn("self._base + INSIGHTS_PATH", publisher)
         self.assertNotIn("requests", re.findall(r"^import (\w+)", source, re.M))
         self.assertEqual(re.findall(r"urlopen\(", source), ["urlopen("])
-        self.assertEqual(re.findall(r"\.open\(", source), [".open("])
+        self.assertEqual(re.findall(r"(?<!\bos)\.open\(", source), [".open("])
+        # os.open is write_private's local temp file and folder fsync, nothing else.
+        private = source[source.index("def write_private"):source.index("def tick(")]
+        self.assertEqual(re.findall(r"\bos\.open\(", source), re.findall(r"\bos\.open\(", private))
+        self.assertEqual(len(re.findall(r"\bos\.open\(", private)), 2)
 
     def test_a_start_with_no_fresh_sync_sends_only_the_freshness_get(self):
         """End to end through tick and the real freshness read: one GET, nothing else."""
@@ -841,8 +874,9 @@ class SsdMountTests(unittest.TestCase):
 
 
 PLIST = Path(__file__).resolve().parents[1] / "deploy" / "com.davidcasas.grade-insights.plist"
-# family-data dispatches the after-school scrape at 4:45 PM and the evening one at 8:07 PM Pacific.
-SCRAPE_DISPATCH = {"afternoon": (16, 45), "evening": (20, 7)}
+# family-data dispatches the after-school scrape at 4:45 PM Pacific all year. The evening cron is fixed in UTC
+# (03:07), so it lands about 8:07 PM in daylight time and about 7:07 PM in standard time (after Nov 1).
+SCRAPE_DISPATCH = {"afternoon": [(16, 45)], "evening": [(20, 7), (19, 7)]}
 
 
 class PlistTests(unittest.TestCase):
@@ -876,11 +910,12 @@ class PlistTests(unittest.TestCase):
         self.assertEqual(times, [(16, 55), (17, 25), (20, 20), (20, 50)])
         for day in range(1, 6):
             self.assertEqual(sorted((s["Hour"], s["Minute"]) for s in slots if s["Weekday"] == day), times)
-        # Each start falls after its scrape is dispatched and while that sync is still fresh.
+        # Each start falls after its scrape is dispatched and while that sync is still fresh, in daylight
+        # and in standard time (the scrape finishes about two minutes after dispatch).
         for hour, minute in times:
-            dispatch = SCRAPE_DISPATCH["afternoon" if hour < 19 else "evening"]
-            gap = (hour * 60 + minute) - (dispatch[0] * 60 + dispatch[1])
-            self.assertTrue(5 <= gap < runner.FRESH_FOR.total_seconds() / 60, (hour, minute))
+            for dispatch in SCRAPE_DISPATCH["afternoon" if hour < 19 else "evening"]:
+                gap = (hour * 60 + minute) - (dispatch[0] * 60 + dispatch[1])
+                self.assertTrue(5 <= gap and gap + 5 < runner.FRESH_FOR.total_seconds() / 60, (hour, minute, dispatch))
 
     def test_pins_the_ssd_venv_python_and_logs_to_library_logs(self):
         plist = self.load()
@@ -1075,6 +1110,7 @@ class QuietModel:
 # Names, keys, scores and titles from synthetic_latest; none may reach a log line.
 PRIVATE = ("9001", "9002", "Math", "Art", "87.9", "31", "Ch. 4", "Ch. 5", "Sketch", "Kid")
 LOG_LINE = re.compile(r"grade-insights: (skip: no change|\d+ students, \d+ changed; writing|published|"
+                      r"published; \d+ changed kept their last notes or were left out, \d+ missing kept their last notes|"
                       r"publish is off, nothing sent|nothing to send, the stored notes stay|"
                       r"sync skipped, the SSD is not mounted; the last write-up stays|run failed \(\w+\))")
 
@@ -1097,6 +1133,23 @@ class ChangeCheckTests(unittest.TestCase):
     def students(self, client=None):
         return runner.load_students(client or FakeClient())
 
+    def published(self):
+        return self.prints.with_name(runner.PUBLISHED_FILE)
+
+    def two_kids(self, a_print=None, b_print=None):
+        """Kid A from the synthetic data and a copy of it as kid 9002, each with its own fingerprint."""
+        import copy
+
+        a = self.students()[0]
+        b = copy.deepcopy(a)
+        b["sn"], b["fingerprint"] = "9002", b_print or "b" * 64
+        if a_print:
+            a = dict(a, fingerprint=a_print)
+        return [a, b]
+
+    def bodies(self):
+        return [json.loads(r.data)["students"] for r in self.opener.requests]
+
     def run_sync(self, students, model, put="on", machine=None, stamp=AFTERNOON_STAMP):
         if put == "on":
             put = runner.InsightsPublisher(secret=lambda: SECRET_STANDIN, opener=self.opener).put
@@ -1110,7 +1163,8 @@ class ChangeCheckTests(unittest.TestCase):
         with mock.patch.object(self.writer, "write_up", one_story):
             self.assertEqual(self.run_sync(students, QuietModel()), "published")
         self.assertEqual(len(self.opener.requests), 1)
-        self.assertEqual(runner.read_fingerprints(self.prints), [students[0]["fingerprint"]])
+        self.assertEqual(runner.read_fingerprints(self.prints),
+                         {runner.student_key(students[0]["sn"]): students[0]["fingerprint"]})
         self.assertEqual(self.run_sync(self.students(), NoModel(), stamp=EVENING_STAMP), "no_change")
         self.assertEqual(len(self.opener.requests), 1)
         self.assertFalse((self.store / runner.run_id(EVENING_STAMP)).exists())
@@ -1124,8 +1178,8 @@ class ChangeCheckTests(unittest.TestCase):
         self.assertEqual(self.prints.parent.stat().st_mode & 0o777, 0o700)
         data = json.loads(self.prints.read_text())
         self.assertEqual(set(data), {"v", "students"})
-        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", h) for h in data["students"]))
-        for word in ("Math", "Art", "Ch. 4", "Sketch", "87.9", "first_seen", "Tests", "points"):
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", h) for kv in data["students"].items() for h in kv))
+        for word in ("9001", "Math", "Art", "Ch. 4", "Sketch", "87.9", "first_seen", "Tests", "points"):
             self.assertNotIn(word, self.prints.read_text())
 
     def test_what_counts_as_a_change(self):
@@ -1169,12 +1223,15 @@ class ChangeCheckTests(unittest.TestCase):
             Path(tmp, "insights_writer.py").write_text("B = 2\n")
             self.assertNotEqual(runner.code_version(tmp), before)
 
-    def test_a_failed_put_keeps_the_last_fingerprint(self):
-        runner.write_fingerprints(self.prints, ["0" * 64])
+    def test_a_failed_put_keeps_the_last_fingerprint_and_doc(self):
+        runner.write_fingerprints(self.prints, {"k" * 64: "0" * 64})
+        runner.write_published(self.published(), {"9001": {"as_of": "2026-10-21", "stories": []}})
+        before = self.published().read_bytes()
         self.opener.status = 500
         with mock.patch.object(self.writer, "write_up", one_story), self.assertRaises(runner.FamilyDataError):
             self.run_sync(self.students(), QuietModel())
-        self.assertEqual(runner.read_fingerprints(self.prints), ["0" * 64])
+        self.assertEqual(runner.read_fingerprints(self.prints), {"k" * 64: "0" * 64})
+        self.assertEqual(self.published().read_bytes(), before)
 
     def test_a_crash_while_writing_keeps_no_fingerprint(self):
         def boom(*args, **kwargs):
@@ -1191,12 +1248,13 @@ class ChangeCheckTests(unittest.TestCase):
         self.assertEqual(self.opener.requests, [])
         self.assertFalse(self.prints.exists())
 
-    def test_nothing_to_send_is_a_deliberate_no_op_that_saves_the_fingerprint(self):
+    def test_nothing_to_send_sends_nothing_and_moves_no_fingerprint(self):
         model = QuietModel()
         self.assertEqual(self.run_sync(self.students(), model), "nothing_to_send")
         self.assertGreater(model.calls, 0)
         self.assertEqual(self.opener.requests, [])
-        self.assertTrue(self.prints.exists())
+        self.assertFalse(self.prints.exists())
+        self.assertFalse(self.published().exists())
 
     def test_a_render_between_students_waits_and_sends_nothing(self):
         fake = FakeMachine(at(22, 16, 55), busy=True)
@@ -1213,6 +1271,140 @@ class ChangeCheckTests(unittest.TestCase):
             self.assertRegex(line, LOG_LINE)
             for word in PRIVATE:
                 self.assertNotIn(word, line)
+
+
+    def test_two_kids_publish_together(self):
+        with mock.patch.object(self.writer, "write_up", one_story):
+            self.assertEqual(self.run_sync(self.two_kids(), QuietModel()), "published")
+        self.assertEqual(sorted(self.bodies()[0]), ["9001", "9002"])
+        self.assertEqual(len(runner.read_fingerprints(self.prints)), 2)
+        self.assertEqual(sorted(runner.read_published(self.published())), ["9001", "9002"])
+        self.assertEqual(self.published().stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.logs, ["grade-insights: 2 students, 2 changed; writing", "grade-insights: published"])
+
+    def test_review_repro_one_kid_changes_and_the_other_is_carried_not_rewritten(self):
+        # Sync 1 publishes A and B. Sync 2 changes only A; a writer that would now drop B's sentences never runs
+        # for B, B's last entry rides along, and the PUT still carries both.
+        with mock.patch.object(self.writer, "write_up", one_story):
+            self.run_sync(self.two_kids(), QuietModel())
+        calls = []
+
+        def flaky(model, facts, *rest):
+            calls.append(facts)
+            return one_story(model, facts) if len(calls) == 1 else {"as_of": facts["as_of"], "stories": []}
+
+        with mock.patch.object(self.writer, "write_up", flaky):
+            status = self.run_sync(self.two_kids(a_print="c" * 64), QuietModel(), stamp=EVENING_STAMP)
+        self.assertEqual(status, "published")
+        self.assertEqual(len(calls), 1)
+        first, second = self.bodies()
+        self.assertEqual(sorted(second), ["9001", "9002"])
+        self.assertEqual(second["9002"], first["9002"])
+
+    def test_a_changed_kid_with_empty_output_keeps_the_last_entry_and_fingerprint(self):
+        with mock.patch.object(self.writer, "write_up", one_story):
+            self.run_sync(self.two_kids(), QuietModel())
+        old = runner.read_fingerprints(self.prints)
+
+        def only_a(model, facts, *rest):
+            only_a.n += 1
+            return one_story(model, facts) if only_a.n == 1 else {"as_of": facts["as_of"], "stories": []}
+
+        only_a.n = 0
+        kids = self.two_kids(a_print="c" * 64, b_print="d" * 64)
+        with mock.patch.object(self.writer, "write_up", only_a):
+            self.assertEqual(self.run_sync(kids, QuietModel(), stamp=EVENING_STAMP), "published_partial")
+        first, second = self.bodies()
+        self.assertEqual(sorted(second), ["9001", "9002"])
+        self.assertEqual(json.dumps(second["9002"]), json.dumps(first["9002"]))
+        prints = runner.read_fingerprints(self.prints)
+        self.assertEqual(prints[runner.student_key("9001")], "c" * 64)
+        self.assertEqual(prints[runner.student_key("9002")], old[runner.student_key("9002")])
+        self.assertEqual(self.logs[-1], "grade-insights: published; 1 changed kept their last notes or were left out, "
+                                        "0 missing kept their last notes")
+        # The next sync with the same grades writes only B again.
+        seen = []
+
+        def record(model, facts, *rest):
+            seen.append(1)
+            return one_story(model, facts)
+
+        with mock.patch.object(self.writer, "write_up", record):
+            self.assertEqual(self.run_sync(kids, QuietModel(), stamp="2026-10-23T23:46:30.000Z",
+                                           machine=FakeMachine(at(23, 16, 55)).machine()), "published")
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(runner.read_fingerprints(self.prints)[runner.student_key("9002")], "d" * 64)
+
+    def test_a_changed_kid_with_empty_output_and_no_last_entry_is_left_out(self):
+        def only_a(model, facts, *rest):
+            only_a.n += 1
+            return one_story(model, facts) if only_a.n == 1 else {"as_of": facts["as_of"], "stories": []}
+
+        only_a.n = 0
+        with mock.patch.object(self.writer, "write_up", only_a):
+            self.assertEqual(self.run_sync(self.two_kids(), QuietModel()), "published_partial")
+        self.assertEqual(sorted(self.bodies()[0]), ["9001"])
+        self.assertEqual(list(runner.read_fingerprints(self.prints)), [runner.student_key("9001")])
+
+    def test_a_kid_missing_from_the_load_keeps_the_last_entry(self):
+        with mock.patch.object(self.writer, "write_up", one_story):
+            self.run_sync(self.two_kids(), QuietModel())
+        old = runner.read_fingerprints(self.prints)
+        with mock.patch.object(self.writer, "write_up", one_story):
+            status = self.run_sync(self.two_kids(a_print="c" * 64)[:1], QuietModel(), stamp=EVENING_STAMP)
+        self.assertEqual(status, "published_partial")
+        first, second = self.bodies()
+        self.assertEqual(sorted(second), ["9001", "9002"])
+        self.assertEqual(second["9002"], first["9002"])
+        self.assertEqual(runner.read_fingerprints(self.prints)[runner.student_key("9002")], old[runner.student_key("9002")])
+
+    def test_the_carried_entry_is_byte_identical_even_when_the_writer_would_now_word_it_differently(self):
+        with mock.patch.object(self.writer, "write_up", one_story):
+            self.run_sync(self.two_kids(), QuietModel())
+
+        def reworded(model, facts, *rest):
+            return {"as_of": facts["as_of"], "stories": [
+                {"class": "Math", "story": "Reworded: a B, close to an A.", "cites": ["whatif:math:tests:50"]}]}
+
+        with mock.patch.object(self.writer, "write_up", reworded):
+            self.run_sync(self.two_kids(a_print="c" * 64), QuietModel(), stamp=EVENING_STAMP)
+        first_raw, second_raw = (r.data for r in self.opener.requests)
+        carried = json.dumps(json.loads(first_raw)["students"]["9002"]).encode()
+        self.assertIn(carried, first_raw)
+        self.assertIn(carried, second_raw)
+        self.assertIn(b"Reworded", second_raw)
+        self.assertEqual(json.loads(second_raw)["students"]["9002"]["stories"][0]["story"],
+                         "Still a B, 2.1 points from an A.")
+        self.assertEqual(runner.read_published(self.published())["9002"], json.loads(first_raw)["students"]["9002"])
+
+    def test_a_lost_published_doc_rewrites_everyone(self):
+        with mock.patch.object(self.writer, "write_up", one_story):
+            self.run_sync(self.two_kids(), QuietModel())
+            self.published().unlink()
+            self.assertEqual(self.run_sync(self.two_kids(), QuietModel(), stamp=EVENING_STAMP), "published")
+        self.assertEqual(sorted(self.bodies()[1]), ["9001", "9002"])
+        self.assertEqual(self.logs[2], "grade-insights: 2 students, 2 changed; writing")
+
+    def test_the_same_items_in_another_order_are_no_change(self):
+        client = FakeClient()
+        kid = client.latest["latest"]["students"][0]
+        client.log["doc"]["students"]["9001"]["items"].append({"class": "Math", "first_seen": "2026-10-20"})
+        base = self.students(client)[0]["fingerprint"]
+        kid["assignments_by_class"][0]["assignments"].reverse()
+        kid["assignments_by_class"].reverse()
+        client.log["doc"]["students"]["9001"]["items"].reverse()
+        self.assertEqual(self.students(client)[0]["fingerprint"], base)
+
+    def test_state_writes_fsync_before_the_rename(self):
+        order = []
+        real_fsync, real_replace = runner.os.fsync, runner.os.replace
+        with mock.patch.object(runner.os, "fsync", side_effect=lambda fd: (order.append("fsync"), real_fsync(fd))), \
+                mock.patch.object(runner.os, "replace",
+                                  side_effect=lambda a, b: (order.append("replace"), real_replace(a, b))):
+            runner.write_fingerprints(self.prints, {"k" * 64: "0" * 64})
+            runner.State(self.prints.with_name("state.json")).mark(status="x")
+        self.assertEqual(order, ["fsync", "replace", "fsync"] * 2)
+        self.assertEqual(self.prints.with_name("state.json").stat().st_mode & 0o777, 0o600)
 
 
 def recording_client(replies):
@@ -1317,6 +1509,26 @@ class MainTests(unittest.TestCase):
         state = json.loads((self.tmp / "home" / "state.json").read_text())
         self.assertEqual(state["status"], "failed")
         self.assertNotIn("handled", state)
+        client, sent = recording_client(grade_replies())
+        self.assertEqual(self.main(FakeMachine(at(22, 17, 25)), client), 0)
+        self.assertEqual(len(self.opener.requests), 1)
+
+    def test_an_overlapping_start_exits_without_doing_anything(self):
+        import fcntl
+
+        home = self.tmp / "home"
+        home.mkdir()
+        with open(home / "runner.lock", "w") as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            client, sent = recording_client([])
+            machine = FakeMachine(at(22, 16, 55)).machine()
+            freshness = mock.Mock(side_effect=AssertionError("freshness read"))
+            locked = runner.Machine(now=machine.now, freshness=freshness, ssd_mounted=machine.ssd_mounted,
+                                    free_memory_pct=machine.free_memory_pct, busy=machine.busy)
+            self.assertEqual(runner.main([], machine=locked, client=client, model=NoModel(), env=self.env()), 0)
+            self.assertEqual((sent, self.opener.requests), ([], []))
+            self.assertFalse((home / "state.json").exists())
+        # Once the first start lets go, the next start runs.
         client, sent = recording_client(grade_replies())
         self.assertEqual(self.main(FakeMachine(at(22, 17, 25)), client), 0)
         self.assertEqual(len(self.opener.requests), 1)
