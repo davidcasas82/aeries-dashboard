@@ -8,6 +8,7 @@ from contextlib import redirect_stdout
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import class_match  # noqa: E402
 import scraper  # noqa: E402
 
 
@@ -160,7 +161,7 @@ class CountedSummaryGroup(unittest.TestCase):
 
 class NoSilentZeros(unittest.TestCase):
     def setUp(self):
-        getattr(scraper, "_MATCH_WARNED", set()).clear()
+        class_match._MATCH_WARNED.clear()
 
     def _run(self, student, meta, times=3):
         out = io.StringIO()
@@ -252,6 +253,24 @@ class BlankPeriods(unittest.TestCase):
         art = {"course_name": "Art", "period": " 4 "}
         student = {"classes": [art], "assignments_by_class": [_group("Art", 4, ["Sketch 1"])]}
         self.assertEqual(_titles(_quiet_match(student, art)), ["Sketch 1"])
+
+
+class MatcherLivesInClassMatchTests(unittest.TestCase):
+    """The scrape and the runner share one matcher: scraper uses class_match's, not a copy."""
+
+    def test_scraper_uses_the_class_match_functions(self):
+        self.assertIs(scraper.assignments_for_class, class_match.assignments_for_class)
+        self.assertIs(scraper.match_class_groups, class_match.match_class_groups)
+        self.assertIs(scraper.extract_period_from_label, class_match.extract_period_from_label)
+
+    def test_class_match_period_decides_without_scraper(self):
+        data = {"classes": [], "assignments_by_class": [
+            {"class_name": "Math", "period": 5, "assignments": [{"title": "Other period"}]},
+            {"class_name": "Math", "period": 3, "assignments": [{"title": "Right period"}]},
+        ]}
+        with redirect_stdout(io.StringIO()):
+            got = class_match.assignments_for_class(data, {"course_name": "Math", "period": 3})
+        self.assertEqual([a["title"] for a in got], ["Right period"])
 
 
 if __name__ == "__main__":

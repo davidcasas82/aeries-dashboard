@@ -1,4 +1,7 @@
+import contextlib
 import copy
+import io
+import json
 import random
 import sys
 import unittest
@@ -137,7 +140,7 @@ class PercentOfGradeGoldenTests(unittest.TestCase):
         }])
 
     def test_what_if_says_no_single_next_assignment_reaches_an_a(self):
-        rows = [(f["id"], f["points"], f["needed_pct"], f["reachable"]) for f in by_kind(self.facts, "what_if")]
+        rows = [(f["id"], f["points"], f["needed_pct"], f["reachable"]) for f in by_kind(self.facts, "what_if") if f.get("target") != "keep"]
         self.assertEqual(rows, [
             ("whatif:biology:tests:50", 50.0, None, False),
             ("whatif:biology:homework:10", 10.0, None, False),
@@ -160,7 +163,7 @@ class SummativeFormativeGoldenTests(unittest.TestCase):
         self.assertEqual(insights.live_weight_pct(model, "summative"), 70.0)
 
     def test_next_test_at_100_reaches_an_a_and_classwork_cannot(self):
-        rows = [(f["id"], f["needed_pct"], f["reachable"]) for f in by_kind(self.facts, "what_if")]
+        rows = [(f["id"], f["needed_pct"], f["reachable"]) for f in by_kind(self.facts, "what_if") if f.get("target") != "keep"]
         self.assertEqual(rows, [
             ("whatif:worldhistory:summative:20", 100.0, True),
             ("whatif:worldhistory:formative:10", None, False),
@@ -310,6 +313,423 @@ class FloorAndCapTests(unittest.TestCase):
     def test_no_floor_or_cap_is_plain_interpolation(self):
         self.assertEqual(self.needed(80.0), 90.0)
         self.assertEqual(self.needed(60.0), 50.0)
+
+
+def keep_model(buckets, min_pct=None, max_pct=None, name="Physics"):
+    """buckets: [(name, weight, [(earned, possible), ...])]."""
+    return insights.ClassModel(name, "percent_of_grade", tuple(
+        insights.Bucket(b, w, tuple(insights.Score(f"{b}{i}", f"{b} {i}", b, e, p) for i, (e, p) in enumerate(rows)))
+        for b, w, rows in buckets), min_pct, max_pct)
+
+
+class KeepTheLetterTests(unittest.TestCase):
+    """The keep what-if: the lowest score on the next item that keeps the letter the class holds now."""
+
+    # Tests 70% at 180/200 (90%), Classwork 30% at 30/30: a 93.0, an A.
+    A_CLASS = [("Tests", 70.0, [(92, 100), (88, 100)]), ("Classwork", 30.0, [(10, 10), (10, 10), (10, 10)])]
+
+    def assert_lands(self, model, bucket, points, needed, floor):
+        """The named score lands at the floor or above; a point less lands below it."""
+        self.assertGreaterEqual(insights.truncated_grade(insights.with_score(model, bucket, needed / 100 * points, points)), floor)
+        self.assertLess(insights.truncated_grade(insights.with_score(model, bucket, (needed - 1) / 100 * points, points)), floor)
+
+    def test_an_a_that_needs_a_real_score_to_stay_above_90(self):
+        model = keep_model(self.A_CLASS)
+        self.assertEqual(insights.grade(model), 93.0)
+        facts = {f["id"]: f for f in insights.keep_search(model, 93.0)}
+        test = facts["keep:physics:tests:100"]
+        self.assertEqual((test["kind"], test["letter"], test["threshold"]), ("keep_letter", "A", 90.0))
+        self.assertNotIn("target", test)
+        # 77.1 lands at 89.99, shown 89.9 (cut off, not rounded); 77.2 lands at 90.01.
+        self.assertEqual((test["needed_pct"], test["cannot_lose"], test["reachable"]), (77.2, False, True))
+        self.assertFalse(insights.holds(model, "Tests", 77.1, 100, 90.0))
+        self.assert_lands(model, "Tests", 100, 77.2, 90.0)
+        self.assertEqual(facts["keep:physics:classwork:10"]["needed_pct"], 60.0)
+        self.assert_lands(model, "Classwork", 10, 60.0, 90.0)
+
+    def test_an_a_the_next_item_cannot_cost(self):
+        model = keep_model([("Tests", 100.0, [(940, 1000), (10, 10), (10, 10)])])
+        fact = insights.keep_search(model, insights.grade(model))[0]
+        self.assertEqual(fact["points"], 10.0)
+        self.assertEqual((fact["needed_pct"], fact["cannot_lose"], fact["reachable"]), (None, True, True))
+        self.assertGreaterEqual(insights.truncated_grade(insights.with_score(model, "Tests", 0.0, 10.0)), 90.0)
+
+    def test_a_letter_even_the_cap_cannot_hold(self):
+        # Capped at 85% a score, the A rests on 10 bonus points; a 200-point item at the cap pulls it to 88.33.
+        model = keep_model([("Tests", 100.0, [(85, 100), (10, 0)])], max_pct=85.0)
+        self.assertEqual(insights.grade(model), 95.0)
+        self.assertEqual(insights.keep_score(model, "Tests", 200.0, 90.0), (None, False))
+        self.assertEqual(insights.keep_score(model, "Tests", 100.0, 90.0), (85.0, False))
+
+    def test_floor_and_cap(self):
+        floored = keep_model([("Tests", 100.0, [(90, 100), (90, 100)])], min_pct=50.0)
+        self.assertEqual(insights.keep_score(floored, "Tests", 100.0, 90.0), (90.0, False))
+        self.assert_lands(floored, "Tests", 100, 90.0, 90.0)
+        # A floor of 90 a score: even a blank keeps the A.
+        self.assertEqual(insights.keep_score(keep_model([("Tests", 100.0, [(95, 100), (95, 100)])], min_pct=90.0),
+                                             "Tests", 100.0, 90.0), (None, True))
+        # Capped at 95: the 100 counts as 95, so the class is an 87.5 B; a 65 keeps the B.
+        capped = keep_model([("Tests", 100.0, [(100, 100), (80, 100)])], max_pct=95.0)
+        self.assertEqual(insights.grade(capped), 87.5)
+        fact = insights.keep_search(capped, 87.5)[0]
+        self.assertEqual((fact["letter"], fact["threshold"], fact["needed_pct"]), ("B", 80.0, 65.0))
+        self.assert_lands(capped, "Tests", 100, 65.0, 80.0)
+
+    def test_truncation_at_89_95_and_90_00(self):
+        model = keep_model([("Tests", 100.0, [(90, 100), (90, 100)])])
+        at = lambda pct: insights.with_score(model, "Tests", pct, 100.0)
+        self.assertEqual(insights.truncated_grade(at(89.85)), 89.9)  # a raw 89.95
+        self.assertFalse(insights.holds(model, "Tests", 89.85, 100, 90.0))
+        # 89.99 on the item is a 89.9967: grade() rounds it to 90.0, Aeries shows 89.9, a B.
+        self.assertEqual((insights.grade(at(89.99)), insights.truncated_grade(at(89.99))), (90.0, 89.9))
+        self.assertFalse(insights.holds(model, "Tests", 89.99, 100, 90.0))
+        self.assertEqual(insights.truncated_grade(at(90.0)), 90.0)
+        self.assertEqual(insights.keep_score(model, "Tests", 100.0, 90.0), (90.0, False))
+
+    def test_an_f_has_no_letter_to_keep_and_golden_classes_get_keep_facts(self):
+        self.assertEqual(insights.keep_search(keep_model([("Tests", 100.0, [(40, 100)])]), 40.0), [])
+        facts = insights.class_facts(class_input("Biology", POG_TOTALS, POG_ROWS, 85.2, "B"), [], None, TODAY)
+        keeps = by_kind(facts, "keep_letter")
+        # One per class: the Unit 3 Test (50 points, due Nov 5) is the soonest named next item.
+        self.assertEqual(keeps, [{"id": "keep:biology:tests:50", "kind": "keep_letter", "class": "Biology", "letter": "B",
+                                  "bucket": "Tests", "points": 50.0, "needed_pct": 53.3, "cannot_lose": False}])
+        model = insights.build_class_model("Biology", class_input("Biology", POG_TOTALS, POG_ROWS, 85.2, "B")["counted_insight"], POG_ROWS)
+        for f in keeps:
+            if f["needed_pct"] is not None:
+                self.assert_lands(model, f["bucket"], f["points"], f["needed_pct"], 80.0)
+
+    def test_the_payload_still_fits(self):
+        classes = [dict(class_input(f"Class {i}", POG_TOTALS, POG_ROWS, 85.2, "B"), name=f"Class {i}") for i in range(9)]
+        facts = insights.student_facts(classes, [], None, TODAY)
+        keeps = by_kind(facts["facts"], "keep_letter")
+        self.assertEqual(len(keeps), 9)
+        self.assertLessEqual(insights.facts_size(facts), insights.FACTS_CAP_BYTES)
+        self.assertNotIn("trimmed", facts)
+        data = {"students": [{"sn": "1", "insight_facts": facts}, {"sn": "2", "insight_facts": facts}]}
+        scraper.fit_payload_for_family_data(data, today=TODAY)
+        self.assertEqual(data["students"][0]["insight_facts"], facts)
+
+
+class KeepFactShapeTests(unittest.TestCase):
+    """#54 review: keep facts are their own kind, one per class, picked like the writer picks one."""
+
+    A_CLASS = KeepTheLetterTests.A_CLASS
+
+    def test_biology_repro_keep_fact_is_never_a_what_if(self):
+        # GE's repro: Biology at 85.2 keeps the B with a 53.3 ("54 or better") on the next test. That fact
+        # must not read as a next-letter what-if, so "A 54 or better ... gets it to an A." has nothing to cite.
+        facts = insights.class_facts(class_input("Biology", POG_TOTALS, POG_ROWS, 85.2, "B"), [], None, TODAY)
+        keep = by_kind(facts, "keep_letter")[0]
+        self.assertEqual((keep["letter"], keep["needed_pct"]), ("B", 53.3))
+        self.assertTrue(all(f.get("target") == 90.0 for f in by_kind(facts, "what_if")))
+        self.assertFalse(any(f["id"].startswith("keep:") for f in by_kind(facts, "what_if")))
+        model = keep_model(self.A_CLASS)
+        self.assertTrue(all(f["kind"] == "keep_letter" for f in insights.keep_search(model, 93.0)))
+        doc = insights.student_facts([class_input(f"Kid A Class {i}", POG_TOTALS, POG_ROWS, 85.2, "B") for i in range(3)],
+                                     [], None, TODAY)
+        for f in doc["facts"]:
+            if f["id"].startswith("keep:"):
+                self.assertEqual(f["kind"], "keep_letter")
+                for dropped in ("target", "threshold", "bucket_weight_pct", "reachable"):
+                    self.assertNotIn(dropped, f)
+
+    def test_order_named_item_then_drop_cause_then_heaviest(self):
+        model = keep_model(self.A_CLASS)  # Tests 70%, Classwork 30%: both need a real score to keep the A
+        heaviest = insights.keep_fact(model, 93.0)
+        self.assertEqual(heaviest["bucket"], "Tests")
+        move = {"kind": "grade_move", "delta": -1.2, "causes": [
+            {"bucket": "Tests", "share": 0.3, "points": 0.3},
+            {"bucket": "Classwork", "share": -1.5, "points": -1.5}]}
+        self.assertEqual(insights.keep_fact(model, 93.0, move=move)["bucket"], "Classwork")
+        # A rise has no drop cause to follow.
+        self.assertEqual(insights.keep_fact(model, 93.0, move={**move, "delta": 1.2})["bucket"], "Tests")
+        upcoming = [(date(2026, 10, 23), "Lab 9", "Classwork", 20.0), (date(2026, 10, 30), "Unit 5 Test", "Tests", 100.0)]
+        named = insights.keep_fact(model, 93.0, upcoming, move={**move, "causes": move["causes"][:1]})
+        self.assertEqual((named["bucket"], named["points"]), ("Classwork", 20.0))
+
+    def test_a_needed_score_beats_cannot_drop_it(self):
+        # Physics: an Assessments item needs a real score to keep the A; the next Coursework item can't
+        # cost it. The Assessments fact wins even though Coursework is the soonest named item and the
+        # bucket the drop came from.
+        model = keep_model([("Assessments", 80.0, [(902, 1000)]), ("Coursework", 20.0, [(10, 10)] * 40)], min_pct=50.0)
+        self.assertEqual(insights.truncated_grade(model), 92.1)
+        self.assertEqual(insights.keep_score(model, "Coursework", 10.0, 90.0), (None, True))
+        upcoming = [(date(2026, 10, 23), "Lab 9", "Coursework", 10.0),
+                    (date(2026, 10, 30), "Unit 5 Assessment", "Assessments", 200.0)]
+        move = {"kind": "grade_move", "delta": -0.8, "causes": [{"bucket": "Coursework", "share": -0.8, "points": -0.8}]}
+        fact = insights.keep_fact(model, 92.1, upcoming, move)
+        self.assertEqual((fact["bucket"], fact["points"], fact["needed_pct"], fact["cannot_lose"]),
+                         ("Assessments", 200.0, 74.0, False))
+        # With nothing that needs a score, the can't-drop-it fact is still the one.
+        safe = insights.keep_fact(model, 92.1, upcoming[:1])
+        self.assertEqual(safe["bucket"], "Assessments")  # its typical 1000-point item still needs a score
+        only_safe = keep_model([("Coursework", 100.0, [(10, 10)] * 40)])
+        self.assertEqual(insights.keep_fact(only_safe, 100.0)["cannot_lose"], True)
+
+    def test_keep_score_with_zero_points_is_none(self):
+        model = keep_model([("Tests", 100.0, [(85, 100)])])
+        self.assertIsNone(insights.keep_score(model, "Tests", 0.0, 80.0))
+        self.assertEqual(insights.keep_search(model, 85.0, sizes={"Tests": [0.0]}), [])
+        self.assertIsNone(insights.needed_score(model, "Tests", 0.0, 90.0))
+
+    def test_posted_and_rebuilt_letters_disagree_so_no_score_is_named(self):
+        # Posted 80.0 B, but the footer rebuilds to 79.7, a C as Aeries cuts it: no what-if, no keep fact.
+        rows = [row("Kid A Test", "Tests", 797.0, 1000.0)]
+        totals = {"parse_ok": True, "layout": "percent_of_grade", "categories": [cat("Tests", 100.0, 797.0, 1000.0, 79.7)]}
+        facts = insights.class_facts(class_input("Chem", totals, rows, 80.0, "B"), [], None, TODAY)
+        self.assertEqual([f["kind"] for f in facts], ["next_letter"])
+        agree = insights.class_facts(class_input("Chem", totals, rows, 79.7, "C"), [], None, TODAY)
+        self.assertEqual(sorted({f["kind"] for f in agree}), ["keep_letter", "next_letter", "what_if"])
+
+
+class NeededScoreTruncationTests(unittest.TestCase):
+    """The next-letter what-if never names a score that leaves the grade at 89.9 as Aeries shows it."""
+
+    def test_896_of_1000_plus_a_300_point_item(self):
+        model = keep_model([("Tests", 100.0, [(896, 1000)])])
+        needed = insights.needed_score(model, "Tests", 300.0, 90.0)
+        self.assertEqual(needed, 91.4)  # 91.3 lands at 89.99, shown 89.9
+        self.assertEqual(insights.truncated_grade(insights.with_score(model, "Tests", 91.3 / 100 * 300, 300.0)), 89.9)
+        self.assertGreaterEqual(insights.truncated_grade(insights.with_score(model, "Tests", needed / 100 * 300, 300.0)), 90.0)
+
+    def test_edges(self):
+        model = keep_model([("Tests", 100.0, [(80, 100)])])
+        self.assertEqual(insights.needed_score(model, "Tests", 100.0, 90.0), 100.0)  # exactly 90.0 at the cap
+        self.assertIsNone(insights.needed_score(model, "Tests", 50.0, 90.0))  # 85.3 at best
+        self.assertEqual(insights.needed_score(keep_model([("Tests", 100.0, [(99, 100)])]), "Tests", 10.0, 90.0), 0.0)
+        floored = keep_model([("Tests", 100.0, [(95, 100)] * 3)], min_pct=50.0)
+        self.assertEqual(insights.needed_score(floored, "Tests", 100.0, 80.0), 0.0)  # a 50 floor keeps it at 80+
+        random.seed(54)
+        for _ in range(400):
+            buckets = [(f"B{i}", float(random.choice([20, 30, 50])),
+                        [(random.randint(0, p), p) for p in random.choices([10, 50, 100, 300, 1000], k=random.randint(1, 4))])
+                       for i in range(random.randint(1, 3))]
+            m = keep_model(buckets)
+            step = insights.next_threshold(insights.truncated_grade(m))
+            if not step:
+                continue
+            for b in m.buckets:
+                for pts in insights._typical_sizes(b):
+                    need = insights.needed_score(m, b.name, pts, step[1])
+                    if need is None or need == 0.0:
+                        continue
+                    self.assertGreaterEqual(insights.truncated_grade(insights.with_score(m, b.name, need / 100 * pts, pts)), step[1])
+                    self.assertLess(insights.truncated_grade(insights.with_score(m, b.name, (need - 0.1) / 100 * pts, pts)), step[1])
+
+
+def busy_night(moves, new=6):
+    """GE's synthetic busy night: Kid A, 8 classes x 40 items x 4 buckets, the last `new` scores new."""
+    rng = random.Random(7)
+    cats = [("Tests", 50.0, [50, 100]), ("Quizzes", 20.0, [20, 25]), ("Homework", 20.0, [10]), ("Labs", 10.0, [15, 30])]
+    classes = []
+    for c in range(8):
+        rows = []
+        for i in range(40):
+            n, _w, sizes = cats[i % 4]
+            p = float(rng.choice(sizes))
+            e = float(round(rng.uniform(.55, 1) * p))
+            rows.append(row(f"{n} Assignment {i} Chapter {i // 4}", n, e, p, f"10/{1 + i % 20:02d}/2026"))
+        tot = {"parse_ok": True, "layout": "percent_of_grade", "categories": []}
+        m = insights.ClassModel("x", "percent_of_grade", tuple(insights.Bucket(n, w, tuple(
+            insights.Score(str(k), "", n, r["points_earned"], r["points_possible"])
+            for k, r in enumerate(rows) if r["category"] == n)) for n, w, _ in cats))
+        for n, w, _ in cats:
+            e = sum(r["points_earned"] for r in rows if r["category"] == n)
+            p = sum(r["points_possible"] for r in rows if r["category"] == n)
+            tot["categories"].append(cat(n, w, e, p, round(e / p * 100, 1)))
+        g = insights.grade(m)
+        pct = int(g * 10) / 10
+        mark = insights.letter_for(pct)
+        name = f"Advanced Placement Course Number {c} Honors"
+        classes.append({"name": name, "pct": pct, "mark": mark,
+                        "counted_insight": scraper.build_counted_insight(tot, rows, posted_pct=pct, posted_mark=mark),
+                        "assignments": rows, "new_keys": [insights.slug(r["description"]) for r in rows[-new:]],
+                        "prior_scores": {}})
+    prior = snapshot("2026-10-21", {c["name"]: (c["pct"] + 1.3, c["mark"]) for c in classes}) if moves else None
+    return insights.student_facts(classes, [], prior, TODAY)
+
+
+# main (#49, e763a3b) on busy_night: 9,251 bytes quiet, 22,332 with moves. Keep facts may add at most this.
+MAIN_BUSY_NIGHT = {False: 9_251, True: 22_332}
+KEEP_BUDGET_BYTES = 2_000
+# busy_night(True, new=40), every score new: 30,355 bytes after the causes fold, 81,501 before it.
+EVERY_SCORE_NEW_BYTES = 31_000
+
+
+class InsightFactsSizeTests(unittest.TestCase):
+    def test_whole_object_on_the_busy_night(self):
+        for moves in (False, True):
+            doc = busy_night(moves)
+            size = insights.facts_size(doc)
+            self.assertLessEqual(size, MAIN_BUSY_NIGHT[moves] + KEEP_BUDGET_BYTES, moves)
+            self.assertLessEqual(size, insights.FACTS_CAP_BYTES)
+            self.assertNotIn("trimmed", doc)
+            self.assertEqual(len(by_kind(doc["facts"], "keep_letter")), 8)
+            self.assertEqual(len(by_kind(doc["facts"], "grade_move")), 8 if moves else 0)
+
+    def test_the_cap_trims_keep_then_far_what_ifs_then_oldest_patterns(self):
+        doc = busy_night(True)
+        log = [{"class": f"Kid A Pattern {i}", "first_seen": f"2026-10-{d:02d}", "scrape": "evening"}
+               for i in range(6) for d in range(1 + i, 22, 7)]
+        patterns = [{"id": f"pattern:posting_day:kidapattern{i}", "kind": "posting_day", "class": f"Kid A Pattern {i}",
+                     "weekday": "Someday", "share": 1.0, "scores": 8, "window_days": 28} for i in range(6)]
+        doc = {**doc, "facts": doc["facts"] + patterns}
+        moves = by_kind(doc["facts"], "grade_move")
+        self.assertTrue(all(m["causes"] for m in moves))
+        full = insights.facts_size(doc)
+        kinds = lambda d: [f["kind"] for f in d["facts"]]  # noqa: E731
+        keep_bytes = sum(insights.facts_size(f) + 1 for f in by_kind(doc["facts"], "keep_letter"))
+
+        # (a) a little over: only keep facts go, the last class's first.
+        a = insights.fit_facts(doc, log, cap=full - 50)
+        self.assertEqual(a["trimmed"], ["keep_letter"])
+        self.assertEqual(len(by_kind(a["facts"], "keep_letter")), 7)
+        self.assertNotIn("Advanced Placement Course Number 7 Honors", [f["class"] for f in by_kind(a["facts"], "keep_letter")])
+        self.assertEqual(kinds(a).count("what_if"), 32)
+
+        # (b) past all keep facts: what-ifs past the next item go; one per class stays.
+        b = insights.fit_facts(doc, log, cap=full - keep_bytes - 100)
+        self.assertEqual(b["trimmed"], ["keep_letter", "what_if"])
+        self.assertEqual(kinds(b).count("keep_letter"), 0)
+        self.assertGreaterEqual(kinds(b).count("what_if"), 8)
+        self.assertLess(kinds(b).count("what_if"), 32)
+
+        # (c) still over: the oldest patterns go (Pattern 0's last score is the oldest).
+        with contextlib.redirect_stdout(io.StringIO()):
+            floor = insights.fit_facts(doc, log, cap=1)
+        c = insights.fit_facts(doc, log, cap=insights.facts_size(floor) + 300)
+        self.assertEqual(c["trimmed"], ["keep_letter", "what_if", "posting_day"])
+        left = [f["class"] for f in by_kind(c["facts"], "posting_day")]
+        self.assertTrue(left and len(left) < 6)
+        self.assertEqual(left, [f"Kid A Pattern {i}" for i in range(6 - len(left), 6)])
+
+        # Nothing trims a move or its causes, even under an impossible cap.
+        for out in (a, b, c, floor):
+            self.assertEqual(by_kind(out["facts"], "grade_move"), moves)
+        self.assertEqual(kinds(floor).count("what_if"), 8)
+        self.assertEqual(kinds(floor).count("posting_day"), 0)
+        self.assertEqual(kinds(floor).count("next_letter"), 8)
+        # Under the cap, nothing changes.
+        self.assertIs(insights.fit_facts(doc, log, cap=full), doc)
+
+
+class CauseFoldTests(unittest.TestCase):
+    """A move keeps its top CAUSES_MAX causes; the rest fold into other_share and leave no trace."""
+
+    def every_score_new(self):
+        return busy_night(True, new=40)
+
+    def test_fold_keeps_eight_by_share_and_the_sum(self):
+        causes = [{"id": f"cause:kida:2026-10-21:item{i}", "title": f"Folded Item {i}", "bucket": "Tests",
+                   "share": round(-0.1 * (i + 1), 2), "points": round(-0.1 * (i + 1), 2)} for i in range(12)]
+        causes.sort(key=lambda c: (-abs(c["share"]), c["id"]))
+        move = {"id": "move:kida:2026-10-21", "kind": "grade_move", "causes": causes, "delta": -8.0,
+                "explained": -7.8, "coverage": 0.98}
+        out = insights.fold_causes(move)
+        self.assertEqual(len(out["causes"]), 8)
+        self.assertEqual([c["title"] for c in out["causes"]], [f"Folded Item {i}" for i in range(11, 3, -1)])
+        # other_share is the folded causes' own shares (-0.1 - 0.2 - 0.3 - 0.4), not explained's leftover.
+        self.assertEqual(out["other_share"], -1.0)
+        self.assertAlmostEqual(sum(c["share"] for c in out["causes"]) + out["other_share"],
+                               sum(c["share"] for c in causes), places=9)
+        self.assertEqual((out["coverage"], out["other_causes"]), (0.98, 4))
+        text = json.dumps(out)
+        for i in range(4):
+            self.assertNotIn(f"Folded Item {i}\"", text)
+            self.assertNotIn(f"item{i}\"", text)
+        eight = {**move, "causes": causes[:8]}
+        self.assertIs(insights.fold_causes(eight), eight)
+
+    def test_real_moves_fold_and_keep_coverage(self):
+        # new=10: shares exist (10 changes or fewer), so kept shares + other_share == explained.
+        # new=40: every score new, nothing to rebuild "before" from: explained and other_share are None.
+        sums = 0
+        for new in (10, 40):
+            with patch.object(insights, "CAUSES_MAX", 10 ** 6):
+                unfolded = busy_night(True, new=new)
+            folded = busy_night(True, new=new)
+            before, after = by_kind(unfolded["facts"], "grade_move"), by_kind(folded["facts"], "grade_move")
+            self.assertEqual(len(after), len(before))
+            for full, cut in zip(before, after):
+                self.assertEqual((cut["coverage"], cut["explained"], cut["delta"]), (full["coverage"], full["explained"], full["delta"]))
+                if len(full["causes"]) <= 8:
+                    self.assertEqual(cut["causes"], full["causes"])
+                    continue
+                self.assertEqual(cut["causes"], full["causes"][:8])  # the same ranking, cut at 8
+                self.assertEqual(cut["other_causes"], len(full["causes"]) - 8)
+                if full["causes"][0]["share"] is None:
+                    self.assertIsNone(cut["other_share"])
+                else:
+                    sums += 1
+                    self.assertAlmostEqual(cut["other_share"], sum(c["share"] for c in full["causes"][8:]), delta=0.005 * len(full["causes"]))
+                # No folded item's title or id is anywhere in its class's facts.
+                text = json.dumps([f for f in folded["facts"] if f.get("class") == cut["class"]], ensure_ascii=False)
+                for gone in full["causes"][8:]:
+                    self.assertNotIn(json.dumps(gone["title"], ensure_ascii=False), text)
+                    self.assertNotIn(gone["id"], json.dumps(folded))
+        self.assertGreater(sums, 0)
+
+    def test_other_share_with_and_without_shares(self):
+        # 10 changed scores: shares exist. other_share is the two folded causes' own unrounded shares
+        # summed, and all ten shares sum to explained.
+        rows = [row(f"Kid A Quiz {i}", "Tests", float(3 + (i * 7) % 8), 10.0, "10/20/2026") for i in range(10)]
+        rows += [row(f"Kid A Old {i}", "Tests", 9.0, 10.0, "10/01/2026") for i in range(5)]
+        totals = {"parse_ok": True, "layout": "percent_of_grade", "categories": [cat("Tests", 100.0, 0, 0, 0)]}
+        model = insights.build_class_model("Chem", totals, rows)
+        new = [insights.slug(r["description"]) for r in rows[:10]]
+        now = insights.grade(model)
+        move = insights.explain_move(model, "Chem", now + 9.0, now, "2026-10-21", new)
+        self.assertEqual((len(move["causes"]), move["other_causes"]), (8, 2))
+        shares = insights._shares(model, {k: None for k in new})
+        listed = {c["id"] for c in move["causes"]}
+        folded = [k for k in new if f"cause:chem:2026-10-21:{k}" not in listed]
+        self.assertEqual(len(folded), 2)
+        self.assertEqual(move["other_share"], round(sum(shares[k] for k in folded), 2))
+        self.assertAlmostEqual(sum(shares.values()), move["explained"], places=2)
+        # 11 changed scores: no shares, leave-one-out points don't add up, so other_share is None.
+        rows.append(row("Kid A Quiz 10", "Tests", 4.0, 10.0, "10/20/2026"))
+        model = insights.build_class_model("Chem", totals, rows)
+        new = [insights.slug(r["description"]) for r in rows if "Quiz" in r["description"]]
+        self.assertEqual(len(new), 11)
+        now = insights.grade(model)
+        move = insights.explain_move(model, "Chem", now + 9.0, now, "2026-10-21", new)
+        self.assertTrue(all(c["share"] is None for c in move["causes"]))
+        self.assertEqual(len(move["causes"]), 8)
+        self.assertEqual(move["other_causes"], 3)
+        self.assertIsNone(move["other_share"])
+        self.assertIsNotNone(move["coverage"])
+
+    def test_every_score_new_night_size_and_warning(self):
+        def measure(causes_max):
+            out = io.StringIO()
+            with patch.object(insights, "CAUSES_MAX", causes_max), contextlib.redirect_stdout(out):
+                doc = self.every_score_new()
+            return insights.facts_size(doc), doc, out.getvalue()
+
+        before, doc_before, said = measure(10 ** 6)
+        self.assertGreater(before, insights.FACTS_CAP_BYTES)  # 81.5 KB with every cause kept
+        self.assertEqual(doc_before["trimmed"], ["keep_letter", "what_if"])
+        self.assertEqual(said, f"::warning::insight_facts is {before} bytes after every trim step, "
+                               f"over the {insights.FACTS_CAP_BYTES}-byte cap\n")
+        self.assertNotRegex(said, r"[A-Za-z]{2,} [A-Z][a-z]+ \d")  # numbers only, no class or item names
+        self.assertNotIn("Course", said)
+        after, doc_after, quiet = measure(insights.CAUSES_MAX)
+        self.assertLessEqual(after, EVERY_SCORE_NEW_BYTES)
+        self.assertLessEqual(after, insights.FACTS_CAP_BYTES)
+        self.assertEqual(quiet, "")
+        self.assertNotIn("trimmed", doc_after)
+
+    def test_warning_only_when_the_protected_facts_alone_are_over(self):
+        doc = busy_night(True)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            fitted = insights.fit_facts(doc, cap=insights.facts_size(doc) - 10)
+        self.assertEqual(out.getvalue(), "")
+        self.assertEqual(fitted["trimmed"], ["keep_letter"])
+        with contextlib.redirect_stdout(out):
+            insights.fit_facts(doc, cap=1000)
+        self.assertEqual(out.getvalue().count("::warning::"), 1)
+        self.assertRegex(out.getvalue(), r"^::warning::insight_facts is \d+ bytes after every trim step, over the 1000-byte cap\n$")
 
 
 class ScraperWiringTests(unittest.TestCase):
