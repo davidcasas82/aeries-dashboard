@@ -13,7 +13,12 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 import classroom
-from class_match import _norm_course_name, assignments_for_class, extract_period_from_label  # noqa: F401
+from class_match import (  # noqa: F401
+    _norm_course_name,
+    assignments_for_class,
+    extract_period_from_label,
+    match_class_groups,
+)
 import glance
 import insights
 
@@ -2414,24 +2419,17 @@ def finalize_gradebook_group(entry):
     return entry
 
 
-def assignment_group_for_class(class_assignments, class_meta):
-    """Return the GradebookDetails group matching a ClassSummary row."""
+def assignment_group_for_class(class_assignments, class_meta, classes=None):
+    """Return the GradebookDetails group matching a ClassSummary row, or None.
+
+    Same rule as assignments_for_class (see match_class_groups): the period decides when
+    both sides have one, otherwise exact name first, then one unambiguous contains match.
+    Pass the student's class rows as ``classes`` so a group another row claims is skipped.
+    """
     if not class_assignments or not class_meta:
         return None
-    period = class_meta.get("period")
-    course_n = _norm_course_name(class_meta.get("course_name"))
-    fallback = None
-    for group in class_assignments:
-        label = group.get("class_name") or ""
-        group_period = group.get("period")
-        if group_period is None:
-            group_period = extract_period_from_label(label)
-        name_n = _norm_course_name(label)
-        if period is not None and group_period is not None and int(group_period) == int(period):
-            return group
-        if course_n and name_n and (course_n in name_n or name_n in course_n):
-            fallback = group
-    return fallback
+    groups, _ = match_class_groups(class_assignments, class_meta, classes)
+    return groups[0] if groups else None
 
 
 def attach_gradebook_insights(classes, class_assignments):
@@ -2439,7 +2437,7 @@ def attach_gradebook_insights(classes, class_assignments):
     for group in class_assignments or []:
         finalize_gradebook_group(group)
     for class_meta in classes or []:
-        group = assignment_group_for_class(class_assignments, class_meta)
+        group = assignment_group_for_class(class_assignments, class_meta, classes)
         if not group:
             continue
         if group.get("totals"):
