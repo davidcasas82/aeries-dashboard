@@ -2753,6 +2753,208 @@ def save_grade_history(history):
     HISTORY_FILE.write_text(json.dumps(history, indent=2))
 
 
+# ── Scored-items log (the first scrape that saw each score) ──────────────────
+
+SCORED_LOG_PATH = "/v1/docs/aeries/scored-log"
+SCORED_LOG_KEEP_DAYS = 120
+# family-data caps a doc at 900k characters. Stay well under it.
+SCORED_LOG_MAX_CHARS = 600_000
+
+
+def scrape_slot(now):
+    """Which daily scrape this is, from the Pacific hour."""
+    hour = now.hour
+    if hour >= EVENING_SNAPSHOT_HOUR:
+        return "evening"
+    if hour < 6:
+        return "overnight"
+    if hour >= 15:
+        return "afternoon"
+    return "daytime"
+
+
+def _iso_day(text):
+    parsed = parse_due_date((text or "").strip())
+    return parsed.date().isoformat() if parsed else ""
+
+
+def scored_items_for_student(student_data):
+    """Every assignment with a numeric score, one row per class it sits in."""
+    rows = []
+    for class_meta in student_data.get("classes") or []:
+        class_name = (class_meta.get("course_name") or "").strip()
+        if not class_name:
+            continue
+        for assignment in assignments_for_class(student_data, class_meta):
+            title = (assignment.get("description") or "").strip()
+            if assignment.get("points_earned") is None or not title:
+                continue
+            rows.append({
+                "class": class_name,
+                "title": title,
+                "key": _history_item_key(title),
+                "category": (assignment.get("category") or "").strip(),
+                "earned": assignment.get("points_earned"),
+                "possible": assignment.get("points_possible"),
+                "pct": assignment.get("percentage"),
+                "counts": assignment.get("counts_toward_grade"),
+                "assigned": _iso_day(assignment.get("date_assigned")),
+                "due": _iso_day(assignment.get("due_date")),
+                "completed": _iso_day(assignment.get("date_completed")),
+            })
+    return rows
+
+
+def _same_due_and_points(entry, item):
+    return bool(item["due"]) and entry.get("due", "") == item["due"] and entry.get("possible") == item["possible"]
+
+
+def _match_scored_entries(entries, items):
+    """Pair today's scored items with logged entries. Returns {item index: entry index}.
+
+    Exact matches go first: class, title key, due date and points possible.
+    Then a renamed item (same class, due date and points, old title gone today),
+    then a points-possible edit (same class, title key and due date).
+    A repeated title with a new due date is a new item.
+    """
+    taken = set()
+    matched = {}
+    today_keys = {(item["class"], item["key"]) for item in items}
+
+    def claim(item_i, pred, unique):
+        hits = [
+            entry_i for entry_i, entry in enumerate(entries)
+            if entry_i not in taken and entry["class"] == items[item_i]["class"] and pred(entry)
+        ]
+        if not hits or (unique and len(hits) > 1):
+            return
+        matched[item_i] = hits[0]
+        taken.add(hits[0])
+
+    for item_i, item in enumerate(items):
+        claim(item_i, lambda e, it=item: (
+            e["key"] == it["key"] and e.get("due", "") == it["due"] and e.get("possible") == it["possible"]
+        ), unique=False)
+    for item_i, item in enumerate(items):
+        if item_i in matched:
+            continue
+        claim(item_i, lambda e, it=item: (
+            e["key"] != it["key"] and _same_due_and_points(e, it) and (e["class"], e["key"]) not in today_keys
+        ), unique=True)
+        if item_i in matched:
+            continue
+        claim(item_i, lambda e, it=item: (
+            bool(it["due"]) and e["key"] == it["key"] and e.get("due", "") == it["due"]
+        ), unique=True)
+    return matched
+
+
+def update_scored_log(doc, student_key, items, now):
+    """Fold one student's scored items into the log. Returns how many were new.
+
+    A student's first run records what is already scored as the baseline.
+    Logged entries are never removed here, so a quarter reset keeps them.
+    """
+    students = doc.setdefault("students", {})
+    entry = students.get(student_key)
+    baseline = entry is None
+    if baseline:
+        entry = {"baseline_at": now.isoformat(timespec="minutes"), "items": []}
+    entries = [
+        item for item in entry.get("items") or []
+        if isinstance(item, dict) and {"class", "key"} <= item.keys()
+    ]
+    entry["items"] = entries
+    matched = _match_scored_entries(entries, items)
+    seen_at = now.isoformat(timespec="minutes")
+    slot = scrape_slot(now)
+    new = 0
+    for item_i, item in enumerate(items):
+        if item_i in matched:
+            logged = entries[matched[item_i]]
+            logged.update(title=item["title"], key=item["key"], possible=item["possible"])
+            continue
+        entries.append({
+            **{field: value for field, value in item.items() if value not in (None, "")},
+            "first_seen": now.date().isoformat(),
+            "first_seen_at": seen_at,
+            "scrape": slot,
+            "baseline": baseline,
+        })
+        new += 1
+    entry["last_seen_at"] = seen_at
+    students[student_key] = entry
+    return new
+
+
+def trim_scored_log(doc, today, keep_days=SCORED_LOG_KEEP_DAYS, max_chars=SCORED_LOG_MAX_CHARS):
+    """Drop entries first seen more than keep_days ago, then the oldest until the doc fits."""
+    cutoff = (today - timedelta(days=keep_days)).isoformat()
+    dropped = 0
+    for entry in (doc.get("students") or {}).values():
+        kept = [item for item in entry.get("items") or [] if item.get("first_seen", "") >= cutoff]
+        dropped += len(entry.get("items") or []) - len(kept)
+        entry["items"] = kept
+    size = len(json.dumps(doc, separators=(",", ":")))
+    if size > max_chars:
+        oldest = sorted(
+            (item.get("first_seen", ""), key, i)
+            for key, entry in doc["students"].items()
+            for i, item in enumerate(entry["items"])
+        )
+        gone = set()
+        for _day, key, i in oldest:
+            if size <= max_chars:
+                break
+            size -= len(json.dumps(doc["students"][key]["items"][i], separators=(",", ":"))) + 1
+            gone.add((key, i))
+        for key, entry in doc["students"].items():
+            entry["items"] = [item for i, item in enumerate(entry["items"]) if (key, i) not in gone]
+        dropped += len(gone)
+    return dropped
+
+
+def apply_scored_log(doc, fresh_students, now):
+    """Update the log for every freshly scraped student. Returns the log line counts."""
+    doc["schema"] = 1
+    new = {}
+    for label, student_key, student_data in fresh_students:
+        new[label] = update_scored_log(doc, student_key, scored_items_for_student(student_data), now)
+    dropped = trim_scored_log(doc, now.date())
+    doc["updated_at"] = now.isoformat(timespec="minutes")
+    total = sum(len(entry.get("items") or []) for entry in doc["students"].values())
+    return {"new": new, "dropped": dropped, "total": total}
+
+
+def publish_scored_log(fresh_students, now=None):
+    """GET the log, fold in today's scores, PUT it back under the version we read."""
+    if not family_data_configured() or not fresh_students:
+        return None
+    now = now or pacific_now()
+    token = family_unlock()
+    for attempt in (1, 2):
+        remote = family_request("GET", SCORED_LOG_PATH, token)
+        doc = remote.get("doc") if isinstance(remote.get("doc"), dict) else {}
+        version = int(remote.get("version") or 0)
+        counts = apply_scored_log(doc, fresh_students, now)
+        try:
+            saved = family_request("PUT", SCORED_LOG_PATH, token, {"doc": doc, "version": version})
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status == 409 and attempt == 1:
+                print("  scored-log: version moved, reading it again")
+                continue
+            raise
+        new = ", ".join(f"{label}: {n} new" for label, n in counts["new"].items())
+        print(
+            f"family-data: scored-log {scrape_slot(now)} scrape: {new}; "
+            f"{counts['total']} kept, {counts['dropped']} dropped, "
+            f"{len(json.dumps(doc, separators=(',', ':'))) // 1000} KB, version {saved.get('version')}"
+        )
+        return counts
+    return None
+
+
 def _parse_iso_date(date_str):
     if not date_str:
         return None
@@ -5361,6 +5563,7 @@ def scrape_all():
         print("  Classroom: no exports (service account unset or nothing shared yet)")
 
     failed = 0
+    fresh_scores = []
     for i, student in enumerate(STUDENTS, start=1):
         label = student_log_label(i)
         prior = previous_by_sn.get(str(student["sn"])) or {}
@@ -5489,6 +5692,7 @@ def scrape_all():
             )
 
             data["students"].append(student_data)
+            fresh_scores.append((label, str(student["sn"]), student_data))
         except Exception as e:
             print(f"  WARNING: scrape failed for {label} ({e})")
             failed += 1
@@ -5501,6 +5705,10 @@ def scrape_all():
     data["summer_break"] = False
 
     persist_grades(data, history)
+    try:
+        publish_scored_log(fresh_scores)
+    except Exception as exc:
+        print(f"::warning::scored-log not saved this run ({exc})")
     print(f"\nData written to {OUTPUT_FILE}")
     print(f"History written to {HISTORY_FILE}")
     print(f"Last updated: {data['last_updated']}")
