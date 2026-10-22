@@ -2419,10 +2419,28 @@ class HostileTitleFillTests(unittest.TestCase):
         self.assertEqual(self.check("Unit 3: Part 2"), (None, "Mostly the Unit 3: Part 2 (20/40)."))
 
     def test_a_title_that_looks_like_a_slot_or_an_id_drops(self):
-        for title in ("{item:cause:g:b}", "{item:cause:g:zz}", "item:cause:g:b", "{next:whatif:g}", "[class: Geo]",
-                      "cause:g:b", "move:g", "pattern:posting_day:geo"):
+        # A brace is stripped; a real fact id, or a slot word followed by an id-like token, in the fill drops.
+        for title in ("{item:cause:g:b}", "{item:cause:g:zz}", "item:cause:g:b", "Item : Cause:G:H", "{next:whatif:g}",
+                      "next：whatif：g", "{bucket:cause:g:b}", "cause:g:b", "move:g", "pattern:posting_day:geo"):
             reason, out = self.check(title)
             self.assertIsNotNone(reason, (title, out))
+
+    def test_real_titles_with_colons_fill_as_written(self):
+        # The id and slot-debris filters read the model's raw text; a fill is only checked for slot-shaped text.
+        for title in ("Next: Chapter 5", "Class: Notes Check", "Ratio a:b Practice", "Quiz: next: steps", "Test: Cells",
+                      "Lab 3: Density", "Bell work 10:15", "DBQ: WWI causes", "[class: Geo]", "Bucket: List Essay"):
+            self.assertEqual(self.check(title), (None, "Mostly the %s (20/40)." % title), title)
+            facts = geo2_facts()
+            facts[2] = {**facts[2], "next_title": title}
+            idx = w.fact_index(w.model_facts(facts))
+            step = "A 74 or better on the {next:whatif:g} gets it to a C."
+            self.assertIsNone(w.check_sentence(step, ["whatif:g"], idx, "Geo", ["Geo"]), title)
+            self.assertEqual(w.fill_slots(step, w.fact_index(facts)), "A 74 or better on the %s gets it to a C." % title)
+        # The same words written by the model, outside a slot, still drop on the raw text.
+        idx = w.fact_index(w.model_facts(geo2_facts()))
+        for text in ("Mostly the {item:cause:g:a}, next:whatif:g.", "Mostly the {item:cause:g:a} item:cause:g:b.",
+                     "Mostly the {item:cause:g:a}, cause:g:b.", "Mostly the {item:cause:g:a} a:b."):
+            self.assertIsNotNone(w.check_sentence(text, ["move:g", "cause:g:a"], idx, "Geo", ["Geo"]), text)
 
 
 
