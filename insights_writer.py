@@ -139,6 +139,19 @@ _ECHO_RE = re.compile(
 _LETTER_MOVE_RE = re.compile(
     r"\b(?i:moved|went|slipped|slid|dropped|fell|rose|climbed|jumped|dipped|changed|fallen|risen|is down|is up)"
     r" (?i:up |down |back )?to (?:an? )?([A-F])\b(?!\w)")
+# Words that set a cause against the move: "the Lab (9/10) helped", "while the Lab helped".
+_CONTRAST_RE = re.compile(
+    r"\b(?:helped|helps|helping|offset|offsets|offsetting|cushioned|softened|propped|while|but|though|although|"
+    r"despite|even with|kept it from)\b", re.I)
+# "The move", "the drop", "explained the change": talk of a move needs a cited grade_move.
+_MOVE_REF_RE = re.compile(
+    r"\b(?:the|this|that|its) (?:move|drop|dip|slide|slip|rise|climb|change|decline|gain|jump)\b|"
+    r"\bexplain(?:s|ed|ing)? (?:the|it|this|that)\b", re.I)
+# Sentences about what isn't there say nothing: "No major assignments identified", "No pattern data".
+_NOTHING_RE = re.compile(
+    r"\bno (?:major |main |clear |single |specific |big |one |particular )?"
+    r"(?:assignments?|causes?|reasons?|patterns?|data|items?|scores?|changes?)\b|"
+    r"\bnothing (?:explains|stands out|explained)\b|\b(?:not|none) (?:identified|cited|available|explained)\b", re.I)
 # Advice the facts can't back. A next step comes only from a cited what_if ("an 85 or better on ...").
 _ADVICE_RE = re.compile(
     r"\b(?:re-?do(?:ing)?|re-?take|re-?submit|make up|makeup|focus(?:es|ing)? on|work(?:ing)? on|study|studying|"
@@ -191,7 +204,7 @@ You get FACTS as JSON. Every fact has an id. Use only those facts.
 Write 1 to 4 short, plain sentences:
 - Open with the letter and the gap, or the letter and the move, citing the next_letter or grade_move: "Still a B, down 1.4 since Mar 3." or "Half a point from a B."
 - Then why it moved, naming the real assignment with its score as earned/possible (4/10) or a percent: "Mostly the Lab Report (6/10)."
-- Then a pattern, only from a posting_day fact, naming its weekday.
+- Then a pattern, only if FACTS has a posting_day fact, naming its weekday.
 - End with one next step, only from a what_if fact, using its say_needed: "An 85 or better on the next test gets it to a B."
 - With no what_if fact, end without a next step. Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
 
@@ -203,7 +216,8 @@ Rules:
 - With no grade_move, the grade didn't move: say "Still a C", never "moved to a C".
 - No talk of the next letter without a next_letter fact. A class at an A has no next letter.
 - "Back to" or "again" only when a grade_move shows the class had that letter before.
-- A cause that helped while the grade fell (or hurt while it rose) can be named, but not as the reason.
+- A cause that helped while the grade fell (or hurt while it rose) is never the reason. Name it only as a contrast: "The Lab (9/10) helped." or "..., while the Lab (9/10) helped."
+- Never say what isn't there ("no major assignments", "no pattern").
 - Say "since" only with since_label; never "since last report".
 - Numbers come from the cited facts, written as digits. A needed score is say_needed ("85 or better"), never rounded down.
 - Whole letters only: A, B, C, D, F. Never a plus or minus.
@@ -678,11 +692,15 @@ def _claims_reason(text, cited, index):
             return f"names a weekday ({match.group(0)}) no pattern backs"
     if _ADVICE_RE.search(_strip_names(masked, cited)) and not any(f.get("kind") == "what_if" for f in cited):
         return "gives advice no what_if backs"
+    if _NOTHING_RE.search(_strip_names(masked, cited)):
+        return "says what isn't there"
     move_ids = [f["move"] if f.get("move") else f["id"] for f in cited if f.get("kind") == "grade_move"]
     moves = [index.get(m) or {} for m in dict.fromkeys(move_ids)]
     cause_words = _CAUSE_CLAIM_RE.search(masked) or (_BARE_CAUSE_RE.search(masked) and _GRADE_WORDS_RE.search(masked))
     if cause_words and not moves:
         return "states a cause without citing a grade_move or cause"
+    if _MOVE_REF_RE.search(masked) and not moves:
+        return "talks about a move with no grade_move cited"
     claims_cause = any(f.get("move") for f in cited) or (moves and cause_words)
     if claims_cause and not all(cause_allowed(m) for m in moves):
         return "states a cause the move's causes don't explain"
@@ -698,6 +716,9 @@ def _claims_reason(text, cited, index):
         # A cause that pushed the other way may be named, but never as the reason for the move.
         if not said_drivers and cause_words:
             return "gives an offsetting cause as the reason for the move"
+        # Named beside the drivers, a cause that pushed the other way must be set against the move.
+        if len(said_drivers) < len(said) and not _CONTRAST_RE.search(masked):
+            return "names an offsetting cause as if it drove the move"
     pairs = _score_pairs(cited)
     for raw, kind in scores:
         if kind == "score":

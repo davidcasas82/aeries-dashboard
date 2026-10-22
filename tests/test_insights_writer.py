@@ -573,6 +573,15 @@ class BakeoffFindingTests(unittest.TestCase):
                          "gives an offsetting cause as the reason for the move")
         self.assertEqual(w.check_sentence("Down 1.6, mostly from the Warm Ups (1/3).", [CHEM_MOVE, CHEM_C2], idx),
                          "names causes out of share order")
+        # Re-run finding: the helping lab named beside the drivers as if it caused the drop.
+        lab = "cause:chem:2026-10-14:rocketlab"
+        for line in ("Mainly the Lab 3 Packet (4/10) and the Rocket Lab (9/10).",
+                     "The Lab 3 Packet (4/10) and the Rocket Lab (9/10) drove the drop.",
+                     "The Lab 3 Packet (4/10) and the Rocket Lab (9/10) had the biggest impact."):
+            self.assertEqual(w.check_sentence(line, [CHEM_C1, lab], idx),
+                             "names an offsetting cause as if it drove the move", line)
+        self.assertIsNone(w.check_sentence("The Lab 3 Packet (4/10) hurt the grade, while the Rocket Lab (9/10) helped.",
+                                           [CHEM_C1, lab], idx))
 
     def test_students_wording_is_dropped(self):
         self.assertIn("echoes the prompt", w.check_sentence(
@@ -668,6 +677,17 @@ class PolishPassTests(unittest.TestCase):
                        "It should come back with steady work.", "Kid A needs to turn in cleaner Warm Ups."):
             self.assertEqual(w.check_sentence(advice, [CHEM_C1], chem), "gives advice no what_if backs", advice)
         self.assertIsNone(w.check_sentence("Aim for an 88% on the next test to get the A back.", [WHATIF], index()))
+
+    def test_talk_of_a_move_needs_one_and_nothing_is_said_about_what_isnt_there(self):
+        geo = w.fact_index(geometry_facts())
+        self.assertEqual(w.check_sentence("No major assignments explained the move.", [GEO_NEXT], geo),
+                         "says what isn't there")
+        self.assertEqual(w.check_sentence("Nothing big explains the change.", [GEO_NEXT], geo),
+                         "talks about a move with no grade_move cited")
+        for line in ("No pattern data available.", "No major cause identified.", "Scores: none identified."):
+            self.assertEqual(w.check_sentence(line, [GEO_NEXT], geo), "says what isn't there", line)
+        chem = w.fact_index(chem_facts())
+        self.assertIsNone(w.check_sentence("The Lab 3 Packet (4/10) drove the drop.", [CHEM_C1], chem))
 
     def test_a_and_an_follow_how_the_number_or_letter_is_said(self):
         cases = {
