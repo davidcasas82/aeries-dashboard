@@ -1,3 +1,4 @@
+import json
 import re
 import sys
 import tempfile
@@ -354,6 +355,131 @@ class ReadOnlyClientTests(unittest.TestCase):
             runner.tick(runner.State(Path(tmp) / "state.json"), runner.PendingWork(), machine)
         self.assertTrue(seen)
         self.assertEqual(set(seen), {"GET"})
+
+
+def synthetic_latest():
+    """Two synthetic students, Kid A with a Math what-if and Kid B with no facts. No real data."""
+    whatif = {"id": "whatif:math:tests:50", "kind": "what_if", "class": "Math", "bucket": "Tests",
+              "bucket_weight_pct": 60.0, "points": 50.0, "target": 90.0, "needed_pct": 88.0, "reachable": True}
+    kid_a = {
+        "sn": "9001",
+        "classes": [{"period": 3, "course_name": "Math", "percent": "87.9", "mark": "B", "counted_insight": {
+            "layout": "percent_of_grade",
+            "categories": [{"name": "Tests", "weight_pct": 60.0}, {"name": "Homework", "weight_pct": 40.0}]}}],
+        "assignments_by_class": [
+            {"class_name": "<<3- Math", "assignments": [
+                {"description": "Ch. 4 Quiz", "category": "Tests", "points_earned": 31, "points_possible": 50,
+                 "due_date": "10/14/2026"},
+                {"description": "Ch. 5 Test", "category": "Tests", "points_earned": None, "points_possible": 50,
+                 "due_date": "10/30/2026"},
+            ]},
+            {"class_name": "<<4- Art", "assignments": [
+                {"description": "Sketch", "category": "Tests", "points_earned": None, "points_possible": 50,
+                 "due_date": "10/24/2026"},
+            ]},
+        ],
+        "insight_facts": {"scale": "90/80/70/60", "as_of": "2026-10-22", "facts": [whatif]},
+    }
+    kid_b = {"sn": "9002", "classes": [], "assignments_by_class": []}
+    log = {"doc": {"schema": 1, "students": {"9001": {"items": [{"class": "Math", "first_seen": "2026-10-16"}]}}},
+           "version": 4}
+    return {"latest": {"students": [kid_a, kid_b]}}, log
+
+
+class FakeClient:
+    def __init__(self):
+        self.latest, self.log = synthetic_latest()
+        self.calls = []
+
+    def latest_grades(self):
+        self.calls.append("latest")
+        return self.latest
+
+    def scored_log(self):
+        self.calls.append("log")
+        return self.log
+
+
+def writer_has_upcoming():
+    try:
+        import insights_writer
+    except ImportError:
+        return False
+    return hasattr(insights_writer, "upcoming_items") and hasattr(insights_writer, "attach_next_items")
+
+
+class LoaderTests(unittest.TestCase):
+    def test_the_loader_passes_upcoming_items_built_from_the_class_inputs(self):
+        seen = []
+
+        def build(classes, as_of):
+            seen.append((classes, as_of))
+            return [{"class": "Math", "bucket": "Tests", "title": "Ch. 5 Test", "due": "2026-10-30", "points": 50.0}]
+
+        client = FakeClient()
+        students = runner.load_students(client, upcoming_items=build)
+        self.assertEqual(client.calls, ["latest", "log"])
+        self.assertEqual(len(students), 1)
+        self.assertEqual(students[0]["upcoming"][0]["title"], "Ch. 5 Test")
+        self.assertEqual(students[0]["log_items"], [{"class": "Math", "first_seen": "2026-10-16"}])
+        self.assertEqual(students[0]["insight_facts"]["as_of"], "2026-10-22")
+        classes, as_of = seen[0]
+        self.assertEqual(as_of, "2026-10-22")
+        self.assertEqual([c["name"] for c in classes], ["Math"])
+        self.assertEqual([a["description"] for a in classes[0]["assignments"]], ["Ch. 4 Quiz", "Ch. 5 Test"])
+        self.assertEqual(classes[0]["counted_insight"]["categories"][0]["name"], "Tests")
+
+    def test_without_the_writer_the_loader_still_loads_with_no_upcoming(self):
+        with mock.patch.dict(sys.modules, {"insights_writer": None}):
+            self.assertIsNone(runner.writer_upcoming())
+            self.assertIsNone(runner.writer_work(FakeClient(), model=None, store="/nonexistent"))
+            students = runner.load_students(FakeClient())
+        self.assertEqual(students[0]["upcoming"], [])
+
+    def test_the_loader_reads_with_one_unlock_and_gets_only(self):
+        latest, log = synthetic_latest()
+        sent = []
+        replies = iter([(200, b'{"token": "t1"}'), (200, json.dumps(latest).encode()),
+                        (200, json.dumps(log).encode())])
+
+        def opener(request):
+            sent.append(request.get_method())
+            return next(replies)
+
+        client = runner.ReadOnlyFamilyData(pin=lambda: "0000", opener=opener)
+        students = runner.load_students(client, upcoming_items=lambda classes, as_of: [])
+        self.assertEqual(sent, ["POST", "GET", "GET"])
+        self.assertEqual(len(students), 1)
+
+    @unittest.skipUnless(writer_has_upcoming(), "needs the writer's upcoming_items (PR #52)")
+    def test_a_what_if_gets_next_title_and_next_due_from_the_loader(self):
+        import insights_writer
+
+        student = runner.load_students(FakeClient())[0]
+        self.assertEqual(student["upcoming"], [
+            {"class": "Math", "bucket": "Tests", "title": "Ch. 5 Test", "due": "2026-10-30", "points": 50.0}])
+        facts = insights_writer.attach_next_items(student["insight_facts"]["facts"], student["upcoming"])
+        whatif = next(f for f in facts if f["kind"] == "what_if")
+        self.assertEqual((whatif["next_title"], whatif["next_due"]), ("Ch. 5 Test", "2026-10-30"))
+
+    @unittest.skipUnless(writer_has_upcoming(), "needs the writer's WriterWork (PR #52)")
+    def test_writer_work_hands_the_model_the_named_item_and_loads_once(self):
+        drafts = []
+
+        class Model:
+            def complete(self, system, user):
+                if "FACTS as JSON" in system and "class story" in system:
+                    drafts.append(json.loads(user))
+                return json.dumps({"sentences": []})
+
+        client = FakeClient()
+        with tempfile.TemporaryDirectory() as tmp:
+            work = runner.writer_work(client, Model(), tmp, env={})
+            for step in work.plan("2026-10-22"):
+                work.run_step("2026-10-22", step)
+        self.assertEqual(client.calls, ["latest", "log"])
+        whatif = next(f for f in drafts[0]["facts"] if f["kind"] == "what_if")
+        self.assertEqual((whatif["next_title"], whatif["next_due"]), ("Ch. 5 Test", "2026-10-30"))
 
 
 class FreshnessTests(unittest.TestCase):

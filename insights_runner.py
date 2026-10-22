@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import Callable, Protocol
 from zoneinfo import ZoneInfo
 
+from class_match import assignments_for_class
+
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 FAMILY_DATA_URL = "https://family-data.davidcasas.workers.dev"
@@ -313,6 +315,83 @@ def _open_request(request, opener=None):
             return response.status, response.read()
     except urllib.error.HTTPError as err:
         return err.code, b""
+
+
+# ── Loading tonight's students ───────────────────────────────────────────────
+
+
+def class_inputs(student):
+    """The per-class inputs the scrape gives the facts engine: name, counted_insight, assignments.
+
+    Built from the latest payload the same way the scrape builds them (class_match), so an
+    upcoming item lands in the class and bucket its scores would.
+    """
+    out = []
+    for meta in student.get("classes") or []:
+        name = (meta.get("course_name") or "").strip()
+        if not name:
+            continue
+        out.append({
+            "name": name,
+            "counted_insight": meta.get("counted_insight"),
+            "assignments": assignments_for_class(student, meta),
+        })
+    return out
+
+
+def writer_upcoming():
+    """The writer's upcoming_items, or None while the writer (PR #52) isn't in this checkout.
+
+    Imported here rather than at the top so the runner keeps working without the writer.
+    """
+    try:
+        from insights_writer import upcoming_items
+    except ImportError:
+        return None
+    return upcoming_items
+
+
+def load_students(client, upcoming_items=None):
+    """[{"insight_facts", "log_items", "upcoming"}] per student with facts, for the writer.
+
+    Two GETs on the read-only session: the latest grades and the scored log. Students are
+    matched to their log by the same key the scrape writes under; nothing here is logged.
+    upcoming is [] until the writer provides upcoming_items.
+    """
+    latest = client.latest_grades() or {}
+    latest = latest.get("latest") if isinstance(latest.get("latest"), dict) else latest
+    remote_log = client.scored_log() or {}
+    log_doc = remote_log.get("doc") if isinstance(remote_log.get("doc"), dict) else {}
+    logged = log_doc.get("students") or {}
+    build = upcoming_items or writer_upcoming()
+    students = []
+    for student in latest.get("students") or []:
+        facts = student.get("insight_facts")
+        if not isinstance(facts, dict) or not facts.get("facts"):
+            continue
+        entry = logged.get(str(student.get("sn"))) or {}
+        upcoming = build(class_inputs(student), facts["as_of"]) if build and facts.get("as_of") else []
+        students.append({"insight_facts": facts, "log_items": entry.get("items") or [], "upcoming": upcoming})
+    return students
+
+
+def writer_work(client, model, store, put=None, env=None):
+    """The writer's nightly steps fed by load_students, or None while the writer isn't merged.
+
+    The load is read once per runner process, so a run unlocks at most once.
+    """
+    try:
+        from insights_writer import WriterWork
+    except ImportError:
+        return None
+    loaded = []
+
+    def load():
+        if not loaded:
+            loaded.append(load_students(client))
+        return loaded[0]
+
+    return WriterWork(load, model, store, put=put, env=env)
 
 
 def model_dir(ssd_path):
