@@ -1807,8 +1807,9 @@ def write_class(model, facts, name, votes=VOTES):
 
 # ── Tags (code, no model) ────────────────────────────────────────────────────
 # A class's tag says what its next item means: the easiest step up a letter (the soonest next item, named or
-# not), or the hardest score to keep the letter it has (named items only). "Named" is an upcoming item
-# attach_next_items matched at its posted points.
+# not), or the hardest score to keep the letter it has (named items only, and only after a drop, as in
+# pick_keep). "Named" is an upcoming item attach_next_items matched at its posted points. write_up works the
+# tags out over the classes whose stories publish, so a tag always lands on a story.
 EASIEST_WIN, BIGGEST_RISK = "easiest_win", "biggest_risk"
 STORY_TAGS = (EASIEST_WIN, BIGGEST_RISK)
 
@@ -1873,14 +1874,16 @@ def easiest_win(facts):
 def biggest_risk(facts):
     """The class whose keep_letter fact needs the highest score on a named next item, or None.
 
-    Only a keep fact with a needed score about a named item at its posted points counts (a can't-drop fact
-    needs no score). Ties go to the smaller cushion above the letter's floor (unknown last), then the name.
+    Same rule as pick_keep: the engine emits a keep fact for every class, but it only counts when the class
+    dropped (a rise story says how to go up, not what could be lost). Then only a keep fact with a needed
+    score about a named item at its posted points counts (a can't-drop fact needs no score). Ties go to the
+    smaller cushion above the letter's floor (unknown last), then the name.
     """
     floors = dict(insights.SCALE)
     best = None
-    for fact in facts:
-        name = fact.get("class")
-        if not is_keep(fact) or not name or not _named(fact) or not _number(fact.get("needed_pct")):
+    for name in class_names(facts):
+        fact = pick_keep(facts_for(facts, name))
+        if fact is None or not _named(fact) or not _number(fact.get("needed_pct")):
             continue
         pct = _class_pct(facts, name)
         cushion = pct - floors[fact["letter"]] if pct is not None and fact.get("letter") in floors else math.inf
@@ -1889,8 +1892,14 @@ def biggest_risk(facts):
     return best[2] if best else None
 
 
-def story_tags(facts):
-    """{class name: [tags]} in STORY_TAGS order. One class can carry both."""
+def story_tags(facts, classes=None):
+    """{class name: [tags]} in STORY_TAGS order. One class can carry both.
+
+    classes, when given, limits the race to those classes (write_up passes the ones with a published story),
+    so the next-best class with a story gets a tag its winner can't carry."""
+    if classes is not None:
+        allowed = set(classes)
+        facts = [f for f in facts if f.get("class") in allowed]
     tags = {}
     for tag, name in ((EASIEST_WIN, easiest_win(facts)), (BIGGEST_RISK, biggest_risk(facts))):
         if name is not None:
@@ -1901,17 +1910,25 @@ def story_tags(facts):
 def write_up(model, insight_facts, log_items=None, votes=VOTES, upcoming=None):
     """The whole write-up for one student: {"as_of", "stories"}, each story with its tags (story_tags) if any.
 
-    upcoming (from upcoming_items) lets a what-if name the real next item and its due date. A tagged class
-    with no story shows no tag: the tag goes on that class's story or nowhere.
+    upcoming (from upcoming_items) lets a what-if name the real next item and its due date. Tags are worked
+    out over the classes whose stories survive, so each goes on a published story. Stories come sorted by
+    class name (story_order), so the same facts in any order give the same bytes.
     """
     facts = attach_next_items(merged_facts(insight_facts, log_items), upcoming)
     # A story over the Worker's limits is dropped alone; the others still publish.
     stories = [s for s in (write_class(model, facts, name, votes) for name in class_names(facts)) if s and story_fits(s)]
-    tags = story_tags(facts)
+    stories.sort(key=story_order)
+    tags = story_tags(facts, [s["class"] for s in stories])
     for story in stories:
         if story["class"] in tags:
             story["tags"] = tags[story["class"]]
     return {"as_of": (insight_facts or {}).get("as_of"), "stories": stories}
+
+
+def story_order(story):
+    """Publish order: class name, then the story's own text, cites and tags as a stable tie-break."""
+    return (str(story.get("class")), str(story.get("story")),
+            json.dumps(story.get("cites"), sort_keys=True), json.dumps(story.get("tags"), sort_keys=True))
 
 
 # ── Takeover and publishing ──────────────────────────────────────────────────

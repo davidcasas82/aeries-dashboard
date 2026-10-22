@@ -748,9 +748,10 @@ class InsightsPublisherTests(unittest.TestCase):
         body = json.loads(opener.requests[0].data.decode("utf-8"))
         kid = body["students"]["9001"]
         self.assertNotIn("headline", kid)
+        # Sorted by class name before publishing.
         self.assertEqual(kid["stories"], [
-            {"class": "Math", "story": "Dup cites.", "cites": ["a", "b"]},
             {"class": "Chem", "story": "y" * 600, "cites": cites12},
+            {"class": "Math", "story": "Dup cites.", "cites": ["a", "b"]},
         ])
         self.assertTrue(worker_accepts(body))
 

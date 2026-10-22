@@ -408,11 +408,32 @@ def _clean_student(up):
             if _is_tags(story.get("tags")) and story["tags"]:
                 kept["tags"] = list(story["tags"])
             stories.append(kept)
-        if len(stories) == PUBLISH_MAX_STORIES:
-            break
+    # Sorted (class name, then a stable tie-break) before the story cap, so input order never changes the bytes.
+    stories = sorted(stories, key=_story_order)[:PUBLISH_MAX_STORIES]
+    _one_of_each_tag(stories)
     if not stories:
         return None
     return {"as_of": as_of if _is_text(as_of, PUBLISH_MAX_AS_OF) else None, "stories": stories}
+
+
+def _story_order(story):
+    """Publish order, the same as insights_writer.story_order (the writer loads lazily, so it isn't imported
+    here): class name, then the story's own text, cites and tags as a stable tie-break."""
+    return (str(story.get("class")), str(story.get("story")),
+            json.dumps(story.get("cites"), sort_keys=True), json.dumps(story.get("tags"), sort_keys=True))
+
+
+def _one_of_each_tag(stories):
+    """At most one easiest_win and one biggest_risk per kid: the first story in publish order keeps each,
+    later stories lose it, and a story left with no tag has no tags key (as cleanInsights stores it)."""
+    seen = set()
+    for story in stories:
+        if "tags" not in story:
+            continue
+        story["tags"] = [tag for tag in story["tags"] if tag not in seen]
+        seen.update(story["tags"])
+        if not story["tags"]:
+            del story["tags"]
 
 
 def _is_tags(value):

@@ -92,10 +92,12 @@ def random_ups(rng):
 
 
 def full_ups():
-    """8 students x 40 stories at the line maximums: 600-unit text, 12 cites of 120, 120-unit class, both tags."""
+    """8 students x 40 stories at the line maximums: 600-unit text, 12 cites of 120, 120-unit class. Class
+    names sort in story order; each kid's first story carries both tags (one of each per kid)."""
     def story(i, j):
-        return {"class": f"{i}{j}".ljust(120, "c"), "story": f"{i}-{j} ".ljust(600, "s"),
-                "cites": [f"{i}-{j}-{k}".ljust(120, "f") for k in range(12)], "tags": ["easiest_win", "biggest_risk"]}
+        return {"class": f"{i}{j:02d}".ljust(120, "c"), "story": f"{i}-{j} ".ljust(600, "s"),
+                "cites": [f"{i}-{j}-{k}".ljust(120, "f") for k in range(12)],
+                **({"tags": ["easiest_win", "biggest_risk"]} if j == 0 else {})}
     return [{"sn": f"90{i:02d}", "as_of": "2026-10-22", "stories": [story(i, j) for j in range(40)]} for i in range(8)]
 
 
@@ -206,7 +208,8 @@ class PayloadRuleTests(unittest.TestCase):
         self.assertEqual(list(doc["students"]), [up["sn"] for up in ups])
         for up in ups:
             kept = doc["students"][up["sn"]]["stories"]
-            self.assertEqual(kept, [{k: s[k] for k in ("class", "story", "cites", "tags")} for s in up["stories"][:len(kept)]])
+            self.assertEqual(kept, [{k: s[k] for k in ("class", "story", "cites", "tags") if k in s}
+                                    for s in up["stories"][:len(kept)]])
         counts = [len(doc["students"][up["sn"]]["stories"]) for up in ups]
         self.assertLessEqual(max(counts) - min(counts), 1)
         self.assertEqual(runner.insights_body(runner.insights_doc(full_ups())), body)
@@ -214,6 +217,28 @@ class PayloadRuleTests(unittest.TestCase):
         sent = []
         runner.InsightsPublisher(secret=lambda: "standin", opener=lambda r: sent.append(r.data) or (200, b"")).put(ups)
         self.assertEqual(sent, [body])
+
+    def test_at_most_one_of_each_tag_per_kid_and_extras_go_deterministically(self):
+        stories = [{"class": "Math", "story": "M.", "cites": ["a"], "tags": ["easiest_win", "biggest_risk"]},
+                   {"class": "Art", "story": "A.", "cites": ["b"], "tags": ["easiest_win"]},
+                   {"class": "Chem", "story": "C.", "cites": ["c"], "tags": ["biggest_risk", "easiest_win"]},
+                   {"class": "Biology", "story": "B.", "cites": ["d"]}]
+        want = [{"class": "Art", "story": "A.", "cites": ["b"], "tags": ["easiest_win"]},
+                {"class": "Biology", "story": "B.", "cites": ["d"]},
+                {"class": "Chem", "story": "C.", "cites": ["c"], "tags": ["biggest_risk"]},
+                {"class": "Math", "story": "M.", "cites": ["a"]}]
+        body = None
+        rng = random.Random(27)
+        for _ in range(20):
+            rng.shuffle(stories)
+            doc = runner.insights_doc([{"sn": "9001", "stories": [dict(s) for s in stories]},
+                                       {"sn": "9002", "stories": [dict(s) for s in stories]}])
+            for kid in doc["students"].values():
+                self.assertEqual(kid["stories"], want)
+            body = body or runner.insights_body(doc)
+            self.assertEqual(runner.insights_body(doc), body)
+        # The input write-ups are never changed in place.
+        self.assertEqual(sorted(len(s.get("tags", [])) for s in stories), [0, 1, 2, 2])
 
     def test_no_more_than_eight_students_or_forty_stories(self):
         ups = [{"sn": f"9{i:03d}", "stories": [self.STORY] * 45} for i in range(10)]
@@ -244,7 +269,8 @@ class PayloadRuleTests(unittest.TestCase):
     def test_the_real_worker_keeps_the_tags(self):
         doc = runner.insights_doc([{"sn": "9001", "stories": [{**self.STORY, "tags": ["easiest_win", "biggest_risk"]},
                                                               {**self.STORY, "class": "Art", "tags": ["biggest_risk"]}]}])
-        self.assertEqual(doc["students"]["9001"]["stories"][0]["tags"], ["easiest_win", "biggest_risk"])
+        # Art sorts first and keeps biggest_risk; Math keeps only easiest_win (one of each per kid).
+        self.assertEqual([s.get("tags") for s in doc["students"]["9001"]["stories"]], [["biggest_risk"], ["easiest_win"]])
         self.assertEqual(run_worker([runner.insights_body(doc).decode()]), {"checked": 1, "failures": []})
 
     def test_a_body_still_over_the_cap_is_dropped_not_raised(self):

@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import insights  # noqa: E402
+import insights_runner as runner  # noqa: E402
 import insights_writer as w  # noqa: E402
 
 MOVE = "move:math:2026-10-15"
@@ -413,7 +414,8 @@ class PublishLimitTests(unittest.TestCase):
         with mock.patch.object(w, "class_names", return_value=["Math", "Art", "Biology", "Chem", "Spanish"]), \
                 mock.patch.object(w, "write_class", side_effect=lambda *a, **k: next(stories)):
             up = w.write_up(None, {"as_of": "2026-10-22", "facts": []})
-        self.assertEqual([s["class"] for s in up["stories"]], ["Math", "Art"])
+        # Published in class-name order (story_order), whatever order the classes came in.
+        self.assertEqual([s["class"] for s in up["stories"]], ["Art", "Math"])
         public = w.public_write_up({**up, "stories": [ok, edge, many, long, bare]})
         self.assertEqual([s["class"] for s in public["stories"]], ["Math", "Art"])
 
@@ -2413,11 +2415,20 @@ class CannotDropWriterTests(unittest.TestCase):
 
 
 def tag_class(name, pct, needed=None, keep=None, due="2026-10-27", points=50.0, named=True, cannot_lose=False,
-              reachable=None, keep_named=None):
+              reachable=None, keep_named=None, delta="auto"):
     """One synthetic class as the engine emits it: its next_letter (insights.next_letter), a what_if on Tests at
-    `points` needing `needed` and a keep_letter needing `keep`, plus the upcoming item that names both."""
+    `points` needing `needed` and a keep_letter needing `keep`, plus the upcoming item that names both.
+
+    delta is the grade_move since Oct 1: by default a 2.0 drop when there's a keep fact (a keep only counts
+    after a drop, as in pick_keep) and no move otherwise; None for no move, a number for that move."""
     slug = insights.slug(name)
     facts = []
+    if delta == "auto":
+        delta = -2.0 if keep is not None or cannot_lose else None
+    if delta is not None:
+        facts.append({"id": f"move:{slug}:2026-10-01", "kind": "grade_move", "class": name, "since": "2026-10-01",
+                      "from_pct": round(pct - delta, 1), "to_pct": pct, "delta": delta, "causes": [],
+                      "explained": None, "coverage": None, "coverage_trimmed": False})
     step = insights.next_letter(name, pct)
     if step:
         facts.append(step)
@@ -2539,9 +2550,9 @@ class StoryTagTests(unittest.TestCase):
                                                   tag_class("Chem", 80.5, keep=78.9))), "Chem")
         self.assertEqual(w.biggest_risk(tag_facts(tag_class("Chem", 80.5, keep=78.9),
                                                   tag_class("Biology", 80.5, keep=78.9))), "Biology")
-        # An A with no move has no percent among its facts: its cushion is unknown, so it loses the tie.
+        # An A that dropped takes its percent from the move: 5.0 above the A floor beats Chem's 9.5 above the B's.
         self.assertEqual(w.biggest_risk(tag_facts(tag_class("Art", 95.0, keep=78.9),
-                                                  tag_class("Chem", 89.5, keep=78.9))), "Chem")
+                                                  tag_class("Chem", 89.5, keep=78.9))), "Art")
 
     def test_one_class_can_carry_both_tags_in_order(self):
         facts = tag_facts(tag_class("Art", 79.5, needed=81.0, keep=70.0), tag_class("Biology", 72.0, needed=99.0, keep=40.0))
@@ -2553,9 +2564,77 @@ class StoryTagTests(unittest.TestCase):
         facts = {"as_of": "2026-10-22", "facts": math_facts() + risk[0]}
         upcoming = [{"class": "Math", "bucket": "Tests", "title": "Ch. 5 Test", "due": "2026-10-30", "points": 50.0}]
         up = w.write_up(ScriptedModel({"Math": GOOD}), facts, upcoming=upcoming + risk[1])
-        # Math has a story and the tag; Biology is the risk but has no story, so its tag shows nowhere.
+        # Math has a story and the tag. Biology would be the risk but has no story, and the race only counts
+        # classes with a published story; Math has no keep after a drop, so no class gets Biggest risk.
         self.assertEqual([(s["class"], s.get("tags")) for s in up["stories"]], [("Math", ["easiest_win"])])
         self.assertEqual(w.public_write_up(up)["stories"][0]["tags"], ["easiest_win"])
+
+
+class TagReviewTests(unittest.TestCase):
+    """GitHub Engineer's #57 review at 83d2569: risk only after a drop, tags over published stories, and the
+    same bytes whatever order the facts come in."""
+
+    RISE = "Still a C, up 1.5 since Oct 1. A 90 or better on the next lab gets it to a B."
+
+    def written(self, facts, upcoming, stories):
+        """write_up with each class's story scripted: stories[name] is its text, or None for no story."""
+        def write_class(model, all_facts, name, votes):
+            text = stories.get(name)
+            ids = sorted(f["id"] for f in all_facts if f.get("class") == name)[:2]
+            return {"class": name, "story": text, "cites": ids} if text else None
+        with mock.patch.object(w, "write_class", side_effect=write_class):
+            return w.write_up(None, {"as_of": "2026-10-22", "facts": facts}, upcoming=upcoming)
+
+    def published(self, up):
+        return runner.insights_body(runner.insights_doc([{"sn": "9001", **w.public_write_up(up)}]))
+
+    def test_the_rise_repro_gets_no_risk_pill(self):
+        # The engine emits a keep fact for every class; Chem rose 1.5, so its keep fact is no risk.
+        chem, up = tag_class("Chem", 76.0, needed=89.2, keep=61.0, delta=1.5)
+        written = self.written(chem, up, {"Chem": self.RISE})
+        self.assertEqual([(s["class"], s.get("tags")) for s in written["stories"]], [("Chem", ["easiest_win"])])
+        self.assertIsNone(w.biggest_risk(w.attach_next_items(chem, up)))
+        # The same class after a 1.5 drop is a risk (the pick_keep rule); with no move at all it isn't.
+        dropped, up = tag_class("Chem", 76.0, needed=89.2, keep=61.0, delta=-1.5)
+        self.assertEqual(w.story_tags(w.attach_next_items(dropped, up)), {"Chem": ["easiest_win", "biggest_risk"]})
+        flat, up = tag_class("Chem", 76.0, needed=89.2, keep=61.0, delta=None)
+        self.assertEqual(w.story_tags(w.attach_next_items(flat, up)), {"Chem": ["easiest_win"]})
+
+    def test_tags_go_to_the_next_best_class_with_a_published_story(self):
+        facts, upcoming = [], []
+        for f, u in (tag_class("Algebra", 79.5, needed=84.3, keep=70.0), tag_class("Marketing", 76.3, needed=96.2),
+                     tag_class("Chem", 85.0, keep=62.0), tag_class("Spanish", 88.0)):
+            facts += f
+            upcoming += u
+        every = {"Algebra": "Alg.", "Marketing": "Mkt.", "Chem": "Chem.", "Spanish": "Sp."}
+        tags = lambda up: {s["class"]: s["tags"] for s in up["stories"] if s.get("tags")}
+        self.assertEqual(tags(self.written(facts, upcoming, every)), {"Algebra": ["easiest_win", "biggest_risk"]})
+        # Algebra's story doesn't survive: Marketing is the next-best win and Chem the next-worst risk.
+        self.assertEqual(tags(self.written(facts, upcoming, {**every, "Algebra": None})),
+                         {"Marketing": ["easiest_win"], "Chem": ["biggest_risk"]})
+        # A story over the Worker's limits is dropped the same way, before the tags are worked out.
+        self.assertEqual(tags(self.written(facts, upcoming, {**every, "Algebra": "x" * 601})),
+                         {"Marketing": ["easiest_win"], "Chem": ["biggest_risk"]})
+        # No eligible class has a story: no tag at all.
+        self.assertEqual(tags(self.written(facts, upcoming, {"Spanish": "Sp."})), {})
+
+    def test_shuffled_facts_publish_the_same_bytes(self):
+        facts, upcoming = [], []
+        for f, u in (tag_class("Algebra", 79.5, needed=84.3), tag_class("Marketing", 76.3, needed=84.9),
+                     tag_class("Chem", 85.0, keep=62.0), tag_class("Biology", 80.5, keep=62.4),
+                     tag_class("Spanish", 88.0), tag_class("Art", 95.0, keep=70.0, delta=1.0)):
+            facts += f
+            upcoming += u
+        stories = {name: f"{name} note." for name in ("Algebra", "Marketing", "Chem", "Biology", "Spanish", "Art")}
+        want = self.published(self.written(facts, upcoming, stories))
+        self.assertEqual([s["class"] for s in json.loads(want)["students"]["9001"]["stories"]],
+                         ["Algebra", "Art", "Biology", "Chem", "Marketing", "Spanish"])
+        rng = random.Random(57)
+        for _ in range(25):
+            f, u = facts[:], upcoming[:]
+            rng.shuffle(f)
+            rng.shuffle(u)
+            self.assertEqual(self.published(self.written(f, u, stories)), want)
 
 
 class ExampleNumbersTests(unittest.TestCase):
