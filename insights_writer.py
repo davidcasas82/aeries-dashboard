@@ -186,6 +186,13 @@ _ADVICE_RE = re.compile(
 _ARTICLE_RE = re.compile(
     r"(?:(?<=^)|(?<=[.!?:;\"“(] )|(?<=[.!?:;]  ))(A|An)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))"
     r"|\b(a|an)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))")
+# Verbs that say which way a cause pushed the grade. A cause that "helped" has a positive share; one that
+# "hurt" has a negative one. "Pulled it up" or "knocked it up" is a push up.
+_UP_VERB_RE = re.compile(r"\b(?:help(?:s|ed|ing)?|lift(?:s|ed|ing)?|boost(?:s|ed|ing)?|rais(?:e|es|ed|ing)|"
+                         r"sav(?:e|es|ed|ing)|(?:pull|knock)(?:s|ed|ing)?(?=(?:\s+\w+){0,2}\s+up\b))\b", re.I)
+_DOWN_VERB_RE = re.compile(r"\b(?:hurt(?:s|ing)?|drag(?:s|ged|ging)?|cost(?:s|ing)?|pull(?:s|ed|ing)?|"
+                           r"knock(?:s|ed|ing)?|s[ai]nk(?:s|ing)?|sunk|damag(?:e|es|ed|ing))\b", re.I)
+_NEGATED_RE = re.compile(r"\b(?:not|never|n't|didn't|doesn't|did not|does not|wasn't|won't)\s+(?:\w+\s+)?$", re.I)
 _SAME_LETTER_MOVE_RE = re.compile(
     r"\b(?i:moved|went|changed|dropped|fell|rose|slipped|slid|climbed) (?i:from) (?i:an? )?([A-F]) (?i:to) (?i:an? )?\1\b")
 ROLE_FIELDS = {
@@ -231,10 +238,10 @@ You get FACTS as JSON. Every fact has an id. Use only those facts.
 
 Name assignments and classes ONLY with slots, which code fills in with the real name:
 - {item:<cause id>} ONLY for a cause inside a grade_move's causes (it has a title). Code adds its score, like "(6/10)"; don't write the score yourself.
-- {next:<what_if id>} or {next:<keep_letter id>} for the coming item a what_if or keep_letter fact is about. Code writes "next test", "next assessment" or the item's title.
-- {bucket:<fact id>} for the bucket or category of a cause, what_if or keep_letter fact ("{bucket:<cause id>} scores dragged it."). Code writes the name, like "Homework".
+- {next:<what_if id>} for the coming item a what_if fact is about. Code writes "next test", "next assessment" or the item's title.
+- {bucket:<fact id>} for the bucket or category of a cause or what_if fact ("{bucket:<cause id>} scores dragged it."). Code writes the name, like "Homework".
 - {class:<fact id>} for the class name. You may also write the class's own name as FACTS gives it; never another class.
-A what_if or keep_letter id goes in a {next:} slot, never in an {item:} slot: the next item has no title yet.
+A what_if id goes in a {next:} slot, never in an {item:} slot: the next item has no title yet.
   Right: "An 85 or better on the {next:whatif:art:projects:20} gets it to a B."
   Wrong: "An 85 or better on the {item:whatif:art:projects:20} gets it to a B."
 Never write an assignment word yourself (test, quiz, exam, lab, project, packet, homework, essay, report, assessment, ...), not even "the next test": use {next:<id>} or {bucket:<id>}. Never write a fact id outside the braces, and nothing but these slots in braces. A sentence that does is thrown away.
@@ -748,7 +755,7 @@ def check_sentence(text, cites, index, name=None, classes=None):
     echo = _ECHO_RE.search(neutral) or _SAME_LETTER_MOVE_RE.search(neutral)
     if echo:
         return f"echoes the prompt ({echo.group(0)})"
-    reason = _claims_reason(neutral, cited, index)
+    reason = _claims_reason(neutral, cited, index, slotted=text)
     if reason:
         return reason
     # Last, so the claim checks keep their own reasons: any school-work noun must sit in a slot, and a
@@ -815,11 +822,13 @@ def _bucket_of(fact):
     return fact.get("bucket") or fact.get("category")
 
 
-# Bucket words a "next ..." fill can stand on alone ("the next assessment"). Anything else that isn't a
-# plural, and mass nouns like "Coursework", get "item" ("the next coursework item").
+# Bucket words a "next ..." fill can stand on alone ("the next assessment"). Mass nouns like "Homework" get
+# "assignment" ("the next homework assignment"), "Participation" gets "score", and any other word that isn't
+# a plural gets "item". A bucket of two kinds reads as either one ("Labs & Projects" -> "lab or project").
 _COUNT_BUCKETS = {"assessment", "test", "quiz", "lab", "project", "exam", "essay", "assignment", "summative",
                   "formative", "task", "final", "midterm", "activity", "worksheet", "presentation", "paper", "report"}
 _MASS_BUCKETS = {"coursework", "homework", "classwork", "participation", "practice", "fluency", "work", "progress"}
+_MASS_TAIL = {"participation": "score", "progress": "score"}
 
 
 def _singular(word):
@@ -836,11 +845,13 @@ def _singular(word):
 
 def _bucket_noun(bucket):
     """ "Assessments" or "Assessment" -> "assessment"; "Quizzes" -> "quiz"; "Labs & Activities" ->
-    "lab & activity"; a mass noun like "Coursework" or "Math Fluency" -> "coursework item"."""
+    "lab or activity"; a mass noun like "Homework" or "Math Fluency" -> "homework assignment",
+    "math fluency assignment"; "Participation" -> "participation score"."""
     words = str(bucket or "test").strip().lower().split() or ["test"]
     if words[-1] in _MASS_BUCKETS:
-        return " ".join(words) + " item"
-    singular = [w if w in ("&", "and") else _singular(w) for w in words]
+        tail = _MASS_TAIL.get(words[-1], "assignment")
+        return " ".join("or" if w in ("&", "and", "/") else w for w in words) + f" {tail}"
+    singular = ["or" if w in ("&", "and", "/") else _singular(w) for w in words]
     noun = " ".join(singular)
     if singular[-1] in _COUNT_BUCKETS or singular[-1] != words[-1]:
         return noun
@@ -1014,8 +1025,47 @@ def _said_letters(bare):
     return out
 
 
-def _claims_reason(text, cited, index):
-    """Every claim check except the prompt-echo and example-copy bans."""
+def _cause_share(fact):
+    return fact.get("share") if fact.get("share") is not None else fact.get("points")
+
+
+def _direction_reason(slotted, cited, index):
+    """Why a verb says a cause pushed the grade the other way from its share, or None.
+
+    "helped", "lifted", "boosted", "raised" and "saved" need a positive share; "hurt", "dragged", "cost",
+    "pulled", "knocked", "sank" and "damage" a negative one. Each verb is read against the cause named by
+    the nearest {item:} or {bucket:} slot before it (after it when none comes before: "Lifted by the
+    {item:...}."). With no cause slot, every cited cause must match. "Didn't help" turns the verb around.
+    """
+    causes = [f for f in cited if f.get("move")]
+    if not causes:
+        return None
+    slots = [(m.start(), m.end(), index.get(m.group(2)) or {}) for m in SLOT_RE.finditer(slotted)
+             if m.group(1) in ("item", "bucket")]
+    slots = [(a, b, f) for a, b, f in slots if f.get("move")]
+    bare = SLOT_RE.sub(lambda m: " " * len(m.group(0)), slotted)
+    verbs = [(m.start(), 1) for m in _UP_VERB_RE.finditer(bare)]
+    taken = {start for start, _ in verbs}
+    verbs += [(m.start(), -1) for m in _DOWN_VERB_RE.finditer(bare) if m.start() not in taken]
+    for start, way in sorted(verbs):
+        if _NEGATED_RE.search(bare[:start]):
+            way = -way
+        before = [f for a, b, f in slots if b <= start]
+        after = [f for a, b, f in slots if a >= start]
+        named = [before[-1]] if before else [after[0]] if after else causes
+        for cause in named:
+            share = _cause_share(cause) or 0
+            if share * way <= 0:
+                return "says a cause pushed the grade the other way from its share"
+    return None
+
+
+def _claims_reason(text, cited, index, slotted=None):
+    """Every claim check except the prompt-echo and example-copy bans.
+
+    slotted is the sentence with its slots (check_sentence passes it), so each direction verb is read
+    against the cause its slot names; without it, against every cited cause.
+    """
     text = spelled_to_digits(text)
     masked, unbacked_dates, scores = _mask_allowed_dates(text, cited)
     if unbacked_dates:
@@ -1063,6 +1113,9 @@ def _claims_reason(text, cited, index):
         # Named beside the drivers, a cause that pushed the other way must be set against the move.
         if len(said_drivers) < len(said) and not _CONTRAST_RE.search(masked):
             return "names an offsetting cause as if it drove the move"
+    reason = _direction_reason(slotted if slotted is not None else text, cited, index)
+    if reason:
+        return reason
     pairs = _score_pairs(cited)
     for raw, kind in scores:
         if kind == "score":
@@ -1271,11 +1324,18 @@ def vote(model, sentences, class_facts, votes=VOTES):
     return [s for s, n in zip(sentences, tally) if n * 2 > votes]
 
 
+_CODE_LETTER_RE = re.compile(r"(?<![\w'’])[A-F](?:\+|-|−|–)?(?![\w'’])")
+_CODE_DAY_RE = re.compile(r"\b(?:mon|tues|wednes|thurs|fri|satur|sun)days?\b", re.I)
+
+
 def reason_code(reason):
-    """A drop reason without its numbers, ids, quotes or words: safe to log or store ("number # isn't in the cited facts")."""
+    """A drop reason without its numbers, ids, quotes, letters, weekdays or words: safe to log or store
+    ("number # isn't in the cited facts", "letter <letter> isn't in the cited facts")."""
     code = re.sub(r"\{[^}]*\}|\([^)]*\)|\"[^\"]*\"", "", str(reason or ""))
     code = re.sub(r"\b[\w.-]*:[\w:.-]+", "<id>", code)
     code = re.sub(r"\d+(?:[./]\d+)?", "#", code)
+    code = _CODE_LETTER_RE.sub("<letter>", code)
+    code = _CODE_DAY_RE.sub("<day>", code)
     return re.sub(r"\s+", " ", code).strip()
 
 
