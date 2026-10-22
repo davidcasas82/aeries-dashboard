@@ -12,13 +12,13 @@ import os
 import plistlib
 import subprocess
 import sys
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Callable, Protocol
 from zoneinfo import ZoneInfo
 
-import requests
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 FRESHNESS_URL = "https://family-data.davidcasas.workers.dev/v1/grades/freshness"
@@ -180,9 +180,9 @@ def tick(state, work, machine, log=print):
 
 
 def read_freshness(url=FRESHNESS_URL):
-    response = requests.get(url, timeout=20)
-    response.raise_for_status()
-    return response.json()["updatedAt"]
+    """Stdlib only, so the runner works under the SSD venv (which has no requests)."""
+    with urllib.request.urlopen(url, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))["updatedAt"]
 
 
 def free_memory_pct():
@@ -233,10 +233,10 @@ def venv_python(ssd_path):
 
 
 def model_link(ssd_path, name):
-    """A model's symlink under <SSD>/grade-insights/models/."""
+    """A model's symlink under <SSD>/grade-insights/models/, named after its repo."""
     if name not in MODEL_REPOS:
         raise KeyError(f"unknown model {name!r}")
-    return model_dir(ssd_path) / "models" / name
+    return model_dir(ssd_path) / "models" / MODEL_REPOS[name].split("/", 1)[1]
 
 
 def model_env(ssd_path, base=None):

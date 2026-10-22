@@ -218,9 +218,19 @@ class ModelPathTests(unittest.TestCase):
         self.assertEqual(runner.venv_python(runner.DEFAULT_SSD),
                          Path("/Volumes/David C SSD/grade-insights/venv/bin/python"))
         self.assertEqual(runner.model_link(runner.DEFAULT_SSD, "qwen3-8b"),
-                         Path("/Volumes/David C SSD/grade-insights/models/qwen3-8b"))
+                         Path("/Volumes/David C SSD/grade-insights/models/Qwen3-8B-4bit"))
+        self.assertEqual(runner.model_link(runner.DEFAULT_SSD, "gemma3-12b").name, "gemma-3-text-12b-it-4bit")
         self.assertEqual(sorted(runner.MODEL_REPOS.values()),
                          ["mlx-community/Qwen3-8B-4bit", "mlx-community/gemma-3-text-12b-it-4bit"])
+
+
+class FreshnessTests(unittest.TestCase):
+    def test_reads_updated_at_with_the_stdlib(self):
+        import io
+        body = io.BytesIO(b'{"ok": true, "updatedAt": "2026-10-22T03:08:36Z"}')
+        with mock.patch.object(runner.urllib.request, "urlopen", return_value=body) as urlopen:
+            self.assertEqual(runner.read_freshness(), "2026-10-22T03:08:36Z")
+        self.assertEqual(urlopen.call_args.args[0], runner.FRESHNESS_URL)
 
 
 class SsdMountTests(unittest.TestCase):
