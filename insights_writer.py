@@ -239,7 +239,8 @@ ROLE_FIELDS = {
 # other_share/other_causes (#54) describe causes folded away; no sentence can name or count them.
 _NOT_GENERAL = ("bucket_weight_pct", "coverage", "needed_pct", "other_share", "other_causes")
 
-# The made-up example: a class, items, numbers and a weekday that match no real class.
+# The made-up example: a class, items and numbers that match no real class. It has no posting_day fact, so it
+# shows no weekday for the model to copy.
 EXAMPLE_FACTS = [
     {"id": "next:ceramics", "kind": "next_letter", "class": "Ceramics", "pct": 68.8, "letter": "D",
      "next_letter": "C", "threshold": 70.0, "gap": 1.2, "say_opening": "Still a D, 1.2 points from a C."},
@@ -255,15 +256,12 @@ EXAMPLE_FACTS = [
     {"id": "whatif:ceramics:projects:20", "kind": "what_if", "class": "Ceramics", "bucket": "Projects",
      "bucket_weight_pct": 40.0, "points": 20.0, "target": 70.0, "needed_pct": 73.4, "say_needed": "74 or better",
      "reachable": True, "say_step": "A 74 or better on the {next:whatif:ceramics:projects:20} gets it to a C."},
-    {"id": "pattern:posting_day:ceramics", "kind": "posting_day", "class": "Ceramics", "weekday": "Tuesday",
-     "share": 0.8, "scores": 10, "window_days": 28, "say_pattern": "Scores usually post Tuesdays."},
 ]
 EXAMPLE_NOTE = [
     {"text": "Slipped to a D since Sep 9, down 2.3.", "cites": ["move:ceramics:2026-09-09"]},
     {"text": "The {item:cause:ceramics:2026-09-09:glazetest} did most of the damage.",
      "cites": ["cause:ceramics:2026-09-09:glazetest"]},
     {"text": "The {item:cause:ceramics:2026-09-09:claysketch} helped.", "cites": ["cause:ceramics:2026-09-09:claysketch"]},
-    {"text": "Scores usually post Tuesdays.", "cites": ["pattern:posting_day:ceramics"]},
     {"text": "A 74 or better on the {next:whatif:ceramics:projects:20} gets it to a C.",
      "cites": ["whatif:ceramics:projects:20"]},
 ]
@@ -281,7 +279,7 @@ A what_if or keep_letter id goes in a {next:} slot, never in an {item:} slot: th
 Never write an assignment word yourself (test, quiz, exam, lab, project, packet, homework, essay, report, assessment, ...), not even "the next test": use {next:<id>} or {bucket:<id>}. Never write a fact id outside the braces, and nothing but these slots in braces. A sentence that does is thrown away.
 
 Write 1 to 4 short sentences, in this order: letter, cause, pattern, next step.
-Every sentence that cites a fact is one of these forms, word for word. Any other sentence that cites a fact is thrown away.
+Every sentence cites at least one fact and is one of these forms, word for word. Any other sentence is thrown away.
 - Opening: say_opening, from the grade_move if there is one, else from the next_letter. Cite that fact.
 - Cause, citing the cause id (and its grade_move if you like):
   "Mostly the {item:<cause id>}." for the largest cause whose effect matches the move.
@@ -290,10 +288,9 @@ Every sentence that cites a fact is one of these forms, word for word. Any other
   "The {item:<cause id>} helped." for a cause whose effect is "helped" (against a drop, only as a contrast).
   The same with "{bucket:<cause id>} scores" in place of "The {item:<cause id>}". Two or three causes with the same effect may share one form, joined with "and".
 - Weight: "{bucket:<cause id>} is 40% of the grade.", with that bucket's bucket_weight_pct.
-- Pattern: the posting_day fact's say_pattern ("Scores usually post Tuesdays.").
+- Pattern: only if FACTS has a posting_day fact, its say_pattern, citing it. Never write a weekday any other way.
 - Next step: the what_if fact's say_step ("An 85 or better on the {next:<what_if id>} gets it to a B."). With no what_if fact, no next step.
 - Keep: if the grade dropped and FACTS has a keep_letter fact, end with its say_keep, citing it: "A 62 or better on the {next:<keep_letter id>} keeps the A." If its say_keep says the next item can't drop the letter, you may end with that or leave it out.
-A sentence that cites no fact may use your own words, but no letter grade, no number or score, and no direction or cause word (up, down, rose, fell, slipping, helped, hurt, ...).
   Right: "The {item:cause:ceramics:2026-09-09:glazetest} hurt."
   Wrong: "Still a D, 1.2 points from a C, and slipping." (cites a fact but isn't its say_opening, word for word)
 Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
@@ -317,7 +314,7 @@ Rules:
 - Never write "the student", "the letter is", "next letter", "distance", "what-if", "what moved", or "moved from A to A".
 - If nothing here is worth saying, return {"sentences": []}.
 
-MADE-UP EXAMPLE. This class doesn't exist; it shows the style only. Never copy its class, titles, numbers, letters, dates or weekday.
+MADE-UP EXAMPLE. This class doesn't exist; it shows the style only. Never copy its class, titles, numbers, letters or dates.
 FACTS: """ + json.dumps(EXAMPLE_FACTS, separators=(",", ":")) + """
 NOTE: """ + json.dumps({"sentences": EXAMPLE_NOTE}, separators=(",", ":")) + """
 
@@ -828,13 +825,13 @@ def check_sentence(text, cites, index, name=None, classes=None, headline=False):
 
     classes is the student's class names (write_class passes them); the index's own classes are added.
     A sentence that cites a fact must be one of the fixed forms for the kinds it cites (headline: the headline
-    forms). One that cites nothing is free wording with no grade, number or direction in it.
+    forms). A sentence that cites nothing drops.
     """
     text = (text or "").strip()
     if not text:
         return "empty"
     if not cites:
-        return free_reason(text, index, classes)
+        return UNCITED_REASON
     cited = []
     for fid in cites:
         fact = index.get(fid)
@@ -1504,7 +1501,7 @@ def cause_form_reason(text, cites, index):
 
 
 FORM_REASON = CAUSE_FORM_REASON  # one reason for every fixed-form gate
-FREE_REASON = "uncited sentence names a grade, number or direction"
+UNCITED_REASON = "cites nothing"  # every sentence cites at least one fact
 # Kinds no sentence may cite: the model never sees them (model_facts leaves them out).
 UNSAYABLE_KINDS = ("scale_break", "no_raise_math")
 
@@ -1530,6 +1527,7 @@ def _lower_first(sentence):
 
 def _headline_forms(cited):
     """The headline forms for the cited facts: a what_if step alone, led by its class, or after the gap.
+    Each may cite the step's class's next_letter or not (the gap form needs it).
 
     "An 88 or better on the {next:<id>} gets it to an A."
     "{class:<id>}: an 88 or better on the {next:<id>} gets it to an A."
@@ -1543,12 +1541,14 @@ def _headline_forms(cited):
     forms = set()
     for step_fact in steps:
         step = _step(step_fact)
+        if any(letter.get("class") != step_fact.get("class") for letter in letters):
+            continue
         leads = {step_fact["class"]} | {f"{{class:{f['id']}}}" for f in cited}
-        if not letters:
-            forms.add(step)
-            forms |= {f"{lead}: {_lower_first(step)}" for lead in leads}
+        # As in a story, the step may cite its class's next_letter or not.
+        forms.add(step)
+        forms |= {f"{lead}: {_lower_first(step)}" for lead in leads}
         for letter in letters:
-            if letter.get("class") != step_fact.get("class") or not isinstance(letter.get("gap"), (int, float)):
+            if not isinstance(letter.get("gap"), (int, float)):
                 continue
             gap = f"{letter['gap']:g} pts from {_article(letter['next_letter'])} {letter['next_letter']}"
             forms |= {f"{lead} is {gap}; {_lower_first(step)}" for lead in leads}
@@ -1598,34 +1598,6 @@ def _keep_forms(fact):
     """A keep_letter fact's sentence: its say_keep, word for word (the score form or the can't-drop form)."""
     say = fact.get("say_keep") or say_keep(fact)
     return {say} if say else set()
-
-
-_GRADE_TOKEN_RE = re.compile(r"(?<![\w'’])[A-F][+-]?(?![\w'’])")
-_FREE_DIRECTION_RES = (_MOVED_UP_RE, _MOVED_DOWN_RE, _UP_VERB_RE, _DOWN_VERB_RE, _DIRECTION_WORDS_RE,
-                       _SLOT_DIRECTION_RE, _GRADE_WORDS_RE, _CAUSE_CLAIM_RE)
-
-
-def free_reason(text, index, classes=None):
-    """None if a sentence that cites no fact names no fact, grade, number or direction, and passes the rest.
-
-    Free wording only: no slot or id, no letter grade (a capital A-F standing alone, so a sentence-initial
-    article "A" drops too: fail closed), no digit or spelled number, no up/down or move/cause word.
-    """
-    reason = leak_reason(text, index)
-    if reason:
-        return reason
-    if SLOT_RE.search(text) or "{" in text or "}" in text:
-        return "uncited sentence names a fact"
-    bare = spelled_to_digits(text)
-    if _GRADE_TOKEN_RE.search(bare) or re.search(r"\d", bare) or any(r.search(bare) for r in _FREE_DIRECTION_RES):
-        return FREE_REASON
-    if _ECHO_RE.search(text):
-        return "echoes the prompt"
-    reason = _claims_reason(text, [], index)
-    if reason:
-        return reason
-    all_classes = list(dict.fromkeys([*(classes or ()), *(f.get("class") for f in index.values() if f.get("class"))]))
-    return names_reason(text, [], all_classes)
 
 
 def eval_story(sentences, index):
@@ -1765,6 +1737,14 @@ def _json(raw):
             continue
         if isinstance(value, dict):
             return value
+    # The one leniency: extra closing braces at the very end ('...]}}'). Strip the excess, retry once.
+    excess = text.count("}") - text.count("{")
+    if excess > 0 and text.endswith("}" * excess):
+        try:
+            value = json.loads(text[:-excess])
+        except (TypeError, ValueError):
+            return None
+        return value if isinstance(value, dict) else None
     return None
 
 
