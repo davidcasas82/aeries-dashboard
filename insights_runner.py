@@ -4,11 +4,11 @@ A start checks that a fresh sync landed (the public freshness stamp), then reads
 (GETs only; one unlock, and a second only if a GET answers 401) and fingerprints what the engine uses,
 per student. When every fingerprint matches the last successful run it logs "skip: no change" and
 stops: no model, no PUT, the stored notes stay. Otherwise the writer (WriterWork) writes only the
-changed students, and InsightsPublisher sends the whole doc (only with GRADE_INSIGHTS_PUBLISH=1):
-fresh entries for the changed students and, verbatim, the last published entry for everyone else.
-The Worker replaces the whole doc on a PUT, so a student is never dropped by a partial run. A
-student's fingerprint moves only when that student got fresh, published output, so anyone left on
-their last entry is written again at the next sync.
+changed students, and InsightsPublisher sends the whole doc (only with GRADE_INSIGHTS_PUBLISH=1),
+because the Worker replaces the whole doc on a PUT. No notes beat wrong numbers: the doc carries fresh
+entries for the changed students, the last published entry verbatim only for unchanged students, and a
+student missing from the grades for at most MAX_MISSED_SYNCS syncs. A changed student whose write-up
+comes out empty is left out, and their fingerprint doesn't move, so the next sync writes them again.
 """
 
 import fcntl
@@ -48,6 +48,10 @@ HANDLED = ("no_change", "published", "published_partial", "nothing_to_send", "pu
 # The SSD state files under <SSD>/grade-insights/state/: the per-student hashes and the last published doc.
 FINGERPRINT_FILE = "fingerprint.json"
 PUBLISHED_FILE = "published.json"
+MISSED_FILE = "missed.json"
+# A student in the last published doc but missing from the grades keeps their entry for this many syncs,
+# then is aged out of the doc. Their count resets when they come back.
+MAX_MISSED_SYNCS = 2
 # The parent PIN is a generic password in the mini's login Keychain.
 PIN_KEYCHAIN_SERVICE = "family-data-parent-pin"
 PIN_KEYCHAIN_ACCOUNT = "aeries"
@@ -757,8 +761,26 @@ def read_published(path):
 
 
 def write_published(path, students):
-    """Save the doc just sent (story text, no grades) on the SSD: mode 600 in a 700 folder, atomic."""
+    """Save the doc just sent on the SSD: mode 600 in a 700 folder, atomic. It holds student numbers and the
+    story text, which can include scores."""
     write_private(_state_folder(path), json.dumps({"v": 1, "students": students}, ensure_ascii=False))
+
+
+def read_missed(path):
+    """{student_key: syncs missed in a row} for students carried while missing from the grades, or {}."""
+    try:
+        data = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+    counts = data.get("students") if isinstance(data, dict) and data.get("v") == 1 else None
+    if not isinstance(counts, dict):
+        return {}
+    return {k: v for k, v in counts.items() if isinstance(k, str) and isinstance(v, int) and not isinstance(v, bool)}
+
+
+def write_missed(path, counts):
+    """Save the missed-sync counts on the SSD: mode 600 in a 700 folder, atomic. Hashed keys and counts only."""
+    write_private(_state_folder(path), json.dumps({"v": 1, "students": dict(sorted(counts.items()))}))
 
 
 def run_id(stamp):
@@ -769,36 +791,58 @@ def run_id(stamp):
 def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, env=None, log=print):
     """One fresh sync: the change check, then either a skip or the changed students' write-ups and the publish.
 
-    load() is load_students on the read-only session. Only students whose fingerprint changed go to the
-    writer. The Worker replaces the whole doc on a PUT, so the PUT carries everyone with an entry: the
-    changed students' fresh write-ups, and the last published entry, verbatim, for unchanged students,
-    for a changed student whose write-up came out empty, and for a student missing from the load. A
-    student with neither is left out. A student's fingerprint moves only with fresh, published output.
+    load() is load_students on the read-only session. Only students whose fingerprint changed (or who have
+    no entry in the last published doc) go to the writer. The Worker replaces the whole doc on a PUT, and no
+    notes beat wrong numbers, so the PUT carries:
+      - each changed student's fresh write-up; one whose write-up came out empty is left out, and their
+        fingerprint doesn't move, so the next sync writes them again;
+      - the last published entry, verbatim, for each unchanged student;
+      - the last published entry of a student missing from the load, for at most MAX_MISSED_SYNCS syncs in a
+        row (counted in missed.json, reset when they come back); after that they are aged out of the doc.
+    A sync with no changed student and nobody to age out is a skip (the missed counts are still saved).
 
-    Returns one of HANDLED: "published" when every changed student got fresh output and nobody is
-    missing, "published_partial" when someone kept their last entry or was left out. Or
-    "waiting_for_machine" when a render starts or memory runs low between students (the next start
-    picks up from WriterWork's saved steps). Logs carry counts and outcomes only: no names, keys or scores.
+    Returns one of HANDLED: "published", "published_partial" when a changed student was left out or a
+    missing student was carried, or "waiting_for_machine" when a render starts or memory runs low between
+    students (the next start picks up from WriterWork's saved steps). Logs carry counts and outcomes only:
+    no names, keys or scores.
     """
     students = load()
     published_path = Path(prints_path).with_name(PUBLISHED_FILE)
+    missed_path = Path(prints_path).with_name(MISSED_FILE)
     last_doc = read_published(published_path)
     # Without the last published doc nothing can be carried forward, so every student is written again.
     last = read_fingerprints(prints_path) if last_doc is not None else {}
     last_doc = last_doc or {}
-    changed = [s for s in students if last.get(student_key(s["sn"])) != s["fingerprint"]]
-    if not changed:
+    present = {str(s["sn"]) for s in students}
+    old_missed = read_missed(missed_path)
+    missed, carried_missing, aged = {}, [], []
+    for sn in last_doc:
+        if sn in present:
+            continue
+        count = old_missed.get(student_key(sn), 0) + 1
+        if count <= MAX_MISSED_SYNCS:
+            carried_missing.append(sn)
+            missed[student_key(sn)] = count
+        else:
+            aged.append(sn)
+    changed = [s for s in students
+               if last.get(student_key(s["sn"])) != s["fingerprint"] or str(s["sn"]) not in last_doc]
+    if not changed and not aged:
+        if missed != old_missed:
+            write_missed(missed_path, missed)
         log("grade-insights: skip: no change")
         return "no_change"
     log(f"grade-insights: {len(students)} students, {len(changed)} changed; writing")
     run_dir = Path(store) / run_id(stamp)
     changed_sns = [str(s["sn"]) for s in changed]
+    keep = {sn: entry for sn, entry in last_doc.items()
+            if (sn in present and sn not in changed_sns) or sn in carried_missing}
 
     def merged_put(write_ups):
         fresh = {}
         for up in write_ups or []:
             fresh.update(insights_doc([up])["students"])
-        merged = dict(last_doc)
+        merged = dict(keep)
         merged.update({sn: fresh[sn] for sn in changed_sns if sn in fresh})
         doc = insights_doc([{"sn": sn, **entry} for sn, entry in sorted(merged.items())])
         sent = {"students": doc["students"],
@@ -816,23 +860,21 @@ def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, e
     if published:
         sent = json.loads((run_dir / "merged.json").read_text())
         write_published(published_path, sent["students"])
-        prints = dict(last)
+        prints = {k: v for k, v in last.items() if k not in {student_key(sn) for sn in aged}}
         prints.update({student_key(s["sn"]): s["fingerprint"] for s in changed if str(s["sn"]) in sent["fresh"]})
         write_fingerprints(prints_path, prints)
-        kept = len(changed) - len(sent["fresh"])
-        present = {str(s["sn"]) for s in students}
-        missing = sum(1 for sn in last_doc if sn not in present)
-        if not kept and not missing:
+        write_missed(missed_path, missed)
+        dropped = len(changed) - len(sent["fresh"])
+        if not dropped and not carried_missing and not aged:
             log("grade-insights: published")
             return "published"
-        log(f"grade-insights: published; {kept} changed kept their last notes or were left out, "
-            f"{missing} missing kept their last notes")
-        return "published_partial"
+        log(f"grade-insights: published; {dropped} changed left out until the next sync, "
+            f"{len(carried_missing)} missing carried, {len(aged)} missing aged out")
+        return "published_partial" if dropped or carried_missing else "published"
     if put is None:
         log("grade-insights: publish is off, nothing sent")
         return "publish_off"
-    # No fresh write-up and nothing to carry: nothing was sent, the stored notes stay, and no fingerprint
-    # moves, so the next sync writes these students again.
+    # Nobody to send: nothing was sent, the stored notes stay, and no state moves, so the next sync tries again.
     log("grade-insights: nothing to send, the stored notes stay")
     return "nothing_to_send"
 

@@ -1110,7 +1110,7 @@ class QuietModel:
 # Names, keys, scores and titles from synthetic_latest; none may reach a log line.
 PRIVATE = ("9001", "9002", "Math", "Art", "87.9", "31", "Ch. 4", "Ch. 5", "Sketch", "Kid")
 LOG_LINE = re.compile(r"grade-insights: (skip: no change|\d+ students, \d+ changed; writing|published|"
-                      r"published; \d+ changed kept their last notes or were left out, \d+ missing kept their last notes|"
+                      r"published; \d+ changed left out until the next sync, \d+ missing carried, \d+ missing aged out|"
                       r"publish is off, nothing sent|nothing to send, the stored notes stay|"
                       r"sync skipped, the SSD is not mounted; the last write-up stays|run failed \(\w+\))")
 
@@ -1301,7 +1301,8 @@ class ChangeCheckTests(unittest.TestCase):
         self.assertEqual(sorted(second), ["9001", "9002"])
         self.assertEqual(second["9002"], first["9002"])
 
-    def test_a_changed_kid_with_empty_output_keeps_the_last_entry_and_fingerprint(self):
+    def test_a_changed_kid_with_empty_output_is_dropped_and_retried_next_sync(self):
+        # No notes beat wrong numbers: B changed and came out empty, so B's old entry is not sent.
         with mock.patch.object(self.writer, "write_up", one_story):
             self.run_sync(self.two_kids(), QuietModel())
         old = runner.read_fingerprints(self.prints)
@@ -1314,15 +1315,14 @@ class ChangeCheckTests(unittest.TestCase):
         kids = self.two_kids(a_print="c" * 64, b_print="d" * 64)
         with mock.patch.object(self.writer, "write_up", only_a):
             self.assertEqual(self.run_sync(kids, QuietModel(), stamp=EVENING_STAMP), "published_partial")
-        first, second = self.bodies()
-        self.assertEqual(sorted(second), ["9001", "9002"])
-        self.assertEqual(json.dumps(second["9002"]), json.dumps(first["9002"]))
+        self.assertEqual(sorted(self.bodies()[1]), ["9001"])
+        self.assertEqual(sorted(runner.read_published(self.published())), ["9001"])
         prints = runner.read_fingerprints(self.prints)
         self.assertEqual(prints[runner.student_key("9001")], "c" * 64)
         self.assertEqual(prints[runner.student_key("9002")], old[runner.student_key("9002")])
-        self.assertEqual(self.logs[-1], "grade-insights: published; 1 changed kept their last notes or were left out, "
-                                        "0 missing kept their last notes")
-        # The next sync with the same grades writes only B again.
+        self.assertEqual(self.logs[-1], "grade-insights: published; 1 changed left out until the next sync, "
+                                        "0 missing carried, 0 missing aged out")
+        # The next sync with the same grades writes only B again, and B is back in the doc.
         seen = []
 
         def record(model, facts, *rest):
@@ -1333,7 +1333,27 @@ class ChangeCheckTests(unittest.TestCase):
             self.assertEqual(self.run_sync(kids, QuietModel(), stamp="2026-10-23T23:46:30.000Z",
                                            machine=FakeMachine(at(23, 16, 55)).machine()), "published")
         self.assertEqual(len(seen), 1)
+        self.assertEqual(sorted(self.bodies()[2]), ["9001", "9002"])
         self.assertEqual(runner.read_fingerprints(self.prints)[runner.student_key("9002")], "d" * 64)
+
+    def test_a_dropped_kid_whose_grades_go_back_is_still_written_again(self):
+        # B is dropped with its old fingerprint kept; if B's data returns to that fingerprint, B has no entry in the
+        # doc, so B still counts as changed instead of being skipped forever.
+        with mock.patch.object(self.writer, "write_up", one_story):
+            self.run_sync(self.two_kids(), QuietModel())
+
+        def only_a(model, facts, *rest):
+            only_a.n += 1
+            return one_story(model, facts) if only_a.n == 1 else {"as_of": facts["as_of"], "stories": []}
+
+        only_a.n = 0
+        with mock.patch.object(self.writer, "write_up", only_a):
+            self.run_sync(self.two_kids(a_print="c" * 64, b_print="d" * 64), QuietModel(), stamp=EVENING_STAMP)
+        with mock.patch.object(self.writer, "write_up", one_story):
+            status = self.run_sync(self.two_kids(a_print="c" * 64), QuietModel(), stamp="2026-10-23T23:46:30.000Z",
+                                   machine=FakeMachine(at(23, 16, 55)).machine())
+        self.assertEqual(status, "published")
+        self.assertEqual(sorted(self.bodies()[2]), ["9001", "9002"])
 
     def test_a_changed_kid_with_empty_output_and_no_last_entry_is_left_out(self):
         def only_a(model, facts, *rest):
@@ -1346,17 +1366,53 @@ class ChangeCheckTests(unittest.TestCase):
         self.assertEqual(sorted(self.bodies()[0]), ["9001"])
         self.assertEqual(list(runner.read_fingerprints(self.prints)), [runner.student_key("9001")])
 
-    def test_a_kid_missing_from_the_load_keeps_the_last_entry(self):
+    def test_a_missing_kid_is_carried_for_two_syncs_then_aged_out(self):
         with mock.patch.object(self.writer, "write_up", one_story):
             self.run_sync(self.two_kids(), QuietModel())
-        old = runner.read_fingerprints(self.prints)
+        first = self.bodies()[0]
+        only_a = self.two_kids()[:1]
+        missed = self.prints.with_name(runner.MISSED_FILE)
+        stamps = ["2026-10-23T03:08:40.000Z", "2026-10-23T23:46:30.000Z", "2026-10-24T03:08:40.000Z"]
+        # Syncs 1 and 2 without B: nothing else changed, so no model and no PUT, B's entry stays, the count goes up.
+        for n, stamp in enumerate(stamps[:2], 1):
+            self.assertEqual(self.run_sync(only_a, NoModel(), stamp=stamp), "no_change")
+            self.assertEqual(runner.read_missed(missed), {runner.student_key("9002"): n})
+        self.assertEqual(len(self.opener.requests), 1)
+        self.assertEqual(missed.stat().st_mode & 0o777, 0o600)
+        self.assertNotIn("9002", missed.read_text())
+        # Sync 3 without B: aged out, so the doc is sent once more without B. No model call.
+        self.assertEqual(self.run_sync(only_a, NoModel(), stamp=stamps[2]), "published")
+        third = self.bodies()[1]
+        self.assertEqual(sorted(third), ["9001"])
+        self.assertEqual(json.dumps(third["9001"]), json.dumps(first["9001"]))
+        self.assertEqual(runner.read_missed(missed), {})
+        self.assertNotIn(runner.student_key("9002"), runner.read_fingerprints(self.prints))
+        self.assertEqual(sorted(runner.read_published(self.published())), ["9001"])
+        self.assertEqual(self.logs[-1], "grade-insights: published; 0 changed left out until the next sync, "
+                                        "0 missing carried, 1 missing aged out")
+        # B comes back with the same grades: written again, since B has no entry any more.
         with mock.patch.object(self.writer, "write_up", one_story):
+            self.assertEqual(self.run_sync(self.two_kids(), QuietModel(), stamp="2026-10-26T23:46:30.000Z",
+                                           machine=FakeMachine(at(26, 16, 55)).machine()), "published")
+        self.assertEqual(sorted(self.bodies()[2]), ["9001", "9002"])
+
+    def test_a_missing_kid_rides_along_on_a_changed_sync_and_the_count_resets_on_return(self):
+        with mock.patch.object(self.writer, "write_up", one_story):
+            self.run_sync(self.two_kids(), QuietModel())
             status = self.run_sync(self.two_kids(a_print="c" * 64)[:1], QuietModel(), stamp=EVENING_STAMP)
         self.assertEqual(status, "published_partial")
         first, second = self.bodies()
         self.assertEqual(sorted(second), ["9001", "9002"])
-        self.assertEqual(second["9002"], first["9002"])
-        self.assertEqual(runner.read_fingerprints(self.prints)[runner.student_key("9002")], old[runner.student_key("9002")])
+        self.assertEqual(json.dumps(second["9002"]), json.dumps(first["9002"]))
+        missed = self.prints.with_name(runner.MISSED_FILE)
+        self.assertEqual(runner.read_missed(missed), {runner.student_key("9002"): 1})
+        self.assertEqual(self.logs[-1], "grade-insights: published; 0 changed left out until the next sync, "
+                                        "1 missing carried, 0 missing aged out")
+        # B is back, unchanged: carried as an unchanged kid, and the count resets without a model call or a PUT.
+        self.assertEqual(self.run_sync(self.two_kids(a_print="c" * 64), NoModel(), stamp="2026-10-23T23:46:30.000Z",
+                                       machine=FakeMachine(at(23, 16, 55)).machine()), "no_change")
+        self.assertEqual(runner.read_missed(missed), {})
+        self.assertEqual(len(self.opener.requests), 2)
 
     def test_the_carried_entry_is_byte_identical_even_when_the_writer_would_now_word_it_differently(self):
         with mock.patch.object(self.writer, "write_up", one_story):
