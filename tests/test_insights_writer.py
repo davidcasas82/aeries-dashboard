@@ -1091,10 +1091,10 @@ class KeepTheLetterWriterTests(unittest.TestCase):
         # The keep wording names the item only through a {next:} slot; code fills it after the checks.
         self.assertEqual(seen[0]["say_keep"], "A 62 or better on the {next:%s} keeps the A." % KEEP_LAB)
         idx = w.fact_index(chem_keep_facts())
-        self.assertEqual(w.fill_slots(seen[0]["say_keep"], idx), "A 62 or better on the next coursework item keeps the A.")
+        self.assertEqual(w.fill_slots(seen[0]["say_keep"], idx), "A 62 or better on the next coursework assignment keeps the A.")
         safe = [f for f in w.model_facts(chem_keep_facts(cannot_lose=True)) if w.is_keep(f)]
         self.assertEqual(safe[0]["say_keep"], "The {next:%s} can't drop it below an A." % KEEP_LAB)
-        self.assertEqual(w.fill_slots(safe[0]["say_keep"], idx), "The next coursework item can't drop it below an A.")
+        self.assertEqual(w.fill_slots(safe[0]["say_keep"], idx), "The next coursework assignment can't drop it below an A.")
         tests = [f for f in w.model_facts(chem_keep_facts(keep_id=KEEP_TEST)) if w.is_keep(f)]
         self.assertEqual(w.fill_slots(tests[0]["say_keep"], w.fact_index(chem_keep_facts(keep_id=KEEP_TEST))),
                          "A 72 or better on the next test keeps the A.")
@@ -1113,31 +1113,31 @@ class KeepTheLetterWriterTests(unittest.TestCase):
         self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE), dict(self.KEEP)], idx))
         story = w.write_class(ScriptedModel({"Chem": [self.OPEN, self.CAUSE, self.KEEP]}), chem_keep_facts(), "Chem")
         self.assertEqual(story["story"], "Still an A, down 1.6 since Oct 14. Mostly the Lab 3 Packet (4/10). "
-                                         "A 62 or better on the next coursework item keeps the A.")
+                                         "A 62 or better on the next coursework assignment keeps the A.")
 
     def test_the_checker_takes_a_keep_claim_only_from_a_cited_keep_fact(self):
         idx = w.fact_index(chem_keep_facts())
         self.assertIsNone(w.check_sentence(self.KEEP["text"], [KEEP_LAB], idx, "Chem"))
-        self.assertEqual(w.check_sentence("A 62 or better on the next coursework item keeps the A.", [CHEM_MOVE], idx, "Chem"),
+        self.assertEqual(w.check_sentence("A 62 or better on the next coursework assignment keeps the A.", [CHEM_MOVE], idx, "Chem"),
                          "says the letter holds with no keep_letter fact cited")
         self.assertIn("doesn't cite", w.check_sentence(self.KEEP["text"], [CHEM_MOVE], idx, "Chem"))
         # Free text naming the item is dropped even with the keep fact cited.
-        self.assertIn("outside a slot", w.check_sentence("A 62 or better on the next coursework item keeps the A.",
+        self.assertIn("outside a slot", w.check_sentence("A 62 or better on the next coursework assignment keeps the A.",
                                                          [KEEP_LAB], idx, "Chem"))
         self.assertEqual(w.check_sentence("It stays an A with a 62 or better on the next lab.", [CHEM_C1], idx, "Chem"),
                          "says the letter holds with no keep_letter fact cited")
         # Round up only: the exact ceiling, "or better".
-        self.assertEqual(w.check_sentence("A 61 or better on the next coursework item keeps the A.", [KEEP_LAB], idx, "Chem"),
+        self.assertEqual(w.check_sentence("A 61 or better on the next coursework assignment keeps the A.", [KEEP_LAB], idx, "Chem"),
                          "number 61 isn't the needed score or a round-up of it")
-        self.assertEqual(w.check_sentence("A 63 or better on the next coursework item keeps the A.", [KEEP_LAB], idx, "Chem"),
+        self.assertEqual(w.check_sentence("A 63 or better on the next coursework assignment keeps the A.", [KEEP_LAB], idx, "Chem"),
                          "number 63 isn't the needed score or a round-up of it")
         # A keep fact never backs a gets-it-to claim.
         self.assertEqual(w.check_sentence("A 62 or better on the next lab gets it up to an A.", [KEEP_LAB], idx, "Chem"),
                          "a keep_letter fact never backs a gets-it-to claim")
-        self.assertEqual(w.check_sentence("The next coursework item can't drop it below an A.", [KEEP_LAB], idx, "Chem"),
+        self.assertEqual(w.check_sentence("The next coursework assignment can't drop it below an A.", [KEEP_LAB], idx, "Chem"),
                          "says the next item can't cost the letter, but the keep_letter fact needs a score")
         # The letter kept is the keep fact's, the class's current letter.
-        self.assertIn("current letter", w.check_sentence("A 62 or better on the next coursework item keeps the B.",
+        self.assertIn("current letter", w.check_sentence("A 62 or better on the next coursework assignment keeps the B.",
                                                          [KEEP_LAB], idx, "Chem"))
 
     def test_ge_biology_repro_keep_never_backs_gets_it_to(self):
@@ -1180,9 +1180,9 @@ class KeepTheLetterWriterTests(unittest.TestCase):
         idx = w.fact_index(chem_keep_facts(cannot_lose=True))
         line = {"text": "The {next:%s} can't drop it below an A." % KEEP_LAB, "cites": [KEEP_LAB]}
         self.assertIsNone(w.check_sentence(line["text"], line["cites"], idx, "Chem"))
-        self.assertEqual(w.check_sentence("The next coursework item can't drop it below an A.", [CHEM_MOVE], idx, "Chem"),
+        self.assertEqual(w.check_sentence("The next coursework assignment can't drop it below an A.", [CHEM_MOVE], idx, "Chem"),
                          "says the letter holds with no keep_letter fact cited")
-        self.assertEqual(w.check_sentence("A 62 or better on the next coursework item keeps the A.", [KEEP_LAB], idx, "Chem"),
+        self.assertEqual(w.check_sentence("A 62 or better on the next coursework assignment keeps the A.", [KEEP_LAB], idx, "Chem"),
                          "says a score keeps the letter, but the keep_letter fact has no needed score")
         # No item can cost the A, so no step is owed.
         self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE)], idx))
@@ -1578,9 +1578,10 @@ class ReviewNitTests(unittest.TestCase):
             self.assertIsNone(w.check_sentence("A 74 or better on the {next:whatif:geo} gets it to a C.",
                                                ["whatif:geo"], idx, "Geo"), bucket)
 
-    def test_the_prompt_offers_no_keep_ids_until_keep_a(self):
-        self.assertNotIn("keep_letter", w.DRAFT_SYSTEM)
-        self.assertIn("{next:<what_if id>}", w.DRAFT_SYSTEM)
+    def test_keep_a_offers_keep_ids_in_next_slots(self):
+        # #52 drops this line until keep-A lands; keep-A puts it back.
+        self.assertIn("{next:<keep_letter id>}", w.DRAFT_SYSTEM)
+        self.assertIn("A what_if or keep_letter id goes in a {next:} slot", w.DRAFT_SYSTEM)
 
 
 class OtherClassNameTests(unittest.TestCase):

@@ -248,10 +248,10 @@ You get FACTS as JSON. Every fact has an id. Use only those facts.
 
 Name assignments and classes ONLY with slots, which code fills in with the real name:
 - {item:<cause id>} ONLY for a cause inside a grade_move's causes (it has a title). Code adds its score, like "(6/10)"; don't write the score yourself.
-- {next:<what_if id>} for the coming item a what_if fact is about. Code writes "next test", "next assessment" or the item's title.
-- {bucket:<fact id>} for the bucket or category of a cause or what_if fact ("{bucket:<cause id>} scores dragged it."). Code writes the name, like "Homework".
+- {next:<what_if id>} or {next:<keep_letter id>} for the coming item a what_if or keep_letter fact is about. Code writes "next test", "next assessment" or the item's title.
+- {bucket:<fact id>} for the bucket or category of a cause, what_if or keep_letter fact ("{bucket:<cause id>} scores dragged it."). Code writes the name, like "Homework".
 - {class:<fact id>} for the class name. You may also write the class's own name as FACTS gives it; never another class.
-A what_if id goes in a {next:} slot, never in an {item:} slot: the next item has no title yet.
+A what_if or keep_letter id goes in a {next:} slot, never in an {item:} slot: the next item has no title yet.
   Right: "An 85 or better on the {next:whatif:art:projects:20} gets it to a B."
   Wrong: "An 85 or better on the {item:whatif:art:projects:20} gets it to a B."
 Never write an assignment word yourself (test, quiz, exam, lab, project, packet, homework, essay, report, assessment, ...), not even "the next test": use {next:<id>} or {bucket:<id>}. Never write a fact id outside the braces, and nothing but these slots in braces. A sentence that does is thrown away.
