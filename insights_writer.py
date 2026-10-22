@@ -856,6 +856,10 @@ def check_sentence(text, cites, index, name=None, classes=None):
     reason = cause_form_reason(text, cites, index)
     if reason:
         return reason
+    # A sentence citing only the letter fact is that fact's opening, word for word.
+    reason = letter_form_reason(text, cites, index)
+    if reason:
+        return reason
     # Whatever the fill produces must not carry a raw id or a brace either.
     return leak_reason(fill_slots(text, index), index, filled=True)
 
@@ -1492,6 +1496,25 @@ def cause_form_reason(text, cites, index):
             top = _top_bucket(move, sign)
         return None if value * sign > 0 and top == what else CAUSE_FORM_REASON
     return CAUSE_FORM_REASON
+
+
+LETTER_FORM_REASON = "letter sentence not the fact's opening"
+
+
+def letter_form_reason(text, cites, index):
+    """None unless the sentence cites a next_letter fact and no grade_move, cause or what_if, and isn't the
+    say_opening of a cited next_letter, word for word.
+
+    Mirrors the move-only rule in cause_form_reason: with no grade_move or cause cited, nothing backs a direction
+    ("and slipping", "No longer a C.", "From a C to a D."), so only the fixed opening may be said. That holds with
+    a pattern cited beside the letter too. A what_if step keeps its own form; a keep_letter sentence (keep-a) its own.
+    """
+    cited = _cited_facts(cites, index)
+    letters = [f for f in cited if f.get("kind") == "next_letter" and not f.get("move")]
+    if not letters or any(f.get("move") or f.get("kind") in ("grade_move", "what_if", "keep_letter") for f in cited):
+        return None
+    text = (text or "").strip()
+    return None if any(text in _opening_forms(f) for f in letters) else LETTER_FORM_REASON
 
 
 def eval_story(sentences, index):
