@@ -527,9 +527,11 @@ class BakeoffFindingTests(unittest.TestCase):
         crossed = geometry_facts() + [{"id": "move:geometry:2026-10-14", "kind": "grade_move", "class": "Geometry",
                                        "since": "2026-10-14", "from_pct": 81.0, "to_pct": 79.5, "delta": -1.5,
                                        "explained": None, "coverage": None, "coverage_trimmed": False, "causes": []}]
-        self.assertIsNone(w.check_sentence(line, [geo_next], w.fact_index(crossed)))
+        self.assertIsNone(w.check_sentence(line, [geo_next, "move:geometry:2026-10-14"], w.fact_index(crossed)))
+        self.assertEqual(w.check_sentence(line, [geo_next], w.fact_index(crossed)),
+                         "says the class moved to C but no move crossed into that letter")
         held = crossed[:-1] + [dict(crossed[-1], from_pct=79.9)]
-        self.assertEqual(w.check_sentence(line, [geo_next], w.fact_index(held)),
+        self.assertEqual(w.check_sentence(line, [geo_next, "move:geometry:2026-10-14"], w.fact_index(held)),
                          "says the class moved to C but no move crossed into that letter")
         self.assertEqual(w.check_sentence("Slipped to a C this term.", [geo_next], w.fact_index(geometry_facts())),
                          "says the class moved to C but no move crossed into that letter")
@@ -597,9 +599,75 @@ class BakeoffFindingTests(unittest.TestCase):
 
     def test_a_sentence_copied_from_the_example_is_dropped(self):
         idx = w.fact_index(geometry_facts())
-        for text in ("Slipped to a C since Sep 9, 0.5 points from a B.", "The Glaze Test (11/20) did most of the damage.",
-                     "A 74 or better on the next test gets there."):
-            self.assertIn("copies the made-up example", w.check_sentence(text, [GEO_NEXT, GEO_WHATIF], idx), text)
+        for text in ("The Glaze Test (11/20) did most of the damage.", "The Clay Sketch (19/20) helped.",
+                     "Ceramics slipped to a C.", "Scores usually post Tuesdays.",
+                     "A 74 or better on the next project gets it to a C."):
+            self.assertIn("copies", w.check_sentence(text, [GEO_NEXT, GEO_WHATIF], idx) or "", text)
+
+    def test_example_numbers_and_dates_are_never_markers(self):
+        # Review repro: a needed 73.2 says "74 or better", the same words as the example.
+        facts = [{"id": "move:geo:2026-10-14", "kind": "grade_move", "class": "Geo", "since": "2026-10-14",
+                  "from_pct": 71.5, "to_pct": 69.0, "delta": -2.5, "explained": -2.5, "coverage": 1.0,
+                  "coverage_trimmed": False, "causes": [
+                      {"id": "cause:geo:2026-10-14:unittest", "title": "Unit Test", "category": "Tests", "bucket": "Tests",
+                       "bucket_weight_pct": 50.0, "change": "new", "earned": 20.0, "possible": 40.0, "points": -2.5,
+                       "share": -2.5}]},
+                 {"id": "whatif:geo:tests:40", "kind": "what_if", "class": "Geo", "bucket": "Tests",
+                  "bucket_weight_pct": 50.0, "points": 40.0, "target": 70.0, "needed_pct": 73.2, "reachable": True}]
+        mf = w.model_facts(facts)
+        self.assertEqual(mf[1]["say_needed"], "74 or better")
+        draft = [{"text": mf[0]["say_opening"], "cites": ["move:geo:2026-10-14"]},
+                 {"text": "Mostly the Unit Test (20/40).", "cites": ["cause:geo:2026-10-14:unittest"]},
+                 {"text": "A 74 or better on the next test gets it to a C.", "cites": ["whatif:geo:tests:40"]}]
+        story = w.write_class(ScriptedModel({"Geo": draft}), facts, "Geo")
+        self.assertEqual(story["story"], "Slipped to a D since Oct 14, down 2.5. Mostly the Unit Test (20/40). "
+                                         "A 74 or better on the next test gets it to a C.")
+        # Review repro: a real move since Sep 9 gets the code's own opener, which must pass.
+        sep = [dict(facts[0], id="move:geo:2026-09-09", since="2026-09-09", causes=[])]
+        opener = w.model_facts(sep)[0]["say_opening"]
+        self.assertEqual(opener, "Slipped to a D since Sep 9, down 2.5.")
+        self.assertIsNone(w.check_sentence(opener, ["move:geo:2026-09-09"], w.fact_index(sep), "Geo"))
+        for number in ("68.8", "71.1", "73.4"):
+            self.assertNotIn("copies", w.check_sentence(f"An {number}% on the next test gets it to a C.",
+                                                        ["whatif:geo:tests:40"], w.fact_index(facts)) or "")
+
+    def test_spoken_gaps_are_checked_against_the_real_gap(self):
+        bio = [{"id": "next:bio", "kind": "next_letter", "class": "Bio", "pct": 78.6, "letter": "C",
+                "next_letter": "B", "threshold": 80.0, "gap": 1.4}]
+        idx = w.fact_index(bio)
+        for text in ("Still a C, one and a half points from a B.", "Still a C, a point and a half from a B.",
+                     "Still a C, a half point from a B.", "Still a C, two and a half points from a B."):
+            self.assertIn("isn't in the cited facts", w.check_sentence(text, ["next:bio"], idx) or "", text)
+        self.assertEqual(w.spelled_to_digits("one and a half points, a half point, two and a half, 3 and a half"),
+                         "1.5 points, 0.5 point, 2.5, 3.5")
+        half = [dict(bio[0], pct=79.5, gap=0.5)]
+        for text in ("Still a C, a half point from a B.", "Still a C, half a point from a B."):
+            self.assertIsNone(w.check_sentence(text, ["next:bio"], w.fact_index(half)), text)
+        onehalf = [dict(bio[0], pct=78.5, gap=1.5)]
+        self.assertIsNone(w.check_sentence("Still a C, one and a half points from a B.", ["next:bio"],
+                                           w.fact_index(onehalf)))
+
+    def test_review_nits(self):
+        geo = w.fact_index(geometry_facts())
+        self.assertIn("echoes the prompt", w.check_sentence("Moved from a C to a C.", [GEO_NEXT], geo))
+        self.assertEqual(w.check_sentence("Mainly the Unit 2 Test.", [GEO_NEXT], geo),
+                         "states a cause without citing a grade_move or cause")
+        self.assertIsNone(w.check_sentence("Scores mostly post on Fridays.", [PATTERN], index()))
+        # "Moved to" is checked against the move the sentence cites, not any move in the class.
+        two = geometry_facts() + [
+            {"id": "move:geometry:2026-10-14", "kind": "grade_move", "class": "Geometry", "since": "2026-10-14",
+             "from_pct": 81.0, "to_pct": 79.5, "delta": -1.5, "explained": None, "coverage": None,
+             "coverage_trimmed": False, "causes": []},
+            {"id": "move:geometry:2026-10-20", "kind": "grade_move", "class": "Geometry", "since": "2026-10-20",
+             "from_pct": 79.9, "to_pct": 79.5, "delta": -0.4, "explained": None, "coverage": None,
+             "coverage_trimmed": False, "causes": []}]
+        idx = w.fact_index(two)
+        self.assertIsNone(w.check_sentence("Slipped to a C since Oct 14.", ["move:geometry:2026-10-14"], idx))
+        self.assertEqual(w.check_sentence("Slipped to a C since Oct 20.", ["move:geometry:2026-10-20"], idx),
+                         "says the class moved to C but no move crossed into that letter")
+        # An unclosed <think> holds no answer.
+        self.assertIsNone(w._json('<think>unclosed {"a": 2}'))
+        self.assertEqual(w._json('{"a": 1}<think>more {"b": 2}'), {"a": 1})
 
     def test_prompt_echo_and_log_wording_are_dropped(self):
         idx = w.fact_index(geometry_facts())

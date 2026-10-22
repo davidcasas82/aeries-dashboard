@@ -108,11 +108,12 @@ _SCORE_AFTER_RE = re.compile(r"^\s*(?:%|percent)?\s+(?:on|in|for)\b", re.I)
 _FRACTION_WORDS = (
     (re.compile(r"\ba point and a half\b", re.I), "1.5 points"),
     (re.compile(r"\bhalf (?:a|of a|a single) (point|percent|percentage point)\b", re.I), r"0.5 \1"),
+    (re.compile(r"\b(?:a|one) half(?:[- ]a)? (point|percent|percentage point)s?\b", re.I), r"0.5 \1"),
     (re.compile(r"\b(?:a )?quarter(?: of a| a)? (point|percent)\b", re.I), r"0.25 \1"),
     (re.compile(r"\b(?:a )?tenth of a (point|percent)\b", re.I), r"0.1 \1"),
     (re.compile(r"\b(?:a|one) (point|percent|percentage point)(?! (?:five|\d))\b", re.I), r"1 \1"),
 )
-_AND_A_HALF_RE = re.compile(r"\b(\d+(?:\.\d+)?) and a half\b", re.I)
+_AND_A_HALF_RE = re.compile(rf"\b(\d+(?:\.\d+)?|{_W}) and a half\b", re.I)
 # Claims about the next letter up: they need a next_letter or what_if fact, and never for an A.
 _NEXT_CLAIM_RE = re.compile(
     r"\b(?:next letter|(?:to )?reach(?:es|ing)? an? [A-D]\b|"
@@ -163,7 +164,8 @@ _ADVICE_RE = re.compile(
 _ARTICLE_RE = re.compile(
     r"(?:(?<=^)|(?<=[.!?:;\"“(] )|(?<=[.!?:;]  ))(A|An)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))"
     r"|\b(a|an)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))")
-_SAME_LETTER_MOVE_RE = re.compile(r"\b(?:moved|went|changed|dropped|fell|rose) from (?:an? )?([A-F]) to (?:an? )?\1\b")
+_SAME_LETTER_MOVE_RE = re.compile(
+    r"\b(?i:moved|went|changed|dropped|fell|rose|slipped|slid|climbed) (?i:from) (?i:an? )?([A-F]) (?i:to) (?i:an? )?\1\b")
 ROLE_FIELDS = {
     "move": ("delta", "explained", "points", "share"),
     "weight": ("bucket_weight_pct",),
@@ -199,8 +201,17 @@ EXAMPLE_NOTE = [
     {"text": "Scores usually post Tuesdays.", "cites": ["pattern:posting_day:ceramics"]},
     {"text": "A 74 or better on the next project gets it to a C.", "cites": ["whatif:ceramics:projects:20"]},
 ]
-# A sentence carrying any of these copied the example rather than the facts.
-EXAMPLE_MARKERS = ("ceramics", "glaze", "kiln", "clay sketch", "sep 9", "74 or better", "73.4", "68.8", "71.1")
+# A sentence naming the made-up class or items copied the example. Never numbers or dates: real
+# classes produce "74 or better" or "since Sep 9" too.
+EXAMPLE_MARKERS = ("ceramics", "glaze test", "glaze", "kiln", "clay sketch")
+
+
+def _normalized(text):
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
+
+
+# A whole example sentence, copied word for word, is a copy too.
+EXAMPLE_SENTENCES = frozenset(_normalized(s["text"]) for s in EXAMPLE_NOTE)
 
 DRAFT_SYSTEM = """You write a short note to a parent about one class, the way a sharp teacher would.
 You get FACTS as JSON. Every fact has an id. Use only those facts.
@@ -561,8 +572,14 @@ def spelled_to_digits(text):
             return match.group(0)
         return _words_value(phrase) + unit
 
+    # "one and a half", "two and a half", "3 and a half" first, so "one" isn't left bare.
+    def half(match):
+        whole = match.group(1)
+        value = float(whole) if whole[0].isdigit() else float(_words_value(whole))
+        return f"{value + 0.5:g}"
+
+    text = _AND_A_HALF_RE.sub(half, text)
     text = _SPELLED_RE.sub(swap, text)
-    text = _AND_A_HALF_RE.sub(lambda m: f"{float(m.group(1)) + 0.5:g}", text)
     for pattern, value in _FRACTION_WORDS:
         text = pattern.sub(value, text)
     return text
@@ -675,9 +692,11 @@ def check_sentence(text, cites, index, name=None):
     if echo:
         return f"echoes the prompt ({echo.group(0)})"
     lowered = text.lower()
-    copied = next((m for m in EXAMPLE_MARKERS if m in lowered), None)
+    copied = next((m for m in EXAMPLE_MARKERS if re.search(rf"\b{re.escape(m)}\b", lowered)), None)
     if copied:
         return f"copies the made-up example ({copied})"
+    if _normalized(text) in EXAMPLE_SENTENCES:
+        return "copies a made-up example sentence"
     return _claims_reason(text, cited, index)
 
 
@@ -734,7 +753,9 @@ def _claims_reason(text, cited, index):
         return "says what isn't there"
     move_ids = [f["move"] if f.get("move") else f["id"] for f in cited if f.get("kind") == "grade_move"]
     moves = [index.get(m) or {} for m in dict.fromkeys(move_ids)]
-    cause_words = _CAUSE_CLAIM_RE.search(masked) or (_BARE_CAUSE_RE.search(masked) and _GRADE_WORDS_RE.search(masked))
+    # A bare "mainly"/"mostly" is cause wording, except in a posting pattern ("scores mostly post Fridays").
+    pattern_only = any(f.get("kind") == "posting_day" for f in cited) and not _GRADE_WORDS_RE.search(masked)
+    cause_words = _CAUSE_CLAIM_RE.search(masked) or (_BARE_CAUSE_RE.search(masked) and not pattern_only)
     if cause_words and not moves:
         return "states a cause without citing a grade_move or cause"
     if _MOVE_REF_RE.search(masked) and not moves:
@@ -779,8 +800,8 @@ def _claims_reason(text, cited, index):
         if not set(said) & held:
             return "says back to or again with a letter no move shows the class held"
     for match in _LETTER_MOVE_RE.finditer(bare):
-        crossed = {insights.letter_for(m["to_pct"]) for m in _class_moves(index, cited)
-                   if isinstance(m.get("to_pct"), (int, float))
+        crossed = {insights.letter_for(m["to_pct"]) for m in moves
+                   if isinstance(m.get("to_pct"), (int, float)) and isinstance(m.get("from_pct"), (int, float))
                    and insights.letter_for(m["from_pct"]) != insights.letter_for(m["to_pct"])}
         if match.group(1) not in crossed:
             return f"says the class moved to {match.group(1)} but no move crossed into that letter"
@@ -900,7 +921,10 @@ def _json(raw):
     """A JSON object from a model reply, after dropping <think> blocks and a ```json fence."""
     if not isinstance(raw, str):
         return None
-    text = _FENCE_RE.sub("", _THINK_RE.sub("", raw).strip()).strip()
+    text = _THINK_RE.sub("", raw)
+    # An unclosed <think> runs to the end: nothing after it is the answer.
+    text = re.split(r"<think>", text, maxsplit=1, flags=re.I)[0]
+    text = _FENCE_RE.sub("", text.strip()).strip()
     for candidate in (text, text[text.find("{"): text.rfind("}") + 1] if "{" in text else ""):
         try:
             value = json.loads(candidate)
