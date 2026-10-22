@@ -827,9 +827,9 @@ class BakeoffFindingTests(unittest.TestCase):
         self.assertIsNone(check("Still a D, one and three quarters points from a C.", ["next:q"], w.fact_index(quarters)))
         # "down 2.5 (10/14)": a pair that is the cited since date reads as that date, not a score.
         moved = clay[0]
-        self.assertIsNone(check("Still a D, down 2 (10/14).", ["move:c"], w.fact_index([moved])))
+        self.assertIsNone(check("Slipped to a D, down 2 (10/14).", ["move:c"], w.fact_index([moved])))
         # Any other pair in parentheses is read as a score, and no fact backs it.
-        self.assertEqual(w.check_sentence("Still a D, down 2 (10/15).", ["move:c"], w.fact_index([moved])),
+        self.assertEqual(w.check_sentence("Slipped to a D, down 2 (10/15).", ["move:c"], w.fact_index([moved])),
                          "score 10/15 isn't in the cited facts")
         self.assertIn("whole-letter", w.check_sentence("Still a D, 1.4 points from a C-.", ["next:q"], w.fact_index(dash)))
 
@@ -2518,12 +2518,19 @@ class StoryTagTests(unittest.TestCase):
                self.what_if("Art", "Homework", 90.0, 81.0)]
         upcoming = [{"class": "Art", "bucket": "Tests", "title": "Unit 3 Test", "due": "2026-10-23", "points": 20.0}]
         bio = [insights.next_letter("Biology", 79.5), self.what_if("Biology", "Tests", 50.0, 90.0)]
-        self.assertEqual(w.easiest_win(w.attach_next_items(art + bio, upcoming)), "Biology")
-        # Unnamed, Art's heaviest bucket would be next: 81 beats Biology's 90.
+        # The CTO's rule: a named item beats any assumed one across the kid, so Art's named 95 beats Biology's
+        # assumed 90.
+        self.assertEqual(w.easiest_win(w.attach_next_items(art + bio, upcoming)), "Art")
+        self.assertEqual(w.class_step(w.facts_for(w.attach_next_items(art, upcoming), "Art"))["id"], "whatif:art:tests:20")
+        # Unnamed, both are assumed: Art's 81 beats Biology's 90.
         self.assertEqual(w.easiest_win(w.attach_next_items(art + bio, [])), "Art")
-        # A named next item that can't reach the letter skips the class; a later unnamed one doesn't rescue it.
+        # A named next item that can't reach the letter isn't said; Art's story says its assumed Homework step
+        # instead (another category, nothing posted there), and that 81 is the easiest.
         stuck = [art[0], self.what_if("Art", "Tests", 10.0, 101.0), art[2]]
-        self.assertEqual(w.easiest_win(w.attach_next_items(stuck + bio, upcoming)), "Biology")
+        self.assertEqual(w.easiest_win(w.attach_next_items(stuck + bio, upcoming)), "Art")
+        self.assertEqual(w.class_step(w.attach_next_items(stuck, upcoming))["bucket"], "Homework")
+        # Biology's 90 only wins when Art's story says no step at all.
+        self.assertEqual(w.easiest_win(w.attach_next_items(stuck[:2] + bio, upcoming)), "Biology")
 
     def test_unnamed_items_go_heaviest_reachable_bucket_first(self):
         # With nothing named, the tag is the assumed step the story says: the heaviest bucket that can reach.
@@ -2532,7 +2539,11 @@ class StoryTagTests(unittest.TestCase):
         self.assertEqual(w.class_step(heavy_stuck)["bucket"], "Homework")
         self.assertEqual(w.easiest_win(heavy_stuck), "Art")
         heavy_ok = [letter, self.what_if("Art", "Tests", 60.0, 90.0), self.what_if("Art", "Homework", 20.0, 81.0)]
-        self.assertEqual(w.class_step(heavy_ok)["bucket"], "Tests")
+        # Both are said (two assumed lines, heaviest first); the tag goes on the easier one.
+        self.assertEqual([f["bucket"] for f in w.class_steps(heavy_ok)], ["Tests", "Homework"])
+        self.assertEqual(w.class_step(heavy_ok)["bucket"], "Homework")
+        # Only what the story says counts.
+        self.assertEqual(w.class_step(heavy_ok, said={"whatif:art:tests:20"})["bucket"], "Tests")
         # Neither reaches: no step, no tag.
         stuck = [letter, self.what_if("Art", "Tests", 40.0, 101.0), self.what_if("Art", "Homework", 40.0, 104.0)]
         self.assertIsNone(w.easiest_win(stuck))
@@ -2571,12 +2582,14 @@ class StoryTagTests(unittest.TestCase):
         facts = tag_facts(tag_class("Art", 92.0, keep=62.0), tag_class("Biology", 81.0, keep=78.6),
                           tag_class("Chem", 85.0, keep=99.0, named=False))
         # Chem's unnamed keep is an assumed next item its story says ("If the next test is worth about 50
-        # points like the last ones, a 50 or better keeps the B."), so it counts.
-        self.assertEqual(w.biggest_risk(facts), "Chem")
+        # points like the last ones, a 50 or better keeps the B."), so it counts, but the CTO's rule puts named
+        # items first across the kid: Biology's named 78.6 beats Chem's assumed 99.
+        self.assertEqual(w.biggest_risk(facts), "Biology")
+        self.assertEqual(w.biggest_risk([f for f in facts if f["class"] == "Chem"]), "Chem")
         # With a Tests item posted at another size, the posted one wins: Chem's assumed keep isn't said.
         other_size = [{"class": "Chem", "bucket": "Tests", "title": "Chem Quiz", "due": "2026-10-27", "points": 20.0}]
-        posted = w.attach_next_items([f for f in facts], other_size)
-        self.assertEqual(w.biggest_risk(posted), "Biology")
+        posted = w.attach_next_items([f for f in facts if f["class"] == "Chem"], other_size)
+        self.assertIsNone(w.biggest_risk(posted))
         safe = tag_facts(tag_class("Art", 99.0, cannot_lose=True), tag_class("Chem", 85.0, cannot_lose=True, named=False))
         self.assertIsNone(w.biggest_risk(safe))
         self.assertIsNone(w.biggest_risk(tag_facts(tag_class("Art", 79.5, needed=84.3))))
@@ -2988,7 +3001,8 @@ class AssumedNextItemTests(unittest.TestCase):
             "If the {next:%s} tomorrow%s" % (BIO_KEEP, tail): "names a relative day (tomorrow)",
             "If the scheduled {next:%s}%s" % (BIO_KEEP, tail): "says an assumed item is scheduled",
             "If the upcoming {next:%s}%s" % (BIO_KEEP, tail): "says an assumed item is scheduled",
-            "If the {next:%s} due next week%s" % (BIO_KEEP, tail): "restates the to-do list",
+            "If the {next:%s} due next week%s" % (BIO_KEEP, tail): "says an assumed item is scheduled",
+            "If the {next:%s} that's due%s" % (BIO_KEEP, tail): "says an assumed item is scheduled",
         }
         for text, reason in cases.items():
             self.assertEqual(w.check_sentence(text, cites, idx, "Bio"), reason, text)
@@ -3154,3 +3168,229 @@ class AssumedTagTests(unittest.TestCase):
         self.assertEqual(w.easiest_win(facts, said={BIO_STEP}), "Bio")
         self.assertEqual(w.biggest_risk(facts, said={BIO_STEP}), None)
         self.assertEqual(w.biggest_risk(facts, said={BIO_KEEP}), "Bio")
+
+
+# ── PR #60 review: no false "Still", one drag item, deterministic keeps, fitting stories ─────────────────────
+def one_test_class(name, prior, now):
+    """A class whose whole grade is one 1000-point test, so its percent is exactly `now`'s (test_insights's
+    synthetic helpers), with yesterday's snapshot at `prior`."""
+    from test_insights import TODAY, cat, class_input, row, snapshot
+    totals = {"parse_ok": True, "layout": "percent_of_grade",
+              "categories": [cat("Tests", 100.0, now[0] * 10, 1000.0, now[0])]}
+    snap = snapshot("2026-10-21", {name: prior})
+    return insights.class_facts(class_input(name, totals, [row("Unit Test", "Tests", now[0] * 10, 1000.0)], *now),
+                                [snap], snap, TODAY)
+
+
+class NoFalseStillTests(unittest.TestCase):
+    """GE's must-fix 2 and the CTO's call: "Still a X" only when the letter the dashboard shows is unchanged."""
+
+    def test_ge_repros_open_on_now(self):
+        for prior, now, opening in (((89.8, "B"), (90.1, "A"), "Now an A."),
+                                    ((80.2, "B"), (79.9, "C"), "Now a C, 0.1 points from a B."),
+                                    ((85.0, "B"), (85.2, "B"), "Still a B, 4.8 points from an A."),
+                                    ((90.4, "A"), (90.1, "A"), "Still an A.")):
+            facts = one_test_class("Art", prior, now)
+            self.assertNotIn("grade_move", [f["kind"] for f in facts], prior)
+            story = w.write_class(ScriptedModel({}), w.attach_next_items(facts, []), "Art")
+            self.assertTrue(story["story"].startswith(opening), (prior, now, story["story"]))
+
+    def test_a_still_sentence_across_a_letter_change_drops(self):
+        changed = {"id": "next:art", "kind": "next_letter", "class": "Art", "pct": 79.9, "letter": "C",
+                   "next_letter": "B", "threshold": 80.0, "gap": 0.1, "still": False}
+        at_a = {"id": "letter:art", "kind": "current_letter", "class": "Art", "pct": 90.1, "letter": "A", "still": False}
+        idx = w.fact_index([changed])
+        self.assertEqual(w.say_opening(changed), "Now a C, 0.1 points from a B.")
+        self.assertIsNone(w.check_sentence("Now a C, 0.1 points from a B.", ["next:art"], idx, "Art"))
+        for text in ("Still a C, 0.1 points from a B.", "It remains a C, 0.1 points from a B."):
+            self.assertEqual(w.check_sentence(text, ["next:art"], idx, "Art"), "says still across a letter change", text)
+        idx = w.fact_index([at_a])
+        self.assertEqual(w.say_opening(at_a), "Now an A.")
+        self.assertIsNone(w.check_sentence("Now an A.", ["letter:art"], idx, "Art"))
+        self.assertIsNotNone(w.check_sentence("Still an A.", ["letter:art"], idx, "Art"))
+        # A move the dashboard shows as a letter change, though the percents' letters agree, says the crossing.
+        move = {"id": "move:art:2026-10-21", "kind": "grade_move", "class": "Art", "since": "2026-10-21",
+                "from_pct": 81.0, "to_pct": 80.2, "delta": -0.8, "still": False}
+        self.assertTrue(w.say_opening(move).startswith("Slipped to a B"))
+
+
+class DragRankTests(unittest.TestCase):
+    """GE's must-fix 1 and the CTO's calls: one drag item, the real top cost, and none on a clear A."""
+
+    def test_an_a_says_its_drag_only_within_2_points_of_the_b_line(self):
+        for pct, said in ((95.0, False), (92.0, False), (91.9, True)):
+            facts = [{"id": "letter:art", "kind": "current_letter", "class": "Art", "pct": pct, "letter": "A"},
+                     {"id": "drag:art:lab", "kind": "drag", "class": "Art", "title": "Lab 3", "category": "Labs",
+                      "bucket": "Labs", "earned": 6.0, "possible": 10.0, "points": 1.2}]
+            self.assertEqual(w.drag_fact(facts) is not None, said, pct)
+
+    def test_the_engine_s_no_drag_case_gives_a_story_with_no_drag_line(self):
+        # GE's repro end to end: the zero tops the ranking, so no drag fact and no line naming Unit 2.
+        model = insights.ClassModel("Physics", "percent_of_grade", (
+            insights.Bucket("Tests", 70.0, tuple(insights.Score(f"unit{i}test", f"Unit {i} Test", "Tests", e, 50.0)
+                                                 for i, e in ((1, 0.0), (2, 25.0), (3, 48.0), (4, 49.0)))),
+            insights.Bucket("HW", 30.0, (insights.Score("hw1", "HW 1", "HW", 10.0, 10.0),))))
+        self.assertIsNone(insights.biggest_drag(model, "Physics"))
+        facts = [{"id": "next:physics", "kind": "next_letter", "class": "Physics", "pct": 72.7, "letter": "C",
+                  "next_letter": "B", "threshold": 80.0, "gap": 7.3}]
+        story = w.write_class(ScriptedModel({}), facts, "Physics")
+        self.assertNotIn("pulling it down", story["story"])
+        self.assertNotIn("Unit 2", story["story"])
+
+
+class AssumedReviewTests(unittest.TestCase):
+    """The CTO's "a perfect N", GE's nits on sizes, nouns, buckets and "due"."""
+
+    def test_full_points_read_a_perfect_n(self):
+        facts = [f if f["id"] != "keep:bio:homework:10" else {**f, "needed_pct": 100.0} for f in bio_facts()]
+        idx = w.fact_index(w.attach_next_items(facts, []))
+        lines = [l for l in w.code_lines(list(idx.values()), "Bio") if l["code"] == "assumed"]
+        homework = w.fill_slots(lines[1]["text"], idx)
+        self.assertEqual(homework, "If the next homework assignment is worth about 10 points like the last ones, a "
+                                   "perfect 10 keeps the B and a perfect 10 gets it to an A.")
+        step_only = w.say_assumed(None, idx["whatif:bio:homework:10"])
+        self.assertTrue(step_only.endswith("a perfect 10 gets it to an A."))
+        self.assertIsNone(w.check_sentence(step_only, ["whatif:bio:homework:10"], idx, "Bio"))
+        # "a 10 or better" on a 10-point item isn't the form.
+        self.assertIsNotNone(w.check_sentence(step_only.replace("a perfect 10", "a 10 or better"),
+                                              ["whatif:bio:homework:10"], idx, "Bio"))
+
+    def test_attack_a_keep_and_step_from_two_buckets_drop(self):
+        facts = bio_facts()
+        # Labs at 50 points too, so only the bucket tells the two apart.
+        facts = [{**f, "id": f["id"].replace(":20", ":50"), "points": 50.0} if f.get("bucket") == "Labs" else f
+                 for f in facts]
+        idx = w.fact_index(w.attach_next_items(facts, []))
+        keep, step = idx[BIO_KEEP], idx["whatif:bio:labs:50"]
+        self.assertIsNone(w.say_assumed(keep, step))
+        text = ("If the {next:%s} is worth about 50 points like the last ones, a 38 or better keeps the B and a 50 gets "
+                "it to an A." % BIO_KEEP)
+        self.assertIsNotNone(w.check_sentence(text, [BIO_KEEP, "whatif:bio:labs:50"], idx, "Bio"))
+
+    def test_a_bucket_whose_sizes_vary_gets_no_assumed_line(self):
+        facts = [{**f, "sizes_vary": True} if f["id"] == BIO_STEP else f for f in bio_facts()]
+        facts = [f for f in facts if f["id"] != BIO_KEEP]  # the engine makes no typical keep there
+        lines = w.code_lines(w.attach_next_items(facts, []), "Bio")
+        self.assertNotIn(BIO_STEP, [c for l in lines for c in l["cites"]])
+        self.assertEqual([l["cites"][0] for l in lines if l["code"] == "assumed"],
+                         ["keep:bio:homework:10", "keep:bio:labs:20"])
+
+    def test_a_category_reads_as_one_item(self):
+        for category, start in (("Projects and Presentations", "If the next project or presentation is worth"),
+                                ("Projects & Presentations", "If the next project or presentation is worth"),
+                                ("Speaking and Listening", "If the next item in Speaking and Listening is worth"),
+                                ("Reading, Writing", "If the next item in Reading, Writing is worth")):
+            facts = [{**f, "bucket": "summative", "category": category} if f.get("bucket") == "Tests"
+                     and f["kind"] != "drag" else f for f in bio_facts()]
+            idx = w.fact_index(w.attach_next_items(facts, []))
+            line = next(l for l in w.code_lines(list(idx.values()), "Bio") if l["code"] == "assumed")
+            self.assertTrue(w.fill_slots(line["text"], idx).startswith(start), category)
+
+    def test_due_says_the_item_is_scheduled_but_due_to_doesn_t(self):
+        self.assertTrue(w._SCHEDULED_RE.search("the next test, due soon"))
+        self.assertFalse(w._SCHEDULED_RE.search("due to the Unit 2 Test"))
+
+
+class StoryFitTests(unittest.TestCase):
+    """GE's should-fix: a story over 600 characters sheds the drag line, then the second assumed line."""
+
+    def story(self, limit):
+        facts = [{**f, "category": "Projects and Presentations"} if f.get("bucket") == "Homework" else f
+                 for f in bio_facts()]
+        with mock.patch.object(w, "PUBLISH_MAX_TEXT", limit):
+            return w.write_class(ScriptedModel({}), w.attach_next_items(facts, []), "Bio")["story"]
+
+    def test_the_drag_line_goes_first_then_the_second_assumed_line(self):
+        whole = self.story(600)
+        self.assertEqual(len(whole), 342)
+        self.assertIn("pulling it down", whole)
+        self.assertEqual(whole.count("like the last ones"), 2)
+        no_drag = self.story(341)
+        self.assertNotIn("pulling it down", no_drag)
+        self.assertEqual(no_drag.count("like the last ones"), 2)
+        self.assertEqual(no_drag, whole.replace(" The Unit 2 Test (31/50) is what's pulling it down most.", ""))
+        one = self.story(len(no_drag) - 1)
+        self.assertEqual(one, "Still a B, 6 points from an A. " + DAVIDS_EXAMPLE)
+        # Too long even then: write_class keeps it, and write_up drops it (story_fits).
+        self.assertEqual(self.story(len(one) - 1), one)
+        with mock.patch.object(w, "PUBLISH_MAX_TEXT", len(one) - 1):
+            self.assertEqual(w.write_up(ScriptedModel({}), {"as_of": "2026-10-22", "facts": bio_facts()})["stories"], [])
+
+
+SUBJ_D = "Subj D"
+
+
+def subj_d_facts():
+    """GE's Subj D Lab Report case, synthetic: an A with two keep facts both named by posted items (the engine's
+    keep on the Lab Report at 20 points, and a typical Tests keep the 50-point Unit 4 Test matches), and its drag."""
+    return [
+        {"id": "letter:subjd", "kind": "current_letter", "class": SUBJ_D, "pct": 91.0, "letter": "A"},
+        {"id": "keep:subjd:labs:20", "kind": "keep_letter", "class": SUBJ_D, "letter": "A", "bucket": "Labs",
+         "points": 20.0, "needed_pct": 85.0, "cannot_lose": False},
+        {"id": "keep:subjd:tests:50", "kind": "keep_letter", "class": SUBJ_D, "letter": "A", "bucket": "Tests",
+         "points": 50.0, "needed_pct": 72.0, "cannot_lose": False},
+        {"id": "keep:subjd:homework:10", "kind": "keep_letter", "class": SUBJ_D, "letter": "A", "bucket": "Homework",
+         "points": 10.0, "needed_pct": 60.0, "cannot_lose": False},
+        {"id": "drag:subjd:quiz2", "kind": "drag", "class": SUBJ_D, "title": "Quiz 2", "category": "Tests",
+         "bucket": "Tests", "earned": 30.0, "possible": 50.0, "points": 1.1},
+        {"id": "next:art", "kind": "next_letter", "class": "Art", "pct": 84.0, "letter": "B", "next_letter": "A",
+         "threshold": 90.0, "gap": 6.0, "still": False},
+        {"id": "keep:art:tests:50", "kind": "keep_letter", "class": "Art", "letter": "B", "bucket": "Tests",
+         "points": 50.0, "needed_pct": 99.0, "cannot_lose": False},
+    ]
+
+
+SUBJ_D_UPCOMING = [
+    {"class": SUBJ_D, "bucket": "Labs", "title": "Lab Report", "due": "2026-10-23", "points": 20.0},
+    {"class": SUBJ_D, "bucket": "Tests", "title": "Unit 4 Test", "due": "2026-10-28", "points": 50.0},
+]
+
+
+class FactOrderTests(unittest.TestCase):
+    """GE's must-fix 3: #57's invariant, the same facts in any order give the same bytes."""
+
+    def test_ge_subj_d_lab_report_repro_any_order_same_bytes(self):
+        facts = subj_d_facts()
+        first = json.dumps(w.write_up(ScriptedModel({}), {"as_of": "2026-10-22", "facts": facts},
+                                      upcoming=SUBJ_D_UPCOMING), sort_keys=True)
+        rng = random.Random(60)
+        for _ in range(30):
+            rng.shuffle(facts)
+            upcoming = SUBJ_D_UPCOMING[::rng.choice((1, -1))]
+            got = json.dumps(w.write_up(ScriptedModel({}), {"as_of": "2026-10-22", "facts": facts}, upcoming=upcoming),
+                             sort_keys=True)
+            self.assertEqual(got, first)
+        story = next(s for s in json.loads(first)["stories"] if s["class"] == SUBJ_D)
+        # The heavier-sounding pick is deterministic: no weight on either keep, so the sooner Lab Report wins.
+        self.assertIn("An 85 or better on the Lab Report keeps the A.", story["story"])
+
+    def test_pick_keep_ranks_weight_then_due_then_id(self):
+        facts = w.attach_next_items(subj_d_facts(), SUBJ_D_UPCOMING)
+        weights = [{"id": "whatif:subjd:tests:50", "kind": "what_if", "class": SUBJ_D, "bucket": "Tests",
+                    "bucket_weight_pct": 60.0, "points": 50.0, "target": 90.0, "needed_pct": 50.0, "reachable": True}]
+        mine = w.facts_for(facts, SUBJ_D)
+        rng = random.Random(7)
+        for _ in range(12):
+            rng.shuffle(mine)
+            self.assertEqual(w.pick_keep(mine)["id"], "keep:subjd:labs:20")
+            self.assertEqual(w.pick_keep(mine + weights)["id"], "keep:subjd:tests:50")
+
+    def test_named_keeps_beat_assumed_ones_across_the_kid(self):
+        # The CTO's rule: Subj D's named Lab Report keep (85) is the Biggest risk over Art's assumed 99.
+        facts = w.attach_next_items(subj_d_facts(), SUBJ_D_UPCOMING)
+        self.assertEqual(w.biggest_risk(facts), SUBJ_D)
+        self.assertEqual(w.biggest_risk(w.facts_for(facts, "Art")), "Art")
+        up = w.write_up(ScriptedModel({}), {"as_of": "2026-10-22", "facts": subj_d_facts()}, upcoming=SUBJ_D_UPCOMING)
+        self.assertEqual({s["class"]: s.get("tags") for s in up["stories"]}, {"Art": None, SUBJ_D: ["biggest_risk"]})
+
+    def test_named_steps_beat_assumed_ones_across_the_kid(self):
+        named = [{"id": "next:x", "kind": "next_letter", "class": "X", "pct": 85.0, "letter": "B", "next_letter": "A",
+                  "threshold": 90.0, "gap": 5.0},
+                 {"id": "whatif:x:tests:20", "kind": "what_if", "class": "X", "bucket": "Tests", "bucket_weight_pct": 50.0,
+                  "points": 20.0, "target": 90.0, "needed_pct": 97.0, "reachable": True}]
+        assumed = [{**f, "class": "Y", "id": f["id"].replace(":x", ":y"), "needed_pct": 60.0} if f["kind"] == "what_if"
+                   else {**f, "class": "Y", "id": "next:y"} for f in named]
+        upcoming = [{"class": "X", "bucket": "Tests", "title": "Quiz 4", "due": "2026-10-27", "points": 20.0}]
+        facts = w.attach_next_items(named + assumed, upcoming)
+        self.assertEqual(w.easiest_win(facts), "X")
+        self.assertEqual(w.easiest_win(w.attach_next_items(named + assumed, [])), "Y")

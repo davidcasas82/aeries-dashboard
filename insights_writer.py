@@ -307,7 +307,7 @@ Rules:
 - Order: letter, cause, pattern, next step.
 - "Because", "mainly", "mostly", "due to" or "driven by" only with a cited grade_move or cause.
 - If a grade_move has causes_withheld, say how much it moved but not why.
-- With no grade_move, the grade didn't move: say "Still a C", never "moved to a C".
+- With no grade_move, the grade didn't move: open with the letter fact's say_opening ("Still a C, ..." or, when the letter changed, "Now a C, ..."), never "moved to a C".
 - No talk of the next letter without a next_letter fact. A class at an A has no next letter.
 - "Back to" or "again" only when a grade_move shows the class had that letter before.
 - Never say what isn't there ("no major assignments", "no pattern").
@@ -431,18 +431,22 @@ def say_opening(fact):
 
     current_letter (a class at an A): "Still an A."  next_letter: "Still a C, 0.5 points from a B."  grade_move: "Still an A, down 1.6 since Oct 14."
     or, when the move crossed a letter, "Slipped to a C since Oct 14, down 1.6."
+    "Still" only when the letter the dashboard shows is the one it showed last time: a letter fact the engine
+    marks "still": False (the letter changed by less than a grade_move, or there's no earlier letter) opens
+    "Now a C, 0.1 points from a B." or "Now an A.", and a grade_move marked so says the crossing.
     """
     kind = fact.get("kind")
+    still = "Still" if fact.get("still", True) else "Now"
     if kind == "current_letter" and fact.get("letter"):
-        return f"Still {_article(fact['letter'])} {fact['letter']}."
+        return f"{still} {_article(fact['letter'])} {fact['letter']}."
     if kind == "next_letter" and fact.get("letter") and fact.get("next_letter") and isinstance(fact.get("gap"), (int, float)):
         letter, nxt = fact["letter"], fact["next_letter"]
-        return f"Still {_article(letter)} {letter}, {fact['gap']:g} points from {_article(nxt)} {nxt}."
+        return f"{still} {_article(letter)} {letter}, {fact['gap']:g} points from {_article(nxt)} {nxt}."
     if kind == "grade_move" and all(isinstance(fact.get(k), (int, float)) for k in ("from_pct", "to_pct", "delta")):
         before, after = insights.letter_for(fact["from_pct"]), insights.letter_for(fact["to_pct"])
         way = "down" if fact["delta"] < 0 else "up"
         since = f" since {fact['since_label']}" if fact.get("since_label") else ""
-        if before == after:
+        if fact.get("still", before == after):
             return f"Still {_article(after)} {after}, {way} {abs(fact['delta']):g}{since}."
         verb = "Slipped" if fact["delta"] < 0 else "Up"
         return f"{verb} to {_article(after)} {after}{since}, {way} {abs(fact['delta']):g}."
@@ -551,26 +555,29 @@ def is_keep(fact):
 def pick_keep(class_facts):
     """The class's keep_letter fact when code can say it, in any direction (rise, flat or drop), else None.
 
-    The engine already picks one per class (a needed score beats can't-drop, then the soonest named
-    next item, the drop's biggest cause, the heaviest bucket), so the writer only takes it. It is said only
-    about a named next item at its posted points (_named): a needed score of at most 100, or #55's
-    can't-drop form (_named_cannot_lose). At a typical size, with no item named, it isn't said.
+    It is said only about a named next item at its posted points (_named): a needed score of at most 100,
+    or #55's can't-drop form (_named_cannot_lose). At a typical size, with no item named, it isn't said
+    here (assumed_picks says it). With several named keep facts (keep_fact's and a typical keep an
+    upcoming item matches), the heaviest bucket wins, then the soonest due date, then the id, so the same
+    facts in any order pick the same one.
     """
-    # The engine's keep_fact comes first; typical_keeps' assumed-size facts follow it.
-    keep = next((f for f in class_facts if is_keep(f) and not f.get("move")), None)
-    if keep is None or not _named(keep):
-        return None
-    if _number(keep.get("needed_pct")):
-        return keep if keep["needed_pct"] <= 100 else None
-    return keep if _named_cannot_lose(keep) else None
+    def sayable(f):
+        if not is_keep(f) or f.get("move") or not _named(f):
+            return False
+        if _number(f.get("needed_pct")):
+            return f["needed_pct"] <= 100
+        return _named_cannot_lose(f)
+    weight = {f.get("bucket"): -(_weight(f, class_facts) or 0.0) for f in class_facts}
+    return min((f for f in class_facts if sayable(f)),
+               key=lambda f: (weight.get(f.get("bucket"), 0.0), str(f.get("next_due") or ""), f["id"]), default=None)
 
 
 def move_up_step(class_facts):
     """The class's what_if for its next named item when it reaches the next letter, else None.
 
-    The next named item is the soonest one attach_next_items named at its posted points (due date, then
-    title, then id). Reachable means a needed score of at most 100; the step's target must be the class's
-    next letter. A later item never stands in for a next one that can't get there.
+    Of the what_if facts attach_next_items named at their posted points, the soonest (due date, then title,
+    then id), in any fact order. Reachable means a needed score of at most 100; the step's target must be
+    the class's next letter. A later item never stands in for a soonest one that can't get there.
     """
     named = [f for f in class_facts if f.get("kind") == "what_if" and _named(f)]
     step = min(named, key=lambda f: (str(f.get("next_due") or ""), str(f["next_title"]), f["id"]), default=None)
@@ -618,7 +625,8 @@ ASSUMED_MAX_BUCKETS = 2
 # An assumed keep needing less than this ("a 1 or better keeps the B" on a 10-point homework) says nothing
 # useful, so it isn't said and its bucket doesn't take one of the two places.
 ASSUMED_KEEP_MIN_PCT = 50.0
-_SCHEDULED_RE = re.compile(r"\b(?:schedul\w*|planned|coming up|upcoming|on the calendar)\b", re.I)
+_SCHEDULED_RE = re.compile(r"\b(?:schedul\w*|planned|coming up|upcoming|on the calendar|due(?! to\b))\b", re.I)
+_STILL_RE = re.compile(r"\b(?:still|remains?|stays?)\b", re.I)
 _ASSUMED_RE = re.compile(r"^If the \{next:([^{}\s]+)\} is worth about \d+(?:\.\d+)? points like the last ones, ")
 _DRAG_FORM = "The {{item:{id}}} is what's pulling it down most."
 _DRAG_RE = re.compile(r"^The \{item:([^{}\s]+)\} is what's pulling it down most\.$")
@@ -635,8 +643,10 @@ def needed_points(fact):
 
 
 def _assumable(fact):
-    """An unnamed fact about the next item at its typical size, in a bucket with nothing posted."""
-    return not _named(fact) and not fact.get("bucket_posted") and needed_points(fact) is not None
+    """An unnamed fact about the next item at its typical size, in a bucket with nothing posted and past
+    items of about one size (no sizes_vary)."""
+    return not _named(fact) and not fact.get("bucket_posted") and not fact.get("sizes_vary") \
+        and needed_points(fact) is not None
 
 
 def _class_next_letter(class_facts):
@@ -692,25 +702,34 @@ def assumed_picks(class_facts):
     return [tuple(pr) for pr in ordered[:max(0, ASSUMED_MAX_BUCKETS - len(named))]]
 
 
+def _points_said(n, fact, or_better):
+    """ "a 38 or better", or "a perfect 50" when only full points will do."""
+    if n >= fact["points"]:
+        return f"a perfect {n}"
+    return f"a {n} or better" if or_better else f"a {n}"
+
+
 def say_assumed(keep, step):
     """The assumed-item sentence in slot form, or None:
     "If the {next:<id>} is worth about 50 points like the last ones, a 38 or better keeps the B and a 46 gets
-    it to an A." Either half alone too ("..., a 46 or better gets it to an A.")."""
+    it to an A." Either half alone too ("..., a 46 or better gets it to an A."). Both halves are about one
+    bucket at one size. When only full points will do, "a perfect 50 gets it to an A"."""
     lead = keep or step
-    if lead is None or (keep and step and keep.get("points") != step.get("points")):
+    if lead is None or (keep and step and (keep.get("points"), keep.get("class"), keep.get("bucket"))
+                        != (step.get("points"), step.get("class"), step.get("bucket"))):
         return None
     parts = []
     if keep:
         kn = needed_points(keep)
         if kn is None or not keep.get("letter"):
             return None
-        parts.append(f"a {kn} or better keeps the {keep['letter']}")
+        parts.append(f"{_points_said(kn, keep, True)} keeps the {keep['letter']}")
     if step:
         sn = needed_points(step)
         if sn is None or not _number(step.get("target")):
             return None
         to = insights.letter_for(step["target"])
-        parts.append(f"a {sn} gets it to a {to}" if keep else f"a {sn} or better gets it to a {to}")
+        parts.append(f"{_points_said(sn, step, not keep)} gets it to a {to}")
     head = f"If the {{next:{lead['id']}}} is worth about {lead['points']:g} points like the last ones, "
     return fix_articles(head + " and ".join(parts) + ".")
 
@@ -728,8 +747,12 @@ def _assumed_forms(cited):
 
 
 def drag_fact(class_facts):
-    """The class's drag fact when code says it: only on a class with no recent move."""
+    """The class's drag fact when code says it: only on a class with no recent move, and on an A only within
+    DRAG_A_MARGIN points of the B line (the engine leaves it off past that too)."""
     if any(f.get("kind") == "grade_move" for f in class_facts):
+        return None
+    at_a = next((f for f in class_facts if f.get("kind") == "current_letter" and _number(f.get("pct"))), None)
+    if at_a and at_a["pct"] - dict(insights.SCALE)["A"] >= insights.DRAG_A_MARGIN:
         return None
     return next((f for f in class_facts if f.get("kind") == "drag" and f.get("title") and _has_score(f)), None)
 
@@ -1127,6 +1150,31 @@ def _bucket_noun(bucket):
     return f"{noun} item"
 
 
+def _item_noun(name):
+    """One next item of a category, singular: "Projects and Presentations" -> "project or presentation",
+    "Learning Targets" -> "learning target", "Homework" -> "homework assignment". When a name can't be made
+    singular safely ("Speaking and Listening", "Reading, Writing"), "item in Speaking and Listening"."""
+    words = re.sub(r"\s*([/&])\s*", r" \1 ", str(name or "")).strip().split()
+    if not words or not all(re.fullmatch(r"[A-Za-z][A-Za-z'-]*|[/&]", w) for w in words):
+        return f"item in {name}" if words else "test"
+    parts, part = [], []
+    for w in words + ["and"]:
+        if w.lower() in ("&", "and", "/"):
+            parts.append(part)
+            part = []
+        else:
+            part.append(w.lower())
+    if any(not p for p in parts):
+        return f"item in {name}"
+    if parts[-1][-1] in _MASS_BUCKETS:
+        return _bucket_noun(name)
+    for p in parts:
+        last = _singular(p[-1])
+        if last == p[-1] and last not in _COUNT_BUCKETS:
+            return f"item in {name}"
+    return _bucket_noun(name)
+
+
 def slot_reason(text, cites, index):
     """None if every slot names one of the sentence's cited facts, of the right kind, else why not."""
     found = SLOT_RE.findall(text)
@@ -1301,7 +1349,7 @@ def fill_slots(text, index):
             # The Aeries category name when the bucket has one ("Learning Targets (Quizzes)" -> "next learning
             # target"), else the bucket's.
             noun = re.sub(r"\s*\([^()]*\)\s*$", "", _clean(fact.get("category") or fact.get("bucket")))
-            return f"next {_bucket_noun(noun or _clean(fact.get('bucket')))}"
+            return f"next {_item_noun(noun or _clean(fact.get('bucket')))}"
         title = _clean(fact.get("title"))
         if _has_score(fact) and not re.match(r"\s*\(", text[match.end():]):
             return f"{_short_title(title)} ({fact['earned']:g}/{fact['possible']:g})"
@@ -1403,6 +1451,10 @@ def _claims_reason(text, cited, index, slotted=None):
     masked, unbacked_dates, scores = _mask_allowed_dates(text, cited)
     if unbacked_dates:
         return "names a date"
+    if _STILL_RE.search(masked) and any(f.get("kind") in ("next_letter", "current_letter", "grade_move")
+                                         and say_opening(f) and not say_opening(f).startswith("Still")
+                                         for f in cited):
+        return "says still across a letter change"
     # An unnamed next item is only assumed: nothing says it's on the calendar.
     if _SCHEDULED_RE.search(masked) and any(f.get("kind") in ("what_if", "keep_letter") and not _named(f)
                                              for f in cited):
@@ -1836,7 +1888,7 @@ def _without_titles(text, cited):
 def _opens_with_letter(sentence, index):
     """The first sentence states a letter and a gap or move from a cited next_letter or grade_move."""
     cited = [index[fid] for fid in sentence.get("cites") or [] if fid in index]
-    # A class at an A has no gap to state: its opening is exactly "Still an A." from its current_letter.
+    # A class at an A has no gap to state: its opening is exactly "Still an A." (or "Now an A.") from its current_letter.
     if [f.get("kind") for f in cited] == ["current_letter"]:
         return (sentence.get("text") or "").strip() == say_opening(cited[0])
     backers = [f for f in cited if f.get("kind") == "next_letter" or (f.get("kind") == "grade_move" and not f.get("move"))]
@@ -2037,6 +2089,22 @@ def _filled(line, index):
     return {**line, "slots": line["text"], "text": fix_articles(fill_slots(line["text"], index))}
 
 
+def _fit(final):
+    """A story over the publish limits (600 characters, the cite count) loses the drag line first, then its
+    second assumed line, so it can still publish; write_up drops a story still over them."""
+    def fits(lines):
+        return within_publish_limits(" ".join(s["text"] for s in lines), _unique([c for s in lines for c in s["cites"]]))
+    for code in ("drag", "assumed"):
+        if fits(final):
+            break
+        lines = [i for i, s in enumerate(final) if s.get("code") == code]
+        if code == "assumed" and len(lines) < 2:
+            continue
+        if lines:
+            final = [s for i, s in enumerate(final) if i != lines[-1]]
+    return final
+
+
 def write_class(model, facts, name, votes=VOTES):
     """{"class", "story", "cites", "keep_sentence", "dropped"}, or None for a class with no letter to open on.
 
@@ -2044,8 +2112,9 @@ def write_class(model, facts, name, votes=VOTES):
     worth_saying; its checked, voted sentences go first, then code_lines, in story order. A drafted sentence
     citing a keep fact, or any what_if when a code line says one, is dropped: code owns those, so each is
     said once and the vote can't remove it. When the model's story fails eval_story, or the model didn't run,
-    the story is code's alone: the opening and code_lines. keep_sentence is the keep sentence as published
-    (named or assumed), or None.
+    the story is code's alone: the opening and code_lines. A story over the publish limits sheds its drag
+    line, then its second assumed line (_fit). keep_sentence is the keep sentence as published (named or
+    assumed), or None.
     """
     class_facts = facts_for(facts, name)
     opening = opening_fact(class_facts)
@@ -2084,6 +2153,7 @@ def write_class(model, facts, name, votes=VOTES):
         final = _ranked([_filled(first, index)] + [_filled(line, index) for line in code], index)
         if eval_story([{"text": s["text"], "cites": s["cites"]} for s in final], index, code_only=True):
             return None
+    final = _fit(final)
     return {
         "class": name,
         "story": " ".join(s["text"] for s in final),
@@ -2099,8 +2169,9 @@ def write_class(model, facts, name, votes=VOTES):
 
 # ── Tags (code, no model) ────────────────────────────────────────────────────
 # A class's tag says what its next item means: the easiest step up a letter, or the hardest score to keep the
-# letter it has. Each is picked from what the class's story says: a named item first ("Named" is an upcoming
-# item attach_next_items matched at its posted points), else an assumed next item at its typical size. write_up
+# letter it has. Each is picked from what the class's story says: a named item ("Named" is an upcoming item
+# attach_next_items matched at its posted points) or an assumed next item at its typical size. Across the kid's
+# classes every named candidate ranks ahead of every assumed one, then the needed score decides. write_up
 # works the tags out over the published stories and the facts they cite, so a tag always lands on a story
 # that says it.
 EASIEST_WIN, BIGGEST_RISK = "easiest_win", "biggest_risk"
@@ -2120,23 +2191,36 @@ def _spoken_needed(fact):
     return math.ceil(round(fact["needed_pct"], 6))
 
 
-def class_step(class_facts):
-    """The what_if a class's story says as its step up, or None. Named items first, as code_lines says them:
-    with any named what_if, the soonest named one when it reaches the next letter (move_up_step; a later item
-    never stands in for it). With none, the heaviest assumed step (assumed_picks)."""
-    if any(f.get("kind") == "what_if" and _named(f) for f in class_facts):
-        return move_up_step(class_facts)
-    return next((step for _keep, step in assumed_picks(class_facts) if step), None)
+def class_steps(class_facts):
+    """The what_if facts a class's story can say as its step up, as code_lines says them: the soonest named
+    one (move_up_step) when it reaches the next letter, else each assumed step (assumed_picks)."""
+    step = move_up_step(class_facts)
+    if step is not None:
+        return [step]
+    return [step for _keep, step in assumed_picks(class_facts) if step]
 
 
-def class_keep(class_facts):
-    """The keep_letter fact a class's story says with a needed score, or None: pick_keep's named one, else
-    the assumed keep (assumed_picks) that needs the highest score. Never a can't-drop fact."""
+def class_keeps(class_facts):
+    """The keep_letter facts a class's story can say with a needed score: pick_keep's named one, else each
+    assumed keep (assumed_picks). Never a can't-drop fact."""
     named = pick_keep(class_facts)
     if named is not None:
-        return named if _number(named.get("needed_pct")) else None
-    keeps = [keep for keep, _step in assumed_picks(class_facts) if keep]
-    return max(keeps, key=lambda f: (f["needed_pct"], f["id"]), default=None)
+        return [named] if _number(named.get("needed_pct")) else []
+    return [keep for keep, _step in assumed_picks(class_facts) if keep]
+
+
+def class_step(class_facts, said=None):
+    """The step a class's story says that needs the lowest score, or None (named before assumed; said, when
+    given, limits it to the ids the story cites)."""
+    steps = [f for f in class_steps(class_facts) if said is None or f["id"] in said]
+    return min(steps, key=lambda f: (_spoken_needed(f), f["id"]), default=None)
+
+
+def class_keep(class_facts, said=None):
+    """The keep a class's story says that needs the highest score, or None (named before assumed; said as in
+    class_step)."""
+    keeps = [f for f in class_keeps(class_facts) if said is None or f["id"] in said]
+    return max(keeps, key=lambda f: (_spoken_needed(f), f["id"]), default=None)
 
 
 def _class_pct(facts, name):
@@ -2154,38 +2238,39 @@ def easiest_win(facts, said=None):
     """The class whose story's step up (class_step) needs the lowest score, or None.
 
     said, when given, is the set of fact ids the published stories cite: a step no story says doesn't count.
-    Ties go to the smaller gap, then the class name.
+    Across the kid's classes a named item's step beats any assumed one, then the lowest needed score wins;
+    ties go to the smaller gap, then the class name.
     """
     best = None
     for name in class_names(facts):
-        step = class_step(facts_for(facts, name))
+        step = class_step(facts_for(facts, name), said)
         letter = next((f for f in facts if f.get("kind") == "next_letter" and f.get("class") == name), None)
-        if step is None or letter is None or (said is not None and step["id"] not in said) \
-                or not _number(letter.get("gap")):
+        if step is None or letter is None or not _number(letter.get("gap")):
             continue
-        key = (_spoken_needed(step), letter["gap"], name)
+        key = (not _named(step), _spoken_needed(step), letter["gap"], name)
         best = key if best is None or key < best else best
-    return best[2] if best else None
+    return best[-1] if best else None
 
 
 def biggest_risk(facts, said=None):
     """The class whose story's keep sentence (class_keep) needs the highest score, or None.
 
     A can't-drop fact needs no score, so a class that keeps its letter even with a zero isn't eligible. said
-    works as in easiest_win. Ties go to the smaller cushion above the letter's floor (unknown last), then the
-    name.
+    works as in easiest_win. Across the kid's classes a named item's keep beats any assumed one, then the
+    highest needed score wins; ties go to the smaller cushion above the letter's floor (unknown last), then
+    the name.
     """
     floors = dict(insights.SCALE)
     best = None
     for name in class_names(facts):
-        fact = class_keep(facts_for(facts, name))
-        if fact is None or (said is not None and fact["id"] not in said):
+        fact = class_keep(facts_for(facts, name), said)
+        if fact is None:
             continue
         pct = _class_pct(facts, name)
         cushion = pct - floors[fact["letter"]] if pct is not None and fact.get("letter") in floors else math.inf
-        key = (-_spoken_needed(fact), cushion, name)
+        key = (not _named(fact), -_spoken_needed(fact), cushion, name)
         best = key if best is None or key < best else best
-    return best[2] if best else None
+    return best[-1] if best else None
 
 
 def story_tags(facts, classes=None, risk_classes=None, said=None):

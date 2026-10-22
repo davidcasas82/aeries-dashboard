@@ -137,6 +137,8 @@ class PercentOfGradeGoldenTests(unittest.TestCase):
             "next_letter": "A",
             "threshold": 90.0,
             "gap": 4.8,
+            # An A yesterday: the letter changed, so the note never says "Still".
+            "still": False,
         }])
 
     def test_what_if_says_no_single_next_assignment_reaches_an_a(self):
@@ -1143,7 +1145,8 @@ class FollowupEngineTests(unittest.TestCase):
     """The grade insights follow-up: an A's letter, keeps at the typical size, and the biggest drag."""
 
     def test_an_a_gets_a_current_letter_fact_and_no_next_letter(self):
-        facts = insights.class_facts(class_input("Art", A_TOTALS, A_ROWS, 96.4, "A"), [], None, TODAY)
+        prior = snapshot("2026-10-21", {"Art": (96.0, "A")})
+        facts = insights.class_facts(class_input("Art", A_TOTALS, A_ROWS, 96.4, "A"), [prior], prior, TODAY)
         self.assertEqual(by_kind(facts, "next_letter"), [])
         self.assertEqual(by_kind(facts, "current_letter"),
                          [{"id": "letter:art", "kind": "current_letter", "class": "Art", "pct": 96.4, "letter": "A"}])
@@ -1151,6 +1154,28 @@ class FollowupEngineTests(unittest.TestCase):
         # Below an A there's a next letter and no current_letter.
         b = insights.class_facts(class_input("Biology", POG_TOTALS, POG_ROWS, 85.2, "B"), [], None, TODAY)
         self.assertEqual(by_kind(b, "current_letter"), [])
+
+    def test_still_only_when_the_shown_letter_is_unchanged(self):
+        """GE's repros: 89.8 to 90.1 and 80.2 to 79.9 move under half a point (no grade_move) but change the
+        letter, so the letter fact says it isn't "still". The letter is the one the dashboard shows: the
+        Aeries mark, else the percent's."""
+        def one_test(pct):
+            # One 1000-point test, the whole grade: pct is exactly what it shows.
+            totals = {"parse_ok": True, "layout": "percent_of_grade",
+                      "categories": [cat("Tests", 100.0, pct * 10, 1000.0, pct)]}
+            return totals, [row("Unit Test", "Tests", pct * 10, 1000.0)]
+
+        for prior, now, still in (((89.8, "B"), (90.1, "A"), False), ((80.2, "B"), (79.9, "C"), False),
+                                  ((85.0, "B"), (85.2, "B"), True), ((90.4, "A"), (90.1, "A"), True)):
+            snap = snapshot("2026-10-21", {"Art": prior})
+            facts = insights.class_facts(class_input("Art", *one_test(now[0]), *now), [snap], snap, TODAY)
+            self.assertEqual([f["kind"] for f in facts if f["kind"] in ("grade_move", "no_raise_math")], [])
+            fact = next(f for f in facts if f["kind"] in ("next_letter", "current_letter"))
+            self.assertEqual(fact.get("still", True), still, (prior, now))
+        # No earlier letter to compare: not "still" either.
+        fact = by_kind(insights.class_facts(class_input("Art", A_TOTALS, A_ROWS, 96.4, "A"), [], None, TODAY),
+                       "current_letter")[0]
+        self.assertIs(fact["still"], False)
 
     def test_typical_keeps_are_the_two_heaviest_buckets_at_their_median_size(self):
         model = keep_model([("Labs", 20.0, [(9, 10), (8, 10)]), ("Tests", 50.0, [(40, 50), (45, 50), (30, 40)]),
@@ -1196,21 +1221,74 @@ class FollowupEngineTests(unittest.TestCase):
         without = insights.without(model, ["unit2test"])
         self.assertAlmostEqual(insights._exact_grade(without) - insights._exact_grade(model), 6.6, places=1)
 
-    def test_no_drag_on_a_zero_a_tiny_cost_or_a_clean_class(self):
-        # A zero may be missing work (the dashboard lists that), so the next-worst real score is named.
-        model = keep_model([("Tests", 60.0, [(0, 50), (20, 50), (48, 50)]), ("Homework", 40.0, [(10, 10)])])
-        self.assertEqual(insights.biggest_drag(model, "Physics")["earned"], 20)
-        # Every score perfect: nothing costs anything.
-        self.assertIsNone(insights.biggest_drag(keep_model([("Tests", 100.0, [(50, 50), (50, 50)])]), "Physics"))
-        # Under half a point of cost isn't a drag.
-        tiny = keep_model([("Tests", 100.0, [(99, 100)] * 30 + [(97, 100)])])
-        self.assertIsNone(insights.biggest_drag(tiny, "Physics"))
+    def test_ge_repro_a_zero_on_top_means_no_drag_line(self):
+        """GE's repro: Tests 70% / HW 30%; Unit 1 Test 0/50, Unit 2 25/50, Unit 3 48/50, Unit 4 49/50, HW 1 10/10.
+        The zero costs 14.2 points, Unit 2 only 2.6. The zero is never named (it may be missing work), and
+        Unit 2 isn't the biggest drag, so there is no drag line at all."""
+        model = insights.ClassModel("Physics", "percent_of_grade", (
+            insights.Bucket("Tests", 70.0, tuple(insights.Score(f"unit{i}test", f"Unit {i} Test", "Tests", e, 50.0)
+                                                 for i, e in ((1, 0.0), (2, 25.0), (3, 48.0), (4, 49.0)))),
+            insights.Bucket("HW", 30.0, (insights.Score("hw1", "HW 1", "HW", 10.0, 10.0),))))
+        self.assertIsNone(insights.biggest_drag(model, "Physics"))
+        # With the zero turned in at 30/50, Unit 2 (25/50) is now the top cost and is named.
+        fixed = insights.ClassModel("Physics", "percent_of_grade", (
+            insights.Bucket("Tests", 70.0, tuple(insights.Score(f"unit{i}test", f"Unit {i} Test", "Tests", e, 50.0)
+                                                 for i, e in ((1, 30.0), (2, 25.0), (3, 48.0), (4, 49.0)))),
+            model.buckets[1]))
+        self.assertEqual(insights.biggest_drag(fixed, "Physics")["title"], "Unit 2 Test")
 
-    def test_the_kept_what_if_follows_keep_fact_s_pick_not_a_typical_keep(self):
+    def test_an_untitled_top_item_means_no_drag_line(self):
+        model = insights.ClassModel("Physics", "percent_of_grade", (insights.Bucket("Tests", 100.0, (
+            insights.Score("a", "", "Tests", 20.0, 50.0), insights.Score("b", "Unit 2 Test", "Tests", 40.0, 50.0),
+            insights.Score("c", "Unit 3 Test", "Tests", 50.0, 50.0))),))
+        self.assertIsNone(insights.biggest_drag(model, "Physics"))
+
+    def test_the_half_point_bar_is_unrounded(self):
+        # Six perfect 143-point tests and a 138: dropping the 138 is worth 500/1001 = 0.4995, which rounds to 0.5.
+        self.assertIsNone(insights.biggest_drag(keep_model([("Tests", 100.0, [(143, 143)] * 6 + [(138, 143)])]), "P"))
+        # Five and a 138: 0.583, a drag.
+        self.assertEqual(insights.biggest_drag(keep_model([("Tests", 100.0, [(143, 143)] * 5 + [(138, 143)])]), "P")["points"],
+                         0.58)
+        # Every score perfect: nothing costs anything.
+        self.assertIsNone(insights.biggest_drag(keep_model([("Tests", 100.0, [(50, 50), (50, 50)])]), "P"))
+
+    def test_an_a_names_its_drag_only_within_2_points_of_the_b_line(self):
+        def drag(pct, rows):
+            tests = sum(e for _t, _c, e, _p in rows)
+            totals = {**A_TOTALS, "categories": [cat("Tests", 60.0, tests, 100.0, tests), *A_TOTALS["categories"][1:]]}
+            return by_kind(insights.class_facts(class_input("Art", totals, [row(*r) for r in rows] + A_ROWS[2:], pct, "A"),
+                                                [], None, TODAY), "drag")
+        # 96.4: well clear of the B line, no drag line.
+        self.assertEqual(by_kind(insights.class_facts(class_input("Art", A_TOTALS, A_ROWS, 96.4, "A"), [], None, TODAY),
+                                 "drag"), [])
+        # 91.6: within 2 points of the B line, the drag is named.
+        close = drag(91.6, [("Unit 1 Test", "Tests", 48.0, 50.0), ("Unit 2 Test", "Tests", 38.0, 50.0)])
+        self.assertEqual([f["title"] for f in close], ["Unit 2 Test"])
+
+    def test_the_kept_what_if_is_a_keep_bucket_s_heaviest_in_any_order(self):
         facts = [{"id": "keep:x:tests:50", "kind": "keep_letter", "class": "X", "bucket": "Tests", "points": 50.0},
                  {"id": "keep:x:labs:10", "kind": "keep_letter", "class": "X", "bucket": "Labs", "points": 10.0},
                  {"id": "whatif:x:tests:50", "kind": "what_if", "class": "X", "bucket": "Tests", "points": 50.0,
                   "bucket_weight_pct": 40.0},
                  {"id": "whatif:x:labs:10", "kind": "what_if", "class": "X", "bucket": "Labs", "points": 10.0,
-                  "bucket_weight_pct": 60.0}]
-        self.assertEqual(insights._kept_what_ifs(facts), {"whatif:x:tests:50"})
+                  "bucket_weight_pct": 30.0},
+                 {"id": "whatif:x:hw:5", "kind": "what_if", "class": "X", "bucket": "HW", "points": 5.0,
+                  "bucket_weight_pct": 30.0}]
+        rng = random.Random(60)
+        for _ in range(24):
+            rng.shuffle(facts)
+            self.assertEqual(insights._kept_what_ifs(facts), {"whatif:x:tests:50"})
+        # With no keep at all, the heaviest; a tie goes to the id.
+        no_keeps = [f for f in facts if f["kind"] == "what_if" and f["bucket"] != "Tests"]
+        for _ in range(8):
+            rng.shuffle(no_keeps)
+            self.assertEqual(insights._kept_what_ifs(no_keeps), {"whatif:x:hw:5"})
+
+    def test_sizes_that_vary_more_than_2x_give_no_typical_keep(self):
+        model = keep_model([("Tests", 60.0, [(40, 50), (8, 10), (45, 50)]), ("Labs", 40.0, [(9, 10), (16, 20)])])
+        keeps = insights.typical_keeps(model, insights.grade(model))
+        self.assertEqual([f["bucket"] for f in keeps], ["Labs"])
+        flags = {f["bucket"]: f.get("sizes_vary") for f in insights.what_if_search(model, 90.0)}
+        self.assertEqual(flags, {"Tests": True, "Labs": None})
+        # Posted sizes aren't typical ones: no flag.
+        self.assertNotIn("sizes_vary", insights.what_if_search(model, 90.0, {"Tests": (50.0,)})[0])
