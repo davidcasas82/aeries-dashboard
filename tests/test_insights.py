@@ -2,6 +2,7 @@ import sys
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 from bs4 import BeautifulSoup
 
@@ -255,6 +256,56 @@ class PatternTests(unittest.TestCase):
         self.assertEqual(insights.find_patterns(None, TODAY), [])
 
 
+class FloorAndCapTests(unittest.TestCase):
+    """One Tests bucket holding 70/100; the next test is 100 points."""
+
+    def totals(self, min_pct=None, max_pct=None):
+        return {
+            "parse_ok": True,
+            "layout": "percent_of_grade",
+            "min_assignment_pct": min_pct,
+            "max_assignment_pct": max_pct,
+            "categories": [cat("Tests", 100.0, 70.0, 100.0, None)],
+        }
+
+    def needed(self, target, min_pct=None, max_pct=None):
+        totals = self.totals(min_pct, max_pct)
+        rows = [row("Quiz 1", "Tests", 70.0, 100.0)]
+        model = insights.build_class_model("Algebra", scraper.build_counted_insight(totals, rows), rows)
+        return insights.needed_score(model, "Tests", 100.0, target)
+
+    def rebuild_with(self, earned, min_pct=None, max_pct=None):
+        rows = [row("Quiz 1", "Tests", 70.0, 100.0), row("Next test", "Tests", earned, 100.0)]
+        return scraper.rebuild_counted_percent(self.totals(min_pct, max_pct), rows)
+
+    def test_floor_counts_a_zero_as_the_floor(self):
+        self.assertEqual(self.needed(80.0, min_pct=50.0), 90.0)
+        self.assertEqual(self.rebuild_with(90.0, min_pct=50.0), 80.0)
+        self.assertEqual(self.rebuild_with(80.0, min_pct=50.0), 75.0)
+
+    def test_floor_already_meets_a_low_target(self):
+        self.assertEqual(self.needed(60.0, min_pct=50.0), 0.0)
+        self.assertEqual(self.rebuild_with(0.0, min_pct=50.0), 60.0)
+
+    def test_cap_stretches_the_raw_score(self):
+        self.assertEqual(self.needed(75.0, max_pct=90.0), 80.0)
+        self.assertEqual(self.rebuild_with(80.0, max_pct=90.0), 75.0)
+
+    def test_cap_reached_early_and_a_target_past_it(self):
+        self.assertEqual(self.needed(80.0, max_pct=90.0), 90.0)
+        self.assertEqual(self.rebuild_with(90.0, max_pct=90.0), 80.0)
+        self.assertIsNone(self.needed(85.0, max_pct=90.0))
+        self.assertEqual(self.rebuild_with(100.0, max_pct=90.0), 80.0)
+
+    def test_floor_and_cap_together(self):
+        self.assertEqual(self.needed(75.0, min_pct=50.0, max_pct=90.0), 80.0)
+        self.assertEqual(self.rebuild_with(80.0, min_pct=50.0, max_pct=90.0), 75.0)
+
+    def test_no_floor_or_cap_is_plain_interpolation(self):
+        self.assertEqual(self.needed(80.0), 90.0)
+        self.assertEqual(self.needed(60.0), 50.0)
+
+
 class ScraperWiringTests(unittest.TestCase):
     def test_attach_insight_facts_uses_the_prior_evening_item_list(self):
         prior = snapshot("2026-10-21", {"Biology": (91.8, "A")})
@@ -271,6 +322,21 @@ class ScraperWiringTests(unittest.TestCase):
         self.assertEqual(out["scale"], "90/80/70/60")
         self.assertEqual([f["id"] for f in out["facts"]][:2], ["move:biology:2026-10-21", "next:biology"])
         self.assertEqual(out["facts"][0]["causes"][0]["id"], "cause:biology:2026-10-21:unit2test")
+
+    def test_oversize_payload_drops_insight_facts_before_failing_the_publish(self):
+        facts = {"scale": "90/80/70/60", "facts": [{"id": f"next:c{i}", "note": "x" * 200} for i in range(40)]}
+        data = {"students": [{"sn": "1", "name": "A", "insight_facts": facts}, {"sn": "2", "name": "B"}]}
+        with patch.object(scraper, "FAMILY_LATEST_TARGET_CHARS", 2_000), \
+             patch.object(scraper, "FAMILY_LATEST_MAX_CHARS", 3_000):
+            size = scraper.fit_payload_for_family_data(data, today=TODAY)
+        self.assertEqual(data, {"students": [{"sn": "1", "name": "A"}, {"sn": "2", "name": "B"}]})
+        self.assertLess(size, 2_000)
+
+    def test_payload_under_the_target_keeps_insight_facts(self):
+        facts = {"scale": "90/80/70/60", "facts": [{"id": "next:c1"}]}
+        data = {"students": [{"sn": "1", "insight_facts": facts}]}
+        scraper.fit_payload_for_family_data(data, today=TODAY)
+        self.assertEqual(data["students"][0]["insight_facts"], facts)
 
 
 if __name__ == "__main__":

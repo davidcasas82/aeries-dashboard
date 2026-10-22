@@ -2698,6 +2698,11 @@ def fit_payload_for_family_data(data, today=None):
             block["trimmed"] = list(dict.fromkeys((block.get("trimmed") or []) + [name]))
         size = classroom.json_chars(data)
         print(f"  Payload: {size // 1000} KB after '{name}'")
+    if size > FAMILY_LATEST_TARGET_CHARS:
+        dropped = [st.pop("insight_facts") for st in data.get("students") or [] if "insight_facts" in st]
+        if dropped:
+            size = classroom.json_chars(data)
+            print(f"::warning::Payload: dropped insight facts to fit; {size // 1000} KB")
     if size > FAMILY_LATEST_MAX_CHARS:
         raise ScrapeError(
             f"latest payload is {size} chars after every Classroom trim; family-data caps it at {FAMILY_LATEST_MAX_CHARS}"

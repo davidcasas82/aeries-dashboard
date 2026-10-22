@@ -247,14 +247,19 @@ def next_letter(name, pct):
 
 
 def needed_score(model, bucket_name, points, target):
-    """Percent needed on the next `points` in a bucket to reach `target`, or None if no score can."""
-    low = grade(with_score(model, bucket_name, 0.0, points))
-    high = grade(with_score(model, bucket_name, points, points))
+    """Raw percent needed on the next `points` in a bucket to reach `target`, or None if no score can.
+
+    The floor and cap clamp each score, so the grade only moves while the raw score is between them.
+    """
+    floor = model.min_pct if model.min_pct is not None else 0.0
+    ceiling = min(model.max_pct, 100.0) if model.max_pct is not None else 100.0
+    low = grade(with_score(model, bucket_name, floor / 100.0 * points, points))
+    high = grade(with_score(model, bucket_name, ceiling / 100.0 * points, points))
     if high is None or low is None or high < target:
         return None
     if low >= target:
         return 0.0
-    return round((target - low) / (high - low) * 100.0, 1)
+    return round(floor + (target - low) / (high - low) * (ceiling - floor), 1)
 
 
 def what_if_search(model, target, sizes=None):
