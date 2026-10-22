@@ -9,6 +9,7 @@ writing, checking) sits behind NightWork; this file never calls a model.
 import fcntl
 import json
 import os
+import plistlib
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -36,7 +37,13 @@ BLOCKED = (
 # The parent PIN is a generic password in the mini's login Keychain. Code only for now.
 PIN_KEYCHAIN_SERVICE = "family-data-parent-pin"
 PIN_KEYCHAIN_ACCOUNT = "aeries"
-DEFAULT_SSD = "/Volumes/David C SSD"
+SSD_VOLUME_NAME = "David C SSD"
+DEFAULT_SSD = f"/Volumes/{SSD_VOLUME_NAME}"
+# Installed on the SSD with mlx-lm 0.32.2. Smoke-test peaks: Qwen 5.2 GB at 32 tok/s, Gemma 8.1 GB at 20 tok/s.
+MODEL_REPOS = {
+    "qwen3-8b": "mlx-community/Qwen3-8B-4bit",
+    "gemma3-12b": "mlx-community/gemma-3-text-12b-it-4bit",
+}
 MIN_FREE_MEMORY_PCT = 35
 BUSY_PROCESSES = ("Blender", "blender", "ffmpeg")
 
@@ -220,18 +227,53 @@ def model_dir(ssd_path):
     return Path(ssd_path) / "grade-insights"
 
 
+def venv_python(ssd_path):
+    """The SSD venv (Homebrew Python 3.12) that has mlx-lm."""
+    return model_dir(ssd_path) / "venv" / "bin" / "python"
+
+
+def model_link(ssd_path, name):
+    """A model's symlink under <SSD>/grade-insights/models/."""
+    if name not in MODEL_REPOS:
+        raise KeyError(f"unknown model {name!r}")
+    return model_dir(ssd_path) / "models" / name
+
+
 def model_env(ssd_path, base=None):
-    """Environment for a model process: HF_HOME points at the SSD cache."""
+    """Environment for a model process: the SSD's HF cache, offline, so nothing downloads."""
     env = dict(os.environ if base is None else base)
     env["HF_HOME"] = str(model_dir(ssd_path) / "hf-cache")
+    env["HF_HUB_OFFLINE"] = "1"
     return env
+
+
+def ssd_mounted(ssd_path, volume_name=SSD_VOLUME_NAME):
+    """True when ssd_path is a mount point and the volume there is named volume_name.
+
+    The name check keeps a stray folder or a second disk mounted as "David C SSD 1" from passing.
+    """
+    if not os.path.ismount(ssd_path):
+        return False
+    try:
+        result = subprocess.run(
+            ["/usr/sbin/diskutil", "info", "-plist", str(ssd_path)], capture_output=True, timeout=30
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    if result.returncode != 0:
+        return False
+    try:
+        info = plistlib.loads(result.stdout)
+    except Exception:
+        return False
+    return info.get("VolumeName") == volume_name
 
 
 def real_machine(ssd_path):
     return Machine(
         now=lambda: datetime.now(PACIFIC),
         freshness=read_freshness,
-        ssd_mounted=lambda: os.path.ismount(ssd_path),
+        ssd_mounted=lambda: ssd_mounted(ssd_path),
         free_memory_pct=free_memory_pct,
         busy=render_running,
     )

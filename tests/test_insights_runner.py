@@ -210,7 +210,37 @@ class ModelPathTests(unittest.TestCase):
     def test_models_and_hf_cache_sit_on_the_ssd(self):
         self.assertEqual(runner.model_dir(runner.DEFAULT_SSD), Path("/Volumes/David C SSD/grade-insights"))
         env = runner.model_env(runner.DEFAULT_SSD, base={"PATH": "/usr/bin", "HF_HOME": "/Users/x/.cache"})
-        self.assertEqual(env, {"PATH": "/usr/bin", "HF_HOME": "/Volumes/David C SSD/grade-insights/hf-cache"})
+        self.assertEqual(env, {
+            "PATH": "/usr/bin",
+            "HF_HOME": "/Volumes/David C SSD/grade-insights/hf-cache",
+            "HF_HUB_OFFLINE": "1",
+        })
+        self.assertEqual(runner.venv_python(runner.DEFAULT_SSD),
+                         Path("/Volumes/David C SSD/grade-insights/venv/bin/python"))
+        self.assertEqual(runner.model_link(runner.DEFAULT_SSD, "qwen3-8b"),
+                         Path("/Volumes/David C SSD/grade-insights/models/qwen3-8b"))
+        self.assertEqual(sorted(runner.MODEL_REPOS.values()),
+                         ["mlx-community/Qwen3-8B-4bit", "mlx-community/gemma-3-text-12b-it-4bit"])
+
+
+class SsdMountTests(unittest.TestCase):
+    def check(self, mounted=True, name="David C SSD", returncode=0):
+        import plistlib
+        info = mock.Mock(returncode=returncode, stdout=plistlib.dumps({"VolumeName": name}))
+        with mock.patch.object(runner.os.path, "ismount", return_value=mounted), \
+                mock.patch.object(runner.subprocess, "run", return_value=info) as run:
+            ok = runner.ssd_mounted(runner.DEFAULT_SSD)
+        return ok, run
+
+    def test_the_named_volume_passes(self):
+        ok, run = self.check()
+        self.assertTrue(ok)
+        self.assertEqual(run.call_args.args[0], ["/usr/sbin/diskutil", "info", "-plist", "/Volumes/David C SSD"])
+
+    def test_a_plain_folder_or_another_volume_fails(self):
+        self.assertFalse(self.check(mounted=False)[0])
+        self.assertFalse(self.check(name="Backup")[0])
+        self.assertFalse(self.check(returncode=1)[0])
 
 
 class TemplateTests(unittest.TestCase):
