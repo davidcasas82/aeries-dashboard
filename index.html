@@ -3612,7 +3612,7 @@
             return false;
         }
 
-        function inferUrgency(profile, aiClass) {
+        function inferUrgency(profile) {
             const mc = profile.missingCount;
             const dueToday = (profile.upcoming || []).some(isDueTodayUngraded);
             if (!hasRealGrade(profile.classMeta, profile.assignments)) {
@@ -3626,11 +3626,11 @@
             if (mc > 0 && !isNaN(pct) && pct >= 80) return 'watch';
             if (dueToday) return 'watch';
             if (!isNaN(pct) && pct >= 90 && mc === 0) return 'strong';
-            const aiUrgency = (aiClass?.urgency || '').toLowerCase();
-            if ((aiUrgency === 'watch' || aiUrgency === 'critical') && mc === 0 && !dueToday) {
+            const suggested = (profile.suggestedUrgency || '').toLowerCase();
+            if ((suggested === 'watch' || suggested === 'critical') && mc === 0 && !dueToday) {
                 return (!isNaN(pct) && pct >= 90) ? 'strong' : 'ok';
             }
-            if (aiUrgency) return aiUrgency;
+            if (suggested) return suggested;
             return 'ok';
         }
 
@@ -3660,7 +3660,7 @@
         // Used for both the raw-assignment path and the server view payload, so neither path
         // can show copy the current rules would not produce.
         function enrichProfile(p, aiClass) {
-            const urgency = inferUrgency(p, aiClass);
+            const urgency = inferUrgency(p);
             let snap = (aiClass?.snap || inferUrgencyReason(p, urgency) || '').trim();
             snap = rewriteStaleCopy(snap, p);
             if (snapNamesStaleWork(snap, p) || snapClaimsMissing(snap, p) || snapClaimsFalseOverdue(snap, p)) {
@@ -4600,12 +4600,12 @@
                     period: row.period,
                     classroom: row.classroom || null,
                     delta_7d: row.delta_7d,
+                    suggestedUrgency: row.urgency,
                 };
                 const aiClass = normalizeAiClass({
                     snap: row.snap,
                     story: row.story,
                     do_tonight: row.do_tonight,
-                    urgency: row.urgency,
                     class_name: row.course_name,
                 });
                 return enrichProfile(base, aiClass);

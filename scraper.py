@@ -5001,6 +5001,15 @@ def annotate_class_truth_flags(student_data):
     return student_data
 
 
+def log_grok_usage(label, result):
+    """One line per Grok call with its token counts, until the local writer replaces them."""
+    usage = (result or {}).get("usage") or {}
+    print(
+        f"  Grok usage ({label}): prompt={usage.get('prompt_tokens', '?')} "
+        f"completion={usage.get('completion_tokens', '?')} total={usage.get('total_tokens', '?')}"
+    )
+
+
 def generate_ai_summary(student_data, history_context=None):
     """Call Grok API to generate a unified family daily briefing."""
     # No real grades and no posted work yet — don't invent urgency
@@ -5131,6 +5140,7 @@ Rules:
             return None
 
         result = resp.json()
+        log_grok_usage("briefing", result)
         content = result["choices"][0]["message"]["content"]
         summary = json.loads(content)
         # Strip any legacy parent/student coaching fields if the model still emits them
@@ -5247,7 +5257,9 @@ def generate_since_yesterday(events):
         if resp.status_code != 200:
             print(f"  WARNING: Grok since-yesterday returned {resp.status_code}")
             return plain
-        content = resp.json()["choices"][0]["message"]["content"]
+        result = resp.json()
+        log_grok_usage("since yesterday", result)
+        content = result["choices"][0]["message"]["content"]
         sentence = (json.loads(content).get("sentence") or "").strip()
         if not _since_yesterday_model_sentence_ok(sentence):
             return plain
@@ -5297,7 +5309,7 @@ def apply_daily_change_snapshot(history, student_sn, student_name, student_data,
         dated = [snap for snap in dated if snap.get("date") != snapshot.get("date")]
         dated.append(snapshot)
         events.extend(ungraded_streak_events(dated, today))
-        sentence = generate_since_yesterday(events) if events else ""
+        sentence = phrase_since_yesterday(events) if events else ""
         snapshot["since_yesterday"] = sentence
         snapshot["change_note_date"] = snapshot.get("date")
         snapshot["change_events"] = events
@@ -5350,6 +5362,7 @@ def generate_look_next(packet, today=None):
             print(f"  WARNING: Grok look-next returned {resp.status_code}")
             return None
         result = resp.json()
+        log_grok_usage("look next", result)
         content = result["choices"][0]["message"]["content"]
         parsed = json.loads(content)
         text = (parsed.get("sentences") or parsed.get("paragraph") or "").strip()
