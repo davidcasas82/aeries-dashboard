@@ -254,9 +254,9 @@ EXAMPLE_FACTS = [
           "points": 0.4, "share": 0.4, "effect": "helped"}]},
     {"id": "whatif:ceramics:projects:20", "kind": "what_if", "class": "Ceramics", "bucket": "Projects",
      "bucket_weight_pct": 40.0, "points": 20.0, "target": 70.0, "needed_pct": 73.4, "say_needed": "74 or better",
-     "reachable": True},
+     "reachable": True, "say_step": "A 74 or better on the {next:whatif:ceramics:projects:20} gets it to a C."},
     {"id": "pattern:posting_day:ceramics", "kind": "posting_day", "class": "Ceramics", "weekday": "Tuesday",
-     "share": 0.8, "scores": 10, "window_days": 28},
+     "share": 0.8, "scores": 10, "window_days": 28, "say_pattern": "Scores usually post Tuesdays."},
 ]
 EXAMPLE_NOTE = [
     {"text": "Slipped to a D since Sep 9, down 2.3.", "cites": ["move:ceramics:2026-09-09"]},
@@ -280,24 +280,23 @@ A what_if or keep_letter id goes in a {next:} slot, never in an {item:} slot: th
   Wrong: "An 85 or better on the {item:whatif:art:projects:20} gets it to a B."
 Never write an assignment word yourself (test, quiz, exam, lab, project, packet, homework, essay, report, assessment, ...), not even "the next test": use {next:<id>} or {bucket:<id>}. Never write a fact id outside the braces, and nothing but these slots in braces. A sentence that does is thrown away.
 
-Write 1 to 4 short, plain sentences:
-- Open with say_opening, word for word: from the grade_move if there is one, else from the next_letter. Cite that fact.
-- Then why it moved: the causes whose effect matches the move ("hurt" on a drop, "helped" on a rise), largest first.
-- A cause with the opposite effect only as a contrast: "The {item:<cause id>} helped." Never as part of the reason.
-
-A sentence about a cause is one of these forms, word for word, and nothing else. Any other cause sentence is thrown away.
-- "Mostly the {item:<cause id>}." for the largest cause whose effect matches the move.
-- "The {item:<cause id>} did most of the damage." for the largest cause whose effect is "hurt".
-- "The {item:<cause id>} hurt." or "The {item:<cause id>} dragged it down." for a cause whose effect is "hurt".
-- "The {item:<cause id>} helped." for a cause whose effect is "helped".
-- The same with "{bucket:<cause id>} scores" in place of "The {item:<cause id>}": "{bucket:<cause id>} scores hurt."
-- Two or three causes with the same effect may share one form, joined with "and": "The {item:<cause id>} and the {item:<cause id>} hurt."
+Write 1 to 4 short sentences, in this order: letter, cause, pattern, next step.
+Every sentence that cites a fact is one of these forms, word for word. Any other sentence that cites a fact is thrown away.
+- Opening: say_opening, from the grade_move if there is one, else from the next_letter. Cite that fact.
+- Cause, citing the cause id (and its grade_move if you like):
+  "Mostly the {item:<cause id>}." for the largest cause whose effect matches the move.
+  "The {item:<cause id>} did most of the damage." for the largest cause whose effect is "hurt".
+  "The {item:<cause id>} hurt." or "The {item:<cause id>} dragged it down." for a cause whose effect is "hurt".
+  "The {item:<cause id>} helped." for a cause whose effect is "helped" (against a drop, only as a contrast).
+  The same with "{bucket:<cause id>} scores" in place of "The {item:<cause id>}". Two or three causes with the same effect may share one form, joined with "and".
+- Weight: "{bucket:<cause id>} is 40% of the grade.", with that bucket's bucket_weight_pct.
+- Pattern: the posting_day fact's say_pattern ("Scores usually post Tuesdays.").
+- Next step: the what_if fact's say_step ("An 85 or better on the {next:<what_if id>} gets it to a B."). With no what_if fact, no next step.
+- Keep: if the grade dropped and FACTS has a keep_letter fact, end with its say_keep, citing it: "A 62 or better on the {next:<keep_letter id>} keeps the A." If its say_keep says the next item can't drop the letter, you may end with that or leave it out.
+A sentence that cites no fact may use your own words, but no letter grade, no number or score, and no direction or cause word (up, down, rose, fell, slipping, helped, hurt, ...).
   Right: "The {item:cause:ceramics:2026-09-09:glazetest} hurt."
-  Wrong: "The {item:cause:ceramics:2026-09-09:glazetest} pulled the grade down a bit." (not one of the forms)
-- Then a pattern, only if FACTS has a posting_day fact, naming its weekday.
-- End with one next step, only from a what_if fact, using its say_step word for word: "An 85 or better on the {next:<what_if id>} gets it to a B."
-- If the grade dropped and FACTS has a keep_letter fact, end with its say_keep, word for word, citing it: "A 62 or better on the {next:<keep_letter id>} keeps the A." If its say_keep says the next item can't drop the letter, you may end with that or leave it out.
-- With no what_if fact, end without a next step. Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
+  Wrong: "Still a D, 1.2 points from a C, and slipping." (cites a fact but isn't its say_opening, word for word)
+Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
 
 Rules:
 - Every sentence cites the ids it uses. A cause cites its own cause id. Name causes largest share first; "mostly", "mainly" or "most of" always names the largest-share cause.
@@ -312,7 +311,7 @@ Rules:
 - Numbers come from the cited facts, written as digits. A needed score is say_needed ("85 or better"), never rounded down.
 - Whole letters only: A, B, C, D, F. Never a plus or minus.
 - Don't mention missing, late, past-due, turned-in or awaiting work. The dashboard lists that.
-- No relative days ("today", "tomorrow", "this week", "next Friday"). The only dates: since_label on a grade_move, or next_due_label on a what_if ("the {next:<what_if id>}, due Oct 30").
+- No dates or relative days ("today", "tomorrow", "this week", "next Friday"), except inside a say_opening.
 - A weekday only in a posting_day pattern, citing that fact.
 - Never call a 0% a grade.
 - Never write "the student", "the letter is", "next letter", "distance", "what-if", "what moved", or "moved from A to A".
@@ -329,12 +328,14 @@ A sentence is backed only if every claim in it follows from the facts it cites.
 Reply with JSON only: {"backed": [true or false, one per sentence, in order]}"""
 
 HEADLINE_SYSTEM = """You write the one-line headline of a parent's grade briefing from the class STORIES (JSON).
-Pick the single most useful insight. One sentence, under 120 characters.
-Use only numbers, letters and classes in the stories, and cite the fact ids of the story you use.
-Say something concrete: a number, a letter or an assignment from the story. No vague lines like "Next scores matter".
-A needed score is written exactly as the story says it, with "or better" ("an 85 or better on the {next:<id>}"), never a bare "85".
-Name assignments and classes only with the story's slots, copied as is: {item:<id>}, {next:<id>}, {bucket:<id>}, {class:<id>}. Never write a test, quiz, lab or other assignment word yourself.
-Don't mention missing, late, past-due, turned-in or awaiting work. No dates, weekdays or relative days ("tomorrow", "next Friday").
+Pick the one class whose story ends on a next step, and write one of these forms, word for word, from that story:
+- its next step as the story says it: "An 85 or better on the {next:<what_if id>} gets it to a B." Cite the what_if.
+- led by the class: "{class:<what_if id>}: an 85 or better on the {next:<what_if id>} gets it to a B." Cite the what_if.
+- after the gap from its opening: "{class:<what_if id>} is 0.5 pts from a B; an 85 or better on the {next:<what_if id>} gets it to a B." Cite the next_letter and the what_if.
+Copy the slots as the story has them. Any other headline is thrown away.
+  Right: "{class:whatif:art:projects:20}: an 85 or better on the {next:whatif:art:projects:20} gets it to a B."
+  Wrong: "Art needs the next project to go well." (not one of the forms)
+If no story ends on a next step, reply {"text": "", "cites": []}.
 Reply with JSON only: {"text": "...", "cites": ["fact id", ...]}"""
 
 
@@ -414,6 +415,9 @@ def model_facts(class_facts):
                 continue
             spoken = say_keep(fact)
             fact = {**fact, "say_keep": spoken} if spoken else fact
+        # A scale break or a no-raise-math gate has no sentence of its own (form_reason): the model never sees it.
+        if fact.get("kind") in UNSAYABLE_KINDS:
+            continue
         if fact.get("kind") == "grade_move" and fact.get("coverage_trimmed"):
             fact = {**fact, "causes": [], "causes_withheld": "the earlier scores were trimmed, so the cause is unknown"}
         elif fact.get("kind") == "grade_move" and fact.get("causes"):
@@ -476,6 +480,9 @@ def _say_fields(fact):
     opening = say_opening(fact)
     if opening:
         fact = {**fact, "say_opening": opening}
+    pattern = say_pattern(fact)
+    if pattern:
+        fact = {**fact, "say_pattern": pattern}
     return fact
 
 
@@ -816,16 +823,18 @@ def _cited_facts(cites, index):
     return [index[c] for c in cites or [] if c in index]
 
 
-def check_sentence(text, cites, index, name=None, classes=None):
+def check_sentence(text, cites, index, name=None, classes=None, headline=False):
     """None if the sentence is backed by the facts it cites, else the reason it's dropped.
 
     classes is the student's class names (write_class passes them); the index's own classes are added.
+    A sentence that cites a fact must be one of the fixed forms for the kinds it cites (headline: the headline
+    forms). One that cites nothing is free wording with no grade, number or direction in it.
     """
     text = (text or "").strip()
     if not text:
         return "empty"
     if not cites:
-        return "cites nothing"
+        return free_reason(text, index, classes)
     cited = []
     for fid in cites:
         fact = index.get(fid)
@@ -852,12 +861,8 @@ def check_sentence(text, cites, index, name=None, classes=None):
     reason = names_reason(text, cited, all_classes)
     if reason:
         return reason
-    # Fail closed: a sentence about a cause or the move's direction must be one of the fixed forms.
-    reason = cause_form_reason(text, cites, index)
-    if reason:
-        return reason
-    # A sentence citing only the letter fact is that fact's opening, word for word.
-    reason = letter_form_reason(text, cites, index)
+    # Fail closed: a sentence that cites a fact is one of the fixed forms for the kinds it cites.
+    reason = form_reason(text, cites, index, headline=headline)
     if reason:
         return reason
     # Whatever the fill produces must not carry a raw id or a brace either.
@@ -1372,7 +1377,7 @@ _SLOT_DIRECTION_RE = re.compile(
     r"gain\w*|lost|los(?:e|es|ing)|moved|cost\w*|pull\w*|push\w*|drag\w*|hurt\w*|help\w*|lift\w*|boost\w*|"
     r"rais\w*|sav\w*|damag\w*|because|due to|thanks|driv\w*|caus\w*|mostly|mainly|largely|primarily|chiefly|"
     r"carr\w*|rescu\w*|improv\w*|tank\w*|cut\w*|dent\w*|slash\w*|blam\w*|sank|sunk)\b", re.I)
-CAUSE_FORM_REASON = "cause sentence not in an allowed form"
+CAUSE_FORM_REASON = "cited sentence not in an allowed form"
 # A bucket whose causes net to less than this, either way, has no direction to claim.
 BUCKET_MIN_NET = 0.1
 
@@ -1498,23 +1503,129 @@ def cause_form_reason(text, cites, index):
     return CAUSE_FORM_REASON
 
 
-LETTER_FORM_REASON = "letter sentence not the fact's opening"
+FORM_REASON = CAUSE_FORM_REASON  # one reason for every fixed-form gate
+FREE_REASON = "uncited sentence names a grade, number or direction"
+# Kinds no sentence may cite: the model never sees them (model_facts leaves them out).
+UNSAYABLE_KINDS = ("scale_break", "no_raise_math")
 
 
-def letter_form_reason(text, cites, index):
-    """None unless the sentence cites a next_letter fact and no grade_move, cause or what_if, and isn't the
-    say_opening of a cited next_letter, word for word.
+def say_pattern(fact):
+    """A posting_day fact's one sentence: "Scores usually post Thursdays." """
+    day = fact.get("weekday")
+    return f"Scores usually post {day}s." if fact.get("kind") == "posting_day" and day else None
 
-    Mirrors the move-only rule in cause_form_reason: with no grade_move or cause cited, nothing backs a direction
-    ("and slipping", "No longer a C.", "From a C to a D."), so only the fixed opening may be said. That holds with
-    a pattern cited beside the letter too. A what_if step keeps its own form; a keep_letter sentence (keep-a) its own.
+
+def _prefixed(sentence, fact):
+    """The sentence, and the same led by the fact's {class:} slot ("{class:<id>} scores usually post ...")."""
+    return {sentence, f"{{class:{fact['id']}}} {sentence[0].lower()}{sentence[1:]}"}
+
+
+def _step(fact):
+    return _say_fields(fact).get("say_step") if fact.get("kind") == "what_if" else None
+
+
+def _lower_first(sentence):
+    return sentence[0].lower() + sentence[1:]
+
+
+def _headline_forms(cited):
+    """The headline forms for the cited facts: a what_if step alone, led by its class, or after the gap.
+
+    "An 88 or better on the {next:<id>} gets it to an A."
+    "{class:<id>}: an 88 or better on the {next:<id>} gets it to an A."
+    "{class:<id>} is 2.1 pts from an A; an 88 or better on the {next:<id>} gets it to an A."
+    The class may be the {class:} slot of a cited fact or the class's own name.
     """
-    cited = _cited_facts(cites, index)
-    letters = [f for f in cited if f.get("kind") == "next_letter" and not f.get("move")]
-    if not letters or any(f.get("move") or f.get("kind") in ("grade_move", "what_if", "keep_letter") for f in cited):
-        return None
+    steps = [f for f in cited if f.get("kind") == "what_if" and _step(f)]
+    letters = [f for f in cited if f.get("kind") == "next_letter"]
+    if not steps or len(steps) + len(letters) != len(cited) or len(letters) > 1:
+        return set()
+    forms = set()
+    for step_fact in steps:
+        step = _step(step_fact)
+        leads = {step_fact["class"]} | {f"{{class:{f['id']}}}" for f in cited}
+        if not letters:
+            forms.add(step)
+            forms |= {f"{lead}: {_lower_first(step)}" for lead in leads}
+        for letter in letters:
+            if letter.get("class") != step_fact.get("class") or not isinstance(letter.get("gap"), (int, float)):
+                continue
+            gap = f"{letter['gap']:g} pts from {_article(letter['next_letter'])} {letter['next_letter']}"
+            forms |= {f"{lead} is {gap}; {_lower_first(step)}" for lead in leads}
+    return forms
+
+
+def form_reason(text, cites, index, headline=False):
+    """None if a sentence that cites facts is one of the fixed forms for the set of kinds it cites.
+
+      grade_move                 its say_opening ({class:} prefix allowed)
+      next_letter                its say_opening ({class:} prefix allowed)
+      cause, with or without its grade_move   the cause forms (cause_form_reason), the weight sentence among them
+      what_if, with or without the next_letter   its say_step, word for word
+      what_if alone              or the weight sentence on its bucket: "{bucket:<what_if id>} is 50% of the grade."
+      posting_day                say_pattern ({class:} prefix allowed): "Scores usually post Thursdays."
+      keep_letter                its say_keep, word for word (keep-a)
+      scale_break, no_raise_math, any other kind or mix: no sentence.
+    A headline is one of the _headline_forms instead.
+    """
     text = (text or "").strip()
-    return None if any(text in _opening_forms(f) for f in letters) else LETTER_FORM_REASON
+    cited = _cited_facts(cites, index)
+    if not cited:
+        return None
+    if headline:
+        return None if text in _headline_forms(cited) else FORM_REASON
+    kinds = {"cause" if f.get("move") else f.get("kind") for f in cited}
+    if "cause" in kinds:
+        ok = kinds <= {"cause", "grade_move"} and cause_form_reason(text, cites, index) is None
+    elif kinds == {"grade_move"}:
+        ok = any(text in _opening_forms(f) for f in cited)
+    elif kinds == {"next_letter"}:
+        ok = any(text in _opening_forms(f) for f in cited)
+    elif kinds in ({"what_if"}, {"what_if", "next_letter"}):
+        ok = any(text == _step(f) for f in cited if f.get("kind") == "what_if")
+        if not ok and kinds == {"what_if"} and len(cited) == 1 and _FORM_WEIGHT_RE.match(text):
+            ok = _FORM_SLOT_RE.findall(text) == [("bucket", cited[0]["id"])]
+    elif kinds == {"posting_day"}:
+        ok = any(say_pattern(f) and text in _prefixed(say_pattern(f), f) for f in cited)
+    elif kinds == {"keep_letter"}:
+        ok = any(text in _keep_forms(f) for f in cited)
+    else:
+        ok = False
+    return None if ok else FORM_REASON
+
+
+def _keep_forms(fact):
+    """A keep_letter fact's sentence: its say_keep, word for word (the score form or the can't-drop form)."""
+    say = fact.get("say_keep") or say_keep(fact)
+    return {say} if say else set()
+
+
+_GRADE_TOKEN_RE = re.compile(r"(?<![\w'’])[A-F][+-]?(?![\w'’])")
+_FREE_DIRECTION_RES = (_MOVED_UP_RE, _MOVED_DOWN_RE, _UP_VERB_RE, _DOWN_VERB_RE, _DIRECTION_WORDS_RE,
+                       _SLOT_DIRECTION_RE, _GRADE_WORDS_RE, _CAUSE_CLAIM_RE)
+
+
+def free_reason(text, index, classes=None):
+    """None if a sentence that cites no fact names no fact, grade, number or direction, and passes the rest.
+
+    Free wording only: no slot or id, no letter grade (a capital A-F standing alone, so a sentence-initial
+    article "A" drops too: fail closed), no digit or spelled number, no up/down or move/cause word.
+    """
+    reason = leak_reason(text, index)
+    if reason:
+        return reason
+    if SLOT_RE.search(text) or "{" in text or "}" in text:
+        return "uncited sentence names a fact"
+    bare = spelled_to_digits(text)
+    if _GRADE_TOKEN_RE.search(bare) or re.search(r"\d", bare) or any(r.search(bare) for r in _FREE_DIRECTION_RES):
+        return FREE_REASON
+    if _ECHO_RE.search(text):
+        return "echoes the prompt"
+    reason = _claims_reason(text, [], index)
+    if reason:
+        return reason
+    all_classes = list(dict.fromkeys([*(classes or ()), *(f.get("class") for f in index.values() if f.get("class"))]))
+    return names_reason(text, [], all_classes)
 
 
 def eval_story(sentences, index):
@@ -1738,7 +1849,7 @@ def write_headline(model, facts, stories):
     cites = [c for c in parsed.get("cites") or [] if isinstance(c, str)]
     used = {c for s in stories for c in s["cites"]}
     # A headline cites a fact from the stories and says something concrete, or there is none.
-    if not text or not cites or not set(cites) <= used or check_sentence(text, cites, index):
+    if not text or not cites or not set(cites) <= used or check_sentence(text, cites, index, headline=True):
         return None
     if _headline_needed_reason(text, cites, index):
         return None
