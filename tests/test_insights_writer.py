@@ -55,12 +55,12 @@ def insight_facts():
 
 
 GOOD = [
-    {"text": "Math: B, 2.1 pts from an A.", "cites": [NEXT]},
+    {"text": "Still a B, 2.1 points from an A.", "cites": [NEXT]},
     {"text": "Mostly the {item:" + CAUSE + "}.", "cites": [CAUSE]},
     {"text": "Scores mostly post on Fridays.", "cites": [PATTERN]},
     {"text": "An 88% on the {next:" + WHATIF + "} gets the A back.", "cites": [WHATIF]},
 ]
-GOOD_STORY = ("Math: B, 2.1 pts from an A. Mostly the Ch.4 Quiz (31/50). "
+GOOD_STORY = ("Still a B, 2.1 points from an A. Mostly the Ch.4 Quiz (31/50). "
               "Scores mostly post on Fridays. An 88% on the next test gets the A back.")
 
 
@@ -107,13 +107,13 @@ def slotted(text, cites, idx):
 
 
 def claims(text, cites, idx, name=None, classes=None):
-    """check_sentence with the cause-sentence gate set aside: None when only the gate would drop it.
+    """check_sentence with the fixed-form gates set aside: None when only a gate would drop it.
 
-    The gate runs last, so every other check keeps its own reason; this reads those checks alone.
-    CauseFormGateTests covers the gate itself.
+    The gates run last, so every other check keeps its own reason; this reads those checks alone.
+    CauseFormGateTests covers the cause-sentence gate, LetterFormTests the letter-sentence one.
     """
     reason = w.check_sentence(text, cites, idx, name, classes)
-    return None if reason == w.CAUSE_FORM_REASON else reason
+    return None if reason in (w.CAUSE_FORM_REASON, w.LETTER_FORM_REASON) else reason
 
 
 def check(text, cites, idx, name=None):
@@ -1127,7 +1127,7 @@ class SlotRoundThreeTests(unittest.TestCase):
                             ("The grade health: still a D, 1.4 points from a C.", ["next:geo"]),
                             ("Its posting history says Thursdays.", ["pattern:posting_day:geo"]),
                             ("Still a D, 1.4 points from a C, in the low band.", ["next:geo"])):
-            self.assertIsNone(w.check_sentence(text, cites, idx, "Geo", classes + ["Art & Design", "Band"]), text)
+            self.assertIsNone(claims(text, cites, idx, "Geo", classes + ["Art & Design", "Band"]), text)
 
     def test_own_class_name_and_unambiguous_short_form_pass(self):
         cases = (("Geometry H", "Geo scores usually post Thursdays.", ["Geometry H", "Physics"]),
@@ -1887,6 +1887,54 @@ class MoveIdiomTests(unittest.TestCase):
         self.assertIsNone(claims("Scores went down.", ["move:g"], drop, "Geo"))
 
 
+class LetterFormTests(unittest.TestCase):
+    """GE's updown4d on 4d3d1fc: a sentence citing only the letter fact is its say_opening, word for word."""
+
+    DIRECTION = ("Still a D, 1.0 points from a C, and slipping.", "No longer a C.", "From a C to a D.",
+                 # comparatives
+                 "Still a D, but higher than before.", "Still a D, worse than before.",
+                 "Still a D, 1.0 points from a C, closer than before.",
+                 # -ing forms
+                 "Still a D, 1.0 points from a C, and rising.", "Still a D, 1.0 points from a C, losing ground.",
+                 "Still a D, 1.0 points from a C, trending lower.",
+                 # nouns
+                 "Still a D after a dip.", "Still a D, 1.0 points from a C, after a slump.",
+                 "Still a D, 1.0 points from a C, a step back.",
+                 # letter changes
+                 "It went from a C to a D.", "Now a D, was a C.", "It's a D now, not a C.")
+
+    def facts(self):
+        return {"fall": geo2_facts(), "rise": geo2_facts(delta=2.5, neg=-0.5, pos=3.0)}
+
+    def test_direction_on_the_letter_fact_alone_drops(self):
+        for label, facts in self.facts().items():
+            idx = w.fact_index(w.model_facts(facts))
+            for text in self.DIRECTION:
+                for cites in (["next:g"], ["next:g", "pat:g"]):
+                    self.assertIsNotNone(w.check_sentence(text, cites, idx, "Geo", ["Geo"]), (label, text, cites))
+            for text in ("Still a D, 1.0 points from a C, and slipping.", "No longer a C.", "From a C to a D."):
+                self.assertEqual(w.check_sentence(text, ["next:g"], idx, "Geo", ["Geo"]), w.LETTER_FORM_REASON, text)
+            # Off the opening's words, even with no direction: the short form drops too (fail closed).
+            for text in ("Geo: D, 1 pts from a C.", "Still a D.", "Still a D, 1 point from a C."):
+                self.assertEqual(w.check_sentence(text, ["next:g"], idx, "Geo", ["Geo"]), w.LETTER_FORM_REASON, text)
+            self.assertEqual(w.reason_code(w.LETTER_FORM_REASON), w.LETTER_FORM_REASON)
+
+    def test_the_exact_opening_and_the_step_pass(self):
+        for label, facts in self.facts().items():
+            model = {f["id"]: f for f in w.model_facts(facts)}
+            idx = w.fact_index(list(model.values()))
+            opening = model["next:g"]["say_opening"]
+            self.assertTrue(opening.startswith("Still a D, 1"), opening)
+            for text in (opening, "{class:next:g} " + opening[0].lower() + opening[1:]):
+                self.assertIsNone(w.check_sentence(text, ["next:g"], idx, "Geo", ["Geo"]), (label, text))
+            step = model["whatif:g"]["say_step"]
+            self.assertIsNone(w.check_sentence(step, ["whatif:g"], idx, "Geo", ["Geo"]), (label, step))
+            # The what-if keeps its own form; a pattern or the move sentence is untouched.
+            self.assertIsNone(w.check_sentence("Scores usually post Thursdays.", ["pat:g"], idx, "Geo", ["Geo"]))
+            move_opening = model["move:g"]["say_opening"]
+            self.assertIsNone(w.check_sentence(move_opening, ["move:g"], idx, "Geo", ["Geo"]), move_opening)
+
+
 class ReviewNitTests(unittest.TestCase):
     """GE's nits on #52 8d2bd63: codes without letters or weekdays, natural next fills, no keep ids in {next:}."""
 
@@ -1946,7 +1994,9 @@ class OtherClassNameTests(unittest.TestCase):
                             ("Its posting history says Thursdays.", ["pattern:posting_day:geo"]),
                             ("geo scores usually post Thursdays.", ["pattern:posting_day:geo"]),
                             ("{bucket:cause:geo:t} scores dragged it.", ["cause:geo:t"])):
-            self.assertIsNone(self.check(text, cites), text)
+            # The letter sentences are off the fixed opening (LetterFormTests); here only the name check counts.
+            reason = self.check(text, cites)
+            self.assertIn(reason, (None, w.LETTER_FORM_REASON) if cites == ["next:geo"] else (None,), text)
 
     def test_the_extra_subject_words_are_another_class(self):
         for word in ("Chem", "Bio", "APUSH", "P.E.", "Yearbook"):
