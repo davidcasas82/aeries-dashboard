@@ -1099,6 +1099,18 @@ class KeepTheLetterWriterTests(unittest.TestCase):
     CAUSE = {"text": "Mostly the {item:%s}." % CHEM_C1, "cites": [CHEM_C1]}
     KEEP = {"text": "A 62 or better on the {next:%s} keeps the A." % KEEP_LAB, "cites": [KEEP_LAB]}
 
+    def test_keep_sentences_are_not_cause_sentences(self):
+        # #52's cause-sentence gate leaves keep wording alone: it names no cause and cites no move.
+        idx = w.fact_index(chem_keep_facts())
+        self.assertIsNone(w.cause_form_reason(self.KEEP["text"], [KEEP_LAB], idx))
+        self.assertIsNone(w.check_sentence(self.KEEP["text"], [KEEP_LAB], idx, "Chem"))
+        safe = w.fact_index(chem_keep_facts(cannot_lose=True))
+        line = "The {next:%s} can't drop it below an A." % KEEP_LAB
+        self.assertIsNone(w.cause_form_reason(line, [KEEP_LAB], safe))
+        self.assertIsNone(w.check_sentence(line, [KEEP_LAB], safe, "Chem"))
+        story = w.write_class(ScriptedModel({"Chem": [self.OPEN, self.CAUSE, self.KEEP]}), chem_keep_facts(), "Chem")
+        self.assertEqual(story["dropped"], [])
+
     def test_the_model_sees_the_engines_keep_fact_with_its_wording(self):
         seen = [f for f in w.model_facts(chem_keep_facts()) if w.is_keep(f)]
         self.assertEqual([f["id"] for f in seen], [KEEP_LAB])
