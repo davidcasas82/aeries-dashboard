@@ -85,12 +85,11 @@ _SPELLED_RE = re.compile(
     rf"percentage points?|letters?|grades?))?",
     re.I,
 )
-# Plain "up" and "down" as direction words, minus idioms that say nothing about a move: "up to date",
-# "down to the wire", "comes down to the next score", "scores show up Thursdays". "Up to"/"down to" a grade
-# ("up to a C", "down to 69", "down to 2.5 points") still says which way the grade went.
-_TO_NO_GRADE = r"(?!\s+to\b(?!\s+(?:an?\s+)?(?:(?-i:[A-F])[+-]?(?![\w'’])|\d)))"
-_UP_WORD = rf"(?<!\bshow )(?<!\bshows )(?<!\bshowed )(?<!\bshowing )(?<!\bshown )(?:upwards?|ups?{_TO_NO_GRADE})"
-_DOWN_WORD = rf"(?:downwards?|downs?{_TO_NO_GRADE})"
+# Every plain "up" and "down" is a direction word, idioms too: "up to date", "down to the wire" and
+# "scores show up Thursdays" need a move of that sign like "up to a C" does. Fail closed: an exemption for
+# idioms can't tell "down to the wire" from "down to the D range", "up to a solid C" or "down to failing".
+_UP_WORD = r"(?:upwards?|ups?)"
+_DOWN_WORD = r"(?:downwards?|downs?)"
 # Which fact fields a number may come from, by what the words around it say it is.
 _MOVE_BEFORE_RE = re.compile(
     r"\b(?:up|down|by|rose|fell|dropped|dipped|slipped|slid|climbed|jumped|gained|lost|cost|costs|costing|"
@@ -217,9 +216,9 @@ _DOWN_VERB_RE = re.compile(
 _UP_PARTICLE_AFTER_RE = re.compile(r"^(?:\s+\w+){0,2}\s+up(?:ward)?s?\b", re.I)
 # Words that say which way the grade itself moved. Each needs a cited grade_move (a cited cause cites its
 # move) whose delta has that sign: "Scores dropped." citing only a next_letter or pattern drops.
-_MOVED_UP_RE = re.compile(rf"\b(?:rose|risen|climbed|jumped|gained|went up|is up{_TO_NO_GRADE}|{_UP_WORD})\b", re.I)
+_MOVED_UP_RE = re.compile(rf"\b(?:rose|risen|climbed|jumped|gained|went up|is up|{_UP_WORD})\b", re.I)
 _MOVED_DOWN_RE = re.compile(rf"\b(?:fell|fallen|dropped|dipped|slipped|slid|declined|sank|sunk|lost|went down|"
-                            rf"is down{_TO_NO_GRADE}|{_DOWN_WORD})\b", re.I)
+                            rf"is down|{_DOWN_WORD})\b", re.I)
 _NEGATED_RE = re.compile(r"\b(?:not|never|n't|didn't|doesn't|did not|does not|wasn't|won't|hardly|barely|scarcely)"
                          r"\s+(?:\w+\s+)?$", re.I)
 # Adjectives on a named cause: "a low {item:...}" says it hurt, "a strong {item:...}" that it helped.

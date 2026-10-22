@@ -1969,24 +1969,44 @@ class TopTieTests(unittest.TestCase):
 
 
 class MoveIdiomTests(unittest.TestCase):
-    """"Up to", "down to" and "show up" say nothing about a move; plain up/down and the move verbs still do."""
+    """Every up/down is a direction word, idioms too (fail closed); the move verbs need a matching move."""
 
-    def test_idioms_pass_when_nothing_else_is_wrong(self):
+    IDIOMS = (("Scores usually post Thursdays, up to date.", ["pat:g"]),
+              ("Scores usually show up Thursdays.", ["pat:g"]),
+              ("Scores usually showed up on Thursdays.", ["pat:g"]),
+              ("Still a D, down to the wire, 1.0 points from a C.", ["next:g"]),
+              ("Still a D, 1 point from a C; it comes down to the next score.", ["next:g"]),
+              ("It comes down to a vote.", ["next:g"]),
+              ("A 74 or better on the next {bucket:whatif:g} score gets it up to a C.", ["whatif:g"]),
+              ("A 74 or better on the {next:whatif:g} brings it up to a C.", ["whatif:g"]))
+    # GE's leaks on 13cbf50, wrong way for each move: up on the fall (C to D), down on the rise (a D).
+    LEAKS_ON_FALL = ("Up to a solid C since Oct 14.", "Up to the C range since Oct 14.", "It's up to a c now.",
+                     'Up to a "C" since Oct 14.', "Up to passing since Oct 14.", "It's up to the grade it had.")
+    LEAKS_ON_RISE = ("Down to the D range since Oct 14.", "Now down to a weak D.", "It came down to a d.",
+                     "Down to 'D' since Oct 14.", "Down to failing since Oct 14.")
+
+    def test_idioms_drop_with_no_matching_move(self):
         for facts in (geo2_facts(), geo2_facts(delta=2.5, neg=-0.5, pos=3.0)):
             idx = w.fact_index(w.model_facts(facts))
-            for text, cites in (("Scores usually post Thursdays, up to date.", ["pat:g"]),
-                                ("Scores usually show up Thursdays.", ["pat:g"]),
-                                ("Scores usually showed up on Thursdays.", ["pat:g"]),
-                                ("Still a D, down to the wire, 1.0 points from a C.", ["next:g"]),
-                                ("Still a D, 1 point from a C; it comes down to the next score.", ["next:g"]),
-                                ("It comes down to a vote.", ["next:g"]),
-                                ("A 74 or better on the {next:whatif:g} gets it to a C.", ["whatif:g"])):
-                self.assertIsNone(w.check_sentence(text, cites, idx, "Geo"), text)
-            # "Up to a C" is up to a grade, so "up" says which way it went: a what-if step worded so needs a
-            # move of that sign and drops (fail safe). "Gets it to a C" is the step's form.
-            for text in ("A 74 or better on the next {bucket:whatif:g} score gets it up to a C.",
-                         "A 74 or better on the {next:whatif:g} brings it up to a C."):
-                self.assertIsNotNone(w.check_sentence(text, ["whatif:g"], idx, "Geo"), text)
+            for text, cites in self.IDIOMS:
+                self.assertIsNotNone(w.check_sentence(text, cites, idx, "Geo"), text)
+                if "{" not in text:
+                    self.assertEqual(claims(text, cites, idx, "Geo"), GateReviewTests.MOVED, text)
+            self.assertEqual(w.check_sentence("Still a D, down to the D range.", ["next:g"], idx, "Geo"),
+                             GateReviewTests.MOVED)
+            # The step's own form, with no up or down in it, passes.
+            self.assertIsNone(w.check_sentence("A 74 or better on the {next:whatif:g} gets it to a C.", ["whatif:g"],
+                                               idx, "Geo"))
+            self.assertIsNone(w.check_sentence("Scores usually post Thursdays.", ["pat:g"], idx, "Geo"))
+
+    def test_up_to_or_down_to_anything_on_the_wrong_way_move_drops(self):
+        moved = GateReviewTests.MOVED
+        fall, rise = (w.fact_index(w.model_facts(f)) for f in (geo2_facts(), geo2_facts(delta=2.5, neg=-0.5, pos=3.0)))
+        self.assertEqual(len(self.LEAKS_ON_FALL + self.LEAKS_ON_RISE), 11)
+        for idx, texts in ((fall, self.LEAKS_ON_FALL), (rise, self.LEAKS_ON_RISE)):
+            for text in texts:
+                self.assertIsNotNone(w.check_sentence(text, ["move:g"], idx, "Geo"), text)
+                self.assertEqual(claims(text, ["move:g"], idx, "Geo"), moved, text)
 
     def test_up_to_or_down_to_a_grade_is_a_direction(self):
         # GE's repros on e677998, citing the move: a fall from a C to a D, and a rise from 66.5 to 69 (a D).
@@ -2007,13 +2027,12 @@ class MoveIdiomTests(unittest.TestCase):
         for text in ("Now up to a D.", "Up to a D since Oct 14.", "It came up to a D.", "It's up to a D now.",
                      "Up to 69 since Oct 14."):
             self.assertIsNone(claims(text, ["move:g"], rise, "Geo"), text)
-        # A letter with + or - is a grade too; "up to date" and "down to a vote" aren't.
-        for text in ("Now up to a B+.", "Up to an A- now.", "It is up to 90%.", "Up to A."):
+        # Whatever follows, up and down are direction words.
+        for text in ("Now up to a B+.", "Up to an A- now.", "It is up to 90%.", "Up to A.", "It is up to date.",
+                     "Up to the teacher.", "They show up Thursdays.", "It showed up as a C."):
             self.assertTrue(w._MOVED_UP_RE.search(text), text)
-        for text in ("Down to a C-.", "It is down to 69.", "Down to D."):
+        for text in ("Down to a C-.", "It is down to 69.", "Down to D.", "It is down to a vote.", "Down to the wire."):
             self.assertTrue(w._MOVED_DOWN_RE.search(text), text)
-        for text in ("It is up to date.", "Up to the teacher.", "It is down to a vote.", "Down to the wire."):
-            self.assertFalse(w._MOVED_UP_RE.search(text) or w._MOVED_DOWN_RE.search(text), text)
         # Where the letter check disagrees, it still drops: a rise that stayed a D isn't "up to a C".
         self.assertIsNotNone(claims("Up to a C since Oct 14.", ["move:g"], rise, "Geo"))
 
