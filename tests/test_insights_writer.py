@@ -819,6 +819,82 @@ class PolishPassTests(unittest.TestCase):
         self.assertEqual(fixed["headline"]["text"], "Math: an 88% on the next test gets the A back.")
 
 
+KEEP_LAB, KEEP_TEST = "keep:chem:coursework:10", "keep:chem:tests:50"
+
+
+def chem_keep_facts(cannot_lose=False):
+    """Chem (an A that dropped 1.6, mostly on Coursework) plus the engine's keep what-ifs."""
+    lab = {"id": KEEP_LAB, "kind": "what_if", "target": "keep", "class": "Chem", "letter": "A", "threshold": 90.0,
+           "bucket": "Coursework", "bucket_weight_pct": 10.0, "points": 10.0, "needed_pct": 61.3,
+           "cannot_lose": False, "reachable": True}
+    if cannot_lose:
+        lab.update(needed_pct=None, cannot_lose=True)
+    test = {"id": KEEP_TEST, "kind": "what_if", "target": "keep", "class": "Chem", "letter": "A", "threshold": 90.0,
+            "bucket": "Tests", "bucket_weight_pct": 60.0, "points": 50.0, "needed_pct": 72.0,
+            "cannot_lose": False, "reachable": True}
+    return chem_facts() + [lab, test]
+
+
+class KeepTheLetterWriterTests(unittest.TestCase):
+    """The keep what-if on a drop story, on made-up Chem data."""
+
+    OPEN = {"text": "Still an A, down 1.6 since Oct 14.", "cites": [CHEM_MOVE]}
+    CAUSE = {"text": "Mostly the Lab 3 Packet (4/10).", "cites": [CHEM_C1]}
+    KEEP = {"text": "A 62 or better on the next coursework item keeps the A.", "cites": [KEEP_LAB]}
+
+    def test_the_model_sees_one_keep_fact_with_its_wording(self):
+        seen = [f for f in w.model_facts(chem_keep_facts()) if w.is_keep(f)]
+        self.assertEqual([f["id"] for f in seen], [KEEP_LAB])  # the bucket of the cause that pulled it down
+        self.assertEqual(seen[0]["say_keep"], "A 62 or better on the next coursework item keeps the A.")
+        safe = [f for f in w.model_facts(chem_keep_facts(cannot_lose=True)) if w.is_keep(f)]
+        self.assertEqual(safe[0]["say_keep"], "The next coursework item can't drop it below an A.")
+        # A named next item wins, by its due date.
+        upcoming = [{"class": "Chem", "bucket": "Tests", "title": "Unit 4 Test", "due": "2026-10-28", "points": 50.0}]
+        named = w.attach_next_items(chem_keep_facts(), upcoming)
+        pick = w.pick_keep(named)
+        self.assertEqual((pick["id"], w.say_keep(pick)), (KEEP_TEST, "A 72 or better on the Unit 4 Test keeps the A."))
+
+    def test_a_drop_story_with_a_keep_fact_ends_on_it(self):
+        idx = w.fact_index(chem_keep_facts())
+        self.assertEqual(w.eval_story([dict(self.OPEN), dict(self.CAUSE)], idx), "a drop story must end on its what-if step")
+        self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE), dict(self.KEEP)], idx))
+        story = w.write_class(ScriptedModel({"Chem": [self.OPEN, self.CAUSE, self.KEEP]}), chem_keep_facts(), "Chem")
+        self.assertEqual(story["story"], "Still an A, down 1.6 since Oct 14. Mostly the Lab 3 Packet (4/10). "
+                                         "A 62 or better on the next coursework item keeps the A.")
+
+    def test_the_checker_takes_a_keep_claim_only_from_a_cited_keep_fact(self):
+        idx = w.fact_index(chem_keep_facts())
+        self.assertIsNone(w.check_sentence(self.KEEP["text"], [KEEP_LAB], idx, "Chem"))
+        self.assertEqual(w.check_sentence(self.KEEP["text"], [CHEM_MOVE], idx, "Chem"),
+                         "says the letter holds with no keep what-if cited")
+        self.assertEqual(w.check_sentence("It stays an A with a 62 or better on the next lab.", [CHEM_C1], idx, "Chem"),
+                         "says the letter holds with no keep what-if cited")
+        self.assertEqual(w.check_sentence("A 61 or better on the next coursework item keeps the A.", [KEEP_LAB], idx, "Chem"),
+                         "number 61 isn't the needed score or a round-up of it")
+        # A keep fact never backs a next-letter claim.
+        self.assertEqual(w.check_sentence("A 62 or better on the next lab gets it up to an A.", [KEEP_LAB], idx, "Chem"),
+                         "claims a next letter with no next_letter or what_if fact")
+        self.assertEqual(w.check_sentence("The next coursework item can't drop it below an A.", [KEEP_LAB], idx, "Chem"),
+                         "says the next item can't cost the letter, but the keep what-if needs a score")
+
+    def test_a_next_item_that_cannot_cost_the_letter_is_optional_and_plain(self):
+        idx = w.fact_index(chem_keep_facts(cannot_lose=True))
+        line = {"text": "The next coursework item can't drop it below an A.", "cites": [KEEP_LAB]}
+        self.assertIsNone(w.check_sentence(line["text"], line["cites"], idx, "Chem"))
+        self.assertEqual(w.check_sentence(line["text"], [CHEM_MOVE], idx, "Chem"),
+                         "says the letter holds with no keep what-if cited")
+        # The tests bucket still needs a 72, but the picked keep fact is the coursework one, so no step is owed.
+        self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE)], idx))
+        self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE), dict(line)], idx))
+
+    def test_an_a_with_no_keep_fact_ends_on_the_cause_and_keep_alone_is_no_story(self):
+        self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE)], w.fact_index(chem_facts())))
+        steady = [f for f in chem_keep_facts() if f.get("kind") != "grade_move"]
+        self.assertFalse(w.worth_saying(steady))
+        self.assertIsNone(w.pick_keep(steady))
+        self.assertEqual([f for f in w.model_facts(steady) if w.is_keep(f)], [])
+
+
 class HeadlineAndTakeoverTests(unittest.TestCase):
     def test_write_up_headline_and_stories(self):
         model = ScriptedModel({"Math": GOOD}, headline={
