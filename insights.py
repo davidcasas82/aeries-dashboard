@@ -615,26 +615,28 @@ def explain_move(model, name, from_pct, to_pct, since, new_keys, prior_scores=No
     if before_all is not None:
         fact["explained"] = round(now - before_all, 2)
         fact["coverage"] = round(fact["explained"] / delta, 2)
-    return fold_causes(fact)
+    raw = {f"cause:{slug(name)}:{since}:{k}": v for k, v in shares.items()} if shares else None
+    return fold_causes(fact, shares=raw)
 
 
-def fold_causes(move, keep=None):
+def fold_causes(move, keep=None, shares=None):
     """Keep a move's top `keep` causes (by share, or points with no shares); fold the rest.
 
     Folded causes leave nothing behind, not even a title or id, so no sentence can name them.
-    other_share is the part of `explained` the kept causes don't carry (kept shares + other_share
-    == explained, to the cent), and other_causes counts what was folded. Coverage doesn't change.
+    other_causes counts them. other_share is the sum of the folded causes' own shares (from the
+    unrounded `shares` by cause id when given, else their rounded shares), never a leftover of
+    `explained`. With no shares (more than SHARE_MAX_CAUSES changes) it is None: leave-one-out
+    points don't add up, so there is no exact share to give. Coverage doesn't change.
     """
     keep = CAUSES_MAX if keep is None else keep
     causes = move.get("causes") or []
     if len(causes) <= keep:
         return move
-    kept = causes[:keep]
-    out = {**move, "causes": kept, "other_causes": len(causes) - keep, "other_share": None}
-    if isinstance(move.get("explained"), (int, float)):
-        carried = sum(c["share"] if c["share"] is not None else c["points"] for c in kept)
-        out["other_share"] = round(move["explained"] - carried, 2)
-    return out
+    kept, folded = causes[:keep], causes[keep:]
+    other = None
+    if all(c.get("share") is not None for c in folded):
+        other = round(sum((shares or {}).get(c["id"], c["share"]) for c in folded), 2)
+    return {**move, "causes": kept, "other_causes": len(folded), "other_share": other}
 
 
 def find_patterns(log_items, today, window_days=PATTERN_WINDOW_DAYS):

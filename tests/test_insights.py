@@ -628,7 +628,10 @@ class CauseFoldTests(unittest.TestCase):
         out = insights.fold_causes(move)
         self.assertEqual(len(out["causes"]), 8)
         self.assertEqual([c["title"] for c in out["causes"]], [f"Folded Item {i}" for i in range(11, 3, -1)])
-        self.assertAlmostEqual(sum(c["share"] for c in out["causes"]) + out["other_share"], -7.8, places=2)
+        # other_share is the folded causes' own shares (-0.1 - 0.2 - 0.3 - 0.4), not explained's leftover.
+        self.assertEqual(out["other_share"], -1.0)
+        self.assertAlmostEqual(sum(c["share"] for c in out["causes"]) + out["other_share"],
+                               sum(c["share"] for c in causes), places=9)
         self.assertEqual((out["coverage"], out["other_causes"]), (0.98, 4))
         text = json.dumps(out)
         for i in range(4):
@@ -654,18 +657,47 @@ class CauseFoldTests(unittest.TestCase):
                     continue
                 self.assertEqual(cut["causes"], full["causes"][:8])  # the same ranking, cut at 8
                 self.assertEqual(cut["other_causes"], len(full["causes"]) - 8)
-                if cut["explained"] is None:
+                if full["causes"][0]["share"] is None:
                     self.assertIsNone(cut["other_share"])
                 else:
                     sums += 1
-                    self.assertTrue(all(c["share"] is not None for c in cut["causes"]))
-                    self.assertAlmostEqual(sum(c["share"] for c in cut["causes"]) + cut["other_share"], cut["explained"], places=2)
+                    self.assertAlmostEqual(cut["other_share"], sum(c["share"] for c in full["causes"][8:]), delta=0.005 * len(full["causes"]))
                 # No folded item's title or id is anywhere in its class's facts.
                 text = json.dumps([f for f in folded["facts"] if f.get("class") == cut["class"]], ensure_ascii=False)
                 for gone in full["causes"][8:]:
                     self.assertNotIn(json.dumps(gone["title"], ensure_ascii=False), text)
                     self.assertNotIn(gone["id"], json.dumps(folded))
         self.assertGreater(sums, 0)
+
+    def test_other_share_with_and_without_shares(self):
+        # 10 changed scores: shares exist. other_share is the two folded causes' own unrounded shares
+        # summed, and all ten shares sum to explained.
+        rows = [row(f"Kid A Quiz {i}", "Tests", float(3 + (i * 7) % 8), 10.0, "10/20/2026") for i in range(10)]
+        rows += [row(f"Kid A Old {i}", "Tests", 9.0, 10.0, "10/01/2026") for i in range(5)]
+        totals = {"parse_ok": True, "layout": "percent_of_grade", "categories": [cat("Tests", 100.0, 0, 0, 0)]}
+        model = insights.build_class_model("Chem", totals, rows)
+        new = [insights.slug(r["description"]) for r in rows[:10]]
+        now = insights.grade(model)
+        move = insights.explain_move(model, "Chem", now + 9.0, now, "2026-10-21", new)
+        self.assertEqual((len(move["causes"]), move["other_causes"]), (8, 2))
+        shares = insights._shares(model, {k: None for k in new})
+        listed = {c["id"] for c in move["causes"]}
+        folded = [k for k in new if f"cause:chem:2026-10-21:{k}" not in listed]
+        self.assertEqual(len(folded), 2)
+        self.assertEqual(move["other_share"], round(sum(shares[k] for k in folded), 2))
+        self.assertAlmostEqual(sum(shares.values()), move["explained"], places=2)
+        # 11 changed scores: no shares, leave-one-out points don't add up, so other_share is None.
+        rows.append(row("Kid A Quiz 10", "Tests", 4.0, 10.0, "10/20/2026"))
+        model = insights.build_class_model("Chem", totals, rows)
+        new = [insights.slug(r["description"]) for r in rows if "Quiz" in r["description"]]
+        self.assertEqual(len(new), 11)
+        now = insights.grade(model)
+        move = insights.explain_move(model, "Chem", now + 9.0, now, "2026-10-21", new)
+        self.assertTrue(all(c["share"] is None for c in move["causes"]))
+        self.assertEqual(len(move["causes"]), 8)
+        self.assertEqual(move["other_causes"], 3)
+        self.assertIsNone(move["other_share"])
+        self.assertIsNotNone(move["coverage"])
 
     def test_every_score_new_night_size_and_warning(self):
         def measure(causes_max):
