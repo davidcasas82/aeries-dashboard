@@ -37,7 +37,8 @@ CAUSE_TOLERANCE = 0.20
 _CAUSE_CLAIM_RE = re.compile(
     r"\b((?:mainly|mostly|largely|primarily|chiefly)\s+(?:\w+\s+)?(?:from|because|due|thanks|owing|driven|"
     r"caused|after|by)|because|due to|owing to|thanks to|driven by|caused by|"
-    r"result of|as a result|on account of|pulled|dragged|hurt|lifted|boosted|cost|came from|comes from|damage|"
+    r"result of|as a result|on account of|pulled|dragged|hurt|lifted|boosted|help(?:s|ed|ing)?|cost|came from|"
+    r"comes from|damage|"
     r"after an? \d|from an? \d)",
     re.I,
 )
@@ -207,6 +208,11 @@ _DOWN_VERB_RE = re.compile(
     r"drop(?:s|ped|ping)?|blam(?:e|es|ed|ing)|fell|fall(?:s|ing|en)?|down(?:ward)?s?)\b", re.I)
 # "Pulled it up" and "knocked it up" push up; "pulled it down" pushes down.
 _UP_PARTICLE_AFTER_RE = re.compile(r"^(?:\s+\w+){0,2}\s+up(?:ward)?s?\b", re.I)
+# Words that say which way the grade itself moved. Each needs a cited grade_move (a cited cause cites its
+# move) whose delta has that sign: "Scores dropped." citing only a next_letter or pattern drops.
+_MOVED_UP_RE = re.compile(r"\b(?:rose|risen|climbed|jumped|gained|went up|is up|up(?:ward)?s?)\b", re.I)
+_MOVED_DOWN_RE = re.compile(r"\b(?:fell|fallen|dropped|dipped|slipped|slid|declined|sank|sunk|lost|went down|is down|"
+                            r"down(?:ward)?s?)\b", re.I)
 _NEGATED_RE = re.compile(r"\b(?:not|never|n't|didn't|doesn't|did not|does not|wasn't|won't|hardly|barely|scarcely)"
                          r"\s+(?:\w+\s+)?$", re.I)
 # Adjectives on a named cause: "a low {item:...}" says it hurt, "a strong {item:...}" that it helped.
@@ -1098,9 +1104,10 @@ def fill_slots(text, index):
             return _clean(fact.get("class"))
         if kind == "bucket":
             name = _clean(_bucket_of(fact))
-            # "Homework scores dragged it." at the start; "the next homework score" inside a sentence.
-            at_start = not text[:match.start()].strip() or text[:match.start()].rstrip().endswith((".", "!", "?"))
-            return name if at_start or name.isupper() else name.lower()
+            # "Homework scores dragged it." and "Mostly Labs scores." keep the name as is; after "the", "a",
+            # "an", "one" or "next" it reads as a common noun: "the next homework score".
+            lead = re.search(r"\b(?:the|a|an|one|next)\s*$", text[:match.start()], re.I)
+            return name.lower() if lead and not name.isupper() else name
         if kind == "next":
             return _clean(fact["next_title"]) if fact.get("next_title") else f"next {_bucket_noun(_clean(fact.get('bucket')))}"
         title = _clean(fact.get("title"))
@@ -1157,9 +1164,9 @@ def _direction_reason(slotted, cited, index):
     causes = [f for f in cited if f.get("move")]
     if not causes:
         return None
-    slots = [(m.start(), m.end(), index.get(m.group(2)) or {}) for m in SLOT_RE.finditer(slotted)
+    slots = [(m.start(), m.end(), (index.get(m.group(2)) or {}, m.group(1))) for m in SLOT_RE.finditer(slotted)
              if m.group(1) in ("item", "bucket")]
-    slots = [(a, b, f) for a, b, f in slots if f.get("move")]
+    slots = [(a, b, f) for a, b, f in slots if f[0].get("move")]
     bare = SLOT_RE.sub(lambda m: " " * len(m.group(0)), slotted)
     words = [(m.start(), 1, False) for m in _UP_PHRASE_RE.finditer(bare)]
     words += [(m.start(), -1, False) for m in _DOWN_PHRASE_RE.finditer(bare)]
@@ -1175,12 +1182,13 @@ def _direction_reason(slotted, cited, index):
             way = -way
         before = [f for a, b, f in slots if b <= start]
         after = [f for a, b, f in slots if a >= start]
+        everyone = [(c, "item") for c in causes]
         if adjective:
-            named = [after[0]] if after else [before[-1]] if before else causes
+            named = [after[0]] if after else [before[-1]] if before else everyone
         else:
-            named = [before[-1]] if before else [after[0]] if after else causes
-        for cause in named:
-            share = _cause_share(cause) or 0
+            named = [before[-1]] if before else [after[0]] if after else everyone
+        for cause, kind in named:
+            share = (_bucket_net(index, cause) if kind == "bucket" else _cause_share(cause)) or 0
             if share * way <= 0:
                 return "says a cause pushed the grade the other way from its share"
     return None
@@ -1222,6 +1230,12 @@ def _claims_reason(text, cited, index, slotted=None):
         return "states a cause without citing a grade_move or cause"
     if _MOVE_REF_RE.search(masked) and not moves:
         return "talks about a move with no grade_move cited"
+    # The exact contrast forms ("The {item:...} helped." on a drop, "... hurt." on a rise) are judged by the
+    # cause-sentence gate on the cause's own share, never as the reason for the move.
+    contrast_form = bool(slotted and _FORM_CONTRAST_RE.match(slotted.strip()))
+    # "Mostly {bucket:...} scores." ranks buckets by net share; the cause-sentence gate checks it.
+    bucket_most = bool(slotted and re.match(r"^(?:Mostly (?:from )?(?:one )?\{bucket:|\{bucket:[^{}\s]+\}(?: scores?)? did most)",
+                                            slotted.strip()))
     claims_cause = any(f.get("move") for f in cited) or (moves and cause_words)
     if claims_cause and not all(cause_allowed(m) for m in moves):
         return "states a cause the move's causes don't explain"
@@ -1232,13 +1246,13 @@ def _claims_reason(text, cited, index, slotted=None):
         sign = 1 if (move.get("delta") or 0) >= 0 else -1
         drivers = [c["id"] for c in ranked_causes(move) if (c.get("share") or c.get("points") or 0) * sign > 0]
         said_drivers = [f["id"] for f in said if f["id"] in drivers]
-        if said_drivers and _MOST_RE.search(masked) and said_drivers[0] != drivers[0]:
+        if said_drivers and _MOST_RE.search(masked) and said_drivers[0] != drivers[0] and not bucket_most:
             return "names causes out of share order"
         # A cause that pushed the other way may be named, but never as the reason for the move.
-        if not said_drivers and cause_words:
+        if not said_drivers and cause_words and not contrast_form:
             return "gives an offsetting cause as the reason for the move"
         # Named beside the drivers, a cause that pushed the other way must be set against the move.
-        if len(said_drivers) < len(said) and not _CONTRAST_RE.search(masked):
+        if len(said_drivers) < len(said) and not _CONTRAST_RE.search(masked) and not contrast_form:
             return "names an offsetting cause as if it drove the move"
     pairs = _score_pairs(cited)
     for raw, kind in scores:
@@ -1300,6 +1314,11 @@ def _claims_reason(text, cited, index, slotted=None):
     for letter in said:
         if letter not in letters:
             return f"letter {letter} isn't in the cited facts"
+    # Last but one, so the older checks keep their reasons: "rose", "fell", "up", "down" and the like need
+    # a cited grade_move (a cited cause cites its move) whose delta has that sign.
+    for pattern, sign in ((_MOVED_UP_RE, 1), (_MOVED_DOWN_RE, -1)):
+        if pattern.search(bare) and not any((m.get("delta") or 0) * sign > 0 for m in moves):
+            return "says the grade moved a way no cited move did"
     return _direction_reason(slotted if slotted is not None else text, cited, index)
 
 
@@ -1324,17 +1343,52 @@ _FORM_SIGNED_RE = re.compile(rf"^(?P<who>{_FORM_LIST}) (?P<verb>helped|hurt|drag
 _FORM_DAMAGE_RE = re.compile(rf"^(?P<who>{_FORM_ONE}) did most of the damage\.$")
 _FORM_MOSTLY_RE = re.compile(
     rf"^Mostly (?:from )?(?P<who>{_FORM_ITEM}|(?:one )?\{{bucket:[^{{}}\s]+\}}(?: scores?)?)\.$")
+_FORM_CONTRAST_RE = re.compile(rf"^(?P<who>{_FORM_LIST}) (?:helped|hurt)\.$")
+# A bucket's weight with no direction in it: "{bucket:<cause>} is 50% of the grade."
+_FORM_WEIGHT_RE = re.compile(r"^\{bucket:[^{}\s]+\}(?: scores)? (?:is|are|counts? for) \d+(?:\.\d+)?% of the grade\.$")
 _DIRECTION_WORDS_RE = re.compile(
     r"\b(?:up|down|rose|rise[sn]?|fell|fall(?:s|en)?|drop\w*|dip\w*|slip\w*|slid\w*|climb\w*|jump\w*|gain\w*|"
     r"lost|los(?:e|es|ing)|moved?|moving|went|cost\w*|pull\w*|push\w*|drag\w*|hurt\w*|help\w*|lift\w*|boost\w*|"
     r"rais\w*|sav\w*|damag\w*|because|due|thanks|driv\w*|caus\w*|mostly|mainly|largely|primarily|chiefly|"
     r"higher|lower|better|worse|back|again)\b", re.I)
+# Direction wording that sends any sentence with an {item:} or {bucket:} slot through the gate, whatever fact
+# the slot names. "Better", "back" and "again" are left out: "A 74 or better on the next {bucket:...} score".
+_SLOT_DIRECTION_RE = re.compile(
+    r"\b(?:up|down|rose|rise[sn]?|risen|fell|fall(?:s|en)?|drop\w*|dip\w*|slip\w*|slid\w*|climb\w*|jump\w*|"
+    r"gain\w*|lost|los(?:e|es|ing)|moved|cost\w*|pull\w*|push\w*|drag\w*|hurt\w*|help\w*|lift\w*|boost\w*|"
+    r"rais\w*|sav\w*|damag\w*|because|due to|thanks|driv\w*|caus\w*|mostly|mainly|largely|primarily|chiefly|"
+    r"carr\w*|rescu\w*|improv\w*|tank\w*|cut\w*|dent\w*|slash\w*|blam\w*|sank|sunk)\b", re.I)
 CAUSE_FORM_REASON = "cause sentence not in an allowed form"
+# A bucket whose causes net to less than this, either way, has no direction to claim.
+BUCKET_MIN_NET = 0.1
 
 
 def _top_cause(move, sign):
     """The move's cause with the largest share of the given sign, or None."""
     return next((c for c in ranked_causes(move) if (_cause_share(c) or 0) * sign > 0), None)
+
+
+def _bucket_nets(move):
+    """{bucket: the sum of its causes' shares in this move}, rounded to 6 places."""
+    nets = {}
+    for cause in move.get("causes") or []:
+        bucket = _bucket_of(cause)
+        if bucket:
+            nets[bucket] = nets.get(bucket, 0.0) + (_cause_share(cause) or 0.0)
+    return {b: round(v, 6) for b, v in nets.items()}
+
+
+def _bucket_net(index, cause):
+    """The net share of the bucket a cause sits in, across its move; 0 when |net| < BUCKET_MIN_NET."""
+    move = index.get(cause.get("move")) or {}
+    net = _bucket_nets(move).get(_bucket_of(cause), 0.0)
+    return net if abs(net) >= BUCKET_MIN_NET - 1e-9 else 0.0
+
+
+def _top_bucket(move, sign):
+    """The move's bucket with the largest net in the given direction (|net| >= BUCKET_MIN_NET), or None."""
+    nets = [(b, v) for b, v in _bucket_nets(move).items() if v * sign >= BUCKET_MIN_NET - 1e-9]
+    return max(nets, key=lambda bv: (abs(bv[1]), bv[0]))[0] if nets else None
 
 
 def _opening_forms(move):
@@ -1346,41 +1400,62 @@ def _opening_forms(move):
 
 
 def cause_form_reason(text, cites, index):
-    """None if the sentence is no cause sentence or is one of the fixed forms, else CAUSE_FORM_REASON."""
+    """None if the sentence is no cause sentence or is one of the fixed forms, else CAUSE_FORM_REASON.
+
+    A cause sentence slots a cause, cites a cause, cites a grade_move with direction wording, or has any
+    {item:} or {bucket:} slot plus a direction word. In the forms every slot names a cause; an item slot is
+    read by its own share, a bucket slot by its bucket's net share in the move (|net| < 0.1 has no direction).
+    """
     text = (text or "").strip()
     cited = _cited_facts(cites, index)
-    cause_slots = [fid for kind, fid in _FORM_SLOT_RE.findall(text) if (index.get(fid) or {}).get("move")]
+    slots = _FORM_SLOT_RE.findall(text)
+    cause_slots = [(kind, fid) for kind, fid in slots if (index.get(fid) or {}).get("move")]
     cited_causes = [f for f in cited if f.get("move")]
     moves = [f for f in cited if f.get("kind") == "grade_move" and not f.get("move")]
-    worded = bool(_DIRECTION_WORDS_RE.search(SLOT_RE.sub(" ", text)))
-    if not cause_slots and not cited_causes and not (moves and worded):
+    bare = SLOT_RE.sub(" ", text)
+    worded = bool(_DIRECTION_WORDS_RE.search(bare))
+    slot_worded = bool(slots) and bool(_SLOT_DIRECTION_RE.search(bare))
+    if not cause_slots and not cited_causes and not (moves and worded) and not slot_worded:
         return None
-    if not cause_slots and not cited_causes:
+    if not slots and not cited_causes:
         # Only the move itself: its say_opening, word for word.
         return None if any(text in _opening_forms(m) for m in moves) else CAUSE_FORM_REASON
-    named = list(dict.fromkeys(cause_slots))
-    # Every cited cause is named in a slot, and the sentence cites nothing but the move and its causes.
-    if set(named) != {f["id"] for f in cited_causes} or len(cited_causes) + len(moves) != len(cited):
+    # Every slot names a cause, every cited cause is slotted, and nothing else is cited but the move.
+    named = list(dict.fromkeys(fid for _, fid in cause_slots))
+    if len(cause_slots) != len(slots) or set(named) != {f["id"] for f in cited_causes} or \
+            len(cited_causes) + len(moves) != len(cited):
         return CAUSE_FORM_REASON
-    shares = [_cause_share(index[fid]) or 0 for fid in named]
-    move_of = lambda fid: index.get(index[fid].get("move")) or {}
+    if _FORM_WEIGHT_RE.match(text) and len(slots) == 1:
+        return None
+    # One reading per slot: (move id, the item or bucket it names) and its signed value.
+    readings = []
+    for kind, fid in cause_slots:
+        cause = index[fid]
+        if kind == "bucket":
+            readings.append(((cause.get("move"), "bucket", _bucket_of(cause)), _bucket_net(index, cause)))
+        else:
+            readings.append(((cause.get("move"), "item", fid), _cause_share(cause) or 0))
+    if len({key for key, _ in readings}) != len(readings):
+        return CAUSE_FORM_REASON
     match = _FORM_SIGNED_RE.match(text)
-    if match and len(_FORM_SLOT_RE.findall(match.group("who"))) == len(_FORM_SLOT_RE.findall(text)):
-        if len(named) != len(_FORM_SLOT_RE.findall(text)):
-            return CAUSE_FORM_REASON
+    if match and len(_FORM_SLOT_RE.findall(match.group("who"))) == len(slots):
         sign = 1 if match.group("verb") == "helped" else -1
-        return None if all(v * sign > 0 for v in shares) else CAUSE_FORM_REASON
-    if len(named) != 1 or len(_FORM_SLOT_RE.findall(text)) != 1:
+        return None if all(v * sign > 0 for _, v in readings) else CAUSE_FORM_REASON
+    if len(readings) != 1:
         return CAUSE_FORM_REASON
-    fid, share = named[0], shares[0]
+    (move_id, kind, what), value = readings[0]
+    move = index.get(move_id) or {}
     if _FORM_DAMAGE_RE.match(text):
-        top = _top_cause(move_of(fid), -1)
-        return None if share < 0 and top and top["id"] == fid else CAUSE_FORM_REASON
+        top = _top_cause(move, -1)["id"] if kind == "item" and _top_cause(move, -1) else _top_bucket(move, -1)
+        return None if value < 0 and top == what else CAUSE_FORM_REASON
     if _FORM_MOSTLY_RE.match(text):
-        move = move_of(fid)
         sign = 1 if (move.get("delta") or 0) >= 0 else -1
-        top = _top_cause(move, sign)
-        return None if share * sign > 0 and top and top["id"] == fid else CAUSE_FORM_REASON
+        if kind == "item":
+            top = _top_cause(move, sign)
+            top = top["id"] if top else None
+        else:
+            top = _top_bucket(move, sign)
+        return None if value * sign > 0 and top == what else CAUSE_FORM_REASON
     return CAUSE_FORM_REASON
 
 
