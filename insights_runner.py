@@ -3,7 +3,7 @@
 A start checks that a fresh sync landed (the public freshness stamp), then reads the grades once
 (GETs only; one unlock, and a second only if a GET answers 401) and fingerprints what the engine uses,
 per student. When every fingerprint matches the last successful run it logs "skip: no change" and
-stops: no model, no PUT, the stored notes stay. Otherwise the writer (WriterWork) writes only the
+stops: no write-up, no PUT, the stored notes stay. Otherwise the writer (WriterWork) writes only the
 changed students, and InsightsPublisher sends the whole doc (only with GRADE_INSIGHTS_PUBLISH=1),
 because the Worker replaces the whole doc on a PUT. No notes beat wrong numbers: the doc carries fresh
 entries for the changed students, the last published entry verbatim only for unchanged students, and a
@@ -45,7 +45,7 @@ USER_AGENT = "grade-insights-runner/1"
 FRESH_FOR = timedelta(hours=2)
 CLOCK_SKEW = timedelta(minutes=5)
 # How a start that reached the work can end. Each of these marks the sync handled; anything else
-# (waiting for the machine, a crash) leaves it for the next start.
+# (a missing SSD, a crash) leaves it for the next start.
 HANDLED = ("no_change", "published", "published_partial", "nothing_to_send", "publish_off")
 # The SSD state files under <SSD>/grade-insights/state/: the per-student hashes and the last published doc.
 FINGERPRINT_FILE = "fingerprint.json"
@@ -65,15 +65,6 @@ INSIGHTS_PATH = "/v1/grades/insights"
 PUBLISH_FLAG = "GRADE_INSIGHTS_PUBLISH"
 SSD_VOLUME_NAME = "David C SSD"
 DEFAULT_SSD = f"/Volumes/{SSD_VOLUME_NAME}"
-# Installed on the SSD with mlx-lm 0.32.2. Smoke-test peaks: Qwen 5.2 GB at 32 tok/s, Gemma 8.1 GB at 20 tok/s.
-MODEL_REPOS = {
-    "qwen3-8b": "mlx-community/Qwen3-8B-4bit",
-    "gemma3-12b": "mlx-community/gemma-3-text-12b-it-4bit",
-}
-# The bake-off's pick (qwen-v11: 30/30 stories) and its settings.
-WRITER_MODEL = "qwen3-8b"
-MIN_FREE_MEMORY_PCT = 35
-BUSY_PROCESSES = ("Blender", "blender", "ffmpeg")
 # The engine and writer sources go into every fingerprint, so a code update writes the notes again once.
 FINGERPRINT_CODE = ("insights.py", "insights_writer.py")
 
@@ -85,8 +76,6 @@ class Machine:
     now: Callable[[], datetime]
     freshness: Callable[[], str]
     ssd_mounted: Callable[[], bool]
-    free_memory_pct: Callable[[], int]
-    busy: Callable[[], bool]
 
 
 def fresh_sync(stamp, now, handled=None):
@@ -100,11 +89,6 @@ def fresh_sync(stamp, now, handled=None):
     if landed.tzinfo is None:
         return False
     return -CLOCK_SKEW <= now - landed <= FRESH_FOR
-
-
-def machine_free(machine):
-    """No render running and enough free memory for the model."""
-    return not machine.busy() and machine.free_memory_pct() >= MIN_FREE_MEMORY_PCT
 
 
 class State:
@@ -153,7 +137,7 @@ def tick(state, machine, run_sync, log=print):
 
     A sync that isn't fresh, or was already handled, ends the start quietly. A missing SSD skips this
     start with one line and keeps the last good write-up; the sync stays unhandled, so the retry start
-    tries again. A busy machine waits for the next start.
+    tries again.
     """
     stamp = machine.freshness()
     if not fresh_sync(stamp, machine.now(), state.get("handled")):
@@ -162,9 +146,6 @@ def tick(state, machine, run_sync, log=print):
         state.mark(status="skipped_no_ssd")
         log("grade-insights: sync skipped, the SSD is not mounted; the last write-up stays")
         return "skipped_no_ssd"
-    if not machine_free(machine):
-        state.mark(status="waiting_for_machine")
-        return "waiting_for_machine"
     state.mark(stamp=stamp, status="running")
     status = run_sync(stamp)
     if status in HANDLED:
@@ -183,21 +164,6 @@ def read_freshness(url=FRESHNESS_URL):
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
     with urllib.request.urlopen(request, timeout=20) as response:
         return json.loads(response.read().decode("utf-8"))["updatedAt"]
-
-
-def free_memory_pct():
-    out = subprocess.run(["/usr/bin/memory_pressure"], capture_output=True, text=True, timeout=30).stdout
-    for line in out.splitlines():
-        if "free percentage" in line:
-            return int(line.rsplit(":", 1)[1].strip().rstrip("%"))
-    return 0
-
-
-def render_running():
-    for name in BUSY_PROCESSES:
-        if subprocess.run(["/usr/bin/pgrep", "-x", name], capture_output=True).returncode == 0:
-            return True
-    return False
 
 
 class KeychainError(RuntimeError):
@@ -605,7 +571,7 @@ def load_students(client, upcoming_items=None, log=print):
     return students
 
 
-def writer_work(client, model, store, put=None, env=None, log=print):
+def writer_work(client, store, put=None, env=None, log=print):
     """The writer's nightly steps fed by load_students, or None without a usable writer.
 
     Same import rule as writer_attr: quiet when the writer isn't in the checkout, one
@@ -622,32 +588,17 @@ def writer_work(client, model, store, put=None, env=None, log=print):
             loaded.append(load_students(client, log=log))
         return loaded[0]
 
-    return work_class(load, model, store, put=put, env=env)
+    return work_class(load, store, put=put, env=env)
 
 
-def model_dir(ssd_path):
-    """Models live on the SSD, never on the internal disk."""
+def ssd_dir(ssd_path):
+    """The runner's folder on the SSD: the venv, the per-sync runs and the state files."""
     return Path(ssd_path) / "grade-insights"
 
 
 def venv_python(ssd_path):
-    """The SSD venv (Homebrew Python 3.12) that has mlx-lm."""
-    return model_dir(ssd_path) / "venv" / "bin" / "python"
-
-
-def model_link(ssd_path, name):
-    """A model's symlink under <SSD>/grade-insights/models/, named after its repo."""
-    if name not in MODEL_REPOS:
-        raise KeyError(f"unknown model {name!r}")
-    return model_dir(ssd_path) / "models" / MODEL_REPOS[name].split("/", 1)[1]
-
-
-def model_env(ssd_path, base=None):
-    """Environment for a model process: the SSD's HF cache, offline, so nothing downloads."""
-    env = dict(os.environ if base is None else base)
-    env["HF_HOME"] = str(model_dir(ssd_path) / "hf-cache")
-    env["HF_HUB_OFFLINE"] = "1"
-    return env
+    """The SSD venv's Python (Homebrew Python 3.12), the interpreter the tick script pins."""
+    return ssd_dir(ssd_path) / "venv" / "bin" / "python"
 
 
 def ssd_mounted(ssd_path, volume_name=SSD_VOLUME_NAME):
@@ -677,8 +628,6 @@ def real_machine(ssd_path):
         now=lambda: datetime.now(PACIFIC),
         freshness=read_freshness,
         ssd_mounted=lambda: ssd_mounted(ssd_path),
-        free_memory_pct=free_memory_pct,
-        busy=render_running,
     )
 
 
@@ -792,7 +741,7 @@ def run_id(stamp):
     return "sync-" + re.sub(r"[^0-9A-Za-z]", "", stamp)
 
 
-def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, env=None, log=print):
+def run_sync(stamp, load, work_class, put, store, prints_path, env=None, log=print):
     """One fresh sync: the change check, then either a skip or the changed students' write-ups and the publish.
 
     load() is load_students on the read-only session. Only students whose fingerprint changed (or who have
@@ -812,9 +761,9 @@ def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, e
     a failure: every student in the last doc is then missing, carried for MAX_MISSED_SYNCS syncs, then aged out.
 
     Returns one of HANDLED: "published", "published_partial" when a changed student was left out or a
-    missing student was carried, or "waiting_for_machine" when a render starts or memory runs low between
-    students (the next start picks up from WriterWork's saved steps). Logs carry counts and outcomes only:
-    no names, keys or scores.
+    missing student was carried, "no_change", "nothing_to_send" or "publish_off". A start that crashes
+    mid-run picks up from WriterWork's saved steps. Logs carry counts and outcomes only: no names, keys or
+    scores.
     """
     # A failed load raises here: nothing sent, no state saved, the current notes stay.
     students = load()
@@ -871,10 +820,8 @@ def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, e
             return put([], clear=True)
         return put([{"sn": sn, **entry} for sn, entry in doc["students"].items()])
 
-    work = work_class(lambda: changed, model, store, put=merged_put if put else None, env=env)
+    work = work_class(lambda: changed, store, put=merged_put if put else None, env=env)
     for step in work.plan(run_dir.name):
-        if not machine_free(machine):
-            return "waiting_for_machine"
         work.run_step(run_dir.name, step)
     # WriterWork saves the publish step's result as <store>/<run>/publish.json.
     published = json.loads((run_dir / "publish.json").read_text()).get("published")
@@ -906,56 +853,7 @@ def run_sync(stamp, load, work_class, model, put, machine, store, prints_path, e
     return "nothing_to_send"
 
 
-# ── The model ────────────────────────────────────────────────────────────────
-
-
-class MlxModel:
-    """The writer's Model on the SSD's Qwen3 8B through mlx-lm, with the bake-off's settings.
-
-    Loaded on the first call only, so a start that skips never touches the model. Offline: the SSD's
-    HF cache with HF_HUB_OFFLINE=1, nothing downloads. Prompts and replies are never logged.
-    """
-
-    MAX_TOKENS = {"draft": 512, "vote": 128}
-
-    def __init__(self, ssd_path, name=WRITER_MODEL):
-        self.ssd_path, self.name = ssd_path, name
-        self._loaded = None
-
-    def _load(self):
-        if self._loaded is None:
-            os.environ.update({k: v for k, v in model_env(self.ssd_path).items() if k.startswith("HF_")})
-            from mlx_lm import load
-            from mlx_lm.sample_utils import make_sampler
-
-            model, tokenizer = load(str(model_link(self.ssd_path, self.name)))
-            self._loaded = (model, tokenizer, make_sampler(temp=0.7, top_p=0.9))
-        return self._loaded
-
-    def complete(self, system, user):
-        from mlx_lm import stream_generate
-
-        model, tokenizer, sampler = self._load()
-        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
-        extra = {"enable_thinking": False} if self.name.startswith("qwen") else {}
-        prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, **extra)
-        role = "vote" if system == importlib.import_module(WRITER_MODULE).VOTE_SYSTEM else "draft"
-        text = "".join(part.text for part in stream_generate(model, tokenizer, prompt, max_tokens=self.MAX_TOKENS[role],
-                                                             sampler=sampler))
-        return clean_reply(text)
-
-
-def clean_reply(text):
-    """The JSON object in a model reply: no think block, no code fence, no text around the braces."""
-    text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.S).strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text).strip()
-    if text and not text.startswith("{") and "{" in text and "}" in text:
-        text = text[text.index("{"): text.rindex("}") + 1]
-    return text
-
-
-def main(argv=None, machine=None, client=None, model=None, publisher=None, env=None):
+def main(argv=None, machine=None, client=None, publisher=None, env=None):
     """One launchd start. The keyword arguments are for tests; launchd passes none of them."""
     argv = argv if argv is not None else sys.argv[1:]
     env = os.environ if env is None else env
@@ -985,9 +883,8 @@ def main(argv=None, machine=None, client=None, model=None, publisher=None, env=N
                     loaded.append(load_students(reader))
                 return loaded[0]
 
-            return run_sync(stamp, load, work_class, model or MlxModel(ssd), publisher_put(env, publisher),
-                            machine, model_dir(ssd) / "runs", model_dir(ssd) / "state" / FINGERPRINT_FILE,
-                            env=env)
+            return run_sync(stamp, load, work_class, publisher_put(env, publisher),
+                            ssd_dir(ssd) / "runs", ssd_dir(ssd) / "state" / FINGERPRINT_FILE, env=env)
 
         try:
             status = tick(state, machine, sync)

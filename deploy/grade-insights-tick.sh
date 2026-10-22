@@ -1,7 +1,7 @@
 #!/bin/sh
 # launchd's entry for the grade-insights runner (deploy/com.davidcasas.grade-insights.plist).
 #
-# Runs insights_runner.py under the SSD venv's Python (Homebrew 3.12, which has mlx-lm) and
+# Runs insights_runner.py under the SSD venv's Python (Homebrew 3.12) and
 # nothing else: no python3, no /usr/bin/env, no PATH lookup. The plist passes that full path as
 # $1 and it must match PINNED exactly, character for character (no symlink, no trailing slash,
 # no ..). Each problem logs one line a day, not one every tick:

@@ -6,7 +6,7 @@
      about 8:07 PM in daylight time and about 7:07 PM in standard time). Nothing lands on the mini, so the
      runner checks the public freshness stamp and only a sync that landed in the last 2 hours and hasn't
      been handled starts work; both evening starts are inside that window in either season. The second
-     start in each pair is the retry for a late scrape, a busy machine or a missing SSD.
+     start in each pair is the retry for a late scrape or a missing SSD.
      The interpreter is pinned to the SSD venv's full path, never python3 or a PATH lookup.
      launchd passes each <string> as one argument, so the space in "David C SSD" needs no quoting.
      The repo checkout and logs sit on the internal disk, so a missing SSD still logs its skip line.
