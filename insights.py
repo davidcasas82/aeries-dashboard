@@ -338,13 +338,14 @@ def _shares(model, changes):
     return shares
 
 
-def explain_move(model, name, from_pct, to_pct, since, new_keys, prior_scores=None):
+def explain_move(model, name, from_pct, to_pct, since, new_keys, prior_scores=None, scores_trimmed=False):
     """Why the posted % moved since `since`: each new or changed score's cost in grade points.
 
     new_keys: scores that weren't there at `since`. prior_scores: {key: (earned, possible)} for scores
     that were there but have changed since. A cause's `points` is the leave-one-out cost (undo that one
     change and rebuild); `share` is its order-averaged part of `explained`; `explained` is the move that
-    undoing every change gives back; `coverage` is explained / delta.
+    undoing every change gives back; `coverage` is explained / delta. If the prior snapshot's score map
+    was trimmed to fit, the move is unexplained (no causes) and coverage_trimmed says why.
     """
     delta = round(to_pct - from_pct, 2)
     if abs(delta) < MOVE_MIN_POINTS:
@@ -360,8 +361,9 @@ def explain_move(model, name, from_pct, to_pct, since, new_keys, prior_scores=No
         "causes": [],
         "explained": None,
         "coverage": None,
+        "coverage_trimmed": bool(scores_trimmed),
     }
-    if model is None:
+    if model is None or scores_trimmed:
         return fact
     present = {s.key for b in model.buckets for s in b.scores}
     changes = {k: None for k in new_keys or [] if k in present}
@@ -450,7 +452,7 @@ def gate_reason(model, broken):
 
 
 def class_facts(cls, snapshots, prior_snapshot, today):
-    """Facts for one class. cls: name, pct, mark, counted_insight, assignments, new_keys, prior_scores."""
+    """Facts for one class. cls: name, pct, mark, counted_insight, assignments, new_keys, prior_scores, scores_trimmed."""
     name, pct = cls["name"], cls["pct"]
     model = build_class_model(name, cls.get("counted_insight"), cls.get("assignments"))
     model_pct = grade(model) if model else None
@@ -471,6 +473,7 @@ def class_facts(cls, snapshots, prior_snapshot, today):
                 prior_snapshot.get("date"),
                 cls.get("new_keys") or [],
                 cls.get("prior_scores"),
+                cls.get("scores_trimmed", False),
             )
             if move:
                 facts.append(move)

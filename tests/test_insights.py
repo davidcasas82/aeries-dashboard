@@ -1,3 +1,5 @@
+import copy
+import random
 import sys
 import unittest
 from datetime import date
@@ -119,6 +121,7 @@ class PercentOfGradeGoldenTests(unittest.TestCase):
             }],
             "explained": -6.6,
             "coverage": 1.0,
+            "coverage_trimmed": False,
         }])
 
     def test_distance_to_the_next_letter(self):
@@ -527,6 +530,122 @@ class NoFooterGateTests(unittest.TestCase):
         cls = class_input("Biology", POG_TOTALS, POG_ROWS, 80.0, "B")
         facts = insights.class_facts(cls, [], None, TODAY)
         self.assertEqual(by_kind(facts, "no_raise_math")[0]["reason"], "weights_do_not_match_posted")
+
+
+def big_snapshot(classes=9, per_class=60, day="2026-10-21"):
+    """An evening snapshot whose score maps push it past family-data's 20,000-character cap."""
+    snap = {
+        "date": day,
+        "captured_at": f"{day}T20:08:00-07:00",
+        "since_yesterday": "One new score.",
+        "change_events": [{"type": "marked", "class_name": "Class 0", "title": "Item", "due": day}],
+        "classes": {},
+    }
+    for c in range(classes):
+        scores = {}
+        for i in range(per_class):
+            due = f"2026-{8 + i % 3:02d}-{1 + (i * 7 + c) % 28:02d}"
+            scores[f"assignmentnumber{c}x{i:03d}"] = [9.5, 10.0, due]
+        snap["classes"][f"Class {c}"] = {
+            "period": c,
+            "pct": 90.0,
+            "mark": "A",
+            "missing_count": 0,
+            "missing_names": [],
+            "aeries_trend": None,
+            "items": [{"title": f"Item {i}", "due": "2026-10-20", "state": "marked"} for i in range(5)],
+            "scores": scores,
+        }
+    return snap
+
+
+def without_scores(snap):
+    out = copy.deepcopy(snap)
+    for row in out["classes"].values():
+        row.pop("scores", None)
+        row.pop("scores_trimmed", None)
+    return out
+
+
+class SnapshotSizeGuardTests(unittest.TestCase):
+    def test_measures_like_json_stringify(self):
+        self.assertEqual(scraper.snapshot_json_chars({"a": [1, "é"]}), len('{"a":[1,"é"]}'))
+        self.assertEqual(scraper.snapshot_json_chars({"a": "😀"}), len('{"a":""}') + 2)
+
+    def test_an_oversize_snapshot_is_trimmed_under_19k_before_it_is_stored(self):
+        snap = big_snapshot()
+        self.assertGreater(scraper.snapshot_json_chars(snap), 20_000)
+        before = copy.deepcopy(snap)
+        history = {"students": {}}
+        scraper.upsert_student_snapshot(history, "1", "", snap)
+        stored = history["students"]["1"]["snapshots"][0]
+        self.assertLessEqual(scraper.snapshot_json_chars(stored), 19_000)
+        self.assertEqual(without_scores(stored), without_scores(before))
+        kept = [v[2] for row in stored["classes"].values() for v in (row.get("scores") or {}).values()]
+        gone = [
+            v[2] for name, row in before["classes"].items() for k, v in row["scores"].items()
+            if k not in (stored["classes"][name].get("scores") or {})
+        ]
+        self.assertTrue(kept and gone)
+        self.assertLessEqual(max(gone), min(kept))
+        trimmed = sum(row.get("scores_trimmed", 0) for row in stored["classes"].values())
+        self.assertEqual(trimmed, len(gone))
+
+    def test_a_small_snapshot_is_untouched(self):
+        snap = big_snapshot(classes=2, per_class=10)
+        before = copy.deepcopy(snap)
+        self.assertEqual(scraper.fit_snapshot_scores(snap), 0)
+        self.assertEqual(snap, before)
+
+    def test_the_trim_order_does_not_depend_on_insertion_order(self):
+        a = big_snapshot()
+        b = copy.deepcopy(a)
+        rng = random.Random(7)
+        for row in b["classes"].values():
+            items = list(row["scores"].items())
+            rng.shuffle(items)
+            row["scores"] = dict(items)
+        b["classes"] = dict(reversed(list(b["classes"].items())))
+        scraper.fit_snapshot_scores(a)
+        scraper.fit_snapshot_scores(b)
+        keys = lambda s: {n: sorted(r.get("scores") or {}) for n, r in s["classes"].items()}  # noqa: E731
+        self.assertEqual(keys(a), keys(b))
+
+    def test_scores_go_entirely_when_trimming_cannot_fit(self):
+        snap = big_snapshot(classes=3, per_class=20)
+        before = copy.deepcopy(snap)
+        dropped = scraper.fit_snapshot_scores(snap, limit=scraper.snapshot_json_chars(without_scores(snap)) - 1)
+        self.assertEqual(dropped, 60)
+        self.assertEqual(without_scores(snap), without_scores(before))
+        self.assertTrue(all("scores" not in r and r["scores_trimmed"] == 20 for r in snap["classes"].values()))
+
+    def test_stored_history_is_fitted_before_publish(self):
+        history = {"students": {"1": {"snapshots": [big_snapshot()]}}}
+        self.assertGreater(scraper.fit_history_snapshots(history), 0)
+        self.assertLessEqual(scraper.snapshot_json_chars(history["students"]["1"]["snapshots"][0]), 19_000)
+
+    def test_a_trimmed_class_reads_as_unexplained(self):
+        scores = scraper.snapshot_scores_for_class(STUDIO_ROWS)
+        scores["portfolioreview"] = [7.1, 10.0, "2026-10-02"]
+        items = [{"title": "Portfolio Review", "due": "2026-10-02", "state": "marked"}]
+        prior_row = {"pct": 77.7, "mark": "C", "items": items, "scores": scores, "scores_trimmed": 3}
+        [move] = moves_for("Studio Design", STUDIO_TOTALS, STUDIO_ROWS, 92.4, "A", prior_row)
+        self.assertEqual(
+            (move["delta"], move["causes"], move["explained"], move["coverage"], move["coverage_trimmed"]),
+            (14.7, [], None, None, True),
+        )
+
+    def test_a_dropped_map_also_reads_as_unexplained(self):
+        prior_row = {"pct": 98.1, "mark": "A", "items": LAB_PRIOR_ITEMS, "scores_trimmed": 9}
+        [move] = moves_for("Lab Science", LAB_TOTALS, LAB_ROWS, 96.4, "A", prior_row)
+        self.assertEqual((move["causes"], move["coverage"], move["coverage_trimmed"]), ([], None, True))
+
+    def test_trim_marker_rides_with_the_map_through_a_daytime_merge(self):
+        history = {"students": {}}
+        evening = {"date": "2026-10-19", "classes": {"Lab": {"pct": 90.0, "items": [], "scores_trimmed": 4}}}
+        scraper.upsert_student_snapshot(history, "1", "", evening)
+        scraper.upsert_student_snapshot(history, "1", "", {"date": "2026-10-19", "classes": {"Lab": {"pct": 91.0}}}, replace_items=False)
+        self.assertEqual(history["students"]["1"]["snapshots"][0]["classes"]["Lab"]["scores_trimmed"], 4)
 
 
 if __name__ == "__main__":

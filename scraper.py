@@ -91,6 +91,9 @@ HISTORY_ITEM_DAYS = 14
 HISTORY_ITEM_CAP = 12
 # Per-item scores ride on the newest few snapshots only: enough for a day-to-day diff.
 HISTORY_SCORE_DAYS = 3
+# family-data rejects a history snapshot whose JSON.stringify length is over 20,000 (MAX_SNAPSHOT
+# in grades.js) and the whole PUT fails. Score maps are trimmed to keep each snapshot under this.
+SNAPSHOT_MAX_CHARS = 19_000
 PCT_HISTORY_UI_POINTS = 30
 TREND_DELTA_THRESHOLD = 2.0  # percentage points over 7d for improve/slip labels
 UNGRADED_STREAK_WEEKDAYS = 5
@@ -2714,6 +2717,7 @@ def fit_payload_for_family_data(data, today=None):
 
 def persist_grades(data, history=None):
     if history is not None:
+        fit_history_snapshots(history)
         save_grade_history(history)
     fit_payload_for_family_data(data)
     OUTPUT_FILE.write_text(json.dumps(data, indent=2))
@@ -3073,14 +3077,88 @@ def snapshot_items_for_class(assignments, today, keep_keys=None):
 
 
 def snapshot_scores_for_class(assignments):
-    """{title key: [earned, possible]} for every numeric score, so tomorrow can tell new and changed scores apart."""
+    """{title key: [earned, possible, due]} for every numeric score, so tomorrow can tell new and changed
+    scores apart. due (YYYY-MM-DD or "") orders the trim when a snapshot runs long."""
     scores = {}
     for assignment in assignments or []:
         key = _history_item_key(assignment.get("description"))
         earned, possible = assignment.get("points_earned"), assignment.get("points_possible")
         if key and earned is not None and possible is not None:
-            scores[key] = [earned, possible]
+            scores[key] = [earned, possible, _snapshot_due_iso(assignment)]
     return scores
+
+
+def snapshot_json_chars(snapshot):
+    """JSON.stringify(snapshot).length as grades.js measures it: compact JSON, UTF-16 code units."""
+    text = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
+    return len(text.encode("utf-16-le")) // 2
+
+
+def _score_entry_chars(key, value):
+    return snapshot_json_chars({key: value}) - 1  # less the braces, plus the comma between entries
+
+
+def fit_snapshot_scores(snapshot, limit=None):
+    """Trim score maps until the snapshot fits under `limit`. Returns how many scores were dropped.
+
+    Oldest-due scores go first (ties by class, then key, so the order never varies). If the snapshot
+    still doesn't fit, every score map goes. A class that lost any scores is marked scores_trimmed, and
+    its next move reads as unexplained. Nothing else in the snapshot changes.
+    """
+    limit = SNAPSHOT_MAX_CHARS if limit is None else limit
+    size = snapshot_json_chars(snapshot)
+    if size <= limit:
+        return 0
+    rows = {
+        name: row for name, row in (snapshot.get("classes") or {}).items()
+        if isinstance(row, dict) and isinstance(row.get("scores"), dict)
+    }
+    if not rows:
+        return 0
+    order = sorted(
+        (
+            str(value[2]) if isinstance(value, (list, tuple)) and len(value) > 2 and value[2] else "",
+            name,
+            key,
+        )
+        for name, row in rows.items()
+        for key, value in row["scores"].items()
+    )
+    dropped = {}
+    for _due, name, key in order:
+        if size <= limit:
+            size = snapshot_json_chars(snapshot)  # the estimate ignores the markers; check for real
+            if size <= limit:
+                break
+        row = rows[name]
+        size -= _score_entry_chars(key, row["scores"].pop(key))
+        dropped[name] = dropped.get(name, 0) + 1
+        row["scores_trimmed"] = row.get("scores_trimmed", 0) + 1
+    for row in rows.values():
+        if "scores" in row and not row["scores"]:
+            row.pop("scores")
+    size = snapshot_json_chars(snapshot)
+    if size > limit:
+        for name, row in rows.items():
+            if "scores" in row:
+                count = len(row.pop("scores"))
+                dropped[name] = dropped.get(name, 0) + count
+                row["scores_trimmed"] = row.get("scores_trimmed", 0) + count
+        size = snapshot_json_chars(snapshot)
+    total = sum(dropped.values())
+    if total:
+        print(f"  Snapshot {snapshot.get('date')}: trimmed {total} score(s) in {len(dropped)} class(es); {size} chars")
+    return total
+
+
+def fit_history_snapshots(history):
+    """fit_snapshot_scores on every stored snapshot, so a score map can never fail the publish."""
+    total = 0
+    for entry in ((history or {}).get("students") or {}).values():
+        for snap in (entry or {}).get("snapshots") or []:
+            if isinstance(snap, dict):
+                total += fit_snapshot_scores(snap)
+    return total
 
 
 def _class_item_index(class_row):
@@ -3323,6 +3401,7 @@ def _strip_stale_snapshot_items(snaps):
                 continue
             if age > HISTORY_SCORE_DAYS:
                 class_row.pop("scores", None)
+                class_row.pop("scores_trimmed", None)
             if age > HISTORY_ITEM_DAYS:
                 class_row.pop("items", None)
     return snaps
@@ -3407,7 +3486,7 @@ def upsert_student_snapshot(history, student_sn, student_name, snapshot, replace
         for name, class_row in (snapshot.get("classes") or {}).items():
             row = dict(class_row)
             old = (existing.get("classes") or {}).get(name) or {}
-            for field in ("items", "scores"):
+            for field in ("items", "scores", "scores_trimmed"):
                 if field in old:
                     row[field] = old[field]
                 else:
@@ -3420,6 +3499,7 @@ def upsert_student_snapshot(history, student_sn, student_name, snapshot, replace
             if existing.get("change_events") is not None:
                 merged["change_events"] = existing["change_events"]
         snapshot = merged
+    fit_snapshot_scores(snapshot)
     snaps = [snap for snap in snaps if snap.get("date") != date_str]
     snaps.append(snapshot)
     snaps.sort(key=lambda snap: snap.get("date") or "")
@@ -5304,10 +5384,13 @@ def score_changes(prior_class_row, assignments, prior_date=None):
     points differ; prior_scores holds the old [earned, possible]. Older snapshots only have the capped
     item list, so a score counts as new when that list had it unscored, or when it's missing from a list
     that would have shown it (due within HISTORY_ITEM_DAYS of the prior day, list under the cap).
-    A changed score can't be seen without the map.
+    A changed score can't be seen without the map. A class whose map was trimmed (scores_trimmed)
+    gets no changes here; attach_insight_facts flags its move as unexplained instead.
     """
     row = prior_class_row or {}
     new_keys, prior_scores = [], {}
+    if row.get("scores_trimmed"):
+        return new_keys, prior_scores
     scored = []
     for assignment in assignments or []:
         key = _history_item_key(assignment.get("description"))
@@ -5317,7 +5400,7 @@ def score_changes(prior_class_row, assignments, prior_date=None):
         before = row["scores"]
         for key, assignment in scored:
             old = before.get(key)
-            if not isinstance(old, (list, tuple)) or len(old) != 2:
+            if not isinstance(old, (list, tuple)) or len(old) < 2:
                 new_keys.append(key)
             elif (old[0], old[1]) != (assignment.get("points_earned"), assignment.get("points_possible")):
                 prior_scores[key] = (old[0], old[1])
@@ -5360,6 +5443,7 @@ def attach_insight_facts(student_data, history, student_sn, today=None):
             "assignments": assignments,
             "new_keys": new_keys,
             "prior_scores": prior_scores,
+            "scores_trimmed": bool((prior_classes.get(name) or {}).get("scores_trimmed")),
         })
     student_data["insight_facts"] = insights.student_facts(classes, snapshots, prior, today)
     return student_data["insight_facts"]
