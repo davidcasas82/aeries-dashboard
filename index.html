@@ -5725,13 +5725,16 @@
             head.appendChild(titles);
             section.appendChild(head);
             // Code tags (the writer's story_tags): tagged classes first, Easiest win then Biggest risk, each
-            // with its tag after the class name. The other classes keep their order.
+            // with its tag after the class name. The other classes keep their order. One of each per kid, as the
+            // runner sends them: if a payload ever carries more, the first class shown with a story keeps it.
             const tagOrder = [['easiest_win', 'Easiest win', 'win'], ['biggest_risk', 'Biggest risk', 'risk']];
+            const shown = new Set();
             const rows = courses.map((course, i) => {
                 const pick = picks[i];
                 const story = pick && typeof pick.story === 'string' ? pick.story.trim() : '';
-                const sent = pick && Array.isArray(pick.tags) ? pick.tags : [];
-                const tags = tagOrder.filter(([tag]) => sent.includes(tag));
+                const sent = story && pick && Array.isArray(pick.tags) ? pick.tags : [];
+                const tags = tagOrder.filter(([tag]) => sent.includes(tag) && !shown.has(tag));
+                tags.forEach(([tag]) => shown.add(tag));
                 const rank = tags.length ? tagOrder.indexOf(tags[0]) : tagOrder.length;
                 return { course, story, tags, rank };
             }).filter(row => row.story);

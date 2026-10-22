@@ -205,6 +205,15 @@ class LocalNotesPageTests(unittest.TestCase):
         self.assertNotIn("Top focus area", HTML)
         self.assertNotIn("glance-insights-headline", HTML)
 
+    def test_one_of_each_tag_per_kid_even_if_the_payload_repeats_one(self):
+        story = lambda cls, tags=None: {"class": cls, "story": f"{cls} note.", **({"tags": tags} if tags else {})}
+        rows = self.rows({"stories": [story("Spanish", ["easiest_win"]), story("Art", ["easiest_win", "biggest_risk"]),
+                                      story("Bio", ["biggest_risk"]), {"class": "Chem", "story": " ", "tags": ["biggest_risk"]}]},
+                         ["Chem", "Spanish", "Art", "Bio"])
+        # Chem has no story, so it claims nothing; Spanish keeps the win, Art the risk, Bio nothing.
+        self.assertEqual([[c[1] for c in r[0]] for r in rows],
+                         [["Spanish", "Easiest win"], ["Art", "Biggest risk"], ["Bio"]])
+
     def test_tags_render_only_their_fixed_labels_as_text(self):
         rows = self.rows({"stories": [{"class": SCRIPT_TITLE, "story": IMG_TITLE,
                                        "tags": [SCRIPT_TITLE, "easiest_win", IMG_TITLE, "<b>biggest_risk</b>"]},

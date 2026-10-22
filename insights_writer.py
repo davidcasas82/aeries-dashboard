@@ -12,7 +12,9 @@ Each class runs as a pipeline:
      aren't backed by the facts it cites. Spelled-out numbers are read as numbers first.
   4. A vote pass asks the model, several times, whether each surviving sentence is backed;
      a sentence needs a majority.
-  5. eval_story (code) rejects the story unless it cites a grade_move, what_if or pattern
+  5. code_lines (code, no model) adds the next named item's move-up step and keep sentence; the
+     model never writes, votes on or trims them.
+  6. eval_story (code) rejects the story unless it cites a grade_move, what_if or pattern
      fact, keeps the insight order, and never restates past-due or missing work.
 Then story_tags (code, no model) marks the student's easiest win and biggest risk.
 """
@@ -273,10 +275,10 @@ You get FACTS as JSON. Every fact has an id. Use only those facts.
 
 Name assignments and classes ONLY with slots, which code fills in with the real name:
 - {item:<cause id>} ONLY for a cause inside a grade_move's causes (it has a title). Code adds its score, like "(6/10)"; don't write the score yourself.
-- {next:<what_if id>} or {next:<keep_letter id>} for the coming item a what_if or keep_letter fact is about. Code writes "next test", "next assessment" or the item's title.
-- {bucket:<fact id>} for the bucket or category of a cause, what_if or keep_letter fact ("{bucket:<cause id>} scores dragged it."). Code writes the name, like "Homework".
+- {next:<what_if id>} for the coming item a what_if fact is about. Code writes "next test", "next assessment" or the item's title.
+- {bucket:<fact id>} for the bucket or category of a cause or what_if fact ("{bucket:<cause id>} scores dragged it."). Code writes the name, like "Homework".
 - {class:<fact id>} for the class name. You may also write the class's own name as FACTS gives it; never another class.
-A what_if or keep_letter id goes in a {next:} slot, never in an {item:} slot: the next item has no title yet.
+A what_if id goes in a {next:} slot, never in an {item:} slot: the next item has no title yet.
   Right: "A 107 or better on the {next:whatif:art:projects:20} gets it to a B."
   Wrong: "A 107 or better on the {item:whatif:art:projects:20} gets it to a B."
 Never write an assignment word yourself (test, quiz, exam, lab, project, packet, homework, essay, report, assessment, ...), not even "the next test": use {next:<id>} or {bucket:<id>}. Never write a fact id outside the braces, and nothing but these slots in braces. A sentence that does is thrown away.
@@ -292,8 +294,7 @@ Every sentence cites at least one fact and is one of these forms, word for word.
   The same with "{bucket:<cause id>} scores" in place of "The {item:<cause id>}". Two or three causes with the same effect may share one form, joined with "and".
 - Weight: "{bucket:<cause id>} is 140% of the grade.", with that bucket's bucket_weight_pct.
 - Pattern: only if FACTS has a posting_day fact, its say_pattern, citing it. Never write a weekday any other way.
-- Next step: the what_if fact's say_step ("A 107 or better on the {next:<what_if id>} gets it to a B."). With no what_if fact, no next step.
-- Keep: if the grade dropped and FACTS has a keep_letter fact, end with its say_keep, citing it: "A 102 or better on the {next:<keep_letter id>} keeps the A." If its say_keep says the next item can't drop the letter, you may end with that or leave it out.
+- Next step: the what_if fact's say_step ("A 107 or better on the {next:<what_if id>} gets it to a B."). With no what_if fact, no next step. Code adds the step for a named next item, and what it takes to keep the letter, itself.
   Right: "The {item:cause:ceramics:2026-09-09:glazetest} hurt."
   Wrong: "Still a D, 13.9 points from a C, and slipping." (cites a fact but isn't its say_opening, word for word)
 Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
@@ -393,16 +394,12 @@ def ranked_causes(move):
 
 
 def model_facts(class_facts):
-    """What the model sees: a move whose causes don't explain it is sent without them, and of the
-    class's keep_letter fact only on a drop story (pick_keep), with its say_keep wording."""
+    """What the model sees: a move whose causes don't explain it is sent without them, and no keep_letter
+    fact (code writes the keep sentence itself, see code_lines)."""
     out = []
-    keep = pick_keep(class_facts)
     for fact in class_facts:
         if is_keep(fact):
-            if keep is None or fact["id"] != keep["id"]:
-                continue
-            spoken = say_keep(fact)
-            fact = {**fact, "say_keep": spoken} if spoken else fact
+            continue
         # A scale break or a no-raise-math gate has no sentence of its own (form_reason): the model never sees it.
         if fact.get("kind") in UNSAYABLE_KINDS:
             continue
@@ -543,20 +540,36 @@ def is_keep(fact):
 
 
 def pick_keep(class_facts):
-    """The class's keep_letter fact when its grade dropped, else None.
+    """The class's keep_letter fact when code can say it, in any direction (rise, flat or drop), else None.
 
     The engine already picks one per class (a needed score beats can't-drop, then the soonest named
-    next item, the drop's biggest cause, the heaviest bucket), so the writer only takes it.
+    next item, the drop's biggest cause, the heaviest bucket), so the writer only takes it. It is said only
+    about a named next item at its posted points (_named): a needed score of at most 100, or #55's
+    can't-drop form (_named_cannot_lose). At a typical size, with no item named, it isn't said.
     """
-    facts = [f for f in class_facts if not f.get("move")]
-    dropped = any(f.get("kind") == "grade_move" and isinstance(f.get("delta"), (int, float)) and f["delta"] < 0
-                  for f in facts)
-    keep = next((f for f in facts if is_keep(f)), None)
-    if not dropped or keep is None:
+    keep = next((f for f in class_facts if is_keep(f) and not f.get("move")), None)
+    if keep is None or not _named(keep):
         return None
-    if not isinstance(keep.get("needed_pct"), (int, float)) and not _named_cannot_lose(keep):
+    if _number(keep.get("needed_pct")):
+        return keep if keep["needed_pct"] <= 100 else None
+    return keep if _named_cannot_lose(keep) else None
+
+
+def move_up_step(class_facts):
+    """The class's what_if for its next named item when it reaches the next letter, else None.
+
+    The next named item is the soonest one attach_next_items named at its posted points (due date, then
+    title, then id). Reachable means a needed score of at most 100; the step's target must be the class's
+    next letter. A later item never stands in for a next one that can't get there.
+    """
+    named = [f for f in class_facts if f.get("kind") == "what_if" and _named(f)]
+    step = min(named, key=lambda f: (str(f.get("next_due") or ""), str(f["next_title"]), f["id"]), default=None)
+    letter = next((f for f in class_facts if f.get("kind") == "next_letter"), None)
+    if step is None or letter is None or not step.get("reachable") or not _number(step.get("needed_pct")) \
+            or step["needed_pct"] > 100 or not _number(step.get("target")) \
+            or insights.letter_for(step["target"]) != letter.get("next_letter"):
         return None
-    return keep
+    return step
 
 
 def _named_cannot_lose(fact):
@@ -571,7 +584,8 @@ def say_keep(fact):
     """How a note says a keep_letter fact, in slot form: "A 62 or better on the {next:<id>} keeps the A." or,
     when the named next item can't cost the letter, "The {next:<id>} can't drop it below an A." (only with a
     named upcoming item at its posted points, see _named_cannot_lose). Code fills the slot with the next
-    item's title or "next <bucket>" after the checks."""
+    item's title or "next <bucket>" after the checks. Only code says it (code_lines), and only for
+    pick_keep's fact: a named item at its posted points; a drafted sentence citing a keep fact is dropped."""
     letter = fact.get("letter")
     if not letter or not fact.get("id"):
         return None
@@ -1540,7 +1554,7 @@ def form_reason(text, cites, index):
       what_if, with or without the next_letter   its say_step, word for word
       what_if alone              or the weight sentence on its bucket: "{bucket:<what_if id>} is 50% of the grade."
       posting_day                say_pattern ({class:} prefix allowed): "Scores usually post Thursdays."
-      keep_letter                its say_keep, word for word (keep-a)
+      keep_letter                its say_keep, word for word (code_lines writes it; a drafted one is dropped)
       scale_break, no_raise_math, any other kind or mix: no sentence.
     """
     text = (text or "").strip()
@@ -1580,7 +1594,7 @@ def eval_story(sentences, index):
     not an insight), that restates past-due or missing work, or that's out of order
     (letter, cause, pattern, next step). The first sentence must state the letter with the
     gap or the move, backed by a cited next_letter or grade_move. A story about a drop must
-    end on the class's what_if step when the class has one.
+    end on the class's what_if or keep step when the class has one; a can't-drop keep line may follow it.
     """
     reason = _story_basics(sentences, index)
     if reason:
@@ -1594,7 +1608,9 @@ def eval_story(sentences, index):
     keep = pick_keep(list(index.values()))
     if keep and isinstance(keep.get("needed_pct"), (int, float)):
         steps.add(keep["id"])
-    if drops and steps and not set(sentences[-1].get("cites") or []) & steps:
+    # A can't-drop keep sentence (code puts it last) is no step; the story must end on a step before it.
+    tail = [s for s in sentences if not (keep and keep.get("cannot_lose") and (s.get("cites") or []) == [keep["id"]])]
+    if drops and steps and not (tail and set(tail[-1].get("cites") or []) & steps):
         return "a drop story must end on its what-if step"
     return None
 
@@ -1776,30 +1792,64 @@ def reason_code(reason):
     return re.sub(r"\s+", " ", code).strip()
 
 
+CODE_STEP_REASON = "code writes this step"
+
+
+def code_lines(class_facts, name, classes=None):
+    """The sentences code writes for a class, in slot form, after the model's: the next named item's move-up
+    step (say_step of move_up_step: "A 90 or better on the {next:<id>} gets it to an A.") and its keep
+    sentence (say_keep of pick_keep: "An 84 or better on the {next:<id>} keeps the B."), on a rising, flat
+    or falling class alike. Each is a what-if step to the checks and passes check_sentence like a model
+    sentence, or it isn't written. No model writes, votes on or trims them."""
+    index = fact_index(class_facts)
+    step, keep = move_up_step(class_facts), pick_keep(class_facts)
+    lines = []
+    for role, fact, text in (("move_up", step, _step(step) if step else None),
+                             ("keep", keep, say_keep(keep) if keep else None)):
+        if text and check_sentence(text, [fact["id"]], index, name, classes) is None:
+            lines.append({"text": text, "cites": [fact["id"]], "code": role})
+    return lines
+
+
 def write_class(model, facts, name, votes=VOTES):
-    """{"class", "story", "cites", "dropped"} or None when there's nothing worth saying."""
+    """{"class", "story", "cites", "keep_sentence", "dropped"} or None when there's nothing worth saying.
+
+    The model's checked, voted sentences come first, then code_lines. A drafted sentence citing a keep fact,
+    or any what_if when code writes the move-up step, is dropped: code owns those, so each is said once and
+    the vote can't remove it. keep_sentence is the keep sentence as published, or None.
+    """
     class_facts = facts_for(facts, name)
     if not worth_saying(class_facts):
         return None
     index = fact_index(class_facts)
+    classes = class_names(facts)
+    code = code_lines(class_facts, name, classes)
+    owns_step = any(line["code"] == "move_up" for line in code)
     user = json.dumps({"class": name, "scale": insights.SCALE_LABEL, "facts": model_facts(class_facts)}, indent=1)
     drafted = _sentences(model.complete(DRAFT_SYSTEM, user))
     kept, dropped = [], []
     for sentence in drafted:
-        reason = check_sentence(sentence["text"], sentence["cites"], index, name, class_names(facts))
+        kinds = {(index.get(c) or {}).get("kind") for c in sentence["cites"]}
+        if "keep_letter" in kinds or (owns_step and "what_if" in kinds):
+            dropped.append({**sentence, "reason": CODE_STEP_REASON})
+            continue
+        reason = check_sentence(sentence["text"], sentence["cites"], index, name, classes)
         if reason:
             dropped.append({**sentence, "reason": reason})
         else:
             kept.append({**sentence, "slots": sentence["text"], "text": fix_articles(fill_slots(sentence["text"], index))})
     voted = vote(model, kept, class_facts, votes)
     dropped += [{**s, "reason": "vote"} for s in kept if s not in voted]
-    if eval_story([dict(s) for s in voted], index):
+    final = voted + [{**line, "slots": line["text"], "text": fix_articles(fill_slots(line["text"], index))}
+                     for line in code]
+    if eval_story([{"text": s["text"], "cites": s["cites"]} for s in final], index):
         return None
     return {
         "class": name,
-        "story": " ".join(s["text"] for s in voted),
-        "slotted": " ".join(s.get("slots", s["text"]) for s in voted),
-        "cites": _unique([c for s in voted for c in s["cites"]]),
+        "story": " ".join(s["text"] for s in final),
+        "slotted": " ".join(s.get("slots", s["text"]) for s in final),
+        "cites": _unique([c for s in final for c in s["cites"]]),
+        "keep_sentence": next((s["text"] for s in final if s.get("code") == "keep"), None),
         # Reason codes only: the full reasons quote grade numbers, so they stay out of stores and logs.
         "dropped": [reason_code(d["reason"]) for d in dropped],
     }
@@ -1807,9 +1857,10 @@ def write_class(model, facts, name, votes=VOTES):
 
 # ── Tags (code, no model) ────────────────────────────────────────────────────
 # A class's tag says what its next item means: the easiest step up a letter (the soonest next item, named or
-# not), or the hardest score to keep the letter it has (named items only, and only after a drop, as in
-# pick_keep). "Named" is an upcoming item attach_next_items matched at its posted points. write_up works the
-# tags out over the classes whose stories publish, so a tag always lands on a story.
+# not), or the hardest score to keep the letter it has (pick_keep: a named item at its posted points, in any
+# direction). "Named" is an upcoming item attach_next_items matched at its posted points. write_up works the
+# tags out over the classes whose stories publish, and Biggest risk only over stories that carry their keep
+# sentence, so a tag always lands on a story that says it.
 EASIEST_WIN, BIGGEST_RISK = "easiest_win", "biggest_risk"
 STORY_TAGS = (EASIEST_WIN, BIGGEST_RISK)
 
@@ -1874,16 +1925,15 @@ def easiest_win(facts):
 def biggest_risk(facts):
     """The class whose keep_letter fact needs the highest score on a named next item, or None.
 
-    Same rule as pick_keep: the engine emits a keep fact for every class, but it only counts when the class
-    dropped (a rise story says how to go up, not what could be lost). Then only a keep fact with a needed
-    score about a named item at its posted points counts (a can't-drop fact needs no score). Ties go to the
-    smaller cushion above the letter's floor (unknown last), then the name.
+    The class's pick_keep fact, in any direction, with a needed score: a named item at its posted points.
+    A can't-drop fact needs no score, so a class that keeps its letter even with a zero isn't eligible. Ties
+    go to the smaller cushion above the letter's floor (unknown last), then the name.
     """
     floors = dict(insights.SCALE)
     best = None
     for name in class_names(facts):
         fact = pick_keep(facts_for(facts, name))
-        if fact is None or not _named(fact) or not _number(fact.get("needed_pct")):
+        if fact is None or not _number(fact.get("needed_pct")):
             continue
         pct = _class_pct(facts, name)
         cushion = pct - floors[fact["letter"]] if pct is not None and fact.get("letter") in floors else math.inf
@@ -1892,16 +1942,19 @@ def biggest_risk(facts):
     return best[2] if best else None
 
 
-def story_tags(facts, classes=None):
+def story_tags(facts, classes=None, risk_classes=None):
     """{class name: [tags]} in STORY_TAGS order. One class can carry both.
 
     classes, when given, limits the race to those classes (write_up passes the ones with a published story),
-    so the next-best class with a story gets a tag its winner can't carry."""
-    if classes is not None:
-        allowed = set(classes)
-        facts = [f for f in facts if f.get("class") in allowed]
+    and risk_classes limits Biggest risk further (write_up passes the ones whose story carries the keep
+    sentence), so the next-best class gets a tag its winner can't carry."""
+    def only(names):
+        allowed = set(names)
+        return [f for f in facts if f.get("class") in allowed]
+    win_facts = facts if classes is None else only(classes)
+    risk_facts = win_facts if risk_classes is None else only(set(risk_classes) & {f.get("class") for f in win_facts})
     tags = {}
-    for tag, name in ((EASIEST_WIN, easiest_win(facts)), (BIGGEST_RISK, biggest_risk(facts))):
+    for tag, name in ((EASIEST_WIN, easiest_win(win_facts)), (BIGGEST_RISK, biggest_risk(risk_facts))):
         if name is not None:
             tags.setdefault(name, []).append(tag)
     return tags
@@ -1911,14 +1964,15 @@ def write_up(model, insight_facts, log_items=None, votes=VOTES, upcoming=None):
     """The whole write-up for one student: {"as_of", "stories"}, each story with its tags (story_tags) if any.
 
     upcoming (from upcoming_items) lets a what-if name the real next item and its due date. Tags are worked
-    out over the classes whose stories survive, so each goes on a published story. Stories come sorted by
-    class name (story_order), so the same facts in any order give the same bytes.
+    out over the classes whose stories survive, so each goes on a published story; Biggest risk only on a
+    story that carries its keep sentence. Stories come sorted by class name (story_order), so the same facts
+    in any order give the same bytes.
     """
     facts = attach_next_items(merged_facts(insight_facts, log_items), upcoming)
     # A story over the Worker's limits is dropped alone; the others still publish.
     stories = [s for s in (write_class(model, facts, name, votes) for name in class_names(facts)) if s and story_fits(s)]
     stories.sort(key=story_order)
-    tags = story_tags(facts, [s["class"] for s in stories])
+    tags = story_tags(facts, [s["class"] for s in stories], [s["class"] for s in stories if s.get("keep_sentence")])
     for story in stories:
         if story["class"] in tags:
             story["tags"] = tags[story["class"]]

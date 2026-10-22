@@ -387,7 +387,7 @@ class ClassSlotTests(unittest.TestCase):
 
 
 class PublishLimitTests(unittest.TestCase):
-    """Cites are deduped; a story or headline over family-data's limits (or with no cites) is dropped alone."""
+    """Cites are deduped; a story over family-data's limits (or with no cites) is dropped alone."""
 
     def test_duplicate_cites_are_deduped_in_order(self):
         raw = json.dumps({"sentences": [{"text": f"S{i}.", "cites": ["a", "b", "a"] if i % 2 else ["c"] * 3}
@@ -1114,6 +1114,14 @@ def chem_keep_facts(cannot_lose=False, keep_id=KEEP_LAB, named=True):
     return chem_facts() + [keep]
 
 
+LAB9 = [{"class": "Chem", "bucket": "Coursework", "title": "Lab 9", "due": "2026-10-23", "points": 10.0}]
+
+
+def chem_named_keep_facts(**kw):
+    """chem_keep_facts with Lab 9 named at the keep fact's posted points, so code says its keep sentence."""
+    return w.attach_next_items(chem_keep_facts(**kw), LAB9)
+
+
 def biology_facts():
     """GE's repro: Biology at 85.2 (a B), down since Oct 14, a keep_letter fact for the B and next:biology."""
     return [{"id": "next:biology", "kind": "next_letter", "class": "Biology", "pct": 85.2, "letter": "B",
@@ -1126,7 +1134,7 @@ def biology_facts():
 
 
 class KeepTheLetterWriterTests(unittest.TestCase):
-    """The engine's keep_letter fact on a drop story, on made-up Chem data."""
+    """The engine's keep_letter fact, said by code (code_lines), on made-up Chem data."""
 
     OPEN = {"text": "Still an A, down 1.6 since Oct 14.", "cites": [CHEM_MOVE]}
     CAUSE = {"text": "Mostly the {item:%s}." % CHEM_C1, "cites": [CHEM_C1]}
@@ -1141,23 +1149,28 @@ class KeepTheLetterWriterTests(unittest.TestCase):
         line = "The {next:%s} can't drop it below an A." % KEEP_LAB
         self.assertIsNone(w.cause_form_reason(line, [KEEP_LAB], safe))
         self.assertIsNone(w.check_sentence(line, [KEEP_LAB], safe, "Chem"))
-        story = w.write_class(ScriptedModel({"Chem": [self.OPEN, self.CAUSE, self.KEEP]}), chem_keep_facts(), "Chem")
-        self.assertEqual(story["dropped"], [])
+        # The model's own keep sentence is dropped (code owns it) and code writes the same sentence last.
+        story = w.write_class(ScriptedModel({"Chem": [self.OPEN, self.CAUSE, self.KEEP]}), chem_named_keep_facts(), "Chem")
+        self.assertEqual(story["dropped"], [w.CODE_STEP_REASON])
+        self.assertEqual(story["keep_sentence"], "A 62 or better on the Lab 9 keeps the A.")
+        self.assertTrue(story["story"].endswith(story["keep_sentence"]))
 
-    def test_the_model_sees_the_engines_keep_fact_with_its_wording(self):
-        seen = [f for f in w.model_facts(chem_keep_facts()) if w.is_keep(f)]
-        self.assertEqual([f["id"] for f in seen], [KEEP_LAB])
+    def test_the_model_never_sees_a_keep_fact_code_says_it(self):
+        for facts in (chem_keep_facts(), chem_named_keep_facts(), chem_named_keep_facts(cannot_lose=True)):
+            self.assertEqual([f for f in w.model_facts(facts) if w.is_keep(f)], [])
         # The keep wording names the item only through a {next:} slot; code fills it after the checks.
-        self.assertEqual(seen[0]["say_keep"], "A 62 or better on the {next:%s} keeps the A." % KEEP_LAB)
-        idx = w.fact_index(chem_keep_facts())
-        self.assertEqual(w.fill_slots(seen[0]["say_keep"], idx), "A 62 or better on the next coursework assignment keeps the A.")
-        safe = [f for f in w.model_facts(chem_keep_facts(cannot_lose=True)) if w.is_keep(f)]
-        self.assertEqual(safe[0]["say_keep"], "The {next:%s} can't drop it below an A." % KEEP_LAB)
-        self.assertEqual(w.fill_slots(safe[0]["say_keep"], w.fact_index(chem_keep_facts(cannot_lose=True))),
+        keep = w.pick_keep(chem_named_keep_facts())
+        self.assertEqual(w.say_keep(keep), "A 62 or better on the {next:%s} keeps the A." % KEEP_LAB)
+        self.assertEqual(w.fill_slots(w.say_keep(keep), w.fact_index(chem_named_keep_facts())),
+                         "A 62 or better on the Lab 9 keeps the A.")
+        safe = w.pick_keep(chem_keep_facts(cannot_lose=True))
+        self.assertEqual(w.say_keep(safe), "The {next:%s} can't drop it below an A." % KEEP_LAB)
+        self.assertEqual(w.fill_slots(w.say_keep(safe), w.fact_index(chem_keep_facts(cannot_lose=True))),
                          "The Lab 9 can't drop it below an A.")
-        tests = [f for f in w.model_facts(chem_keep_facts(keep_id=KEEP_TEST)) if w.is_keep(f)]
-        self.assertEqual(w.fill_slots(tests[0]["say_keep"], w.fact_index(chem_keep_facts(keep_id=KEEP_TEST))),
-                         "A 72 or better on the next test keeps the A.")
+        # At a typical size, with no item named, code says nothing.
+        self.assertIsNone(w.pick_keep(chem_keep_facts()))
+        self.assertIsNone(w.pick_keep(chem_keep_facts(keep_id=KEEP_TEST)))
+        self.assertIsNone(w.pick_keep(chem_keep_facts(cannot_lose=True, named=False)))
         # A named next item of the same bucket and size gives the keep step its title.
         upcoming = [{"class": "Chem", "bucket": "Tests", "title": "Unit 4 Test", "due": "2026-10-28", "points": 50.0}]
         named = w.attach_next_items(chem_keep_facts(keep_id=KEEP_TEST), upcoming)
@@ -1168,12 +1181,17 @@ class KeepTheLetterWriterTests(unittest.TestCase):
         self.assertFalse(w.is_keep({"kind": "what_if", "target": "keep"}))
 
     def test_a_drop_story_with_a_keep_fact_ends_on_it(self):
-        idx = w.fact_index(chem_keep_facts())
+        idx = w.fact_index(chem_named_keep_facts())
         self.assertEqual(w.eval_story([dict(self.OPEN), dict(self.CAUSE)], idx), "a drop story must end on its what-if step")
         self.assertIsNone(w.eval_story([dict(self.OPEN), dict(self.CAUSE), dict(self.KEEP)], idx))
-        story = w.write_class(ScriptedModel({"Chem": [self.OPEN, self.CAUSE, self.KEEP]}), chem_keep_facts(), "Chem")
+        # The model leaves the keep sentence out; code adds it, so the story still ends on it.
+        story = w.write_class(ScriptedModel({"Chem": [self.OPEN, self.CAUSE]}), chem_named_keep_facts(), "Chem")
         self.assertEqual(story["story"], "Still an A, down 1.6 since Oct 14. Mostly the Lab 3 Packet (4/10). "
-                                         "A 62 or better on the next coursework assignment keeps the A.")
+                                         "A 62 or better on the Lab 9 keeps the A.")
+        # With no item named, there is no keep sentence, from the model or from code.
+        story = w.write_class(ScriptedModel({"Chem": [self.OPEN, self.CAUSE, self.KEEP]}), chem_keep_facts(), "Chem")
+        self.assertEqual(story["story"], "Still an A, down 1.6 since Oct 14. Mostly the Lab 3 Packet (4/10).")
+        self.assertIsNone(story["keep_sentence"])
 
     def test_the_checker_takes_a_keep_claim_only_from_a_cited_keep_fact(self):
         idx = w.fact_index(chem_keep_facts())
@@ -1209,8 +1227,7 @@ class KeepTheLetterWriterTests(unittest.TestCase):
                                            ["keep:biology:tests:50"], idx, "Biology"))
         self.assertIn("current letter", w.check_sentence("A 54 or better on the next test keeps the A.",
                                                          ["keep:biology:tests:50"], idx, "Biology"))
-        self.assertEqual(w.fill_slots(w.model_facts(biology_facts())[2]["say_keep"], idx),
-                         "A 54 or better on the next test keeps the B.")
+        self.assertEqual(w.fill_slots(w.say_keep(biology_facts()[2]), idx), "A 54 or better on the next test keeps the B.")
 
     def test_physics_bar_story_passes_on_synthetic_facts(self):
         phys = [{"id": "move:p", "kind": "grade_move", "class": "Physics & Eng", "since": "2026-10-14",
@@ -1222,15 +1239,16 @@ class KeepTheLetterWriterTests(unittest.TestCase):
                       "change": "new", "earned": 9.0, "possible": 10.0, "points": 0.77, "share": 0.38}]},
                 {"id": "keep:p:assessments:10", "kind": "keep_letter", "class": "Physics & Eng", "letter": "A",
                  "bucket": "Assessments", "points": 10.0, "needed_pct": 74.6, "cannot_lose": False}]
+        phys = w.attach_next_items(phys, [{"class": "Physics & Eng", "bucket": "Assessments", "title": "Quiz 4",
+                                           "due": "2026-10-23", "points": 10.0}])
         mf = w.model_facts(phys)
-        self.assertEqual(mf[1]["say_keep"], "A 75 or better on the {next:keep:p:assessments:10} keeps the A.")
+        self.assertEqual([f["kind"] for f in mf], ["grade_move"])
         draft = [{"text": mf[0]["say_opening"], "cites": ["move:p"]},
                  {"text": "The {item:cause:p:packet} did most of the damage.", "cites": ["cause:p:packet"]},
-                 {"text": "The {item:cause:p:lab} helped.", "cites": ["cause:p:lab"]},
-                 {"text": mf[1]["say_keep"], "cites": ["keep:p:assessments:10"]}]
+                 {"text": "The {item:cause:p:lab} helped.", "cites": ["cause:p:lab"]}]
         story = w.write_class(ScriptedModel({"Physics & Eng": draft}), phys, "Physics & Eng")
         self.assertEqual(story["story"], "Still an A, down 1.6 since Oct 14. The Unit 2 Packet (4/10) did most of the damage. "
-                                         "The Balloon Rocket Lab (9/10) helped. A 75 or better on the next assessment keeps the A.")
+                                         "The Balloon Rocket Lab (9/10) helped. A 75 or better on the Quiz 4 keeps the A.")
         self.assertEqual(story["dropped"], [])
         # It must end on the keep step, which names a score.
         self.assertEqual(w.eval_story([dict(s) for s in draft[:3]], w.fact_index(phys)),
@@ -1517,12 +1535,14 @@ class FoldedCausesAndKeepFactTests(unittest.TestCase):
 
         w.write_class(Spy(), facts, "Biology")
         prompt = json.loads(sent[0])
-        keeps = [f for f in prompt["facts"] if f["kind"] == "keep_letter"]
+        # Code says the keep sentence, so the prompt never carries the keep fact; the engine still emits one.
+        self.assertEqual([f for f in prompt["facts"] if f["kind"] == "keep_letter"], [])
+        keeps = [f for f in facts if f["kind"] == "keep_letter"]
         self.assertEqual(len(keeps), 1)
-        self.assertEqual(keeps[0]["say_keep"], "A 54 or better on the {next:%s} keeps the B." % keeps[0]["id"])
+        self.assertEqual(w.say_keep(keeps[0]), "A 54 or better on the {next:%s} keeps the B." % keeps[0]["id"])
         idx = w.fact_index(w.facts_for(facts, "Biology"))
-        self.assertIsNone(w.check_sentence(keeps[0]["say_keep"], [keeps[0]["id"]], idx, "Biology"))
-        self.assertEqual(w.fill_slots(keeps[0]["say_keep"], idx), "A 54 or better on the next test keeps the B.")
+        self.assertIsNone(w.check_sentence(w.say_keep(keeps[0]), [keeps[0]["id"]], idx, "Biology"))
+        self.assertEqual(w.fill_slots(w.say_keep(keeps[0]), idx), "A 54 or better on the next test keeps the B.")
 
 
 def geo_rise_facts():
@@ -2166,10 +2186,10 @@ class ReviewNitTests(unittest.TestCase):
             self.assertIsNone(w.check_sentence("A 74 or better on the {next:whatif:geo} gets it to a C.",
                                                ["whatif:geo"], idx, "Geo"), bucket)
 
-    def test_keep_a_offers_keep_ids_in_next_slots(self):
-        # #52 drops this line until keep-A lands; keep-A puts it back.
-        self.assertIn("{next:<keep_letter id>}", w.DRAFT_SYSTEM)
-        self.assertIn("A what_if or keep_letter id goes in a {next:} slot", w.DRAFT_SYSTEM)
+    def test_the_prompt_offers_no_keep_ids_now_code_says_the_keep(self):
+        # keep-A offered keep ids in {next:} slots; code now writes the keep sentence, so the prompt doesn't.
+        self.assertNotIn("keep_letter", w.DRAFT_SYSTEM)
+        self.assertIn("A what_if id goes in a {next:} slot", w.DRAFT_SYSTEM)
 
 
 class OtherClassNameTests(unittest.TestCase):
@@ -2570,35 +2590,170 @@ class StoryTagTests(unittest.TestCase):
         self.assertEqual(w.public_write_up(up)["stories"][0]["tags"], ["easiest_win"])
 
 
+def scripted_opening(facts, name):
+    """The model's part of a class story in these tests: its say_opening (the move's, else the next letter's)."""
+    shown = w.model_facts(w.facts_for(facts, name))
+    fact = next((f for f in shown if f.get("kind") == "grade_move"), None) or \
+        next(f for f in shown if f.get("kind") == "next_letter")
+    return [{"text": fact["say_opening"], "cites": [fact["id"]]}]
+
+
+class CodeLineTests(unittest.TestCase):
+    """David's rule at cafb128: code writes the keep sentence and the move-up step for the next named item at
+    its posted points, on a rising, flat or falling class; the checker takes both as what-if steps."""
+
+    def chem(self, delta, **kw):
+        facts, upcoming = tag_class("Chem", 76.0, **{"needed": 89.2, "keep": 61.0, "delta": delta, **kw})
+        return w.attach_next_items(facts, upcoming)
+
+    def test_both_sentences_on_a_rising_a_flat_and_a_falling_class(self):
+        for delta in (1.5, None, -1.5):
+            facts = self.chem(delta)
+            idx = w.fact_index(facts)
+            lines = w.code_lines(facts, "Chem")
+            self.assertEqual([(l["code"], l["text"]) for l in lines], [
+                ("move_up", "A 90 or better on the {next:whatif:chem:tests:50} gets it to a B."),
+                ("keep", "A 61 or better on the {next:keep:chem:tests:50} keeps the C.")], delta)
+            for line in lines:
+                # The checker passes each one with the class's move in the index, whichever way it went.
+                self.assertIsNone(w.check_sentence(line["text"], line["cites"], idx, "Chem"), (delta, line))
+            story = w.write_class(ScriptedModel({"Chem": scripted_opening(facts, "Chem")}), facts, "Chem")
+            self.assertEqual(story["story"].split(". ", 1)[1], "A 90 or better on the Chem Unit Test gets it to a B. "
+                                                                "A 61 or better on the Chem Unit Test keeps the C.")
+            self.assertEqual(story["keep_sentence"], "A 61 or better on the Chem Unit Test keeps the C.")
+            self.assertEqual(story["dropped"], [])
+
+    def test_a_falling_class_with_up_words_in_its_step_is_fine(self):
+        # "gets it to a B" on a falling class: no up/down claim, so the same-sign rule doesn't read it.
+        facts = self.chem(-3.0)
+        line = w.code_lines(facts, "Chem")[0]
+        self.assertIsNone(w.check_sentence(line["text"], line["cites"], w.fact_index(facts), "Chem"))
+        # A model sentence saying the grade went up on that falling class still drops.
+        self.assertEqual(w.check_sentence("It went up, and a 90 or better on the {next:whatif:chem:tests:50} gets it to a B.",
+                                          ["whatif:chem:tests:50"], w.fact_index(facts), "Chem"),
+                         "says the grade moved a way no cited move did")
+
+    def test_no_line_on_an_unnamed_item_or_one_off_its_posted_points(self):
+        self.assertEqual(w.code_lines(self.chem(1.5, named=False), "Chem"), [])
+        # The item is named at 20 points; the facts are about 50: not its posted points, so no name, no line.
+        facts, upcoming = tag_class("Chem", 76.0, needed=89.2, keep=61.0, delta=1.5)
+        self.assertEqual(w.code_lines(w.attach_next_items(facts, [{**upcoming[0], "points": 20.0}]), "Chem"), [])
+
+    def test_no_move_up_over_100_and_the_keep_still_goes(self):
+        lines = w.code_lines(self.chem(1.5, needed=100.4, reachable=True), "Chem")
+        self.assertEqual([l["code"] for l in lines], ["keep"])
+        lines = w.code_lines(self.chem(1.5, needed=100.0), "Chem")
+        self.assertEqual([l["code"] for l in lines], ["move_up", "keep"])
+        self.assertIn("A 100 or better", lines[0]["text"])
+
+    def test_a_cant_drop_class_says_so_only_when_named(self):
+        facts, upcoming = tag_class("Chem", 76.0, cannot_lose=True, delta=2.0)
+        lines = w.code_lines(w.attach_next_items(facts, upcoming), "Chem")
+        self.assertEqual([l["text"] for l in lines], ["The {next:keep:chem:tests:50} can't drop it below a C."])
+        self.assertEqual(w.code_lines(w.attach_next_items(facts, []), "Chem"), [])
+
+    def test_a_falling_cant_drop_class_ends_on_its_step_then_the_cant_drop_line(self):
+        facts, upcoming = tag_class("Chem", 76.0, needed=89.2, cannot_lose=True, delta=-2.0)
+        facts = w.attach_next_items(facts, upcoming)
+        story = w.write_class(ScriptedModel({"Chem": scripted_opening(facts, "Chem")}), facts, "Chem")
+        self.assertEqual(story["story"], "Still a C, down 2 since Oct 1. A 90 or better on the Chem Unit Test gets it to a B. "
+                                         "The Chem Unit Test can't drop it below a C.")
+        idx = w.fact_index(facts)
+        opening, step, safe = [{"text": t, "cites": c} for t, c in (
+            (scripted_opening(facts, "Chem")[0]["text"], ["move:chem:2026-10-01"]),
+            ("x.", ["whatif:chem:tests:50"]), ("y.", ["keep:chem:tests:50"]))]
+        self.assertIsNone(w.eval_story([dict(opening), dict(step), dict(safe)], idx))
+        self.assertEqual(w.eval_story([dict(opening), dict(safe)], idx), "a drop story must end on its what-if step")
+
+    def test_writer_and_runner_sort_stories_the_same_way(self):
+        rng = random.Random(7)
+        for _ in range(200):
+            stories = [{"class": rng.choice(["Art", "art", "Bio", "Ärt", "B"]), "story": rng.choice(["a.", "b.", "A."]),
+                        "cites": rng.sample(["x", "y", "z"], rng.randint(1, 3)),
+                        **({"tags": rng.choice([["easiest_win"], ["biggest_risk"]])} if rng.random() < 0.5 else {})}
+                       for _ in range(rng.randint(1, 6))]
+            self.assertEqual([w.story_order(s) for s in stories], [runner._story_order(s) for s in stories])
+
+    def test_a_drafted_step_or_keep_is_replaced_not_repeated(self):
+        facts = self.chem(-1.5)
+        draft = scripted_opening(facts, "Chem") + [
+            {"text": "A 90 or better on the {next:whatif:chem:tests:50} gets it to a B.", "cites": ["whatif:chem:tests:50"]},
+            {"text": "A 61 or better on the {next:keep:chem:tests:50} keeps the C.", "cites": ["keep:chem:tests:50"]}]
+        # Only the opening goes to the vote. Voted down, the story has no opening, so there is none: code lines
+        # never stand alone.
+        self.assertIsNone(w.write_class(ScriptedModel({"Chem": draft}, votes=[[False]] * 3), facts, "Chem"))
+        story = w.write_class(ScriptedModel({"Chem": draft}), facts, "Chem")
+        self.assertEqual(story["story"].count("keeps the C"), 1)
+        self.assertEqual(story["story"].count("gets it to a B"), 1)
+        self.assertEqual(story["dropped"], [w.CODE_STEP_REASON] * 2)
+
+
 class TagReviewTests(unittest.TestCase):
-    """GitHub Engineer's #57 review at 83d2569: risk only after a drop, tags over published stories, and the
-    same bytes whatever order the facts come in."""
+    """GitHub Engineer's #57 review at 83d2569, with David's any-direction Biggest risk at cafb128: tags over
+    published stories, risk only on a story carrying its keep sentence, the same bytes in any fact order."""
 
-    RISE = "Still a C, up 1.5 since Oct 1. A 90 or better on the next lab gets it to a B."
-
-    def written(self, facts, upcoming, stories):
-        """write_up with each class's story scripted: stories[name] is its text, or None for no story."""
+    def written(self, facts, upcoming, stories, no_keep=()):
+        """write_up with each class's model part scripted: stories[name] is its text, or None for no story.
+        code_lines are added as write_class adds them; a class in no_keep loses its keep sentence."""
         def write_class(model, all_facts, name, votes):
             text = stories.get(name)
-            ids = sorted(f["id"] for f in all_facts if f.get("class") == name)[:2]
-            return {"class": name, "story": text, "cites": ids} if text else None
+            if not text:
+                return None
+            class_facts = w.facts_for(all_facts, name)
+            idx = w.fact_index(class_facts)
+            lines = [l for l in w.code_lines(class_facts, name) if not (l["code"] == "keep" and name in no_keep)]
+            said = {l["code"]: w.fix_articles(w.fill_slots(l["text"], idx)) for l in lines}
+            ids = sorted(f["id"] for f in class_facts)[:2] + [c for l in lines for c in l["cites"]]
+            return {"class": name, "story": " ".join([text, *said.values()]), "cites": list(dict.fromkeys(ids)),
+                    "keep_sentence": said.get("keep")}
         with mock.patch.object(w, "write_class", side_effect=write_class):
             return w.write_up(None, {"as_of": "2026-10-22", "facts": facts}, upcoming=upcoming)
 
     def published(self, up):
         return runner.insights_body(runner.insights_doc([{"sn": "9001", **w.public_write_up(up)}]))
 
-    def test_the_rise_repro_gets_no_risk_pill(self):
-        # The engine emits a keep fact for every class; Chem rose 1.5, so its keep fact is no risk.
-        chem, up = tag_class("Chem", 76.0, needed=89.2, keep=61.0, delta=1.5)
-        written = self.written(chem, up, {"Chem": self.RISE})
-        self.assertEqual([(s["class"], s.get("tags")) for s in written["stories"]], [("Chem", ["easiest_win"])])
-        self.assertIsNone(w.biggest_risk(w.attach_next_items(chem, up)))
-        # The same class after a 1.5 drop is a risk (the pick_keep rule); with no move at all it isn't.
-        dropped, up = tag_class("Chem", 76.0, needed=89.2, keep=61.0, delta=-1.5)
-        self.assertEqual(w.story_tags(w.attach_next_items(dropped, up)), {"Chem": ["easiest_win", "biggest_risk"]})
-        flat, up = tag_class("Chem", 76.0, needed=89.2, keep=61.0, delta=None)
-        self.assertEqual(w.story_tags(w.attach_next_items(flat, up)), {"Chem": ["easiest_win"]})
+    def test_biggest_risk_can_land_on_a_rising_story_and_it_carries_the_keep_sentence(self):
+        # GE's old rise repro: Chem up 1.5. Its keep sentence is now said and it can be the risk.
+        for delta in (1.5, None, -1.5):
+            chem, up = tag_class("Chem", 76.0, needed=89.2, keep=61.0, delta=delta)
+            facts = w.attach_next_items(chem, up)
+            written = w.write_up(ScriptedModel({"Chem": scripted_opening(facts, "Chem")}),
+                                 {"as_of": "2026-10-22", "facts": chem}, upcoming=up)
+            (story,) = written["stories"]
+            self.assertEqual(story["tags"], ["easiest_win", "biggest_risk"], delta)
+            self.assertIn("A 61 or better on the Chem Unit Test keeps the C.", story["story"])
+            self.assertEqual(story["keep_sentence"], "A 61 or better on the Chem Unit Test keeps the C.")
+        rise = w.attach_next_items(*tag_class("Chem", 76.0, needed=89.2, keep=61.0, delta=1.5))
+        self.assertEqual(w.biggest_risk(rise), "Chem")
+
+    def test_risk_needs_the_keep_sentence_on_the_story_and_a_score(self):
+        facts, upcoming = [], []
+        for f, u in (tag_class("Algebra", 79.5, keep=88.0, delta=0.8), tag_class("Chem", 85.0, keep=62.0),
+                     tag_class("Art", 91.0, cannot_lose=True, delta=1.0)):
+            facts += f
+            upcoming += u
+        every = {"Algebra": "Alg.", "Chem": "Chem.", "Art": "Art."}
+        tags = lambda up: {s["class"]: s["tags"] for s in up["stories"] if s.get("tags")}
+        self.assertEqual(tags(self.written(facts, upcoming, every)), {"Algebra": ["biggest_risk"]})
+        # If Algebra's story lost its keep sentence, it can't carry the tag: Chem, the next-worst, gets it.
+        self.assertEqual(tags(self.written(facts, upcoming, every, no_keep={"Algebra"})), {"Chem": ["biggest_risk"]})
+        # A class that keeps its letter even with a zero is never the risk.
+        self.assertEqual(tags(self.written(facts, upcoming, {"Art": "Art."})), {})
+
+    def test_the_same_facts_give_the_same_tags(self):
+        facts, upcoming = [], []
+        for f, u in (tag_class("Algebra", 79.5, needed=84.3, keep=70.0, delta=1.0), tag_class("Marketing", 76.3, needed=84.9),
+                     tag_class("Chem", 85.0, keep=70.4, delta=-2.0), tag_class("Biology", 80.5, keep=69.1, delta=None)):
+            facts += f
+            upcoming += u
+        want = w.story_tags(w.attach_next_items(facts, upcoming))
+        self.assertEqual(want, {"Algebra": ["easiest_win"], "Chem": ["biggest_risk"]})
+        rng = random.Random(53)
+        for _ in range(25):
+            f, u = facts[:], upcoming[:]
+            rng.shuffle(f)
+            rng.shuffle(u)
+            self.assertEqual(w.story_tags(w.attach_next_items(f, u)), want)
 
     def test_tags_go_to_the_next_best_class_with_a_published_story(self):
         facts, upcoming = [], []
