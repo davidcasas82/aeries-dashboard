@@ -1859,7 +1859,18 @@
             letter-spacing: 0;
         }
         .glance-look-next li { margin: 0 0 3px; }
-        .glance-insights { margin-bottom: 14px; }
+        .glance-insights { margin-bottom: 14px; min-width: 0; max-width: 100%; }
+        .glance-insights > *, .glance-insight-list, .glance-insight-row,
+        .glance-drawer-top > div { min-width: 0; }
+        .glance-insights-headline,
+        .glance-insight-class,
+        .glance-insight-story,
+        .glance-local-story {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: normal;
+            max-width: 100%;
+        }
         .glance-insights-headline {
             margin: 0;
             padding: 0 24px 14px;
@@ -5671,6 +5682,17 @@
             return out;
         }
 
+        // "2026-10-21" -> "Oct 21". Anything else -> '' (never an ISO date on the page).
+        function shortPostedDate(asOf) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(asOf || ''));
+            if (!m) return '';
+            const month = Number(m[2]);
+            const day = Number(m[3]);
+            const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+            return `${names[month - 1]} ${day}`;
+        }
+
         function textEl(tag, className, text) {
             const el = document.createElement(tag);
             if (className) el.className = className;
@@ -5687,7 +5709,8 @@
             head.className = 'glance-section-head';
             const titles = document.createElement('div');
             titles.appendChild(textEl('h2', '', 'Grade notes'));
-            titles.appendChild(textEl('p', '', up.as_of ? `From grades posted through ${up.as_of}` : 'From the posted grades'));
+            const through = shortPostedDate(up.as_of);
+            titles.appendChild(textEl('p', '', through ? `From grades posted through ${through}` : 'From the posted grades'));
             head.appendChild(titles);
             section.appendChild(head);
             const headline = up.headline && typeof up.headline.text === 'string' ? up.headline.text.trim() : '';

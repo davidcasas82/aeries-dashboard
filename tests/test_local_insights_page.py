@@ -16,7 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import insights_writer  # noqa: E402
 
 HTML = Path(__file__).resolve().parents[1].joinpath("index.html").read_text()
-FUNCS = ["normalizeName", "localWriteUpFor", "matchLocalStories", "withLocalWriteUp", "textEl", "buildLocalInsights"]
+FUNCS = ["normalizeName", "localWriteUpFor", "matchLocalStories", "withLocalWriteUp", "shortPostedDate", "textEl",
+         "buildLocalInsights"]
 
 FAKE_DOM = r"""
 const innerHtmlWrites = [];
@@ -144,6 +145,23 @@ class LocalNotesPageTests(unittest.TestCase):
         self.assertEqual(a["ai_summary"]["headline"], "Grok briefing")  # the Grok briefing stays for now
         self.assertEqual(b["ai_summary"]["classes"][0]["story"], "Grok story")  # no write-up for Kid B
         self.assertEqual(none["ai_summary"]["classes"][0]["status"], "Grok status")
+
+    def test_the_posted_through_date_is_short_month_and_day(self):
+        got = run_page(
+            "process.stdout.write(JSON.stringify({dates: data.dates.map(shortPostedDate), sub: data.ups.map(up =>"
+            " walk(buildLocalInsights(up, []).section).find(n => n.tagName === 'P')._text)}));",
+            {"dates": ["2026-10-21", "2026-01-05", "2026-13-01", "Oct 21", "", None],
+             "ups": [{"as_of": "2026-10-21", "stories": []}, {"stories": []}]},
+        )
+        self.assertEqual(got["dates"], ["Oct 21", "Jan 5", "", "", "", ""])
+        self.assertEqual(got["sub"], ["From grades posted through Oct 21", "From the posted grades"])
+
+    def test_notes_and_drawer_story_text_wrap(self):
+        css = HTML[HTML.index(".glance-insights-headline,\n"):]
+        css = css[:css.index("}") + 1]
+        for rule in ("white-space: normal", "overflow-wrap: anywhere", ".glance-local-story", ".glance-insight-story"):
+            self.assertIn(rule, css)
+        self.assertRegex(HTML, r"\.glance-insight-row,\s*\n\s*\.glance-drawer-top > div \{ min-width: 0; \}")
 
     def test_a_class_without_a_local_story_gets_no_row(self):
         up = {"headline": None, "stories": [{"class": "Biology", "story": "Still an A."}]}
