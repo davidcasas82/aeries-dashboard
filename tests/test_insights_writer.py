@@ -1979,9 +1979,43 @@ class MoveIdiomTests(unittest.TestCase):
                                 ("Scores usually showed up on Thursdays.", ["pat:g"]),
                                 ("Still a D, down to the wire, 1.0 points from a C.", ["next:g"]),
                                 ("Still a D, 1 point from a C; it comes down to the next score.", ["next:g"]),
-                                ("A 74 or better on the next {bucket:whatif:g} score gets it up to a C.", ["whatif:g"]),
-                                ("A 74 or better on the {next:whatif:g} brings it up to a C.", ["whatif:g"])):
+                                ("It comes down to a vote.", ["next:g"]),
+                                ("A 74 or better on the {next:whatif:g} gets it to a C.", ["whatif:g"])):
                 self.assertIsNone(w.check_sentence(text, cites, idx, "Geo"), text)
+            # "Up to a C" is up to a grade, so "up" says which way it went: a what-if step worded so needs a
+            # move of that sign and drops (fail safe). "Gets it to a C" is the step's form.
+            for text in ("A 74 or better on the next {bucket:whatif:g} score gets it up to a C.",
+                         "A 74 or better on the {next:whatif:g} brings it up to a C."):
+                self.assertIsNotNone(w.check_sentence(text, ["whatif:g"], idx, "Geo"), text)
+
+    def test_up_to_or_down_to_a_grade_is_a_direction(self):
+        # GE's repros on e677998, citing the move: a fall from a C to a D, and a rise from 66.5 to 69 (a D).
+        moved = GateReviewTests.MOVED
+        fall, rise = (w.fact_index(w.model_facts(f)) for f in (geo2_facts(), geo2_facts(delta=2.5, neg=-0.5, pos=3.0)))
+        for text in ("Up to a C since Oct 14.", "It's up to a C now.", "Up to 71.5 since Oct 14."):
+            self.assertIsNotNone(w.check_sentence(text, ["move:g"], fall, "Geo"), text)
+            self.assertEqual(claims(text, ["move:g"], fall, "Geo"), moved, text)
+        for text in ("Now down to a D.", "Down to a D since Oct 14.", "It came down to a D.",
+                     "Down to 69 since Oct 14.", "Down to 69% now."):
+            self.assertIsNotNone(w.check_sentence(text, ["move:g"], rise, "Geo"), text)
+            self.assertEqual(claims(text, ["move:g"], rise, "Geo"), moved, text)
+        # The matching sign passes the move check (with the gate set aside, as only the say_opening passes it).
+        for text in ("Down to a D since Oct 14.", "It's down to a D now.", "Now down to a D.", "It came down to a D.",
+                     "Down to 69 since Oct 14."):
+            self.assertIsNone(claims(text, ["move:g"], fall, "Geo"), text)
+            self.assertEqual(w.check_sentence(text, ["move:g"], fall, "Geo"), w.CAUSE_FORM_REASON, text)
+        for text in ("Now up to a D.", "Up to a D since Oct 14.", "It came up to a D.", "It's up to a D now.",
+                     "Up to 69 since Oct 14."):
+            self.assertIsNone(claims(text, ["move:g"], rise, "Geo"), text)
+        # A letter with + or - is a grade too; "up to date" and "down to a vote" aren't.
+        for text in ("Now up to a B+.", "Up to an A- now.", "It is up to 90%.", "Up to A."):
+            self.assertTrue(w._MOVED_UP_RE.search(text), text)
+        for text in ("Down to a C-.", "It is down to 69.", "Down to D."):
+            self.assertTrue(w._MOVED_DOWN_RE.search(text), text)
+        for text in ("It is up to date.", "Up to the teacher.", "It is down to a vote.", "Down to the wire."):
+            self.assertFalse(w._MOVED_UP_RE.search(text) or w._MOVED_DOWN_RE.search(text), text)
+        # Where the letter check disagrees, it still drops: a rise that stayed a D isn't "up to a C".
+        self.assertIsNotNone(claims("Up to a C since Oct 14.", ["move:g"], rise, "Geo"))
 
     def test_plain_up_down_and_move_verbs_still_need_a_matching_move(self):
         moved = GateReviewTests.MOVED
