@@ -1863,6 +1863,7 @@
         .glance-insights > *, .glance-insight-list, .glance-insight-row,
         .glance-drawer-top > div { min-width: 0; }
         .glance-insights-headline,
+        .glance-insights-sentence,
         .glance-insight-class,
         .glance-insight-story,
         .glance-local-story {
@@ -1874,10 +1875,22 @@
         .glance-insights-headline {
             margin: 0;
             padding: 0 24px 14px;
+        }
+        .glance-insights-label {
+            display: block;
+            margin-bottom: 2px;
+            color: var(--g-muted);
+            font-size: var(--g-fs-label);
+            font-weight: 800;
+            letter-spacing: .01em;
+            line-height: 1.35;
+        }
+        .glance-insights-sentence {
+            margin: 3px 0 0;
             color: var(--g-ink);
             font-size: var(--g-fs-sub);
-            font-weight: 650;
-            line-height: 1.4;
+            font-weight: 400;
+            line-height: 1.45;
         }
         .glance-insight-list { padding: 0 24px 18px; }
         .glance-insight-row {
@@ -5715,8 +5728,19 @@
             titles.appendChild(textEl('p', '', through ? `From grades posted through ${through}` : 'From the posted grades'));
             head.appendChild(titles);
             section.appendChild(head);
-            const headline = up.headline && typeof up.headline.text === 'string' ? up.headline.text.trim() : '';
-            if (headline) section.appendChild(textEl('p', 'glance-insights-headline', headline));
+            // The top focus area: a small label, the class on its own line (from the headline's class field,
+            // never split out of the text), then the sentence. With no class, the label and sentence only.
+            const hl = up.headline && typeof up.headline === 'object' ? up.headline : null;
+            const sentence = hl && typeof hl.text === 'string' ? hl.text.trim() : '';
+            if (sentence) {
+                const top = document.createElement('div');
+                top.className = 'glance-insights-headline';
+                top.appendChild(textEl('span', 'glance-insights-label', 'Top focus area'));
+                const cls = typeof hl.class === 'string' ? hl.class.trim() : '';
+                if (cls) top.appendChild(textEl('span', 'glance-insight-class glance-insights-class', cls));
+                top.appendChild(textEl('p', 'glance-insights-sentence', sentence));
+                section.appendChild(top);
+            }
             const list = document.createElement('div');
             list.className = 'glance-insight-list';
             courses.forEach((course, i) => {

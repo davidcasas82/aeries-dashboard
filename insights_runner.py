@@ -398,6 +398,11 @@ def _clean_student(up):
         return None
     as_of = up.get("as_of")
     headline = _clean_line(up.get("headline"), "text")
+    if headline is not None:
+        # cleanInsights keeps an optional headline class under the story-class rule; a bad one goes alone.
+        cls = up["headline"].get("class")
+        if _is_text(cls, PUBLISH_MAX_CLASS):
+            headline["class"] = cls
     stories = []
     raw = up.get("stories")
     for story in raw if isinstance(raw, list) else []:
@@ -438,7 +443,9 @@ def _fit_body(doc):
         new = len(json.dumps(up))
         size += new - sizes[key]
         sizes[key] = new
-    assert len(insights_body(doc)) <= PUBLISH_MAX_BYTES or not students
+    if len(insights_body(doc)) > PUBLISH_MAX_BYTES:
+        # Can't happen with the drops above; if it ever does, send nothing rather than fail the night.
+        students.clear()
     return doc
 
 
@@ -449,9 +456,8 @@ def insights_doc(write_ups):
     nothing left after its bad lines are dropped. At most 8 students; the body stays under 256 KB.
     """
     students = {}
+    past_cap = 0
     for up in write_ups or []:
-        if len(students) == PUBLISH_MAX_STUDENTS:
-            break
         sn = (up or {}).get("sn") if isinstance(up, dict) else None
         if isinstance(sn, bool) or not isinstance(sn, (str, int)):
             continue
@@ -459,8 +465,16 @@ def insights_doc(write_ups):
         if not STUDENT_KEY_RE.fullmatch(sn) or sn in students:
             continue
         clean = _clean_student(up)
-        if clean is not None:
-            students[sn] = clean
+        if clean is None:
+            continue
+        if len(students) == PUBLISH_MAX_STUDENTS:
+            past_cap += 1
+            continue
+        students[sn] = clean
+    if past_cap:
+        # The count only: no student keys, names or scores.
+        print(f"grade-insights: publish keeps {PUBLISH_MAX_STUDENTS} students; {past_cap} more left out",
+              file=sys.stderr)
     return _fit_body({"students": students})
 
 

@@ -1,7 +1,7 @@
 """The runner's publish payload against family-data's real cleanInsights.
 
 tests/fixtures/family_data_insights.js is a verbatim copy of family-data src/insights.js (PR #27 head
-f7cc4f9, branch cursor/grade-insights-write-path). The sha256 pin below fails if the copy is edited;
+82260d6, branch cursor/grade-insights-write-path). The sha256 pin below fails if the copy is edited;
 when family-data changes that file, copy it again and update the pin. node loads the copy as an ES
 module with only its two import lines swapped for stubs (cleanInsights uses neither), so the check runs
 the Worker's own code, not a hand port. No network, no cross-repo runtime dependency.
@@ -22,7 +22,7 @@ import insights_runner as runner  # noqa: E402
 import insights_writer  # noqa: E402
 
 WORKER = Path(__file__).resolve().parent / "fixtures" / "family_data_insights.js"
-WORKER_SHA256 = "539ddcdd940dc1925e1e0c8f657d6b5bb4223f3662317a5d71d4273ce230b6bf"
+WORKER_SHA256 = "7a22b4ef8bee9ce1818e538c551ba02a3512ca4834d5d848e36f725eb6d939a5"
 
 NODE_CHECK = r"""
 const fs = require('fs');
@@ -72,6 +72,8 @@ def random_ups(rng):
             up["as_of"] = rng.choice(["2026-10-22", "", "\ufeff", "x" * 41, None, 5, "2026-10-22T00:00"])
         if rng.random() < 0.6:
             up["headline"] = {"text": text(rng, 1, 620), "cites": [text(rng, 1, 125) for _ in range(rng.randint(0, 14))]}
+            if rng.random() < 0.7:
+                up["headline"]["class"] = rng.choice([text(rng, 0, 125), None, 7, ["B"]])
         stories = []
         for _ in range(rng.randint(0, 45)):
             n = rng.randint(0, 15)
@@ -88,7 +90,8 @@ def full_ups():
     def story(i, j):
         return {"class": f"{i}{j}".ljust(120, "c"), "story": f"{i}-{j} ".ljust(600, "s"),
                 "cites": [f"{i}-{j}-{k}".ljust(120, "f") for k in range(12)]}
-    return [{"sn": f"90{i:02d}", "as_of": "2026-10-22", "headline": {"text": "h" * 600, "cites": ["f" * 120] * 12},
+    return [{"sn": f"90{i:02d}", "as_of": "2026-10-22", "headline": {"class": "k" * 120, "text": "h" * 600,
+                                                                           "cites": ["f" * 120] * 12},
              "stories": [story(i, j) for j in range(40)]} for i in range(8)]
 
 
@@ -137,6 +140,8 @@ class RealWorkerTests(unittest.TestCase):
             {"students": {"9001": {"as_of": "\ufeff", "stories": []}}},
             {"students": {"9001": {"stories": [{"class": "\u3000", "story": "x", "cites": ["a"]}]}}},
             {"students": {"9001": {"stories": [{"class": "B", "story": "x" * 601, "cites": ["a"]}]}}},
+            {"students": {"9001": {"headline": {"class": "\u3000", "text": "x", "cites": ["a"]}}}},
+            {"students": {"9001": {"headline": {"class": "k" * 121, "text": "x", "cites": ["a"]}}}},
         ]
         result = run_worker([json.dumps(doc) for doc in raw])
         self.assertEqual(len(result["failures"]), len(raw))
@@ -207,9 +212,37 @@ class PayloadRuleTests(unittest.TestCase):
 
     def test_no_more_than_eight_students_or_forty_stories(self):
         ups = [{"sn": f"9{i:03d}", "stories": [self.STORY] * 45} for i in range(10)]
-        doc = self.doc(ups)
+        ups.append({"sn": "9100", "stories": [{"class": "B", "story": "x" * 700, "cites": ["a"]}]})  # nothing left
+        with mock.patch("sys.stderr") as err:
+            doc = self.doc(ups)
         self.assertEqual(len(doc), 8)
         self.assertTrue(all(len(kid["stories"]) == 40 for kid in doc.values()))
+        # A count-only warning: no student keys, names or scores.
+        logged = "".join(c.args[0] for c in err.write.call_args_list)
+        self.assertEqual(logged, "grade-insights: publish keeps 8 students; 2 more left out\n")
+        with mock.patch("sys.stderr") as err:
+            self.doc(ups[:8])
+        self.assertEqual(err.write.call_args_list, [])
+
+    def test_a_headline_class_is_kept_only_when_it_passes_the_story_class_rule(self):
+        line = {"text": "An 88 or better on the next test gets it to an A.", "cites": ["w"]}
+        for cls, kept in (("Int Eng&Marktg", True), ("k" * 120, True), ("\U0001F600" * 60, True), (None, False),
+                          ("", False), ("\u3000", False), ("k" * 121, False), ("\U0001F600" * 61, False),
+                          ("ok \ud83d", False), (7, False), (["B"], False)):
+            got = self.doc([{"sn": "9001", "headline": {**line, "class": cls, "slots": "x"}}])["9001"]["headline"]
+            self.assertEqual(got, {**line, "class": cls} if kept else line, repr(cls))
+        self.assertEqual(self.doc([{"sn": "9001", "headline": line}])["9001"]["headline"], line)
+
+    @unittest.skipUnless(shutil.which("node"), "node not installed")
+    def test_the_real_worker_keeps_the_headline_class(self):
+        doc = runner.insights_doc([{"sn": "9001", "headline": {"class": "Int Eng&Marktg", "text": "A 97 or better.",
+                                                               "cites": ["w"]}}])
+        self.assertEqual(run_worker([runner.insights_body(doc).decode()]), {"checked": 1, "failures": []})
+
+    def test_a_body_still_over_the_cap_is_dropped_not_raised(self):
+        ups = [{"sn": "9001", "stories": [self.STORY]}]
+        with mock.patch.object(runner, "insights_body", return_value=b"x" * (runner.PUBLISH_MAX_BYTES + 1)):
+            self.assertEqual(runner.insights_doc(ups), {"students": {}})
 
 
 if __name__ == "__main__":

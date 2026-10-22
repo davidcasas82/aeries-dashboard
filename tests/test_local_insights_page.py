@@ -169,6 +169,41 @@ class LocalNotesPageTests(unittest.TestCase):
             self.assertIn(rule, css)
         self.assertRegex(HTML, r"\.glance-insight-row,\s*\n\s*\.glance-drawer-top > div \{ min-width: 0; \}")
 
+    def test_the_headline_is_label_then_class_line_then_sentence(self):
+        sentence = "A 97 or better on the next summative gets it to a B."
+        ups = [{"headline": {"class": "Int Eng&Marktg", "text": sentence, "cites": ["w"]}, "stories": []},
+               {"headline": {"text": sentence, "cites": ["w"]}, "stories": []},
+               {"headline": {"class": "  ", "text": sentence, "cites": ["w"]}, "stories": []},
+               {"headline": {"class": SCRIPT_TITLE, "text": IMG_TITLE, "cites": ["w"]}, "stories": []},
+               {"headline": {"class": "Art", "text": "  ", "cites": ["w"]}, "stories": []}]
+        got = run_page(
+            "process.stdout.write(JSON.stringify({writes: innerHtmlWrites, tops: data.ups.map(up => {"
+            "  const top = walk(buildLocalInsights(up, []).section).find(n => n.className === 'glance-insights-headline');"
+            "  return top ? top.childNodes.map(n => [n.tagName, n.className, n._text]) : null; })}));",
+            {"ups": ups},
+        )
+        label = ["SPAN", "glance-insights-label", "Top focus area"]
+        self.assertEqual(got["tops"][0], [label, ["SPAN", "glance-insight-class glance-insights-class", "Int Eng&Marktg"],
+                                          ["P", "glance-insights-sentence", sentence]])
+        self.assertEqual(got["tops"][1], [label, ["P", "glance-insights-sentence", sentence]])
+        self.assertEqual(got["tops"][2], [label, ["P", "glance-insights-sentence", sentence]])
+        self.assertEqual(got["tops"][3][1][2], SCRIPT_TITLE)
+        self.assertEqual(got["tops"][3][2][2], IMG_TITLE)
+        self.assertIsNone(got["tops"][4])
+        self.assertEqual(got["writes"], [])
+        self.assertNotIn("Top move", HTML)
+
+    def test_the_headline_label_is_small_and_the_sentence_normal_weight(self):
+        def rule(selector):
+            css = HTML[HTML.index(selector + " {"):]
+            return css[:css.index("}") + 1]
+        label, sentence, action = rule(".glance-insights-label"), rule(".glance-insights-sentence"), rule(".glance-action-label")
+        for prop in ("color: var(--g-muted)", "font-size: var(--g-fs-label)", "font-weight: 800"):
+            self.assertIn(prop, label)
+            self.assertIn(prop, action)
+        self.assertIn("font-weight: 400", sentence)
+        self.assertNotIn("font-weight", rule(".glance-insights-headline"))
+
     def test_a_class_without_a_local_story_gets_no_row(self):
         up = {"headline": None, "stories": [{"class": "Biology", "story": "Still an A."}]}
         got = run_page(

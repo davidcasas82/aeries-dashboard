@@ -1067,15 +1067,16 @@ class PolishPassTests(unittest.TestCase):
             up = w.write_up(ScriptedModel({"Math": GOOD}, headline=headline), insight_facts())
             self.assertIsNone(up["headline"], headline["text"])
             self.assertEqual(w.apply_write_up({"headline": "Grok headline"}, up)["headline"], "")
+        # Published as the cited what-if's class plus the sentence without the class lead.
         for text, cites, out in (("Math: an 88 or better on the {next:" + WHATIF + "} gets it to an A.", [WHATIF],
-                                  "Math: an 88 or better on the next test gets it to an A."),
+                                  "An 88 or better on the next test gets it to an A."),
                                  ("An 88 or better on the {next:" + WHATIF + "} gets it to an A.", [WHATIF],
                                   "An 88 or better on the next test gets it to an A."),
                                  ("{class:" + WHATIF + "} is 2.1 pts from an A; an 88 or better on the {next:" + WHATIF
                                   + "} gets it to an A.", [NEXT, WHATIF],
-                                  "Math is 2.1 pts from an A; an 88 or better on the next test gets it to an A.")):
+                                  "2.1 pts from an A; an 88 or better on the next test gets it to an A.")):
             up = w.write_up(ScriptedModel({"Math": GOOD}, headline={"text": text, "cites": cites}), insight_facts())
-            self.assertEqual(up["headline"], {"text": out, "cites": cites})
+            self.assertEqual(up["headline"], {"class": "Math", "text": out, "cites": cites})
         # Only the headline forms: a cause line, or the step reworded, is no headline.
         for text, cites in (("The {item:" + CAUSE + "} did most of the damage.", [CAUSE]),
                             ("Math: an 88 or better on the {next:" + WHATIF + "} gets the A back.", [WHATIF])):
@@ -1083,7 +1084,8 @@ class PolishPassTests(unittest.TestCase):
             self.assertIsNone(up["headline"], text)
         fixed = w.write_up(ScriptedModel({"Math": GOOD}, headline={
             "text": "Math: a 88 or better on the {next:" + WHATIF + "} gets it to an A.", "cites": [WHATIF]}), insight_facts())
-        self.assertEqual(fixed["headline"]["text"], "Math: an 88 or better on the next test gets it to an A.")
+        self.assertEqual((fixed["headline"]["class"], fixed["headline"]["text"]),
+                         ("Math", "An 88 or better on the next test gets it to an A."))
 
 
 class CtoRoundFourTests(unittest.TestCase):
@@ -1110,7 +1112,7 @@ class CtoRoundFourTests(unittest.TestCase):
         self.assertIsNone(self.headline("Alg ll Bus Mang: an 86 or better on the {next:%s} gets it to a B." % self.ALG))
         self.assertIsNone(self.headline("Alg ll Bus Mang: an 85 or better on the {next:%s} gets a B." % self.ALG))
         ok = self.headline("Alg ll Bus Mang: an 85 or better on the {next:%s} gets it to a B." % self.ALG)
-        self.assertEqual(ok, {"text": "Alg ll Bus Mang: an 85 or better on the next assessment gets it to a B.",
+        self.assertEqual(ok, {"class": "Alg ll Bus Mang", "text": "An 85 or better on the next assessment gets it to a B.",
                               "cites": [self.ALG]})
 
     def test_next_fills_for_singular_plural_and_mass_buckets(self):
@@ -2431,8 +2433,33 @@ class CrossClassHeadlineTests(unittest.TestCase):
                 got = self.headline(text, cites)
                 self.assertIsNotNone(got, (text, cites))
                 self.assertNotIn("{", got["text"])
-        self.assertEqual(self.headline("{class:whatif:g}: " + self.geo_step[0].lower() + self.geo_step[1:], ["whatif:g"])["text"],
-                         "Geo: a 74 or better on the next test gets it to a C.")
+                self.assertEqual(got["class"], name, (text, cites))
+                self.assertFalse(got["text"].startswith(name), (text, cites))
+        self.assertEqual(self.headline("{class:whatif:g}: " + self.geo_step[0].lower() + self.geo_step[1:], ["whatif:g"]),
+                         {"class": "Geo", "text": "A 74 or better on the next test gets it to a C.", "cites": ["whatif:g"]})
+
+    def test_the_headline_class_comes_from_the_cited_what_if_not_the_words(self):
+        lower = self.art_step[0].lower() + self.art_step[1:]
+        # The step alone still carries its what-if's class; the sentence never repeats it.
+        self.assertEqual(self.headline(self.art_step, ["whatif:a"])["class"], "Art")
+        got = self.headline("{class:next:a} is 1 pts from a B; " + lower, ["next:a", "whatif:a"])
+        self.assertEqual(got["class"], "Art")
+        self.assertTrue(got["text"].startswith("1 pts from a B; "), got["text"])
+        # A class the Worker wouldn't keep publishes the led form with no class.
+        long_name = "A" * 121
+        for f in self.facts:
+            if f.get("class") == "Art":
+                f["class"] = long_name
+        self.stories[1]["class"] = long_name
+        got = self.headline("{class:whatif:a}: " + lower, ["whatif:a"])
+        self.assertEqual(set(got), {"text", "cites"})
+        self.assertTrue(got["text"].startswith(long_name + ": "))
+
+    def test_the_masthead_still_reads_the_led_headline(self):
+        local = {"headline": {"class": "Art", "text": "An 85 or better on the next project gets it to a B.", "cites": ["w"]},
+                 "stories": []}
+        self.assertEqual(w.apply_write_up({}, local)["headline"], "Art: an 85 or better on the next project gets it to a B.")
+        self.assertEqual(w.public_write_up(local)["headline"], local["headline"])
 
     def test_a_story_class_prefix_is_its_own_facts_class(self):
         # GE: the story prefix is safe. A {class:} slot may only be the cited fact's own; another class's drops.

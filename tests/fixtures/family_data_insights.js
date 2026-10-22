@@ -60,8 +60,9 @@ export async function getInsights(env) {
   return json(200, { insights: doc, updatedAt: row.updated_at });
 }
 
-// Only the published fields are kept: per student, as_of, the headline text and cites, and each
-// story's class, text and cites. Anything else in the body (drop reasons, slots) is not stored.
+// Only the published fields are kept: per student, as_of, the headline text and cites (plus its
+// class when one is sent), and each story's class, text and cites. Anything else in the body (drop
+// reasons, slots) is not stored.
 export function cleanInsights(body) {
   if (!isObject(body) || !isObject(body.students)) return { error: "Send { students: { ... } }." };
   const entries = Object.entries(body.students);
@@ -80,6 +81,10 @@ export function cleanInsights(body) {
     if (up.headline != null) {
       const headline = cleanLine(up.headline, "text");
       if (!headline) return { error: `students.${key}.headline must have text.` };
+      if (up.headline.class != null) {
+        if (!isText(up.headline.class, 120)) return { error: `students.${key}.headline.class must be a short string.` };
+        headline.class = up.headline.class;
+      }
       out.headline = headline;
     }
     for (const story of stories) {

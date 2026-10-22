@@ -1816,7 +1816,40 @@ def story_fits(story):
 
 
 def headline_fits(headline):
+    """The headline's text and cites fit; its optional class is checked on its own (headline_class)."""
     return within_publish_limits((headline or {}).get("text"), (headline or {}).get("cites"))
+
+
+def _headline_parts(text, cites, index):
+    """(class name, sentence without the class lead) for a checked slotted headline, or (None, text).
+
+    The class comes from the one cited what_if fact, never from the words. Which of _headline_forms the
+    text is decides the sentence: the step alone stays, "{lead}: step" becomes the step, and
+    "{lead} is <gap>; step" becomes "<Gap>; step".
+    """
+    cited = [index[c] for c in cites if c in index]
+    steps = [f for f in cited if f.get("kind") == "what_if" and _step(f)]
+    if len(steps) != 1:
+        return None, text
+    fact = steps[0]
+    name = _clean(fact.get("class"))
+    if not _fits_text(name, PUBLISH_MAX_CLASS):
+        return None, text
+    step = _step(fact)
+    lower = _lower_first(step)
+    if text == step:
+        return name, step
+    leads = {fact["class"]} | {f"{{class:{f['id']}}}" for f in cited if f.get("class") == fact.get("class")}
+    for lead in leads:
+        if text == f"{lead}: {lower}":
+            return name, step
+        for letter in cited:
+            if letter.get("kind") != "next_letter" or not isinstance(letter.get("gap"), (int, float)):
+                continue
+            gap = f"{letter['gap']:g} pts from {_article(letter['next_letter'])} {letter['next_letter']}"
+            if text == f"{lead} is {gap}; {lower}":
+                return name, f"{gap[0].upper()}{gap[1:]}; {lower}"
+    return None, text
 
 
 def _sentences(raw):
@@ -1904,9 +1937,16 @@ def write_headline(model, facts, stories):
         return None
     if _headline_needed_reason(text, cites, index):
         return None
+    class_name, sentence = _headline_parts(text, cites, index)
     text = fix_articles(fill_slots(text, index))
     if _story_basics([{"text": text, "cites": cites}], index) or not _concrete_headline(text, cites, index):
         return None
+    # Published as the class (its own line on the page) and the sentence without the class lead; with no
+    # class known, the led text as checked.
+    if class_name is not None:
+        sentence = fix_articles(fill_slots(sentence, index))
+        if within_publish_limits(sentence, cites, class_name):
+            return {"class": class_name, "text": sentence, "cites": cites}
     headline = {"text": text, "cites": cites}
     return headline if headline_fits(headline) else None
 
@@ -1939,7 +1979,8 @@ def apply_write_up(ai_summary, local):
     summary = dict(ai_summary or {})
     stories = (local or {}).get("stories") or []
     headline = (local or {}).get("headline")
-    summary["headline"] = headline["text"] if headline else ""
+    summary["headline"] = (f"{headline['class']}: {_lower_first(headline['text'])}" if headline and headline.get("class")
+                           else headline["text"] if headline else "")
     if not headline:
         summary.pop("status", None)
     rows = summary.get("classes") or []
