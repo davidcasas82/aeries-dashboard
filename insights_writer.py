@@ -843,6 +843,8 @@ _SUBJECT_IDIOMS = re.compile(r"\bplain English\b")
 NOUN_WHITELIST = ()
 # A raw id ("pattern:posting_day:geo"), a bracketed or bare slot word, a fullwidth or stray brace.
 _ID_LIKE_RE = re.compile(r"\b[a-z_]+:[\w:.-]+")
+# In a fill: a slot word, a colon, then an id-like token (word, colon, more), as a slot-shaped title leaves it.
+_FILL_SLOT_ID_RE = re.compile(r"\b(?:item|next|class|bucket|pattern)\s*[:：]\s*[a-z_]+\s*[:：]\s*[\w.-]", re.I)
 _SLOT_DEBRIS_RE = re.compile(r"[\[(<]\s*(?:item|next|class|bucket|pattern)\s*:|\b(?:item|next|class|bucket|pattern)\s*:|[{}｛｝]",
                              re.I)
 # Short forms of class-name words ("Geometry H" -> "Geo").
@@ -931,18 +933,21 @@ def slot_reason(text, cites, index):
 def leak_reason(text, index, filled=False):
     """Why the text still carries a raw fact id or slot debris once the real slots are out, or None.
 
-    Times ("3:05") and scores ("11/20") aren't ids. On filled text real ids, braces, slot words with a colon
-    ("item:") and id-like tokens ("cause:g:h") count, so a title like "Unit 3: Part 2" is fine.
+    Times ("3:05") and scores ("11/20") aren't ids. On filled text only real ids, braces and a slot word
+    followed by an id-like token ("item:cause:g:h") count, so "Next: Chapter 5" or "Ratio a:b" is fine.
     """
     bare = text if filled else SLOT_RE.sub(" ", text)
     for fid in sorted(index, key=len, reverse=True):
         if ":" in fid and fid in bare:
             return "leaks a raw fact id"
     if filled:
-        # A title that looks like a slot or an id ("{item:cause:g:h}" fills as "item:cause:g:h") drops too.
-        if re.search(r"[{}｛｝]", bare) or _SLOT_DEBRIS_RE.search(bare):
+        # The id and slot-debris filters ran on the model's raw text (below). A fill only adds names from
+        # the facts, so here only what a slot-shaped title could smuggle in counts: a brace, a real fact id,
+        # or a slot word followed by an id-like token ("{item:cause:g:h}" fills as "item:cause:g:h").
+        # "Next: Chapter 5", "Class: Notes Check" and "Ratio a:b Practice" are titles, not slots.
+        if re.search(r"[{}｛｝]", bare):
             return "leaves slot debris"
-        return "leaks a raw fact id" if _ID_LIKE_RE.search(bare) else None
+        return "leaves slot debris" if _FILL_SLOT_ID_RE.search(bare) else None
     if _ID_LIKE_RE.search(bare):
         return "leaks a raw fact id"
     if _SLOT_DEBRIS_RE.search(bare):
