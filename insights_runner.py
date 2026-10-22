@@ -33,6 +33,10 @@ BLOCKED = (
     (None, time(6, 30), time(19, 0)),
     ({SUNDAY}, time(1, 0), time(6, 30)),
 )
+# The parent PIN is a generic password in the mini's login Keychain. Code only for now.
+PIN_KEYCHAIN_SERVICE = "family-data-parent-pin"
+PIN_KEYCHAIN_ACCOUNT = "aeries"
+DEFAULT_SSD = "/Volumes/David C SSD"
 MIN_FREE_MEMORY_PCT = 35
 BUSY_PROCESSES = ("Blender", "blender", "ffmpeg")
 
@@ -206,6 +210,23 @@ def keychain_secret(service, account):
     return result.stdout.rstrip("\n")
 
 
+def parent_pin():
+    """The parent PIN from the login Keychain. Nothing calls this yet."""
+    return keychain_secret(PIN_KEYCHAIN_SERVICE, PIN_KEYCHAIN_ACCOUNT)
+
+
+def model_dir(ssd_path):
+    """Models live on the SSD, never on the internal disk."""
+    return Path(ssd_path) / "grade-insights"
+
+
+def model_env(ssd_path, base=None):
+    """Environment for a model process: HF_HOME points at the SSD cache."""
+    env = dict(os.environ if base is None else base)
+    env["HF_HOME"] = str(model_dir(ssd_path) / "hf-cache")
+    return env
+
+
 def real_machine(ssd_path):
     return Machine(
         now=lambda: datetime.now(PACIFIC),
@@ -219,7 +240,7 @@ def real_machine(ssd_path):
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
     home = Path(os.environ.get("GRADE_INSIGHTS_HOME", "~/Library/Application Support/grade-insights")).expanduser()
-    ssd = os.environ.get("GRADE_INSIGHTS_SSD", "/Volumes/David C SSD")
+    ssd = os.environ.get("GRADE_INSIGHTS_SSD", DEFAULT_SSD)
     home.mkdir(parents=True, exist_ok=True)
     if os.getpriority(os.PRIO_PROCESS, 0) < 10:
         os.setpriority(os.PRIO_PROCESS, 0, 10)

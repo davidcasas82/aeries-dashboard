@@ -188,6 +188,31 @@ class KeychainTests(unittest.TestCase):
         self.assertEqual(str(caught.exception), "no Keychain item for service 'grade-insights' (exit 44)")
 
 
+    def test_parent_pin_reads_the_family_data_item(self):
+        done = mock.Mock(returncode=0, stdout="0000\n")
+        with mock.patch.object(runner.subprocess, "run", return_value=done) as run:
+            self.assertEqual(runner.parent_pin(), "0000")
+        self.assertEqual(
+            run.call_args.args[0],
+            ["/usr/bin/security", "find-generic-password", "-s", "family-data-parent-pin", "-a", "aeries", "-w"],
+        )
+
+    def test_a_tick_never_reads_the_keychain(self):
+        fake = FakeMachine(at(22, 20, 10))
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(runner, "keychain_secret") as secret:
+            status = runner.tick(runner.State(Path(tmp) / "state.json"), runner.PendingWork(), fake.machine())
+        self.assertEqual(status, "done")
+        secret.assert_not_called()
+
+
+class ModelPathTests(unittest.TestCase):
+    def test_models_and_hf_cache_sit_on_the_ssd(self):
+        self.assertEqual(runner.model_dir(runner.DEFAULT_SSD), Path("/Volumes/David C SSD/grade-insights"))
+        env = runner.model_env(runner.DEFAULT_SSD, base={"PATH": "/usr/bin", "HF_HOME": "/Users/x/.cache"})
+        self.assertEqual(env, {"PATH": "/usr/bin", "HF_HOME": "/Volumes/David C SSD/grade-insights/hf-cache"})
+
+
 class TemplateTests(unittest.TestCase):
     def test_plist_template_is_background_and_not_run_at_load(self):
         import plistlib
