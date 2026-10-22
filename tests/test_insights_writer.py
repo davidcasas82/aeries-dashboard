@@ -1033,9 +1033,11 @@ class CtoRoundFourTests(unittest.TestCase):
 
     def test_next_fills_for_singular_plural_and_mass_buckets(self):
         cases = {"Assessment": "assessment", "Assessments": "assessment", "Summative": "summative", "Tests": "test",
-                 "Test": "test", "Quizzes": "quiz", "Labs": "lab", "Projects": "project", "Labs & Activities": "lab & activity",
-                 "Coursework": "coursework item", "Homework": "homework item", "Math Fluency": "math fluency item",
-                 "Participation": "participation item", "Classwork": "classwork item", "Performance": "performance item",
+                 "Test": "test", "Quizzes": "quiz", "Labs": "lab", "Projects": "project", "Labs & Activities": "lab or activity",
+                 "Coursework": "coursework assignment", "Homework": "homework assignment",
+                 "Math Fluency": "math fluency assignment", "Participation": "participation score",
+                 "Classwork": "classwork assignment", "Performance": "performance item",
+                 "Labs & Projects": "lab or project", "Homework & Classwork": "homework or classwork assignment",
                  None: "test"}
         for bucket, noun in cases.items():
             self.assertEqual(w._bucket_noun(bucket), noun, bucket)
@@ -1466,6 +1468,156 @@ class FoldedCausesAndKeepFactTests(unittest.TestCase):
         idx = w.fact_index(w.facts_for(facts, "Biology"))
         self.assertIsNone(w.check_sentence(keeps[0]["say_keep"], [keeps[0]["id"]], idx, "Biology"))
         self.assertEqual(w.fill_slots(keeps[0]["say_keep"], idx), "A 54 or better on the next test keeps the B.")
+
+
+def geo_rise_facts():
+    """Geo up 2.5 since Oct 14, all on one cause that helped: still a D."""
+    facts = geo_facts()
+    facts[1].update({"from_pct": 66.5, "delta": 2.5, "explained": 2.5})
+    facts[1]["causes"][0].update({"points": 2.5, "share": 2.5})
+    return facts
+
+
+def geo_mixed_facts():
+    """Geo down 2.5: the Unit Test hurt (-3.0) and the Lab helped (+0.5)."""
+    facts = geo_facts()
+    facts[1]["causes"] = [
+        {"id": "cause:geo:t", "title": "Unit Test", "bucket": "Tests", "bucket_weight_pct": 50.0,
+         "earned": 14.0, "possible": 40.0, "points": -3.0, "share": -3.0},
+        {"id": "cause:geo:l", "title": "Density Lab", "bucket": "Labs", "bucket_weight_pct": 20.0,
+         "earned": 10.0, "possible": 10.0, "points": 0.5, "share": 0.5}]
+    return facts
+
+
+class DirectionTests(unittest.TestCase):
+    """GE's must-fix on #52 8d2bd63: a direction verb must match the sign of the share on the cause it names."""
+
+    WRONG = "says a cause pushed the grade the other way from its share"
+    UP = ("The {item:cause:geo:t} helped.", "The {item:cause:geo:t} lifted it.", "{bucket:cause:geo:t} scores helped.",
+          "{bucket:cause:geo:t} scores boosted it.", "The {item:cause:geo:t} raised it.", "The {item:cause:geo:t} saved it.",
+          "Lifted by the {item:cause:geo:t}.", "The {item:cause:geo:t} pulled it up.")
+    DOWN = ("The {item:cause:geo:t} hurt.", "The {item:cause:geo:t} dragged it down.",
+            "{bucket:cause:geo:t} scores dragged it.", "The {item:cause:geo:t} did most of the damage.",
+            "{bucket:cause:geo:t} did most of the damage.", "The {item:cause:geo:t} cost it 2.5.",
+            "The {item:cause:geo:t} pulled it down.", "The {item:cause:geo:t} knocked it down.",
+            "{bucket:cause:geo:t} scores sank it.")
+
+    def check_all(self, facts, texts, expected, cites=("cause:geo:t",)):
+        idx = w.fact_index(w.model_facts(facts))
+        for text in texts:
+            self.assertEqual(w.check_sentence(text, list(cites), idx, "Geo"), expected, text)
+
+    def test_on_a_drop_a_cause_never_helped(self):
+        self.check_all(geo_facts(), self.UP, self.WRONG)
+        self.check_all(geo_facts(), self.DOWN, None)
+        self.check_all(geo_facts(), ("Mostly the {item:cause:geo:t}.",), None, ("move:geo", "cause:geo:t"))
+
+    def test_on_a_rise_a_cause_never_hurt(self):
+        self.check_all(geo_rise_facts(), self.DOWN, self.WRONG)
+        self.check_all(geo_rise_facts(), self.UP, None)
+
+    def test_a_negated_verb_turns_around(self):
+        self.check_all(geo_facts(), ("The {item:cause:geo:t} didn't help.",), None)
+        self.check_all(geo_rise_facts(), ("The {item:cause:geo:t} didn't help.",), self.WRONG)
+
+    def test_each_verb_is_read_against_its_own_slot(self):
+        both = ("cause:geo:t", "cause:geo:l")
+        self.check_all(geo_mixed_facts(), ("Mostly the {item:cause:geo:t}, but the {item:cause:geo:l} helped.",
+                                           "The {item:cause:geo:t} hurt, while {bucket:cause:geo:l} scores helped."),
+                       None, both)
+        self.check_all(geo_mixed_facts(), ("The {item:cause:geo:l} hurt, while the {item:cause:geo:t} helped.",
+                                           "The {item:cause:geo:t} hurt, while {bucket:cause:geo:l} scores dragged it."),
+                       self.WRONG, both)
+
+    def test_the_drop_reason_is_a_code(self):
+        idx = w.fact_index(w.model_facts(geo_facts()))
+        reason = w.check_sentence("The {item:cause:geo:t} helped.", ["cause:geo:t"], idx, "Geo")
+        self.assertEqual(w.reason_code(reason), reason)
+        story = w.write_class(ScriptedModel({"Geo": [
+            {"text": "Slipped to a D since Oct 14, down 2.5.", "cites": ["move:geo"]},
+            {"text": "The {item:cause:geo:t} helped.", "cites": ["cause:geo:t"]},
+            {"text": "A 74 or better on the {next:whatif:geo} gets it to a C.", "cites": ["whatif:geo"]}]}),
+            geo_facts(), "Geo")
+        self.assertEqual(story["dropped"], [self.WRONG])
+        self.assertNotIn("helped", story["story"])
+
+    def test_the_made_up_example_still_passes(self):
+        idx = w.fact_index(w.model_facts(w.EXAMPLE_FACTS))
+        for sentence in w.EXAMPLE_NOTE:
+            self.assertIsNone(w.check_sentence(sentence["text"], sentence["cites"], idx, "Ceramics"), sentence["text"])
+
+
+class ReviewNitTests(unittest.TestCase):
+    """GE's nits on #52 8d2bd63: codes without letters or weekdays, natural next fills, no keep ids in {next:}."""
+
+    def test_drop_codes_carry_no_letters_or_weekdays(self):
+        self.assertEqual(w.reason_code("letter B isn't in the cited facts"), "letter <letter> isn't in the cited facts")
+        self.assertEqual(w.reason_code("letter C+ isn't on the whole-letter scale"),
+                         "letter <letter> isn't on the whole-letter scale")
+        self.assertEqual(w.reason_code("says the class moved to D but no move crossed into that letter"),
+                         "says the class moved to <letter> but no move crossed into that letter")
+        self.assertEqual(w.reason_code("pattern on Thursdays isn't cited"), "pattern on <day> isn't cited")
+        self.assertEqual(w.reason_code("names a weekday (Monday) no pattern backs"), "names a weekday no pattern backs")
+        self.assertEqual(w.reason_code("gives advice no what_if backs"), "gives advice no what_if backs")
+        story = w.write_class(ScriptedModel({"Geo": [
+            {"text": "Slipped to a D since Oct 14, down 2.5.", "cites": ["move:geo"]},
+            {"text": "Still a D, 1.4 points from a B.", "cites": ["next:geo"]},
+            {"text": "Scores usually post Mondays.", "cites": ["pattern:posting_day:geo"]},
+            {"text": "A 74 or better on the {next:whatif:geo} gets it to a C.", "cites": ["whatif:geo"]}]}),
+            geo_facts(), "Geo")
+        self.assertEqual(len(story["dropped"]), 2)
+        for code in story["dropped"]:
+            self.assertNotRegex(code, r"(?<![\w'’])[A-F](?![\w'’])|(?i:monday)", code)
+
+    def test_next_fills_read_naturally(self):
+        for bucket, said in (("Homework", "the next homework assignment"), ("Labs & Projects", "the next lab or project"),
+                             ("Participation", "the next participation score"), ("Tests", "the next test")):
+            idx = w.fact_index(geo_facts(bucket=bucket))
+            self.assertEqual(w.fill_slots("A 74 or better on the {next:whatif:geo} gets it to a C.", idx),
+                             f"A 74 or better on {said} gets it to a C.", bucket)
+            self.assertIsNone(w.check_sentence("A 74 or better on the {next:whatif:geo} gets it to a C.",
+                                               ["whatif:geo"], idx, "Geo"), bucket)
+
+    def test_the_prompt_offers_no_keep_ids_until_keep_a(self):
+        self.assertNotIn("keep_letter", w.DRAFT_SYSTEM)
+        self.assertIn("{next:<what_if id>}", w.DRAFT_SYSTEM)
+
+
+class OtherClassNameTests(unittest.TestCase):
+    """GE's nits 1 and 2 on #52 8d2bd63: lowercase class names, and the extra fixed subject words."""
+
+    CLASSES = ["Geo", "English 10", "Physics", "Art", "Band", "Health"]
+
+    def check(self, text, cites=("cause:geo:t",), classes=None, cls="Geo"):
+        return w.check_sentence(text, list(cites), w.fact_index(w.model_facts(geo_facts(cls=cls))), cls,
+                                self.CLASSES if classes is None else classes)
+
+    def test_another_class_in_lowercase_is_dropped(self):
+        for text in ("physics scores dragged it.", "Down 2.5; physics grades dragged it.", "physics dragged it.",
+                     "{bucket:cause:geo:t} scores, not physics class, dragged it.", "health scores dragged it."):
+            self.assertEqual(self.check(text), "names another class (%s)" % re.search(r"physics|health", text).group(0), text)
+
+    def test_lowercase_common_words_still_pass(self):
+        for text, cites in (("Scores usually post Thursdays, state of the art.", ["pattern:posting_day:geo"]),
+                            ("Still a D, 1.4 points from a C; the band for a C starts at 70.", ["next:geo"]),
+                            ("Still a D, 1.4 points from a C, in good health.", ["next:geo"]),
+                            ("geo scores usually post Thursdays.", ["pattern:posting_day:geo"]),
+                            ("{bucket:cause:geo:t} scores dragged it.", ["cause:geo:t"])):
+            self.assertIsNone(self.check(text, cites), text)
+
+    def test_the_extra_subject_words_are_another_class(self):
+        for word in ("Chem", "Bio", "APUSH", "P.E.", "Yearbook"):
+            self.assertEqual(self.check(f"{word} scores dragged it."), f"names another class ({word})", word)
+            self.assertEqual(self.check(f"{word} scores dragged it.", classes=["Geo"]), f"names another class ({word})")
+
+    def test_the_students_own_class_may_use_its_short_form(self):
+        pattern = ["pattern:posting_day:geo"]
+        for cls, text in (("Chemistry H", "Chem scores usually post Thursdays."),
+                          ("Biology", "Bio scores usually post Thursdays."),
+                          ("Yearbook", "Yearbook scores usually post Thursdays."),
+                          ("Physical Education", "P.E. scores usually post Thursdays."),
+                          ("AP US History", "APUSH scores usually post Thursdays.")):
+            self.assertIsNone(self.check(text, pattern, classes=[cls], cls=cls), cls)
 
 
 class EngineFactsTests(unittest.TestCase):

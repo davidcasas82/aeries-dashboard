@@ -196,6 +196,13 @@ _ADVICE_RE = re.compile(
 _ARTICLE_RE = re.compile(
     r"(?:(?<=^)|(?<=[.!?:;\"“(] )|(?<=[.!?:;]  ))(A|An)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))"
     r"|\b(a|an)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))")
+# Verbs that say which way a cause pushed the grade. A cause that "helped" has a positive share; one that
+# "hurt" has a negative one. "Pulled it up" or "knocked it up" is a push up.
+_UP_VERB_RE = re.compile(r"\b(?:help(?:s|ed|ing)?|lift(?:s|ed|ing)?|boost(?:s|ed|ing)?|rais(?:e|es|ed|ing)|"
+                         r"sav(?:e|es|ed|ing)|(?:pull|knock)(?:s|ed|ing)?(?=(?:\s+\w+){0,2}\s+up\b))\b", re.I)
+_DOWN_VERB_RE = re.compile(r"\b(?:hurt(?:s|ing)?|drag(?:s|ged|ging)?|cost(?:s|ing)?|pull(?:s|ed|ing)?|"
+                           r"knock(?:s|ed|ing)?|s[ai]nk(?:s|ing)?|sunk|damag(?:e|es|ed|ing))\b", re.I)
+_NEGATED_RE = re.compile(r"\b(?:not|never|n't|didn't|doesn't|did not|does not|wasn't|won't)\s+(?:\w+\s+)?$", re.I)
 _SAME_LETTER_MOVE_RE = re.compile(
     r"\b(?i:moved|went|changed|dropped|fell|rose|slipped|slid|climbed) (?i:from) (?i:an? )?([A-F]) (?i:to) (?i:an? )?\1\b")
 ROLE_FIELDS = {
@@ -241,10 +248,10 @@ You get FACTS as JSON. Every fact has an id. Use only those facts.
 
 Name assignments and classes ONLY with slots, which code fills in with the real name:
 - {item:<cause id>} ONLY for a cause inside a grade_move's causes (it has a title). Code adds its score, like "(6/10)"; don't write the score yourself.
-- {next:<what_if id>} or {next:<keep_letter id>} for the coming item a what_if or keep_letter fact is about. Code writes "next test", "next assessment" or the item's title.
-- {bucket:<fact id>} for the bucket or category of a cause, what_if or keep_letter fact ("{bucket:<cause id>} scores dragged it."). Code writes the name, like "Homework".
+- {next:<what_if id>} for the coming item a what_if fact is about. Code writes "next test", "next assessment" or the item's title.
+- {bucket:<fact id>} for the bucket or category of a cause or what_if fact ("{bucket:<cause id>} scores dragged it."). Code writes the name, like "Homework".
 - {class:<fact id>} for the class name. You may also write the class's own name as FACTS gives it; never another class.
-A what_if or keep_letter id goes in a {next:} slot, never in an {item:} slot: the next item has no title yet.
+A what_if id goes in a {next:} slot, never in an {item:} slot: the next item has no title yet.
   Right: "An 85 or better on the {next:whatif:art:projects:20} gets it to a B."
   Wrong: "An 85 or better on the {item:whatif:art:projects:20} gets it to a B."
 Never write an assignment word yourself (test, quiz, exam, lab, project, packet, homework, essay, report, assessment, ...), not even "the next test": use {next:<id>} or {bucket:<id>}. Never write a fact id outside the braces, and nothing but these slots in braces. A sentence that does is thrown away.
@@ -802,7 +809,7 @@ def check_sentence(text, cites, index, name=None, classes=None):
     echo = _ECHO_RE.search(neutral) or _SAME_LETTER_MOVE_RE.search(neutral)
     if echo:
         return f"echoes the prompt ({echo.group(0)})"
-    reason = _claims_reason(neutral, cited, index)
+    reason = _claims_reason(neutral, cited, index, slotted=text)
     if reason:
         return reason
     # Last, so the claim checks keep their own reasons: any school-work noun must sit in a slot, and a
@@ -834,10 +841,12 @@ _WORK_NOUN_RE = re.compile(
     r"units?|chapters?|ch\.)(?![\w])", re.I)
 # A capitalized school subject that isn't one of the student's classes ("Physics scores dragged it." in a
 # Geo note). Title case only, so "the low band", "state of the art" or "posting history" never trip it.
+# The CTO's ruling: this fixed list runs on top of the student's own class names, never instead of them.
 _SUBJECT_RE = re.compile(
-    r"\b(?:Math(?:s|ematics)?|Algebra|Geometry|Calculus|Statistics|Physics|Chemistry|Biology|Science|History|"
-    r"English|Spanish|French|German|Latin|Chinese|Art|Ceramics|Music|Band|Choir|Orchestra|Drama|Theater|Health|"
-    r"Economics|Government|Civics|Engineering|Marketing|Business|Psychology|Geography)\b")
+    r"\b(?:Math(?:s|ematics)?|Algebra|Geometry|Calculus|Statistics|Physics|Chemistry|Chem|Biology|Bio|Science|"
+    r"History|APUSH|English|Spanish|French|German|Latin|Chinese|Art|Ceramics|Music|Band|Choir|Orchestra|Drama|"
+    r"Theater|Health|Economics|Government|Civics|Engineering|Marketing|Business|Psychology|Geography|Yearbook)\b|"
+    r"(?<!\w)P\.E\.(?!\w)")
 _SUBJECT_IDIOMS = re.compile(r"\bplain English\b")
 # Phrases that may use a school-work noun outside a slot. Kept empty on purpose: "the next test" goes
 # through {next:<id>} or {bucket:<id>}. Add only with a test.
@@ -869,11 +878,13 @@ def _bucket_of(fact):
     return fact.get("bucket") or fact.get("category")
 
 
-# Bucket words a "next ..." fill can stand on alone ("the next assessment"). Anything else that isn't a
-# plural, and mass nouns like "Coursework", get "item" ("the next coursework item").
+# Bucket words a "next ..." fill can stand on alone ("the next assessment"). Mass nouns like "Homework" get
+# "assignment" ("the next homework assignment"), "Participation" gets "score", and any other word that isn't
+# a plural gets "item". A bucket of two kinds reads as either one ("Labs & Projects" -> "lab or project").
 _COUNT_BUCKETS = {"assessment", "test", "quiz", "lab", "project", "exam", "essay", "assignment", "summative",
                   "formative", "task", "final", "midterm", "activity", "worksheet", "presentation", "paper", "report"}
 _MASS_BUCKETS = {"coursework", "homework", "classwork", "participation", "practice", "fluency", "work", "progress"}
+_MASS_TAIL = {"participation": "score", "progress": "score"}
 
 
 def _singular(word):
@@ -890,11 +901,13 @@ def _singular(word):
 
 def _bucket_noun(bucket):
     """ "Assessments" or "Assessment" -> "assessment"; "Quizzes" -> "quiz"; "Labs & Activities" ->
-    "lab & activity"; a mass noun like "Coursework" or "Math Fluency" -> "coursework item"."""
+    "lab or activity"; a mass noun like "Homework" or "Math Fluency" -> "homework assignment",
+    "math fluency assignment"; "Participation" -> "participation score"."""
     words = str(bucket or "test").strip().lower().split() or ["test"]
     if words[-1] in _MASS_BUCKETS:
-        return " ".join(words) + " item"
-    singular = [w if w in ("&", "and") else _singular(w) for w in words]
+        tail = _MASS_TAIL.get(words[-1], "assignment")
+        return " ".join("or" if w in ("&", "and", "/") else w for w in words) + f" {tail}"
+    singular = ["or" if w in ("&", "and", "/") else _singular(w) for w in words]
     noun = " ".join(singular)
     if singular[-1] in _COUNT_BUCKETS or singular[-1] != words[-1]:
         return noun
@@ -978,6 +991,12 @@ def _class_forms(name):
     """[(form, is_full)] for a class name: the full name, and short forms of its words ("Geometry H" -> Geometry, Geo)."""
     full = _clean(name)
     forms = [(full.lower(), True)]
+    words = set(re.findall(r"[^\W\d_]+", full.lower()))
+    # Short forms the fixed subject list knows, so a student's own "Physical Education" may be "P.E.".
+    if {"physical", "education"} <= words:
+        forms.append(("p.e.", False))
+    if "history" in words and ({"us", "u"} & words or {"united", "states"} <= words):
+        forms.append(("apush", False))
     for word in re.findall(r"[^\W\d_]+", full.lower()):
         if len(word) < 3 or word in _CLASS_SKIP or _WORK_NOUN_RE.fullmatch(word):
             continue
@@ -1005,10 +1024,14 @@ def names_reason(text, cited=(), classes=()):
             owners.setdefault((form, is_full), set()).add(cls)
     student_words = {form for form, _ in owners}
     for (form, is_full), who in sorted(owners.items(), key=lambda kv: (-len(kv[0][0]), not kv[0][1])):
-        # A full name of more than one word matches in any case; a one-word name or short form only
-        # capitalized ("Geo", "GEO", "Band"), never "the art of" or "the low band".
-        pattern = (re.compile(rf"(?<!\w){re.escape(form)}(?!\w)", re.I) if is_full and not re.fullmatch(r"[^\W\d_]+", form) else
-                   re.compile(rf"(?<!\w)(?:{re.escape(form.capitalize())}|{re.escape(form.upper())})(?!\w)"))
+        # A full name of more than one word matches in any case; a one-word name or short form capitalized
+        # ("Geo", "GEO", "Band"), or lowercase only at a sentence start or before scores, grade or class
+        # ("physics scores dragged it."), never "the art of" or "the low band".
+        word = re.escape(form)
+        pattern = (re.compile(rf"(?<!\w){word}(?!\w)", re.I) if is_full and not re.fullmatch(r"[^\W\d_]+", form) else
+                   re.compile(rf"(?<!\w)(?:{re.escape(form.capitalize())}|{re.escape(form.upper())})(?!\w)|"
+                              rf"(?:^\s*|(?<=[.!?;:]\s)|(?<=[.!?;:]\s\s)){word}(?!\w)|"
+                              rf"(?<!\w){word}(?=\s+(?:scores?|grades?|class(?:es)?)\b)"))
         for match in list(pattern.finditer(bare)):
             if who <= own and (is_full or len(who) == 1):
                 continue
@@ -1082,8 +1105,47 @@ def _said_letters(bare):
     return out
 
 
-def _claims_reason(text, cited, index):
-    """Every claim check except the prompt-echo and example-copy bans."""
+def _cause_share(fact):
+    return fact.get("share") if fact.get("share") is not None else fact.get("points")
+
+
+def _direction_reason(slotted, cited, index):
+    """Why a verb says a cause pushed the grade the other way from its share, or None.
+
+    "helped", "lifted", "boosted", "raised" and "saved" need a positive share; "hurt", "dragged", "cost",
+    "pulled", "knocked", "sank" and "damage" a negative one. Each verb is read against the cause named by
+    the nearest {item:} or {bucket:} slot before it (after it when none comes before: "Lifted by the
+    {item:...}."). With no cause slot, every cited cause must match. "Didn't help" turns the verb around.
+    """
+    causes = [f for f in cited if f.get("move")]
+    if not causes:
+        return None
+    slots = [(m.start(), m.end(), index.get(m.group(2)) or {}) for m in SLOT_RE.finditer(slotted)
+             if m.group(1) in ("item", "bucket")]
+    slots = [(a, b, f) for a, b, f in slots if f.get("move")]
+    bare = SLOT_RE.sub(lambda m: " " * len(m.group(0)), slotted)
+    verbs = [(m.start(), 1) for m in _UP_VERB_RE.finditer(bare)]
+    taken = {start for start, _ in verbs}
+    verbs += [(m.start(), -1) for m in _DOWN_VERB_RE.finditer(bare) if m.start() not in taken]
+    for start, way in sorted(verbs):
+        if _NEGATED_RE.search(bare[:start]):
+            way = -way
+        before = [f for a, b, f in slots if b <= start]
+        after = [f for a, b, f in slots if a >= start]
+        named = [before[-1]] if before else [after[0]] if after else causes
+        for cause in named:
+            share = _cause_share(cause) or 0
+            if share * way <= 0:
+                return "says a cause pushed the grade the other way from its share"
+    return None
+
+
+def _claims_reason(text, cited, index, slotted=None):
+    """Every claim check except the prompt-echo and example-copy bans.
+
+    slotted is the sentence with its slots (check_sentence passes it), so each direction verb is read
+    against the cause its slot names; without it, against every cited cause.
+    """
     text = spelled_to_digits(text)
     masked, unbacked_dates, scores = _mask_allowed_dates(text, cited)
     if unbacked_dates:
@@ -1132,6 +1194,9 @@ def _claims_reason(text, cited, index):
         # Named beside the drivers, a cause that pushed the other way must be set against the move.
         if len(said_drivers) < len(said) and not _CONTRAST_RE.search(masked):
             return "names an offsetting cause as if it drove the move"
+    reason = _direction_reason(slotted if slotted is not None else text, cited, index)
+    if reason:
+        return reason
     pairs = _score_pairs(cited)
     for raw, kind in scores:
         if kind == "score":
@@ -1360,11 +1425,18 @@ def vote(model, sentences, class_facts, votes=VOTES):
     return [s for s, n in zip(sentences, tally) if n * 2 > votes]
 
 
+_CODE_LETTER_RE = re.compile(r"(?<![\w'’])[A-F](?:\+|-|−|–)?(?![\w'’])")
+_CODE_DAY_RE = re.compile(r"\b(?:mon|tues|wednes|thurs|fri|satur|sun)days?\b", re.I)
+
+
 def reason_code(reason):
-    """A drop reason without its numbers, ids, quotes or words: safe to log or store ("number # isn't in the cited facts")."""
+    """A drop reason without its numbers, ids, quotes, letters, weekdays or words: safe to log or store
+    ("number # isn't in the cited facts", "letter <letter> isn't in the cited facts")."""
     code = re.sub(r"\{[^}]*\}|\([^)]*\)|\"[^\"]*\"", "", str(reason or ""))
     code = re.sub(r"\b[\w.-]*:[\w:.-]+", "<id>", code)
     code = re.sub(r"\d+(?:[./]\d+)?", "#", code)
+    code = _CODE_LETTER_RE.sub("<letter>", code)
+    code = _CODE_DAY_RE.sub("<day>", code)
     return re.sub(r"\s+", " ", code).strip()
 
 
