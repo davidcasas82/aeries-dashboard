@@ -183,8 +183,23 @@ _ECHO_RE = re.compile(
 )
 # "Moved to a C" claims the class changed letter; it needs a move that crossed into that letter.
 _LETTER_MOVE_RE = re.compile(
-    r"\b(?i:moved|went|slipped|slid|dropped|fell|rose|climbed|jumped|dipped|changed|fallen|risen|is down|is up)"
-    r" (?i:up |down |back )?to (?:an? )?([A-F])\b(?!\w)")
+    r"(?:\b(?P<verb>(?i:moved|went|slipped|slid|dropped|fell|rose|climbed|jumped|dipped|changed|fallen|risen"
+    r"|is down|is up)) (?P<way>(?i:up|down|back) )?|(?:^|(?<=[.!?] ))(?P<lead>(?i:up) ))"
+    r"to (?:an? )?(?P<letter>[A-F])\b(?!\w)")
+_DOWN_VERBS = {"slipped", "slid", "dropped", "fell", "dipped", "fallen", "is down"}
+_UP_VERBS = {"rose", "climbed", "jumped", "risen", "is up"}
+
+
+def _letter_move_direction(match):
+    """-1 for a letter move worded down ("slipped to a B"), 1 up ("Up to an A", "rose to"), 0 for neither
+    ("moved to", "changed to"), None when the words say both ways."""
+    verb = (match.group("verb") or "").lower()
+    way = (match.group("way") or "").strip().lower()
+    down = verb in _DOWN_VERBS or way == "down"
+    up = verb in _UP_VERBS or way == "up" or bool(match.group("lead"))
+    if down and up:
+        return None
+    return -1 if down else 1 if up else 0
 # Words that set a cause against the move: "the Lab (9/10) helped", "while the Lab helped".
 _CONTRAST_RE = re.compile(
     r"\b(?:helped|helps|helping|offset|offsets|offsetting|cushioned|softened|propped|while|but|though|although|"
@@ -451,12 +466,26 @@ def shown_letters(fact):
     return prior, now
 
 
+_RANK = {"A": 4, "B": 3, "C": 2, "D": 1, "F": 0}
+
+
+def shown_direction(fact):
+    """1 when the shown letter rose from prior_shown to now_shown, -1 when it fell, 0 when it's the same,
+    None with no earlier letter. The one place a letter direction comes from (shown_letters)."""
+    prior, now = shown_letters(fact)
+    if prior is None or now is None:
+        return None
+    return (_RANK[now] > _RANK[prior]) - (_RANK[now] < _RANK[prior])
+
+
 def say_opening(fact):
     """The story's first sentence, built from one next_letter, current_letter or grade_move fact, or None.
 
     current_letter (a class at an A): "Still an A."  next_letter: "Still a C, 0.5 points from a B."
     grade_move: "Still an A, down 1.6 since Oct 14.", or, when the shown letter changed, "Slipped to a C since
-    Oct 14, down 1.6." The letters are the fact's prior_shown and now_shown (shown_letters), nothing else:
+    Oct 14, down 1.6." / "Up to a B since Oct 14, up 2.1.", the verb only when the shown letter's direction
+    (shown_direction) and the percent's agree; when they don't (a mark that went against the percent),
+    "Now an A, down 1.4 since Oct 14." The letters are the fact's prior_shown and now_shown, nothing else:
     "Still" exactly when they are equal, otherwise "Now a C, 0.1 points from a B." / "Now an A." or the
     crossing into now_shown. The letter named is now_shown. When it isn't the percent's letter (the Aeries
     mark differs), a letter fact states no gap, since the percent's gap isn't about the letter on the page
@@ -480,8 +509,11 @@ def say_opening(fact):
         since = f" since {fact['since_label']}" if fact.get("since_label") else ""
         if still:
             return f"Still {_article(now)} {now}, {way} {abs(fact['delta']):g}{since}."
-        verb = "Slipped" if fact["delta"] < 0 else "Up"
-        return f"{verb} to {_article(now)} {now}{since}, {way} {abs(fact['delta']):g}."
+        sign = (fact["delta"] > 0) - (fact["delta"] < 0)
+        if sign and shown_direction(fact) == sign:
+            verb = "Slipped" if sign < 0 else "Up"
+            return f"{verb} to {_article(now)} {now}{since}, {way} {abs(fact['delta']):g}."
+        return f"Now {_article(now)} {now}, {way} {abs(fact['delta']):g}{since}."
     return None
 
 
@@ -1586,9 +1618,14 @@ def _claims_reason(text, cited, index, slotted=None):
         if not set(said) & held:
             return "says back to or again with a letter no move shows the class held"
     for match in _LETTER_MOVE_RE.finditer(bare):
-        crossed = {now for prior, now in map(shown_letters, moves) if prior and now and prior != now}
-        if match.group(1) not in crossed:
-            return f"says the class moved to {match.group(1)} but no move crossed into that letter"
+        # A crossing into the letter, the way the words say: "slipped to X" needs X below the shown letter it
+        # left, "up to X" above it (shown_direction).
+        letter, way = match.group("letter"), _letter_move_direction(match)
+        crossed = [m for m in moves if shown_letters(m)[1] == letter and shown_direction(m)]
+        if not crossed:
+            return f"says the class moved to {letter} but no move crossed into that letter"
+        if way is None or not any(way in (0, shown_direction(m)) for m in crossed):
+            return f"says the class moved to {letter} the wrong way"
     for match in _NUMBER_RE.finditer(bare):
         if float(match.group(0)) in assumed_numbers:
             continue

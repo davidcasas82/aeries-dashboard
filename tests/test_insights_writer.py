@@ -2083,9 +2083,12 @@ class MoveIdiomTests(unittest.TestCase):
         # GE's repros on e677998, citing the move: a fall from a C to a D, and a rise from 66.5 to 69 (a D).
         moved = GateReviewTests.MOVED
         fall, rise = (w.fact_index(w.model_facts(f)) for f in (geo2_facts(), geo2_facts(delta=2.5, neg=-0.5, pos=3.0)))
-        for text in ("Up to a C since Oct 14.", "It's up to a C now.", "Up to 71.5 since Oct 14."):
+        for text in ("It's up to a C now.", "Up to 71.5 since Oct 14."):
             self.assertIsNotNone(w.check_sentence(text, ["move:g"], fall, "Geo"), text)
             self.assertEqual(claims(text, ["move:g"], fall, "Geo"), moved, text)
+        # The opener's own crossing form is read as a letter move first: no move crossed into a C.
+        self.assertEqual(claims("Up to a C since Oct 14.", ["move:g"], fall, "Geo"),
+                         "says the class moved to C but no move crossed into that letter")
         for text in ("Now down to a D.", "Down to a D since Oct 14.", "It came down to a D.",
                      "Down to 69 since Oct 14.", "Down to 69% now."):
             self.assertIsNotNone(w.check_sentence(text, ["move:g"], rise, "Geo"), text)
@@ -2095,9 +2098,11 @@ class MoveIdiomTests(unittest.TestCase):
                      "Down to 69 since Oct 14."):
             self.assertIsNone(claims(text, ["move:g"], fall, "Geo"), text)
             self.assertEqual(w.check_sentence(text, ["move:g"], fall, "Geo"), w.CAUSE_FORM_REASON, text)
-        for text in ("Now up to a D.", "Up to a D since Oct 14.", "It came up to a D.", "It's up to a D now.",
-                     "Up to 69 since Oct 14."):
+        for text in ("Now up to a D.", "It came up to a D.", "It's up to a D now.", "Up to 69 since Oct 14."):
             self.assertIsNone(claims(text, ["move:g"], rise, "Geo"), text)
+        # "Up to a D" is the opener's crossing form, and a rise that stayed a D crossed into nothing.
+        self.assertEqual(claims("Up to a D since Oct 14.", ["move:g"], rise, "Geo"),
+                         "says the class moved to D but no move crossed into that letter")
         # Whatever follows, up and down are direction words.
         for text in ("Now up to a B+.", "Up to an A- now.", "It is up to 90%.", "Up to A.", "It is up to date.",
                      "Up to the teacher.", "They show up Thursdays.", "It showed up as a C."):
@@ -3578,10 +3583,51 @@ class ShownPairTests(unittest.TestCase):
         self.assertIsNone(w.check_sentence(w.say_opening(w._say_fields(move)), [move["id"]], idx, "Subj G"))
         self.assertIsNotNone(w.check_sentence("Up to an A since Oct 14, up 9.2.", [move["id"]], idx, "Subj G"))
 
+    @staticmethod
+    def subj_g_in(lo, hi, mark):
+        for score in (x / 2 for x in range(40, 101)):
+            cls = ge_class("Subj G", [("Unit 1 Test", "Tests", 40, 50), ("Unit 2 Test", "Tests", score, 50),
+                                      ("HW 1", "Homework", 8, 10)])
+            if lo <= cls["pct"] < hi:
+                cls["mark"] = mark
+                return cls
+        raise AssertionError((lo, hi))
+
+    def test_ge_marks_against_the_percent_open_on_now_never_a_crossing_verb(self):
+        # GE's three cases on 1b09e7e: the shown letter moved one way and the percent the other.
+        for (lo, hi, mark), prior, want in (
+                # "Now an A, down 1.4 since Oct 14.", "Now a B, down 3 since Oct 14. ...", "Now a C, up 1 since Oct 14."
+                ((79.5, 80, "A"), {"pct": 81.0, "mark": "B"}, "Now an A, down {} since Oct 14."),
+                ((80, 82, "B"), {"pct": 83.0, "mark": "C"}, "Now a B, down {} since Oct 14."),
+                ((80, 83, "C"), {"pct": 79.0, "mark": "B"}, "Now a C, up {} since Oct 14.")):
+            cls = self.subj_g_in(lo, hi, mark)
+            doc, stories = self.stories(cls, prior)
+            move = next(f for f in doc["facts"] if f["kind"] == "grade_move")
+            self.assertEqual(len(stories), 1)
+            opener = want.format(f"{abs(move['delta']):g}")
+            self.assertTrue(stories[0] == opener or stories[0].startswith(opener + " "), (prior, mark, stories))
+            # The checker is direction-aware: no "slipped to" a letter above the one it left, no "up to" below.
+            idx = w.fact_index([move])
+            for verb in ("Slipped", "Up"):
+                text = f"{verb} to {w._article(mark)} {mark} since Oct 14."
+                self.assertIsNotNone(w.check_sentence(text, [move["id"]], idx, "Subj G"), text)
+
+    def test_a_crossing_verb_needs_the_letter_to_move_that_way(self):
+        cls = self.subj_g_in(79.5, 80, "A")
+        doc, _stories = self.stories(cls, {"pct": 81.0, "mark": "B"})
+        move = next(f for f in doc["facts"] if f["kind"] == "grade_move")
+        self.assertEqual(w.shown_direction(move), 1)
+        idx = w.fact_index([move])
+        self.assertEqual(w.check_sentence("It slipped to an A.", [move["id"]], idx, "Subj G"),
+                         "says the class moved to A the wrong way")
+        self.assertEqual(w.shown_direction({**move, "prior_shown": "A"}), 0)
+        self.assertEqual(w.shown_direction({**move, "prior_shown": None}), None)
+        self.assertEqual(w.shown_direction({**move, "prior_shown": "A", "now_shown": "C"}), -1)
+
     def test_property_still_exactly_when_the_shown_letters_match_and_every_opener_gets_a_note(self):
         rng = random.Random(60)
         near = {"A": "AB", "B": "ABC", "C": "BCD", "D": "CDF", "F": "DF"}
-        checked = {"still": 0, "not_still": 0}
+        checked = {"still": 0, "not_still": 0, "cross": 0, "against": 0}
         for n in range(400):
             cls = ge_class(f"Subj {n}", [("Unit 1 Test", "Tests", rng.choice(range(20, 51)), 50),
                                          ("Unit 2 Test", "Tests", rng.choice(range(20, 51)) / 1, 50),
@@ -3604,4 +3650,12 @@ class ShownPairTests(unittest.TestCase):
             self.assertEqual(first.startswith("Still "), prior == now, (n, first, prior, now))
             self.assertRegex(first, rf"^(Still|Now|Slipped to|Up to) an? {now}\b", n)
             checked["still" if prior == now else "not_still"] += 1
-        self.assertGreater(min(checked.values()), 30, checked)
+            # A crossing verb only when the shown letter's direction and the percent's agree; else "Now".
+            if opening["kind"] == "grade_move" and prior != now:
+                letter_way = 1 if "ABCDF".index(now) < "ABCDF".index(prior) else -1
+                pct_way = (opening["delta"] > 0) - (opening["delta"] < 0)
+                verb = {1: "Up to ", -1: "Slipped to "}.get(letter_way) if letter_way == pct_way else "Now "
+                self.assertTrue(first.startswith(verb), (n, first, prior, now, opening["delta"]))
+                checked["cross" if verb != "Now " else "against"] += 1
+        self.assertGreater(min(checked.values()), 5, checked)
+        self.assertGreater(min(checked["still"], checked["not_still"]), 30, checked)
