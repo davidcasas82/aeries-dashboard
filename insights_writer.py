@@ -653,11 +653,9 @@ def apply_write_up(ai_summary, local):
     stories = (local or {}).get("stories") or []
     if (local or {}).get("headline"):
         summary["headline"] = local["headline"]["text"]
-    classes = []
-    for cls in summary.get("classes") or []:
-        match = match_story(stories, cls.get("class_name"))
-        classes.append({**cls, "story": match["story"] if match else ""})
-    summary["classes"] = classes
+    rows = summary.get("classes") or []
+    picks = match_stories(stories, [cls.get("class_name") for cls in rows])
+    summary["classes"] = [{**cls, "story": pick["story"] if pick else ""} for cls, pick in zip(rows, picks)]
     return summary
 
 
@@ -666,17 +664,30 @@ def normalize_name(text):
     return re.sub(r"[^a-z0-9]", "", (text or "").lower())
 
 
-def match_story(stories, class_name):
-    """index.html findAiClass: either name contains the other once normalized; the longest match wins."""
-    want = normalize_name(class_name)
-    best, best_len = None, 0
-    for story in stories or []:
-        have = normalize_name(story.get("class"))
-        if not have:
+def match_stories(stories, class_names):
+    """The story for each class name, or None. Names compare normalized (index.html normalizeName).
+
+    An exact match wins. Otherwise a class takes a story by containment (either name inside the
+    other) only when exactly one story not already taken by an exact match qualifies, so "Math"
+    and "AP Math Analysis" each keep their own story and an ambiguous name gets none.
+    """
+    keyed = [(normalize_name(s.get("class")), s) for s in stories or []]
+    keyed = [(name, s) for name, s in keyed if name]
+    wants = [normalize_name(n) for n in class_names]
+    picks = [next((s for name, s in keyed if want and name == want), None) for want in wants]
+    exact = {id(p) for p in picks if p is not None}
+    for i, want in enumerate(wants):
+        if picks[i] is not None or not want:
             continue
-        if (want in have or have in want) and len(have) > best_len:
-            best, best_len = story, len(have)
-    return best
+        hits = [s for name, s in keyed if id(s) not in exact and (want in name or name in want)]
+        if len(hits) == 1:
+            picks[i] = hits[0]
+    return picks
+
+
+def match_story(stories, class_name):
+    """The story for one class name (see match_stories)."""
+    return match_stories(stories, [class_name])[0]
 
 
 def publish_enabled(env=None):

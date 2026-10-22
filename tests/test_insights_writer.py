@@ -291,6 +291,28 @@ class ReviewFindingTests(unittest.TestCase):
         self.assertEqual([c["story"] for c in out["classes"]], ["long", "bio", ""])
 
 
+class ClassSlotTests(unittest.TestCase):
+    def test_exact_names_first_and_an_ambiguous_contains_match_lands_nowhere(self):
+        local = {"stories": [{"class": "Math", "story": "math story"},
+                             {"class": "AP Math Analysis", "story": "ap story"}]}
+        summary = {"classes": [{"class_name": "AP Math Analysis"}, {"class_name": "math"}]}
+        self.assertEqual([c["story"] for c in w.apply_write_up(summary, local)["classes"]],
+                         ["ap story", "math story"])
+        # No exact name and two stories contain "Math": ambiguous, so no story.
+        two = {"stories": [{"class": "AP Math Analysis", "story": "ap story"},
+                           {"class": "Math Honors", "story": "honors story"}]}
+        out = w.apply_write_up({"classes": [{"class_name": "Math"}, {"class_name": "Biology"}]}, two)
+        self.assertEqual([c["story"] for c in out["classes"]], ["", ""])
+        # A story already taken by an exact match isn't reused by a contains match.
+        out = w.apply_write_up({"classes": [{"class_name": "Math"}, {"class_name": "Math Lab"}]},
+                               {"stories": [{"class": "Math", "story": "math story"}]})
+        self.assertEqual([c["story"] for c in out["classes"]], ["math story", ""])
+        # One contains candidate still lands.
+        out = w.apply_write_up({"classes": [{"class_name": "P3 Biology"}]},
+                               {"stories": [{"class": "Biology", "story": "bio"}]})
+        self.assertEqual(out["classes"][0]["story"], "bio")
+
+
 def ch5(due="2026-10-30", points=50.0, bucket="Tests"):
     return {"class": "Math", "bucket": bucket, "title": "Ch. 5 Test", "due": due, "points": points}
 
