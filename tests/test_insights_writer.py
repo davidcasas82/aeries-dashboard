@@ -1084,6 +1084,11 @@ class FoldedCausesAndKeepFactTests(unittest.TestCase):
         self.assertIn("isn't in the cited facts",
                       w.check_sentence("The other 3 scores account for 6.44 of it.", [MOVE], idx))
         self.assertIn("isn't in the cited facts", w.check_sentence("Down 6.44 since Oct 15.", [MOVE], idx))
+        # GE's repro on #54 e0573ab: one folded cause with a 0.08 share.
+        move = {**math_facts()[1], "other_causes": 1, "other_share": 0.08}
+        idx1 = w.fact_index([math_facts()[0], move] + math_facts()[2:])
+        self.assertIsNotNone(w.check_sentence("The rest, 0.08, came from 1 other scores.", [MOVE], idx1))
+        self.assertIsNotNone(w.check_sentence("The rest, 0.08, came from 1 other scores.", [MOVE], idx))
         # An all-new night: other_share is null and nothing breaks.
         facts = self.folded(None)
         sent = w.model_facts(facts)[1]
