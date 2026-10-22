@@ -186,13 +186,25 @@ _ADVICE_RE = re.compile(
 _ARTICLE_RE = re.compile(
     r"(?:(?<=^)|(?<=[.!?:;\"“(] )|(?<=[.!?:;]  ))(A|An)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))"
     r"|\b(a|an)( +)(\d+(?:\.\d+)?|[A-F](?![\w'’+-]))")
-# Verbs that say which way a cause pushed the grade. A cause that "helped" has a positive share; one that
-# "hurt" has a negative one. "Pulled it up" or "knocked it up" is a push up.
-_UP_VERB_RE = re.compile(r"\b(?:help(?:s|ed|ing)?|lift(?:s|ed|ing)?|boost(?:s|ed|ing)?|rais(?:e|es|ed|ing)|"
-                         r"sav(?:e|es|ed|ing)|(?:pull|knock)(?:s|ed|ing)?(?=(?:\s+\w+){0,2}\s+up\b))\b", re.I)
-_DOWN_VERB_RE = re.compile(r"\b(?:hurt(?:s|ing)?|drag(?:s|ged|ging)?|cost(?:s|ing)?|pull(?:s|ed|ing)?|"
-                           r"knock(?:s|ed|ing)?|s[ai]nk(?:s|ing)?|sunk|damag(?:e|es|ed|ing))\b", re.I)
-_NEGATED_RE = re.compile(r"\b(?:not|never|n't|didn't|doesn't|did not|does not|wasn't|won't)\s+(?:\w+\s+)?$", re.I)
+# Belt and braces behind the cause-sentence gate: words that say which way a cause pushed the grade.
+# A cause that "helped" has a positive share; one that "hurt" a negative one.
+_UP_VERB_RE = re.compile(
+    r"\b(?:help(?:s|ed|ing)?|lift(?:s|ed|ing)?|boost(?:s|ed|ing)?|rais(?:e|es|ed|ing)|sav(?:e|es|ed|ing)|"
+    r"carr(?:y|ies|ied|ying)|rescu(?:e|es|ed|ing)|improv(?:e|es|ed|ing)|up(?:ward)?s?)\b", re.I)
+_DOWN_VERB_RE = re.compile(
+    r"\b(?:hurt(?:s|ing)?|drag(?:s|ged|ging)?|cost(?:s|ing)?|pull(?:s|ed|ing)?|knock(?:s|ed|ing)?|s[aiu]nk(?:s|ing)?|"
+    r"damag(?:e|es|ed|ing)|tank(?:s|ed|ing)?|cut(?:s|ting)?|dent(?:s|ed|ing)?|slash(?:es|ed|ing)?|"
+    r"drop(?:s|ped|ping)?|blam(?:e|es|ed|ing)|fell|fall(?:s|ing|en)?|down(?:ward)?s?)\b", re.I)
+# "Pulled it up" and "knocked it up" push up; "pulled it down" pushes down.
+_UP_PARTICLE_AFTER_RE = re.compile(r"^(?:\s+\w+){0,2}\s+up(?:ward)?s?\b", re.I)
+_NEGATED_RE = re.compile(r"\b(?:not|never|n't|didn't|doesn't|did not|does not|wasn't|won't|hardly|barely|scarcely)"
+                         r"\s+(?:\w+\s+)?$", re.I)
+# Adjectives on a named cause: "a low {item:...}" says it hurt, "a strong {item:...}" that it helped.
+_LOW_ADJ_RE = re.compile(r"\b(?:low|lower|lowest|weak|weaker|poor|bad|rough|missed)\b", re.I)
+_HIGH_ADJ_RE = re.compile(r"\b(?:strong|stronger|high|higher|highest|good|great|perfect|solid|top)\b", re.I)
+# Phrases that name a direction the single words miss.
+_UP_PHRASE_RE = re.compile(r"\bgave it a boost\b", re.I)
+_DOWN_PHRASE_RE = re.compile(r"\bbehind the (?:drop|dip|slide|slip|fall|decline)\b", re.I)
 _SAME_LETTER_MOVE_RE = re.compile(
     r"\b(?i:moved|went|changed|dropped|fell|rose|slipped|slid|climbed) (?i:from) (?i:an? )?([A-F]) (?i:to) (?i:an? )?\1\b")
 ROLE_FIELDS = {
@@ -248,8 +260,18 @@ Never write an assignment word yourself (test, quiz, exam, lab, project, packet,
 
 Write 1 to 4 short, plain sentences:
 - Open with say_opening, word for word: from the grade_move if there is one, else from the next_letter. Cite that fact.
-- Then why it moved: the causes whose effect matches the move ("hurt" on a drop, "helped" on a rise), largest first, each as its slot: "Mostly the {item:<cause id>}."
-- A cause with the opposite effect only as a contrast, in its own words: "The {item:<cause id>} helped." Never as part of the reason.
+- Then why it moved: the causes whose effect matches the move ("hurt" on a drop, "helped" on a rise), largest first.
+- A cause with the opposite effect only as a contrast: "The {item:<cause id>} helped." Never as part of the reason.
+
+A sentence about a cause is one of these forms, word for word, and nothing else. Any other cause sentence is thrown away.
+- "Mostly the {item:<cause id>}." for the largest cause whose effect matches the move.
+- "The {item:<cause id>} did most of the damage." for the largest cause whose effect is "hurt".
+- "The {item:<cause id>} hurt." or "The {item:<cause id>} dragged it down." for a cause whose effect is "hurt".
+- "The {item:<cause id>} helped." for a cause whose effect is "helped".
+- The same with "{bucket:<cause id>} scores" in place of "The {item:<cause id>}": "{bucket:<cause id>} scores hurt."
+- Two or three causes with the same effect may share one form, joined with "and": "The {item:<cause id>} and the {item:<cause id>} hurt."
+  Right: "The {item:cause:ceramics:2026-09-09:glazetest} hurt."
+  Wrong: "The {item:cause:ceramics:2026-09-09:glazetest} pulled the grade down a bit." (not one of the forms)
 - Then a pattern, only if FACTS has a posting_day fact, naming its weekday.
 - End with one next step, only from a what_if fact, using its say_step word for word: "An 85 or better on the {next:<what_if id>} gets it to a B."
 - With no what_if fact, end without a next step. Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
@@ -764,6 +786,10 @@ def check_sentence(text, cites, index, name=None, classes=None):
     reason = names_reason(text, cited, all_classes)
     if reason:
         return reason
+    # Fail closed: a sentence about a cause or the move's direction must be one of the fixed forms.
+    reason = cause_form_reason(text, cites, index)
+    if reason:
+        return reason
     # Whatever the fill produces must not carry a raw id or a brace either.
     return leak_reason(fill_slots(text, index), index, filled=True)
 
@@ -849,7 +875,7 @@ def _bucket_noun(bucket):
     """ "Assessments" or "Assessment" -> "assessment"; "Quizzes" -> "quiz"; "Labs & Activities" ->
     "lab or activity"; a mass noun like "Homework" or "Math Fluency" -> "homework assignment",
     "math fluency assignment"; "Participation" -> "participation score"."""
-    words = str(bucket or "test").strip().lower().split() or ["test"]
+    words = re.sub(r"\s*([/&])\s*", r" \1 ", str(bucket or "test")).strip().lower().split() or ["test"]
     if words[-1] in _MASS_BUCKETS:
         tail = _MASS_TAIL.get(words[-1], "assignment")
         return " ".join("or" if w in ("&", "and", "/") else w for w in words) + f" {tail}"
@@ -938,6 +964,12 @@ def _class_forms(name):
     return forms
 
 
+# Words after which a lowercase class name is a name, not a common word: "mostly from physics".
+_LEAD_INS = "(?:%s)" % "|".join(rf"(?<=\b(?i:{w}) )" for w in (
+    "from", "on", "in", "by", "for", "than", "and", "or", "with", "plus", "but", "like", "after", "to", "mostly",
+    "mainly", "largely", "chiefly", "primarily"))
+
+
 def names_reason(text, cited=(), classes=()):
     """Why the sentence names school work or a class outside a slot, or None.
 
@@ -957,13 +989,15 @@ def names_reason(text, cited=(), classes=()):
     student_words = {form for form, _ in owners}
     for (form, is_full), who in sorted(owners.items(), key=lambda kv: (-len(kv[0][0]), not kv[0][1])):
         # A full name of more than one word matches in any case; a one-word name or short form capitalized
-        # ("Geo", "GEO", "Band"), or lowercase only at a sentence start or before scores, grade or class
-        # ("physics scores dragged it."), never "the art of" or "the low band".
+        # ("Geo", "GEO", "Band"), or lowercase only at a sentence start, before scores, grade or class
+        # ("physics scores dragged it."), or after a word like "from" or "mostly" ("mostly from physics."),
+        # never "the art of", "the low band" or "its posting history".
         word = re.escape(form)
         pattern = (re.compile(rf"(?<!\w){word}(?!\w)", re.I) if is_full and not re.fullmatch(r"[^\W\d_]+", form) else
                    re.compile(rf"(?<!\w)(?:{re.escape(form.capitalize())}|{re.escape(form.upper())})(?!\w)|"
                               rf"(?:^\s*|(?<=[.!?;:]\s)|(?<=[.!?;:]\s\s)){word}(?!\w)|"
-                              rf"(?<!\w){word}(?=\s+(?:scores?|grades?|class(?:es)?)\b)"))
+                              rf"(?<!\w){word}(?=\s+(?:scores?|grades?|class(?:es)?)\b)|"
+                              rf"{_LEAD_INS}{word}(?!\w)"))
         for match in list(pattern.finditer(bare)):
             if who <= own and (is_full or len(who) == 1):
                 continue
@@ -1042,12 +1076,15 @@ def _cause_share(fact):
 
 
 def _direction_reason(slotted, cited, index):
-    """Why a verb says a cause pushed the grade the other way from its share, or None.
+    """Why a direction word says a cause pushed the grade the other way from its share, or None.
 
-    "helped", "lifted", "boosted", "raised" and "saved" need a positive share; "hurt", "dragged", "cost",
-    "pulled", "knocked", "sank" and "damage" a negative one. Each verb is read against the cause named by
-    the nearest {item:} or {bucket:} slot before it (after it when none comes before: "Lifted by the
-    {item:...}."). With no cause slot, every cited cause must match. "Didn't help" turns the verb around.
+    Up words (helped, lifted, boosted, raised, saved, carried, rescued, improved, up, "gave it a boost") need
+    a positive share; down words (hurt, dragged, cost, pulled, knocked, sank, damage, tanked, cut, dented,
+    slashed, dropped, blamed, fell, down, "behind the drop") a negative one. Each word is read against the
+    cause named by the nearest {item:} or {bucket:} slot before it (after it when none comes before:
+    "Lifted by the {item:...}."); an adjective ("a low {item:...}", "a strong {item:...}") against the slot
+    right after it. With no cause slot, every cited cause must match. "Didn't", "hardly" or "barely" turn a
+    word around. This backs up the cause-sentence gate; it is not the main check.
     """
     causes = [f for f in cited if f.get("move")]
     if not causes:
@@ -1056,15 +1093,24 @@ def _direction_reason(slotted, cited, index):
              if m.group(1) in ("item", "bucket")]
     slots = [(a, b, f) for a, b, f in slots if f.get("move")]
     bare = SLOT_RE.sub(lambda m: " " * len(m.group(0)), slotted)
-    verbs = [(m.start(), 1) for m in _UP_VERB_RE.finditer(bare)]
-    taken = {start for start, _ in verbs}
-    verbs += [(m.start(), -1) for m in _DOWN_VERB_RE.finditer(bare) if m.start() not in taken]
-    for start, way in sorted(verbs):
-        if _NEGATED_RE.search(bare[:start]):
+    words = [(m.start(), 1, False) for m in _UP_PHRASE_RE.finditer(bare)]
+    words += [(m.start(), -1, False) for m in _DOWN_PHRASE_RE.finditer(bare)]
+    for m in _UP_VERB_RE.finditer(bare):
+        words.append((m.start(), 1, False))
+    for m in _DOWN_VERB_RE.finditer(bare):
+        up = m.group(0).lower().startswith(("pull", "knock")) and _UP_PARTICLE_AFTER_RE.match(bare[m.end():])
+        words.append((m.start(), 1 if up else -1, False))
+    words += [(m.start(), -1, True) for m in _LOW_ADJ_RE.finditer(bare)]
+    words += [(m.start(), 1, True) for m in _HIGH_ADJ_RE.finditer(bare)]
+    for start, way, adjective in sorted(words):
+        if not adjective and _NEGATED_RE.search(bare[:start]):
             way = -way
         before = [f for a, b, f in slots if b <= start]
         after = [f for a, b, f in slots if a >= start]
-        named = [before[-1]] if before else [after[0]] if after else causes
+        if adjective:
+            named = [after[0]] if after else [before[-1]] if before else causes
+        else:
+            named = [before[-1]] if before else [after[0]] if after else causes
         for cause in named:
             share = _cause_share(cause) or 0
             if share * way <= 0:
@@ -1125,9 +1171,6 @@ def _claims_reason(text, cited, index, slotted=None):
         # Named beside the drivers, a cause that pushed the other way must be set against the move.
         if len(said_drivers) < len(said) and not _CONTRAST_RE.search(masked):
             return "names an offsetting cause as if it drove the move"
-    reason = _direction_reason(slotted if slotted is not None else text, cited, index)
-    if reason:
-        return reason
     pairs = _score_pairs(cited)
     for raw, kind in scores:
         if kind == "score":
@@ -1171,7 +1214,88 @@ def _claims_reason(text, cited, index, slotted=None):
     for letter in said:
         if letter not in letters:
             return f"letter {letter} isn't in the cited facts"
-    return None
+    return _direction_reason(slotted if slotted is not None else text, cited, index)
+
+
+# ── Cause-sentence gate ──────────────────────────────────────────────────────
+# A sentence that names a cause ({item:} or {bucket:} on a cause), cites a cause, or cites a grade_move
+# with direction wording must be one of these forms, or it is dropped. This is the main direction check;
+# _direction_reason's word lists only back it up.
+#   "The {item:<cause>} helped."                 share > 0
+#   "The {item:<cause>} hurt." / "... dragged it down."   share < 0
+#   "The {item:<cause>} did most of the damage." share < 0 and the move's largest negative share
+#   "Mostly the {item:<cause>}." / "Mostly from the {item:<cause>}."  the largest share in the move's direction
+#   the same with "{bucket:<cause>} scores" ("Mostly one {bucket:<cause>} score." too)
+#   helped / hurt / dragged it down may name 2 or 3 causes joined with "and", all of one sign
+#   the cited move's say_opening, word for word ("{class:<id>} slipped to a D since Oct 14, down 2.5." too)
+# The item form may carry " score" and the "(n/m)" score the fill adds.
+_FORM_ITEM = r"(?i:the) \{item:([^{}\s]+)\}(?: score)?(?: \(\d+(?:\.\d+)?/\d+(?:\.\d+)?\))?"
+_FORM_BUCKET = r"\{bucket:([^{}\s]+)\}(?: scores?)?"
+_FORM_ONE = rf"(?:{_FORM_ITEM}|{_FORM_BUCKET})"
+_FORM_SLOT_RE = re.compile(r"\{(item|bucket):([^{}\s]+)\}")
+_FORM_LIST = rf"{_FORM_ONE}(?:(?:, {_FORM_ONE})?,? and {_FORM_ONE})?"
+_FORM_SIGNED_RE = re.compile(rf"^(?P<who>{_FORM_LIST}) (?P<verb>helped|hurt|dragged it(?: down)?)\.$")
+_FORM_DAMAGE_RE = re.compile(rf"^(?P<who>{_FORM_ONE}) did most of the damage\.$")
+_FORM_MOSTLY_RE = re.compile(
+    rf"^Mostly (?:from )?(?P<who>{_FORM_ITEM}|(?:one )?\{{bucket:[^{{}}\s]+\}}(?: scores?)?)\.$")
+_DIRECTION_WORDS_RE = re.compile(
+    r"\b(?:up|down|rose|rise[sn]?|fell|fall(?:s|en)?|drop\w*|dip\w*|slip\w*|slid\w*|climb\w*|jump\w*|gain\w*|"
+    r"lost|los(?:e|es|ing)|moved?|moving|went|cost\w*|pull\w*|push\w*|drag\w*|hurt\w*|help\w*|lift\w*|boost\w*|"
+    r"rais\w*|sav\w*|damag\w*|because|due|thanks|driv\w*|caus\w*|mostly|mainly|largely|primarily|chiefly|"
+    r"higher|lower|better|worse|back|again)\b", re.I)
+CAUSE_FORM_REASON = "cause sentence not in an allowed form"
+
+
+def _top_cause(move, sign):
+    """The move's cause with the largest share of the given sign, or None."""
+    return next((c for c in ranked_causes(move) if (_cause_share(c) or 0) * sign > 0), None)
+
+
+def _opening_forms(move):
+    opening = say_opening(_say_fields(move)) if move else None
+    if not opening:
+        return set()
+    lower = opening[0].lower() + opening[1:]
+    return {opening, fix_articles(opening), f"{{class:{move['id']}}} {lower}"}
+
+
+def cause_form_reason(text, cites, index):
+    """None if the sentence is no cause sentence or is one of the fixed forms, else CAUSE_FORM_REASON."""
+    text = (text or "").strip()
+    cited = _cited_facts(cites, index)
+    cause_slots = [fid for kind, fid in _FORM_SLOT_RE.findall(text) if (index.get(fid) or {}).get("move")]
+    cited_causes = [f for f in cited if f.get("move")]
+    moves = [f for f in cited if f.get("kind") == "grade_move" and not f.get("move")]
+    worded = bool(_DIRECTION_WORDS_RE.search(SLOT_RE.sub(" ", text)))
+    if not cause_slots and not cited_causes and not (moves and worded):
+        return None
+    if not cause_slots and not cited_causes:
+        # Only the move itself: its say_opening, word for word.
+        return None if any(text in _opening_forms(m) for m in moves) else CAUSE_FORM_REASON
+    named = list(dict.fromkeys(cause_slots))
+    # Every cited cause is named in a slot, and the sentence cites nothing but the move and its causes.
+    if set(named) != {f["id"] for f in cited_causes} or len(cited_causes) + len(moves) != len(cited):
+        return CAUSE_FORM_REASON
+    shares = [_cause_share(index[fid]) or 0 for fid in named]
+    move_of = lambda fid: index.get(index[fid].get("move")) or {}
+    match = _FORM_SIGNED_RE.match(text)
+    if match and len(_FORM_SLOT_RE.findall(match.group("who"))) == len(_FORM_SLOT_RE.findall(text)):
+        if len(named) != len(_FORM_SLOT_RE.findall(text)):
+            return CAUSE_FORM_REASON
+        sign = 1 if match.group("verb") == "helped" else -1
+        return None if all(v * sign > 0 for v in shares) else CAUSE_FORM_REASON
+    if len(named) != 1 or len(_FORM_SLOT_RE.findall(text)) != 1:
+        return CAUSE_FORM_REASON
+    fid, share = named[0], shares[0]
+    if _FORM_DAMAGE_RE.match(text):
+        top = _top_cause(move_of(fid), -1)
+        return None if share < 0 and top and top["id"] == fid else CAUSE_FORM_REASON
+    if _FORM_MOSTLY_RE.match(text):
+        move = move_of(fid)
+        sign = 1 if (move.get("delta") or 0) >= 0 else -1
+        top = _top_cause(move, sign)
+        return None if share * sign > 0 and top and top["id"] == fid else CAUSE_FORM_REASON
+    return CAUSE_FORM_REASON
 
 
 def eval_story(sentences, index):

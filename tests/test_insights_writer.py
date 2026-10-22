@@ -56,11 +56,11 @@ def insight_facts():
 
 GOOD = [
     {"text": "Math: B, 2.1 pts from an A.", "cites": [NEXT]},
-    {"text": "Down mainly from a 62% on the {item:" + CAUSE + "} (60% of the grade).", "cites": [CAUSE]},
+    {"text": "Mostly the {item:" + CAUSE + "}.", "cites": [CAUSE]},
     {"text": "Scores mostly post on Fridays.", "cites": [PATTERN]},
     {"text": "An 88% on the {next:" + WHATIF + "} gets the A back.", "cites": [WHATIF]},
 ]
-GOOD_STORY = ("Math: B, 2.1 pts from an A. Down mainly from a 62% on the Ch.4 Quiz (60% of the grade). "
+GOOD_STORY = ("Math: B, 2.1 pts from an A. Mostly the Ch.4 Quiz (31/50). "
               "Scores mostly post on Fridays. An 88% on the next test gets the A back.")
 
 
@@ -106,9 +106,19 @@ def slotted(text, cites, idx):
     return text
 
 
+def claims(text, cites, idx, name=None, classes=None):
+    """check_sentence with the cause-sentence gate set aside: None when only the gate would drop it.
+
+    The gate runs last, so every other check keeps its own reason; this reads those checks alone.
+    CauseFormGateTests covers the gate itself.
+    """
+    reason = w.check_sentence(text, cites, idx, name, classes)
+    return None if reason == w.CAUSE_FORM_REASON else reason
+
+
 def check(text, cites, idx, name=None):
-    """check_sentence on the slot form of a plain sentence."""
-    return w.check_sentence(slotted(text, cites, idx), cites, idx, name)
+    """The claim checks (gate aside, see claims) on the slot form of a plain sentence."""
+    return claims(slotted(text, cites, idx), cites, idx, name)
 
 
 def slot_all(sentences, idx):
@@ -674,8 +684,11 @@ class BakeoffFindingTests(unittest.TestCase):
                             ("Mostly the {item:cause:g:t}.", ["cause:g:t"]),
                             ("{class:pat:g} scores usually post Thursdays.", ["pat:g"]),
                             ("Scores usually post Thursdays.", ["pat:g"]),
-                            ("Low scores dragged it.", ["cause:g:t"])):
+                            ):
             self.assertIsNone(w.check_sentence(text, cites, idx, "Geo"), text)
+        # A cause named without a slot passes the claim checks but not the cause-sentence gate.
+        self.assertIsNone(claims("Low scores dragged it.", ["cause:g:t"], idx, "Geo"))
+        self.assertEqual(w.check_sentence("Low scores dragged it.", ["cause:g:t"], idx, "Geo"), w.CAUSE_FORM_REASON)
         self.assertEqual(w.fill_slots("The {item:cause:g:t} did most of the damage.", idx),
                          "The Unit Test (20/40) did most of the damage.")
         self.assertEqual(w.fill_slots("{class:pat:g} scores usually post Thursdays.", idx),
@@ -997,8 +1010,8 @@ class PolishPassTests(unittest.TestCase):
             self.assertEqual(w.apply_write_up({"headline": "Grok headline"}, up)["headline"], "")
         for text, cites, out in (("Math: an 88 or better on the {next:" + WHATIF + "} gets the A back.", [WHATIF],
                                   "Math: an 88 or better on the next test gets the A back."),
-                                 ("The {item:" + CAUSE + "} pulled Math down.", [CAUSE],
-                                  "The Ch.4 Quiz (31/50) pulled Math down.")):
+                                 ("The {item:" + CAUSE + "} did most of the damage.", [CAUSE],
+                                  "The Ch.4 Quiz (31/50) did most of the damage.")):
             up = w.write_up(ScriptedModel({"Math": GOOD}, headline={"text": text, "cites": cites}), insight_facts())
             self.assertEqual(up["headline"], {"text": out, "cites": cites})
         fixed = w.write_up(ScriptedModel({"Math": GOOD}, headline={
@@ -1037,7 +1050,8 @@ class CtoRoundFourTests(unittest.TestCase):
                  "Coursework": "coursework assignment", "Homework": "homework assignment",
                  "Math Fluency": "math fluency assignment", "Participation": "participation score",
                  "Classwork": "classwork assignment", "Performance": "performance item",
-                 "Labs & Projects": "lab or project", "Homework & Classwork": "homework or classwork assignment",
+                 "Labs & Projects": "lab or project", "Labs/Activities": "lab or activity",
+                 "Homework & Classwork": "homework or classwork assignment",
                  None: "test"}
         for bucket, noun in cases.items():
             self.assertEqual(w._bucket_noun(bucket), noun, bucket)
@@ -1349,9 +1363,10 @@ class DirectionTests(unittest.TestCase):
             "{bucket:cause:geo:t} scores sank it.")
 
     def check_all(self, facts, texts, expected, cites=("cause:geo:t",)):
+        # The word checks back up the cause-sentence gate, so they're read with the gate set aside.
         idx = w.fact_index(w.model_facts(facts))
         for text in texts:
-            self.assertEqual(w.check_sentence(text, list(cites), idx, "Geo"), expected, text)
+            self.assertEqual(claims(text, list(cites), idx, "Geo"), expected, text)
 
     def test_on_a_drop_a_cause_never_helped(self):
         self.check_all(geo_facts(), self.UP, self.WRONG)
@@ -1393,6 +1408,180 @@ class DirectionTests(unittest.TestCase):
             self.assertIsNone(w.check_sentence(sentence["text"], sentence["cites"], idx, "Ceramics"), sentence["text"])
 
 
+def geo2_facts(delta=-2.5, neg=-3.0, pos=0.5, zero=False):
+    """GE's dir958b fixture: Geo moves by delta; cause a (Unit Test) has share neg, b (Rocket Lab) share pos."""
+    causes = [{"id": "cause:g:a", "title": "Unit Test", "bucket": "Tests", "bucket_weight_pct": 50.0, "earned": 20.0,
+               "possible": 40.0, "points": neg, "share": neg},
+              {"id": "cause:g:b", "title": "Rocket Lab", "bucket": "Labs", "bucket_weight_pct": 30.0, "earned": 9.0,
+               "possible": 10.0, "points": pos, "share": pos}]
+    if zero:
+        causes.append({"id": "cause:g:z", "title": "Map Quiz", "bucket": "Quizzes", "bucket_weight_pct": 20.0,
+                       "earned": 5.0, "possible": 10.0, "points": 0.0, "share": 0.0})
+    return [{"id": "next:g", "kind": "next_letter", "class": "Geo", "pct": 69.0, "letter": "D", "next_letter": "C",
+             "threshold": 70.0, "gap": 1.0},
+            {"id": "move:g", "kind": "grade_move", "class": "Geo", "since": "2026-10-14", "from_pct": 69.0 - delta,
+             "to_pct": 69.0, "delta": delta, "explained": delta, "coverage": 1.0, "causes": causes},
+            {"id": "whatif:g", "kind": "what_if", "class": "Geo", "bucket": "Tests", "bucket_weight_pct": 50.0,
+             "points": 40.0, "target": 70.0, "needed_pct": 73.2, "reachable": True},
+            {"id": "pat:g", "kind": "posting_day", "class": "Geo", "weekday": "Thursday", "share": 0.8, "scores": 10,
+             "window_days": 28}]
+
+
+def gate_check(text, facts, classes=("Geo",)):
+    """check_sentence as dir958b runs it: the move plus every cause the sentence slots."""
+    idx = w.fact_index(w.model_facts(facts))
+    cites = ["move:g"] + sorted(set(re.findall(r"\{(?:item|bucket):(cause:[^}]+)\}", text)))
+    return w.check_sentence(text, cites, idx, "Geo", list(classes))
+
+
+class CauseFormGateTests(unittest.TestCase):
+    """GE's dir958b on 958eb47: wrong-way words off any list got through. Cause sentences now fail closed."""
+
+    DROP_WRONG_WAY = (
+        "The {item:cause:g:b} pushed it down.", "The {item:cause:g:a} pushed it up.", "The {item:cause:g:b} brought it down.",
+        "The {item:cause:g:a} improved it.", "The {item:cause:g:b} tanked it.", "The {item:cause:g:b} cut it.",
+        "The {item:cause:g:b} sunk it.", "The {item:cause:g:b} was behind the drop.", "The {item:cause:g:b} is why it fell.",
+        "It fell thanks to the {item:cause:g:b}.", "Blame the {item:cause:g:b}.", "The {item:cause:g:a} carried it.",
+        "The {item:cause:g:a} rescued it.", "The {item:cause:g:a} saved it.", "A strong {item:cause:g:a} kept it up.",
+        "A weak {item:cause:g:b} did it.", "A low {item:cause:g:b} score dropped it.",
+        "The {item:cause:g:a} helped but the {item:cause:g:b} hurt.", "The {item:cause:g:b} hurt but the {item:cause:g:a} helped.",
+        "The {item:cause:g:a} didn't hurt.", "The {item:cause:g:b} didn't help.", "The {item:cause:g:a} did not drag it down.",
+        "The {item:cause:g:a} never hurt.", "The {item:cause:g:a} wasn't what hurt; it helped.",
+        "The {item:cause:g:b} and the {item:cause:g:a} both hurt.", "The {item:cause:g:a} and the {item:cause:g:b} both hurt.",
+        "Both the {item:cause:g:b} and the {item:cause:g:a} dragged it.", "The {item:cause:g:b} did most of the damage.",
+        "The {item:cause:g:b}, a big score after a long week, really ended up being what hurt.",
+        "{bucket:cause:g:b} scores dragged it.", "{bucket:cause:g:a} scores lifted it.", "The {item:cause:g:b} cost it 0.5.",
+        "The {item:cause:g:a} hardly hurt.", "It was lifted by nothing but the {item:cause:g:a}.",
+        "The {item:cause:g:a} made the difference upward.", "Down 2.5, mostly the {item:cause:g:b}.",
+        "Mostly the {item:cause:g:b}.", "The {item:cause:g:b} drove the drop.", "The {item:cause:g:b} was the drag.",
+        "The {item:cause:g:a} gave it a boost.")
+    RISE_WRONG_WAY = ("The {item:cause:g:a} lifted it.", "The {item:cause:g:b} hurt.", "The {item:cause:g:b} did the damage.",
+                      "Rose 2.5, but the {item:cause:g:b} dragged.", "A low {item:cause:g:b} score helped.")
+
+    def test_every_dir958b_wrong_way_sentence_drops(self):
+        self.assertEqual(len(self.DROP_WRONG_WAY), 40)
+        for text in self.DROP_WRONG_WAY:
+            self.assertIsNotNone(gate_check(text, geo2_facts()), text)
+        rise = geo2_facts(delta=2.5, neg=-0.5, pos=3.0)
+        for text in self.RISE_WRONG_WAY:
+            self.assertIsNotNone(gate_check(text, rise), text)
+        zero = geo2_facts(zero=True)
+        for text in ("The {item:cause:g:z} hurt.", "The {item:cause:g:z} helped.", "The {item:cause:g:z} didn't move it.",
+                     "The {item:cause:g:z} came in."):
+            self.assertIsNotNone(gate_check(text, zero), text)
+
+    def test_the_wrong_way_words_drop_even_with_the_gate_aside(self):
+        # Layer B on its own: each of GE's new words is read against the slot's share.
+        idx = w.fact_index(w.model_facts(geo2_facts()))
+        for text in ("The {item:cause:g:a} pushed it up.", "The {item:cause:g:a} carried it.", "The {item:cause:g:a} rescued it.",
+                     "The {item:cause:g:a} improved it.", "The {item:cause:g:a} gave it a boost.",
+                     "The {item:cause:g:a} made the difference upward.", "A strong {item:cause:g:a} kept it up.",
+                     "The {item:cause:g:a} hardly hurt.", "The {item:cause:g:a} barely hurt.",
+                     "The {item:cause:g:b} tanked it.", "The {item:cause:g:b} cut it.", "The {item:cause:g:b} dented it.",
+                     "The {item:cause:g:b} slashed it.", "The {item:cause:g:b} dropped it.", "Blame the {item:cause:g:b}.",
+                     "The {item:cause:g:b} was behind the drop.", "The {item:cause:g:b} pushed it down.",
+                     "A weak {item:cause:g:b} did it."):
+            cites = ["move:g"] + sorted(set(re.findall(r"\{(?:item|bucket):(cause:[^}]+)\}", text)))
+            self.assertIsNotNone(claims(text, cites, idx, "Geo"), text)
+        rise = w.fact_index(w.model_facts(geo2_facts(delta=2.5, neg=-0.5, pos=3.0)))
+        self.assertIsNotNone(claims("A low {item:cause:g:b} score helped.", ["move:g", "cause:g:b"], rise, "Geo"))
+
+    def test_the_allowed_forms_pass(self):
+        drop = geo2_facts()
+        for text in ("Mostly the {item:cause:g:a}.", "Mostly from the {item:cause:g:a}.", "The {item:cause:g:a} hurt.",
+                     "The {item:cause:g:a} dragged it down.", "The {item:cause:g:a} did most of the damage.",
+                     "The {item:cause:g:a} score hurt.", "The {item:cause:g:a} (20/40) hurt.", "The {item:cause:g:b} helped.",
+                     "{bucket:cause:g:a} scores hurt.", "{bucket:cause:g:a} scores dragged it down.",
+                     "{bucket:cause:g:a} scores did most of the damage.", "{bucket:cause:g:b} scores helped.",
+                     "Mostly {bucket:cause:g:a} scores.", "Mostly one {bucket:cause:g:a} score.",
+                     "Slipped to a D since Oct 14, down 2.5.", "{class:move:g} slipped to a D since Oct 14, down 2.5."):
+            self.assertIsNone(gate_check(text, drop), text)
+        rise = geo2_facts(delta=2.5, neg=-0.5, pos=3.0)
+        for text in ("Mostly the {item:cause:g:b}.", "The {item:cause:g:b} helped.", "{bucket:cause:g:b} scores helped."):
+            self.assertIsNone(gate_check(text, rise), text)
+
+    def test_a_list_of_two_or_three_causes_shares_one_sign(self):
+        facts = geo2_facts()
+        facts[1]["causes"].append({"id": "cause:g:c", "title": "Map Quiz", "bucket": "Quizzes", "bucket_weight_pct": 20.0,
+                                   "earned": 2.0, "possible": 10.0, "points": -0.5, "share": -0.5})
+        facts[1]["causes"].append({"id": "cause:g:d", "title": "Unit 2 Packet", "bucket": "Homework",
+                                   "bucket_weight_pct": 10.0, "earned": 3.0, "possible": 10.0, "points": -0.5,
+                                   "share": -0.5})
+        for text in ("The {item:cause:g:a} and the {item:cause:g:c} hurt.",
+                     "The {item:cause:g:a}, the {item:cause:g:c} and the {item:cause:g:d} hurt.",
+                     "The {item:cause:g:a} and {bucket:cause:g:c} scores dragged it down."):
+            self.assertIsNone(gate_check(text, facts), text)
+        self.assertIsNotNone(gate_check("The {item:cause:g:a} and the {item:cause:g:b} hurt.", facts))
+        for text in ("The {item:cause:g:a} and the {item:cause:g:c} helped.",
+                     "The {item:cause:g:a} and the {item:cause:g:c} did most of the damage.",
+                     "Mostly the {item:cause:g:a} and the {item:cause:g:c}."):
+            self.assertIsNotNone(gate_check(text, facts), text)
+
+    def test_most_needs_the_top_share_in_the_moves_direction(self):
+        facts = geo2_facts()
+        facts[1]["causes"].append({"id": "cause:g:c", "title": "Map Quiz", "bucket": "Quizzes", "bucket_weight_pct": 20.0,
+                                   "earned": 2.0, "possible": 10.0, "points": -0.5, "share": -0.5})
+        self.assertIsNone(gate_check("The {item:cause:g:c} hurt.", facts))
+        for text in ("Mostly the {item:cause:g:c}.", "The {item:cause:g:c} did most of the damage.",
+                     "Mostly {bucket:cause:g:c} scores."):
+            self.assertIsNotNone(gate_check(text, facts), text)
+
+    def test_a_cause_sentence_off_the_forms_drops_with_a_code(self):
+        drop = geo2_facts()
+        for text in ("The {item:cause:g:a} pulled it down.", "The {item:cause:g:a} sank it.", "It was hurt by the {item:cause:g:a}.",
+                     "Down 2.5 since Oct 14, mostly the {item:cause:g:a}."):
+            self.assertEqual(gate_check(text, drop), w.CAUSE_FORM_REASON, text)
+        self.assertIsNotNone(gate_check("The {item:cause:g:a} hurt; the {item:cause:g:b} helped.", drop))
+        self.assertEqual(w.reason_code(w.CAUSE_FORM_REASON), w.CAUSE_FORM_REASON)
+        idx = w.fact_index(w.model_facts(drop))
+        # A cited cause with no slot, a cause named but not cited, a move sentence that isn't its opening.
+        self.assertEqual(w.check_sentence("One low score did most of the damage.", ["cause:g:a"], idx, "Geo"),
+                         w.CAUSE_FORM_REASON)
+        self.assertIsNotNone(w.check_sentence("The {item:cause:g:a} hurt.", ["cause:g:a", "cause:g:b"], idx, "Geo"))
+        self.assertEqual(w.check_sentence("Down 2.5 since Oct 14.", ["move:g"], idx, "Geo"), w.CAUSE_FORM_REASON)
+
+    def test_sentences_that_are_no_cause_sentence_skip_the_gate(self):
+        idx = w.fact_index(w.model_facts(geo2_facts()))
+        for text, cites in (("Still a D, 1 points from a C.", ["next:g"]), ("Scores usually post Thursdays.", ["pat:g"]),
+                            ("A 74 or better on the {next:whatif:g} gets it to a C.", ["whatif:g"]),
+                            ("{bucket:whatif:g} is 50% of the grade.", ["whatif:g"])):
+            self.assertIsNone(w.check_sentence(text, cites, idx, "Geo"), text)
+
+    def test_the_v6_story_forms_pass_verbatim(self):
+        # The sentence forms of the v6 bake-off stories, on synthetic facts.
+        idx = w.fact_index(w.model_facts(chem_facts()))
+        for text, cites in (("Still an A, down 1.6 since Oct 14.", [CHEM_MOVE]),
+                            ("The {item:%s} did most of the damage." % CHEM_C1, [CHEM_C1]),
+                            ("Mostly the {item:%s}." % CHEM_C1, [CHEM_C1]),
+                            ("The {item:%s} hurt." % CHEM_C2, [CHEM_C2])):
+            self.assertIsNone(w.check_sentence(text, cites, idx, "Chem"), text)
+        helped = chem_facts()
+        helped[0]["causes"].append({"id": "cause:chem:2026-10-14:rocket", "title": "Balloon Rocket Lab",
+                                    "category": "Labs", "bucket": "Labs", "bucket_weight_pct": 20.0, "change": "new",
+                                    "earned": 10.0, "possible": 10.0, "points": 0.1, "share": 0.1})
+        hidx = w.fact_index(w.model_facts(helped))
+        self.assertIsNone(w.check_sentence("The {item:cause:chem:2026-10-14:rocket} helped.",
+                                           ["cause:chem:2026-10-14:rocket"], hidx, "Chem"))
+        geo = w.fact_index(w.model_facts(geometry_facts()))
+        for text, cites in (("Still a C, 0.5 points from a B.", [GEO_NEXT]),
+                            ("An 85 or better on the {next:%s} gets it to a B." % GEO_WHATIF, [GEO_WHATIF])):
+            self.assertIsNone(w.check_sentence(text, cites, geo, "Geometry"), text)
+
+    def test_the_prompt_teaches_the_forms_and_its_right_example_passes(self):
+        self.assertIn("A sentence about a cause is one of these forms", w.DRAFT_SYSTEM)
+        for form in ('"Mostly the {item:<cause id>}."', '"The {item:<cause id>} did most of the damage."',
+                     '"The {item:<cause id>} hurt."', '"The {item:<cause id>} helped."', "Right:", "Wrong:"):
+            self.assertIn(form, w.DRAFT_SYSTEM)
+        idx = w.fact_index(w.model_facts(w.EXAMPLE_FACTS))
+        right = re.search(r'Right: "(The \{item:[^"]+)"', w.DRAFT_SYSTEM).group(1)
+        wrong = re.search(r'Wrong: "(The \{item:[^"]+)"', w.DRAFT_SYSTEM).group(1)
+        fid = re.search(r"\{item:([^}]+)\}", right).group(1)
+        self.assertIsNone(w.check_sentence(right, [fid], idx, "Ceramics"))
+        self.assertEqual(w.check_sentence(wrong, [fid], idx, "Ceramics"), w.CAUSE_FORM_REASON)
+        for sentence in w.EXAMPLE_NOTE:
+            self.assertIsNone(w.check_sentence(sentence["text"], sentence["cites"], idx, "Ceramics"), sentence["text"])
+
+
 class ReviewNitTests(unittest.TestCase):
     """GE's nits on #52 8d2bd63: codes without letters or weekdays, natural next fills, no keep ids in {next:}."""
 
@@ -1417,6 +1606,7 @@ class ReviewNitTests(unittest.TestCase):
 
     def test_next_fills_read_naturally(self):
         for bucket, said in (("Homework", "the next homework assignment"), ("Labs & Projects", "the next lab or project"),
+                             ("Labs/Activities", "the next lab or activity"),
                              ("Participation", "the next participation score"), ("Tests", "the next test")):
             idx = w.fact_index(geo_facts(bucket=bucket))
             self.assertEqual(w.fill_slots("A 74 or better on the {next:whatif:geo} gets it to a C.", idx),
@@ -1440,13 +1630,15 @@ class OtherClassNameTests(unittest.TestCase):
 
     def test_another_class_in_lowercase_is_dropped(self):
         for text in ("physics scores dragged it.", "Down 2.5; physics grades dragged it.", "physics dragged it.",
-                     "{bucket:cause:geo:t} scores, not physics class, dragged it.", "health scores dragged it."):
+                     "{bucket:cause:geo:t} scores, not physics class, dragged it.", "health scores dragged it.",
+                     "Down 2.5, mostly from physics.", "Mostly physics.", "It slipped on physics."):
             self.assertEqual(self.check(text), "names another class (%s)" % re.search(r"physics|health", text).group(0), text)
 
     def test_lowercase_common_words_still_pass(self):
         for text, cites in (("Scores usually post Thursdays, state of the art.", ["pattern:posting_day:geo"]),
                             ("Still a D, 1.4 points from a C; the band for a C starts at 70.", ["next:geo"]),
                             ("Still a D, 1.4 points from a C, in good health.", ["next:geo"]),
+                            ("Its posting history says Thursdays.", ["pattern:posting_day:geo"]),
                             ("geo scores usually post Thursdays.", ["pattern:posting_day:geo"]),
                             ("{bucket:cause:geo:t} scores dragged it.", ["cause:geo:t"])):
             self.assertIsNone(self.check(text, cites), text)
