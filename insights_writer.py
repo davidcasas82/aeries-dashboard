@@ -149,6 +149,9 @@ _GRADE_WORDS_RE = re.compile(
     re.I,
 )
 _BARE_CAUSE_RE = re.compile(r"\b(?:mainly|mostly|largely|primarily|chiefly)\b", re.I)
+# Wording that ranks a cause first. Only then must the named cause be the top share; a plain list of causes
+# ("Down from HW 3 and the Ch.4 Quiz.") may come in any order.
+_MOST_RE = re.compile(r"\b(?:most|mostly|mainly|main|largely|primarily|chiefly|biggest|largest|bulk|chief)\b", re.I)
 # Prompt wording the models echoed back. A note never talks like this.
 _ECHO_RE = re.compile(
     r"distance to the next letter|\bnext letter\b|\bstudents?\b|\bthe letter is\b|\bwhat[- ]if\b|"
@@ -227,9 +230,12 @@ DRAFT_SYSTEM = """You write a short note to a parent about one class (the class 
 You get FACTS as JSON. Every fact has an id. Use only those facts.
 
 Name assignments and classes ONLY with slots, which code fills in with the real name:
-- {item:<cause id>} for a cause (code adds its score, like "(6/10)"; don't write the score yourself).
-- {next:<what_if id>} for the item a what_if is about (code writes "next test" or the item's title).
+- {item:<cause id>} ONLY for a cause inside a grade_move's causes (it has a title). Code adds its score, like "(6/10)"; don't write the score yourself.
+- {next:<what_if id>} or {next:<keep_letter id>} for the coming item a what_if or keep_letter fact is about. Code writes "next test", "next assessment" or the item's title.
 - {class:<fact id>} for the class name.
+A what_if or keep_letter id goes in a {next:} slot, never in an {item:} slot: the next item has no title yet.
+  Right: "An 85 or better on the {next:whatif:art:projects:20} gets it to a B."
+  Wrong: "An 85 or better on the {item:whatif:art:projects:20} gets it to a B."
 Never write an assignment word yourself (test, quiz, exam, lab, project, packet, homework, essay, report, assessment, ...), not even "the next test". A sentence that does is thrown away.
 
 Write 1 to 4 short, plain sentences:
@@ -241,7 +247,7 @@ Write 1 to 4 short, plain sentences:
 - With no what_if fact, end without a next step. Never invent advice ("redo the packet", "study", "focus on", "should", "needs to").
 
 Rules:
-- Every sentence cites the ids it uses. A cause cites its own cause id. Name causes largest share first.
+- Every sentence cites the ids it uses. A cause cites its own cause id. Name causes largest share first; "mostly", "mainly" or "most of" always names the largest-share cause.
 - Order: letter, cause, pattern, next step.
 - "Because", "mainly", "mostly", "due to" or "driven by" only with a cited grade_move or cause.
 - If a grade_move has causes_withheld, say how much it moved but not why.
@@ -273,6 +279,7 @@ HEADLINE_SYSTEM = """You write the one-line headline of a parent's grade briefin
 Pick the single most useful insight. One sentence, under 120 characters.
 Use only numbers, letters and classes in the stories, and cite the fact ids of the story you use.
 Say something concrete: a number, a letter or an assignment from the story. No vague lines like "Next scores matter".
+A needed score is written exactly as the story says it, with "or better" ("an 85 or better on the {next:<id>}"), never a bare "85".
 Name assignments and classes only with the story's slots, copied as is: {item:<id>}, {next:<id>}, {class:<id>}. Never write a test, quiz, lab or other assignment word yourself.
 Don't mention missing, late, past-due, turned-in or awaiting work. No dates, weekdays or relative days ("tomorrow", "next Friday").
 Reply with JSON only: {"text": "...", "cites": ["fact id", ...]}"""
@@ -746,7 +753,8 @@ def check_sentence(text, cites, index, name=None):
 # ── Slots ─────────────────────────────────────────────────────────────────────
 # The model names items and classes only through slots, which code fills after the checks:
 #   {item:<cause id>}   the cause's title, plus "(earned/possible)" unless the model wrote a "(...)" after it
-#   {next:<what_if id>} the named next item's title, else "next <bucket>" ("next test", "next coursework item")
+#   {next:<what_if id>} the named next item's title, else "next <bucket>" ("next test", "next assessment",
+#                       "next coursework item")
 #   {class:<fact id>}   the class name
 # Outside a slot, a sentence may not use a school-work noun at all: no name guessing.
 SLOT_RE = re.compile(r"\{(item|next|class):([^{}\s]+)\}")
@@ -772,10 +780,36 @@ def _short_title(title):
     return re.sub(r"\s*\([^)]*\)\s*$", "", str(title)).strip() or str(title)
 
 
+# Bucket words a "next ..." fill can stand on alone ("the next assessment"). Anything else that isn't a
+# plural, and mass nouns like "Coursework", get "item" ("the next coursework item").
+_COUNT_BUCKETS = {"assessment", "test", "quiz", "lab", "project", "exam", "essay", "assignment", "summative",
+                  "formative", "task", "final", "midterm", "activity", "worksheet", "presentation", "paper", "report"}
+_MASS_BUCKETS = {"coursework", "homework", "classwork", "participation", "practice", "fluency", "work", "progress"}
+
+
+def _singular(word):
+    if word.endswith("ies") and len(word) > 4:
+        return word[:-3] + "y"
+    if word.endswith("zzes"):
+        return word[:-3]
+    if re.search(r"(?:ch|sh|x|ss)es$", word):
+        return word[:-2]
+    if word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]
+    return word
+
+
 def _bucket_noun(bucket):
-    """ "Assessments" -> "assessment"; a mass noun like "Coursework" -> "coursework item"."""
-    bucket = str(bucket or "test").strip().lower()
-    return bucket[:-1] if bucket.endswith("s") and not bucket.endswith("ss") else f"{bucket} item"
+    """ "Assessments" or "Assessment" -> "assessment"; "Quizzes" -> "quiz"; "Labs & Activities" ->
+    "lab & activity"; a mass noun like "Coursework" or "Math Fluency" -> "coursework item"."""
+    words = str(bucket or "test").strip().lower().split() or ["test"]
+    if words[-1] in _MASS_BUCKETS:
+        return " ".join(words) + " item"
+    singular = [w if w in ("&", "and") else _singular(w) for w in words]
+    noun = " ".join(singular)
+    if singular[-1] in _COUNT_BUCKETS or singular[-1] != words[-1]:
+        return noun
+    return f"{noun} item"
 
 
 def slot_reason(text, cites, index):
@@ -899,7 +933,7 @@ def _claims_reason(text, cited, index):
         sign = 1 if (move.get("delta") or 0) >= 0 else -1
         drivers = [c["id"] for c in ranked_causes(move) if (c.get("share") or c.get("points") or 0) * sign > 0]
         said_drivers = [f["id"] for f in said if f["id"] in drivers]
-        if said_drivers != drivers[: len(said_drivers)]:
+        if said_drivers and _MOST_RE.search(masked) and said_drivers[0] != drivers[0]:
             return "names causes out of share order"
         # A cause that pushed the other way may be named, but never as the reason for the move.
         if not said_drivers and cause_words:
@@ -1028,6 +1062,25 @@ def fix_articles(text):
     return _ARTICLE_RE.sub(swap, text or "")
 
 
+def _headline_needed_reason(text, cites, index):
+    """A needed score in a headline is the exact round-up plus "or better" ("85 or better"), or it's dropped."""
+    cited = [index[fid] for fid in cites if fid in index]
+    needs = [f["needed_pct"] for f in cited if isinstance(f.get("needed_pct"), (int, float))]
+    if not needs:
+        return None
+    bare = SLOT_RE.sub(" ", spelled_to_digits(text))
+    for match in _NUMBER_RE.finditer(bare):
+        n = float(match.group(0))
+        near = [v for v in needs if abs(n - v) < 0.051 or v <= n < v + 1]
+        if not near:
+            continue
+        if not any(n == math.ceil(round(v, 6)) for v in near):
+            return f"headline needed score {match.group(0)} isn't the round-up"
+        if not re.match(r"\s*(?:%|percent)?\s*or better\b", bare[match.end():], re.I):
+            return f"headline needed score {match.group(0)} isn't said as \"or better\""
+    return None
+
+
 def _concrete_headline(text, cites, index):
     """A headline names a number, a letter or a cited item; class names don't count."""
     cited = [index[fid] for fid in cites if fid in index]
@@ -1137,6 +1190,8 @@ def write_headline(model, facts, stories):
     used = {c for s in stories for c in s["cites"]}
     # A headline cites a fact from the stories and says something concrete, or there is none.
     if not text or not cites or not set(cites) <= used or check_sentence(text, cites, index):
+        return None
+    if _headline_needed_reason(text, cites, index):
         return None
     text = fix_articles(fill_slots(text, index))
     if _story_basics([{"text": text, "cites": cites}], index) or not _concrete_headline(text, cites, index):
