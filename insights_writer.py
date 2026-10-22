@@ -92,39 +92,112 @@ _WEIGHT_BEFORE_RE = re.compile(r"\b(?:worth|weighted|weight(?:ed)? (?:at|of)|wei
 _DISTANCE_AFTER_RE = re.compile(
     r"^\s*(?:%|percent|percentage points?|points?|pts\.?)?\s*(?:from|away|short|shy|below|under|to go|off)\b", re.I
 )
+# A needed score: "an 85 or better", "84.2% on the next test", "needs an 85".
+_NEEDED_AFTER_RE = re.compile(
+    r"^\s*(?:%|percent)?\s*(?:or better|or higher|or above|or more|\+|on\s+(?:(?:the|that|this)\s+)?(?:next|upcoming)\b)", re.I
+)
+_NEEDED_BEFORE_RE = re.compile(
+    r"\b(?:needs?|needed|needing|requires?|at least|score of|gets? an?|getting an?|earns? an?|earning an?)\s+$", re.I
+)
+# A score on an item: "a 62% on the Ch.4 Quiz". It must be a percent (or out of 100), never a bare
+# points-earned like "a 4.0 on the Unit 2 Packet", which reads as 4%.
+_SCORE_BEFORE_RE = re.compile(r"\b(?:an?|scored|scoring|got|getting|earned|earning)\s+$", re.I)
+_SCORE_AFTER_RE = re.compile(r"^\s*(?:%|percent)?\s+(?:on|in|for)\b", re.I)
+# Spoken fractions the model uses for small gaps: "half a point", "a quarter point".
+_FRACTION_WORDS = (
+    (re.compile(r"\ba point and a half\b", re.I), "1.5 points"),
+    (re.compile(r"\bhalf (?:a|of a|a single) (point|percent|percentage point)\b", re.I), r"0.5 \1"),
+    (re.compile(r"\b(?:a )?quarter(?: of a| a)? (point|percent)\b", re.I), r"0.25 \1"),
+    (re.compile(r"\b(?:a )?tenth of a (point|percent)\b", re.I), r"0.1 \1"),
+    (re.compile(r"\b(?:a|one) (point|percent|percentage point)(?! (?:five|\d))\b", re.I), r"1 \1"),
+)
+_AND_A_HALF_RE = re.compile(r"\b(\d+(?:\.\d+)?) and a half\b", re.I)
+# Claims about the next letter up: they need a next_letter or what_if fact, and never for an A.
+_NEXT_CLAIM_RE = re.compile(
+    r"\b(?:next letter|(?:to )?reach(?:es|ing)? an? [A-D]\b|"
+    r"(?:gets?|getting|brings?|pulls?|push(?:es)?|lifts?|raises?|moves?)\s+(?:\w+\s+){0,2}?(?:up\s+)?to an? [A-D]\b|"
+    r"(?:points?|pts\.?|percent|%)\s+(?:away\s+)?(?:from|short of|shy of|below)\s+an? [A-D]\b)"
+)
+# "Back to a B", "gets the A back", "a B again": only when a move shows the class held that letter.
+_BACK_RE = re.compile(
+    r"\b(?:back(?: up)? to|gets? (?:it |the \w+ |that \w+ )?back|regain\w*|again|return\w* to|wins? back)\b", re.I
+)
+_GRADE_WORDS_RE = re.compile(
+    r"\b(?:grade|down|up|drop|dropped|drops|fell|falls|slipped|slips|rose|climbed|lost|gained|cost|costs|moved|"
+    r"lower|higher|pulled|dragged|hurt)\b",
+    re.I,
+)
+_BARE_CAUSE_RE = re.compile(r"\b(?:mainly|mostly|largely|primarily|chiefly)\b", re.I)
+# Prompt wording the models echoed back. A note never talks like this.
+_ECHO_RE = re.compile(
+    r"distance to the next letter|\bnext letter\b|\bthe student\b|\bthe letter is\b|\bwhat[- ]if\b|"
+    r"\bwhat moved\b|\bof that size\b|\bnext item of\b|\bitem of similar size\b|\bthe next item\b",
+    re.I,
+)
+_SAME_LETTER_MOVE_RE = re.compile(r"\b(?:moved|went|changed|dropped|fell|rose) from (?:an? )?([A-F]) to (?:an? )?\1\b")
 ROLE_FIELDS = {
     "move": ("delta", "explained", "points", "share"),
     "weight": ("bucket_weight_pct",),
     "distance": ("gap",),
 }
 # Ratios and weights are never a general number: a weight needs weight words around it.
-_NOT_GENERAL = ("bucket_weight_pct", "coverage")
+# A needed score is checked on its own rule (exact, or rounded up), never by plain rounding.
+_NOT_GENERAL = ("bucket_weight_pct", "coverage", "needed_pct")
 
-DRAFT_SYSTEM = """You write one short class story for a parent's grade dashboard.
+# The made-up example: a class, items, numbers and a weekday that match no real class.
+EXAMPLE_FACTS = [
+    {"id": "next:ceramics", "kind": "next_letter", "class": "Ceramics", "pct": 68.8, "letter": "D",
+     "next_letter": "C", "threshold": 70.0, "gap": 1.2},
+    {"id": "move:ceramics:2026-09-09", "kind": "grade_move", "class": "Ceramics", "since": "2026-09-09",
+     "since_label": "Sep 9", "from_pct": 71.1, "to_pct": 68.8, "delta": -2.3, "explained": -2.2, "coverage": 0.96,
+     "coverage_trimmed": False, "causes": [
+         {"id": "cause:ceramics:2026-09-09:glazetest", "title": "Glaze Test", "category": "Projects",
+          "bucket": "Projects", "bucket_weight_pct": 40.0, "change": "new", "earned": 11.0, "possible": 20.0,
+          "points": -2.1, "share": -2.2}]},
+    {"id": "whatif:ceramics:projects:20", "kind": "what_if", "class": "Ceramics", "bucket": "Projects",
+     "bucket_weight_pct": 40.0, "points": 20.0, "target": 70.0, "needed_pct": 73.4, "say_needed": "74 or better",
+     "reachable": True},
+    {"id": "pattern:posting_day:ceramics", "kind": "posting_day", "class": "Ceramics", "weekday": "Tuesday",
+     "share": 0.8, "scores": 10, "window_days": 28},
+]
+EXAMPLE_NOTE = [
+    {"text": "Slipped to a D since Sep 9, 1.2 points from a C.", "cites": ["next:ceramics", "move:ceramics:2026-09-09"]},
+    {"text": "The Glaze Test (11/20) did most of the damage.", "cites": ["cause:ceramics:2026-09-09:glazetest"]},
+    {"text": "A 74 or better on the next project gets it back to a C.",
+     "cites": ["whatif:ceramics:projects:20", "move:ceramics:2026-09-09"]},
+    {"text": "Scores usually post Tuesdays.", "cites": ["pattern:posting_day:ceramics"]},
+]
+# A sentence carrying any of these copied the example rather than the facts.
+EXAMPLE_MARKERS = ("ceramics", "glaze", "kiln", "sep 9", "74 or better", "73.4", "68.8", "71.1")
+
+DRAFT_SYSTEM = """You write a short note to a parent about one class, the way a sharp teacher would.
 You get FACTS as JSON. Every fact has an id. Use only those facts.
 
-Write 1 to 4 sentences, in this order, skipping any part with no fact:
-1. The letter and the distance to the next letter (next_letter).
-2. What moved the grade: the item, its score, its category's weight and the points it cost (grade_move and its causes).
-3. The what-if: the score needed on the next item of that size to reach the next letter (what_if).
-4. A pattern, if there is one (posting_day).
+Write 1 to 4 short, plain sentences:
+- Lead with what's happening, then what to do about it.
+- Name the real assignment when a fact names it, with its score as earned/possible (4/10) or a percent.
+- If the grade moved but kept its letter, say it's still that letter, how much it moved, and why: "Still a B, down 1.4 since Mar 3, mostly from the Lab Report (6/10)."
+- If there's a next_letter fact, say how close the next letter is, then the score that gets there, using say_needed from the what_if fact.
+- A pattern only from a posting_day fact: "Scores usually post Mondays."
 
 Rules:
-- Every sentence cites the ids it uses. A cause cites its own cause id.
-- Any "because", "mainly", "due to" or "driven by" wording cites the grade_move or cause it is about.
-- Name causes in the order they are listed, largest share first. "Mainly" is only for the first cause.
-- If a grade_move has causes_withheld, state the move (from, to, delta) but give no cause for it.
-- Use only numbers that appear in the cited facts, written as digits. Round to one decimal at most.
-- Letters are whole letters only (A, B, C, D, F). Never write a plus or minus grade.
-- Don't mention missing, late, past-due, turned-in or awaiting work. The dashboard lists that separately.
-- Never write a relative day: no "today", "tomorrow", "this Thursday" or "next Friday".
-- If a what_if fact has next_title and next_due_label, name that item with its date: "the Ch. 5 Test, due Oct 30". Otherwise say "the next test" or "the next quiz". No other dates.
-- A weekday appears only in a posting-day pattern ("usually posts Fridays"), citing that posting_day fact.
+- Every sentence cites the ids it uses. A cause cites its own cause id. Name causes largest share first.
+- "Because", "mainly", "mostly", "due to" or "driven by" only with a cited grade_move or cause.
+- If a grade_move has causes_withheld, say how much it moved but not why.
+- No talk of the next letter without a next_letter fact. A class at an A has no next letter.
+- "Back to" or "again" only when a grade_move shows the class had that letter before.
+- Numbers come from the cited facts, written as digits. A needed score is say_needed ("85 or better"), never rounded down.
+- Whole letters only: A, B, C, D, F. Never a plus or minus.
+- Don't mention missing, late, past-due, turned-in or awaiting work. The dashboard lists that.
+- No relative days ("today", "tomorrow", "this week", "next Friday"). The only dates: since_label on a grade_move, or next_due_label on a what_if ("the Ch. 5 Test, due Oct 30"). Otherwise "the next test" or "the next quiz".
+- A weekday only in a posting_day pattern, citing that fact.
 - Never call a 0% a grade.
+- Never write "the student", "the letter is", "next letter", "distance", "what-if", "what moved", or "moved from A to A".
 - If nothing here is worth saying, return {"sentences": []}.
 
-MADE-UP EXAMPLE, to show the shape only. These are not this student's facts; never copy its numbers, titles, dates or class:
-"Math: B, 2.1 pts from an A. Down mainly from a 62% on the Ch.4 Quiz (tests are 60% of the grade). An 88% on the Ch. 5 Test, due Oct 30, gets the A back. Scores usually post Fridays."
+MADE-UP EXAMPLE. This class doesn't exist; it shows the style only. Never copy its class, titles, numbers, letters, dates or weekday.
+FACTS: """ + json.dumps(EXAMPLE_FACTS, separators=(",", ":")) + """
+NOTE: """ + json.dumps({"sentences": EXAMPLE_NOTE}, separators=(",", ":")) + """
 
 Reply with JSON only: {"sentences": [{"text": "...", "cites": ["fact id", ...]}]}"""
 
@@ -162,7 +235,8 @@ def fact_index(facts):
     for fact in facts:
         index[fact["id"]] = fact
         for cause in fact.get("causes") or []:
-            index[cause["id"]] = {**cause, "kind": "grade_move", "class": fact.get("class"), "move": fact["id"]}
+            index[cause["id"]] = {**cause, "kind": "grade_move", "class": fact.get("class"), "move": fact["id"],
+                                  "since": fact.get("since")}
     return index
 
 
@@ -214,8 +288,25 @@ def model_facts(class_facts):
                 fact = {**fact, "causes": ranked_causes(fact)}
             else:
                 fact = {**fact, "causes": [], "causes_withheld": "they don't explain the move"}
-        out.append(fact)
+        out.append(_say_fields(fact))
     return out
+
+
+def say_needed(needed_pct):
+    """How a note says a needed score: the next whole number up, "or better". 84.2 -> "85 or better"."""
+    return f"{math.ceil(round(needed_pct, 6))} or better"
+
+
+def _say_fields(fact):
+    """Ready-to-say wording the model copies instead of rounding: say_needed and since_label."""
+    if fact.get("kind") == "what_if" and isinstance(fact.get("needed_pct"), (int, float)) and fact.get("reachable"):
+        fact = {**fact, "say_needed": say_needed(fact["needed_pct"])}
+    if fact.get("kind") == "grade_move" and fact.get("since"):
+        try:
+            fact = {**fact, "since_label": due_label(fact["since"])}
+        except ValueError:
+            pass
+    return fact
 
 
 def _parse_due(value):
@@ -304,6 +395,10 @@ def _number_role(text, start, end):
         return "move"
     if _WEIGHT_AFTER_RE.match(after) or _WEIGHT_BEFORE_RE.search(before):
         return "weight"
+    if _NEEDED_AFTER_RE.match(after) or _NEEDED_BEFORE_RE.search(before):
+        return "needed"
+    if _SCORE_BEFORE_RE.search(before) and _SCORE_AFTER_RE.match(after):
+        return "score"
     if _DISTANCE_AFTER_RE.match(after):
         return "distance"
     return "general"
@@ -317,6 +412,13 @@ def _add(values, value):
 def _numbers_of(fact, role="general"):
     """The numbers a fact backs for one kind of claim. A move's size never backs a weight, and so on."""
     values = set()
+    if role == "score":
+        for earned, possible in (("earned", "possible"), ("prior_earned", "prior_possible")):
+            if isinstance(fact.get(possible), (int, float)) and fact[possible]:
+                values.add(round(fact[earned] / fact[possible] * 100, 1))
+                if fact[possible] == 100:
+                    values.add(float(fact[earned]))
+        return values
     if role in ROLE_FIELDS:
         for key in ROLE_FIELDS[role]:
             value = fact.get(key)
@@ -348,6 +450,17 @@ def _letters_of(fact):
     return {x for x in letters if x}
 
 
+def _needed_ok(text_number, cited):
+    """A needed score is the exact value to one decimal or a round-up (84.2 -> 85). Never rounded down."""
+    n = float(text_number)
+    for fact in cited:
+        v = fact.get("needed_pct")
+        if fact.get("kind") == "what_if" and isinstance(v, (int, float)):
+            if abs(n - v) < 0.051 or (v <= n < v + 1 and n <= 100):
+                return True
+    return False
+
+
 def _number_ok(text_number, allowed):
     n = float(text_number)
     return any(abs(n - v) < 0.051 or (n == int(n) and round(v) == n) for v in allowed)
@@ -376,7 +489,11 @@ def spelled_to_digits(text):
             return match.group(0)
         return _words_value(phrase) + unit
 
-    return _SPELLED_RE.sub(swap, text)
+    text = _SPELLED_RE.sub(swap, text)
+    text = _AND_A_HALF_RE.sub(lambda m: f"{float(m.group(1)) + 0.5:g}", text)
+    for pattern, value in _FRACTION_WORDS:
+        text = pattern.sub(value, text)
+    return text
 
 
 def _strip_names(text, cited):
@@ -386,8 +503,10 @@ def _strip_names(text, cited):
         for key in ("class", "title", "category", "bucket", "next_title"):
             if fact.get(key):
                 names.add(str(fact[key]))
+    nexts = {str(f["next_title"]) for f in cited if f.get("next_title")}
     for name in sorted(names, key=len, reverse=True):
-        text = re.sub(re.escape(name), " ", text, flags=re.I)
+        # A named next item reads like "the next test" to the needed-score rule.
+        text = re.sub(re.escape(name), " next item " if name in nexts else " ", text, flags=re.I)
     return text
 
 
@@ -418,10 +537,14 @@ def _dates_in(text, cited):
 
 
 def _due_days(cited):
+    """Dates a sentence may name: a cited what-if's next item due date, or a cited move's since date."""
     days = set()
     for fact in cited:
-        if fact.get("next_due"):
-            day = date.fromisoformat(fact["next_due"])
+        for key in ("next_due", "since"):
+            try:
+                day = date.fromisoformat(str(fact.get(key) or ""))
+            except ValueError:
+                continue
             days.add((day.month, day.day))
     return days
 
@@ -472,6 +595,47 @@ def check_sentence(text, cites, index, name=None):
         if name is not None and fact.get("class") != name:
             return f"fact {fid} is another class"
         cited.append(fact)
+    echo = _ECHO_RE.search(text) or _SAME_LETTER_MOVE_RE.search(text)
+    if echo:
+        return f"echoes the prompt ({echo.group(0)})"
+    lowered = text.lower()
+    copied = next((m for m in EXAMPLE_MARKERS if m in lowered), None)
+    if copied:
+        return f"copies the made-up example ({copied})"
+    return _claims_reason(text, cited, index)
+
+
+def _class_moves(index, cited):
+    classes = {f.get("class") for f in cited}
+    return [f for f in index.values() if f.get("kind") == "grade_move" and not f.get("move")
+            and f.get("class") in classes and isinstance(f.get("from_pct"), (int, float))]
+
+
+def _class_at_a(index, cited):
+    classes = {f.get("class") for f in cited}
+    for f in index.values():
+        if f.get("class") not in classes:
+            continue
+        pct = f.get("pct") if f.get("kind") == "next_letter" else f.get("to_pct")
+        if isinstance(pct, (int, float)) and insights.letter_for(pct) == "A":
+            return True
+    return False
+
+
+def _said_letters(bare):
+    out = []
+    for match in _LETTER_RE.finditer(bare):
+        before = bare[: match.start()].rstrip()
+        after = bare[match.end():]
+        # "A score..." or "A 74 or better..." at a sentence start is the article, not the letter.
+        article = match.group(1) == "A" and (not before or before[-1] in ".!?") and re.match(r" [a-z0-9]", after)
+        if not article:
+            out.append(match.group(1))
+    return out
+
+
+def _claims_reason(text, cited, index):
+    """Every claim check except the prompt-echo and example-copy bans."""
     text = spelled_to_digits(text)
     masked, unbacked_dates, scores = _mask_allowed_dates(text, cited)
     if unbacked_dates:
@@ -490,9 +654,10 @@ def check_sentence(text, cites, index, name=None):
             return f"names a weekday ({match.group(0)}) no pattern backs"
     move_ids = [f["move"] if f.get("move") else f["id"] for f in cited if f.get("kind") == "grade_move"]
     moves = [index.get(m) or {} for m in dict.fromkeys(move_ids)]
-    if _CAUSE_CLAIM_RE.search(masked) and not moves:
+    cause_words = _CAUSE_CLAIM_RE.search(masked) or (_BARE_CAUSE_RE.search(masked) and _GRADE_WORDS_RE.search(masked))
+    if cause_words and not moves:
         return "states a cause without citing a grade_move or cause"
-    claims_cause = any(f.get("move") for f in cited) or (moves and _CAUSE_CLAIM_RE.search(masked))
+    claims_cause = any(f.get("move") for f in cited) or (moves and cause_words)
     if claims_cause and not all(cause_allowed(m) for m in moves):
         return "states a cause the move's causes don't explain"
     for move in moves:
@@ -509,19 +674,33 @@ def check_sentence(text, cites, index, name=None):
     if plus_minus:
         return f"letter {plus_minus.group(0).strip()} isn't on the whole-letter scale"
     bare = _strip_names(masked, cited)
+    said = _said_letters(bare)
+    if _NEXT_CLAIM_RE.search(bare):
+        if not any(f.get("kind") in ("next_letter", "what_if") for f in cited):
+            return "claims a next letter with no next_letter or what_if fact"
+        if _class_at_a(index, cited):
+            return "claims a next letter for a class at an A"
+    if _BACK_RE.search(bare) and said:
+        held = {insights.letter_for(m["from_pct"]) for m in _class_moves(index, cited)
+                if insights.letter_for(m["from_pct"]) != insights.letter_for(m.get("to_pct", m["from_pct"]))}
+        if not set(said) & held:
+            return "says back to or again with a letter no move shows the class held"
     for match in _NUMBER_RE.finditer(bare):
         role = _number_role(bare, match.start(), match.end())
+        if role == "needed":
+            if _needed_ok(match.group(0), cited):
+                continue
+            if any(f.get("kind") == "what_if" and isinstance(f.get("needed_pct"), (int, float)) for f in cited):
+                return f"number {match.group(0)} isn't the needed score or a round-up of it"
+            return f"number {match.group(0)} isn't in the cited facts"
         allowed = set().union(*(_numbers_of(f, role) for f in cited))
         if not _number_ok(match.group(0), allowed):
-            suffix = f" as a {role}" if role in ("move", "weight") else ""
+            suffix = f" as a {role}" if role in ("move", "weight", "score") else ""
             return f"number {match.group(0)} isn't in the cited facts{suffix}"
     letters = set().union(*(_letters_of(f) for f in cited))
-    for match in _LETTER_RE.finditer(bare):
-        before = bare[: match.start()].rstrip()
-        after = bare[match.end():]
-        article = match.group(1) == "A" and (not before or before[-1] in ".!?") and re.match(r" [a-z]", after)
-        if not article and match.group(1) not in letters:
-            return f"letter {match.group(1)} isn't in the cited facts"
+    for letter in said:
+        if letter not in letters:
+            return f"letter {letter} isn't in the cited facts"
     return None
 
 
@@ -552,12 +731,23 @@ def eval_story(sentences, index):
 # ── Model steps ──────────────────────────────────────────────────────────────
 
 
+_THINK_RE = re.compile(r"<think>.*?</think>|^.*?</think>", re.S | re.I)
+_FENCE_RE = re.compile(r"^\s*```[a-zA-Z]*\s*|\s*```\s*$")
+
+
 def _json(raw):
-    try:
-        value = json.loads(raw)
-    except (TypeError, ValueError):
+    """A JSON object from a model reply, after dropping <think> blocks and a ```json fence."""
+    if not isinstance(raw, str):
         return None
-    return value if isinstance(value, dict) else None
+    text = _FENCE_RE.sub("", _THINK_RE.sub("", raw).strip()).strip()
+    for candidate in (text, text[text.find("{"): text.rfind("}") + 1] if "{" in text else ""):
+        try:
+            value = json.loads(candidate)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(value, dict):
+            return value
+    return None
 
 
 def _sentences(raw):
