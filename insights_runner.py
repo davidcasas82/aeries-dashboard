@@ -256,17 +256,17 @@ class ReadOnlyFamilyData:
     def _get(self, path):
         if not path.startswith("/v1/"):
             raise FamilyDataError(f"refusing path {path!r}")
-        for attempt in (0, 1):
-            if self._token is None:
-                self._unlock()
+        if self._token is None:
+            self._unlock()
+        status, body = self._send("GET", path, {"Authorization": f"Bearer {self._token}"})
+        if status == 401:
+            # One fresh session for an expired token; a second 401 falls through to the error below.
+            self._token = None
+            self._unlock()
             status, body = self._send("GET", path, {"Authorization": f"Bearer {self._token}"})
-            if status == 401 and attempt == 0:
-                self._token = None
-                continue
-            if status != 200:
-                raise FamilyDataError(f"GET {path} returned {status}")
-            return json.loads(body.decode("utf-8")) if body else {}
-        raise FamilyDataError(f"GET {path} returned 401 twice")
+        if status != 200:
+            raise FamilyDataError(f"GET {path} returned {status}")
+        return json.loads(body.decode("utf-8")) if body else {}
 
     def _unlock(self):
         payload = json.dumps({"pin": self._pin(), "keepUnlocked": False}).encode("utf-8")
@@ -290,10 +290,26 @@ class ReadOnlyFamilyData:
         return self._open(request)
 
 
-def _open_request(request):
-    """(status, body bytes). An HTTP error status comes back as a status, not an exception."""
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect, so the bearer token cannot be resent to another host.
+
+    Returning None makes urllib raise HTTPError with the 3xx status, which _open_request
+    turns into a plain status and the client reports as an error.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+# The PIN session's opener: plain HTTPS, no redirects.
+_NO_REDIRECT_OPENER = urllib.request.build_opener(_RefuseRedirects)
+
+
+def _open_request(request, opener=None):
+    """(status, body bytes). An HTTP error status, including any redirect, comes back as a status."""
+    opener = opener or _NO_REDIRECT_OPENER
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with opener.open(request, timeout=30) as response:
             return response.status, response.read()
     except urllib.error.HTTPError as err:
         return err.code, b""

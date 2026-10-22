@@ -258,6 +258,57 @@ class ReadOnlyClientTests(unittest.TestCase):
         self.assertEqual([r.get_method() for r in self.sent], ["POST", "GET", "POST", "GET"])
         self.assert_only_gets_and_one_unlock()
 
+    def test_a_second_401_raises_after_one_fresh_unlock(self):
+        client = self.client([(200, b'{"token": "t1"}'), (401, b""), (200, b'{"token": "t2"}'), (401, b"")])
+        with self.assertRaises(runner.FamilyDataError) as caught:
+            client.latest_grades()
+        self.assertIn("401", str(caught.exception))
+        self.assertEqual([r.get_method() for r in self.sent], ["POST", "GET", "POST", "GET"])
+
+    def test_the_session_opener_refuses_redirects(self):
+        """A redirect to another host must not carry the bearer token there."""
+        import http.server
+        import threading
+
+        hits = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append((self.path, self.headers.get("Authorization")))
+                if self.path == "/v1/grades/latest":
+                    self.send_response(302)
+                    self.send_header("Location", f"http://127.0.0.1:{self.server.server_port}/elsewhere")
+                    self.end_headers()
+                else:
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b"{}")
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            request = runner.urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}/v1/grades/latest",
+                headers={"Authorization": "Bearer synthetic-token"})
+            status, body = runner._open_request(request)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+        self.assertEqual(status, 302)
+        self.assertEqual(body, b"")
+        self.assertEqual([path for path, _ in hits], ["/v1/grades/latest"])
+
+    def test_a_redirect_is_an_error_not_a_follow(self):
+        client = self.client([(200, b'{"token": "t1"}'), (302, b"")])
+        with self.assertRaises(runner.FamilyDataError):
+            client.latest_grades()
+        self.assertEqual([r.get_method() for r in self.sent], ["POST", "GET"])
+
     def test_no_write_methods_exist(self):
         public = {name.lower() for name in dir(runner.ReadOnlyFamilyData) if not name.startswith("_")}
         self.assertEqual(public & {"put", "post", "patch", "delete", "request", "send", "publish", "write"}, set())
@@ -283,7 +334,8 @@ class ReadOnlyClientTests(unittest.TestCase):
         self.assertNotRegex(source, r"\b(PUT|PATCH|DELETE)\b")
         self.assertEqual(re.findall(r'"POST"', source), ['"POST"', '"POST"'])
         self.assertNotIn("requests", re.findall(r"^import (\w+)", source, re.M))
-        self.assertEqual(re.findall(r"urlopen\(", source), ["urlopen(", "urlopen("])
+        self.assertEqual(re.findall(r"urlopen\(", source), ["urlopen("])
+        self.assertEqual(re.findall(r"\.open\(", source), [".open("])
 
     def test_a_tick_sends_only_gets(self):
         """End to end through tick and the real opener: every request is a GET."""
