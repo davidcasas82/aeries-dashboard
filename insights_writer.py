@@ -1806,8 +1806,9 @@ def write_class(model, facts, name, votes=VOTES):
 
 
 # ── Tags (code, no model) ────────────────────────────────────────────────────
-# A class's tag says what its next named item means: the easiest step up a letter, or the hardest score to
-# keep the letter it has. "Named" is an upcoming item attach_next_items matched at its posted points.
+# A class's tag says what its next item means: the easiest step up a letter (the soonest next item, named or
+# not), or the hardest score to keep the letter it has (named items only). "Named" is an upcoming item
+# attach_next_items matched at its posted points.
 EASIEST_WIN, BIGGEST_RISK = "easiest_win", "biggest_risk"
 STORY_TAGS = (EASIEST_WIN, BIGGEST_RISK)
 
@@ -1825,9 +1826,17 @@ def _spoken_needed(fact):
     return math.ceil(round(fact["needed_pct"], 6))
 
 
-def _soonest_named(facts, kind, name):
-    named = [f for f in facts if f.get("kind") == kind and f.get("class") == name and _named(f)]
-    return min(named, key=lambda f: (str(f.get("next_due") or ""), str(f["next_title"]), f["id"]), default=None)
+def _soonest_what_if(facts, name):
+    """The class's soonest what_if, named or not. Named ones come first, by due date, then title, then id: a
+    named item is known to be next. An unnamed one ("the next test", a typical size) has no date, so it sorts
+    after every named one; among those, the heaviest bucket first (as the engine keeps one), then the id."""
+    def order(f):
+        if _named(f):
+            return (0, str(f.get("next_due") or ""), str(f["next_title"]), 0.0, f["id"])
+        weight = f.get("bucket_weight_pct") if _number(f.get("bucket_weight_pct")) else 0.0
+        return (1, "", "", -weight, f["id"])
+    steps = [f for f in facts if f.get("kind") == "what_if" and f.get("class") == name]
+    return min(steps, key=order, default=None)
 
 
 def _class_pct(facts, name):
@@ -1842,14 +1851,15 @@ def _class_pct(facts, name):
 
 
 def easiest_win(facts):
-    """The class whose next named item reaches the next letter at the lowest needed score, or None.
+    """The class whose soonest next item, named or not, reaches the next letter at the lowest needed score.
 
-    Per class, only the soonest named what_if counts; if that one can't reach the next letter, the class
-    can't move up on its next item. Ties go to the smaller gap, then the class name.
+    Per class, only the soonest what_if counts (_soonest_what_if); if that one can't reach the next letter, the
+    class can't move up on its next item and is skipped. Ties go to the smaller gap, then the class name.
+    None when no class can move up.
     """
     best = None
     for name in class_names(facts):
-        step = _soonest_named(facts, "what_if", name)
+        step = _soonest_what_if(facts, name)
         letter = next((f for f in facts if f.get("kind") == "next_letter" and f.get("class") == name), None)
         if step is None or letter is None or not step.get("reachable") or not _number(step.get("needed_pct")) \
                 or not _number(step.get("target")) or not _number(letter.get("gap")) \

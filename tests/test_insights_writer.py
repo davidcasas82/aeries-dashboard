@@ -2446,8 +2446,47 @@ def tag_facts(*classes):
 
 
 class StoryTagTests(unittest.TestCase):
-    """Code tags each kid's classes: Easiest win (lowest needed on the next named item that reaches the next
-    letter) and Biggest risk (highest keep_letter needed on a named item at its posted points)."""
+    """Code tags each kid's classes: Easiest win (lowest needed on the soonest next item, named or not, that
+    reaches the next letter) and Biggest risk (highest keep_letter needed on a named item at its posted points)."""
+
+    def what_if(self, name, bucket, weight, needed, target=80.0):
+        return {"id": f"whatif:{insights.slug(name)}:{insights.slug(bucket)}:20", "kind": "what_if", "class": name,
+                "bucket": bucket, "bucket_weight_pct": weight, "points": 20.0, "target": target, "needed_pct": needed,
+                "reachable": needed <= 100}
+
+    def test_easiest_win_counts_unnamed_next_items(self):
+        # The v10 shape with no upcoming item named: Algebra needs an 85, Int Eng&Marktg a 97.
+        alg = tag_class("Alg ll Bus Mang", 79.5, needed=84.3, named=False)
+        mkt = tag_class("Int Eng&Marktg", 76.3, needed=96.2, named=False)
+        for order in ((alg, mkt), (mkt, alg)):
+            facts = tag_facts(*order)
+            self.assertFalse([f for f in facts if f.get("next_title")])
+            self.assertEqual(w.easiest_win(facts), "Alg ll Bus Mang")
+            self.assertEqual(w.story_tags(facts), {"Alg ll Bus Mang": ["easiest_win"]})
+
+    def test_a_named_item_comes_before_an_unnamed_one(self):
+        # Art's named Tests item (due Oct 23) is its next item, so its unnamed 81 never counts.
+        art = [insights.next_letter("Art", 79.5), self.what_if("Art", "Tests", 10.0, 95.0),
+               self.what_if("Art", "Homework", 90.0, 81.0)]
+        upcoming = [{"class": "Art", "bucket": "Tests", "title": "Unit 3 Test", "due": "2026-10-23", "points": 20.0}]
+        bio = [insights.next_letter("Biology", 79.5), self.what_if("Biology", "Tests", 50.0, 90.0)]
+        self.assertEqual(w.easiest_win(w.attach_next_items(art + bio, upcoming)), "Biology")
+        # Unnamed, Art's heaviest bucket would be next: 81 beats Biology's 90.
+        self.assertEqual(w.easiest_win(w.attach_next_items(art + bio, [])), "Art")
+        # A named next item that can't reach the letter skips the class; a later unnamed one doesn't rescue it.
+        stuck = [art[0], self.what_if("Art", "Tests", 10.0, 101.0), art[2]]
+        self.assertEqual(w.easiest_win(w.attach_next_items(stuck + bio, upcoming)), "Biology")
+
+    def test_unnamed_items_go_heaviest_bucket_first_then_id(self):
+        letter = insights.next_letter("Art", 79.5)
+        heavy_stuck = [letter, self.what_if("Art", "Tests", 60.0, 104.0), self.what_if("Art", "Homework", 20.0, 81.0)]
+        self.assertIsNone(w.easiest_win(heavy_stuck))
+        heavy_ok = [letter, self.what_if("Art", "Tests", 20.0, 104.0), self.what_if("Art", "Homework", 60.0, 81.0)]
+        self.assertEqual(w.easiest_win(heavy_ok), "Art")
+        # Equal weights: the id decides (Homework before Tests), so the answer never depends on fact order.
+        even = [self.what_if("Art", "Tests", 40.0, 81.0), self.what_if("Art", "Homework", 40.0, 104.0)]
+        self.assertIsNone(w.easiest_win([letter] + even))
+        self.assertIsNone(w.easiest_win([letter] + even[::-1]))
 
     def test_easiest_win_is_the_lowest_needed_score_not_the_model_pick(self):
         # The v10 shape: Algebra needs an 85, Marketing a 97; the code picks Algebra whatever order they come in.
@@ -2464,9 +2503,8 @@ class StoryTagTests(unittest.TestCase):
         self.assertEqual(w.easiest_win(tag_facts(tag_class("Chem", 78.5, needed=84.0),
                                                  tag_class("Biology", 78.5, needed=84.0))), "Biology")
 
-    def test_easiest_win_skips_a_class_that_cant_move_up_on_its_next_named_item(self):
+    def test_easiest_win_skips_a_class_that_cant_move_up_on_its_next_item(self):
         cases = {
-            "unnamed: no upcoming item at the what_if's size": tag_facts(tag_class("Art", 79.5, needed=81.0, named=False)),
             "unreachable": tag_facts(tag_class("Art", 79.5, needed=104.0)),
             "an A has no next letter": tag_facts(tag_class("Art", 95.0, needed=50.0)),
             "no what_if": tag_facts(tag_class("Art", 79.5)),
