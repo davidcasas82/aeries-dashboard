@@ -17,7 +17,7 @@ import insights_writer  # noqa: E402
 
 HTML = Path(__file__).resolve().parents[1].joinpath("index.html").read_text()
 FUNCS = ["normalizeName", "localWriteUpFor", "matchLocalStories", "withLocalWriteUp", "shortPostedDate", "textEl",
-         "buildLocalInsights"]
+         "parseLocalNote", "localNoteBody", "fillLocalStory", "buildLocalInsights"]
 
 FAKE_DOM = r"""
 const innerHtmlWrites = [];
@@ -25,6 +25,7 @@ function fakeEl(tag) {
     const el = {
         tagName: tag.toUpperCase(), className: '', attrs: {}, childNodes: [], _text: '',
         appendChild(child) { this.childNodes.push(child); return child; },
+        replaceChildren() { this.childNodes = []; this._text = ''; },
         setAttribute(k, v) { this.attrs[k] = String(v); },
         set textContent(v) { this._text = String(v); this.childNodes = []; },
         get textContent() { return this._text + this.childNodes.map(c => c.textContent).join(''); },
@@ -98,7 +99,7 @@ class LocalNotesPageTests(unittest.TestCase):
         end = HTML.index("function glanceItemById(")
         self.assertNotIn("innerHTML", HTML[start:end])
         self.assertNotIn("insertAdjacentHTML", HTML[start:end])
-        self.assertIn("localStoryEl.textContent = item.local_story", HTML)
+        self.assertIn("fillLocalStory(localStoryEl, item.local_story || '');", HTML)
 
     def test_page_matching_agrees_with_the_writer(self):
         cases = [
@@ -246,6 +247,56 @@ class LocalNotesPageTests(unittest.TestCase):
         self.assertEqual(got["rows"], ["Biology"])
         self.assertEqual(got["picks"], ["Still an A.", None])
 
+    def test_a_note_renders_as_heading_and_bullets(self):
+        # The writer's note (insights_writer.note_text): letter line, then "- " bullets. Synthetic.
+        up = {"stories": [
+            {"class": "Algebra", "story": "C\n- 0.5 points from a B\n- Pulling it down: Quiz 3 (6/10)\n"
+                                          "- Next quiz (about 10 pts): 9+ gets a B", "tags": ["easiest_win"]},
+            {"class": "Art", "story": "A"},
+            {"class": "Biology", "story": "Still an A, down 1.2 since Oct 14."},
+            {"class": "Chem", "story": "B\nnot a bullet"},
+        ]}
+        rows = self.rows(up, ["Art", "Biology", "Algebra", "Chem"])
+        self.assertEqual(rows, [
+            [[["glance-insight-class", "Algebra"], ["glance-insight-letter", "C"], ["glance-insight-tag win", "Easiest win"]],
+             [["", "0.5 points from a B"], ["", "Pulling it down: Quiz 3 (6/10)"],
+              ["", "Next quiz (about 10 pts): 9+ gets a B"]]],
+            # Nothing past the letter: the heading alone, no empty list.
+            [[["glance-insight-class", "Art"], ["glance-insight-letter", "A"]]],
+            # A story written before bullets (no letter line) keeps today's look: class name over its sentences.
+            [[["glance-insight-class", "Biology"]], ["glance-insight-story", "Still an A, down 1.2 since Oct 14."]],
+            # A letter line over anything but "- " lines isn't a note, so it shows as text too.
+            [[["glance-insight-class", "Chem"]], ["glance-insight-story", "B\nnot a bullet"]],
+        ])
+        got = run_page(
+            "const { section } = buildLocalInsights(data.up, data.courses);\n"
+            "process.stdout.write(JSON.stringify(walk(section).filter(n => n.tagName === 'UL')"
+            "  .map(u => [u.className, u.childNodes.map(li => li.tagName)])));",
+            {"up": up, "courses": ["Algebra"]},
+        )
+        self.assertEqual(got, [["glance-insight-bullets", ["LI", "LI", "LI"]]])
+
+    def test_the_drawer_shows_the_note_s_bullets(self):
+        got = run_page(
+            "const out = data.stories.map(story => { const el = document.createElement('div');"
+            " el.textContent = 'stale'; fillLocalStory(el, story);"
+            " return [el.hidden, walk(el).filter(n => n.tagName === 'LI').map(n => n._text), el._text]; });\n"
+            "process.stdout.write(JSON.stringify({ out, writes: innerHtmlWrites }));",
+            {"stories": ["B\n- Down 1.8 since Oct 14\n- Next test (about 50 pts): 27+ keeps the B", "A",
+                         "Still a B.", ""]},
+        )
+        self.assertEqual(got["writes"], [])
+        self.assertEqual(got["out"], [
+            [False, ["Down 1.8 since Oct 14", "Next test (about 50 pts): 27+ keeps the B"], ""],
+            [True, [], ""],
+            [False, [], "Still a B."],
+            [True, [], ""],
+        ])
+
+    def test_hostile_text_in_a_note_stays_text(self):
+        rows = self.rows({"stories": [{"class": "Art", "story": f"B\n- {IMG_TITLE}\n- {SCRIPT_TITLE}"}]}, ["Art"])
+        self.assertEqual(rows[0][1], [["", IMG_TITLE], ["", SCRIPT_TITLE]])
+
 
 
 # The whole page script in a node vm with a stub browser, so renderStudent builds a kid's dashboard the way
@@ -331,6 +382,17 @@ class NoDueBulletsTests(unittest.TestCase):
         self.assertIn("Grade notes", got["notes"])
         self.assertIn("Synthetic note one.", got["notes"])
         self.assertIn("Synthetic note two.", got["notes"])
+
+
+    def test_the_whole_page_renders_a_note_as_bullets(self):
+        up = {"as_of": "2026-10-21", "stories": [
+            {"class": "Algebra Fixture", "story": "A\n- Next quiz (about 10 pts): 7+ keeps the A", "tags": ["biggest_risk"]},
+            {"class": "English Fixture", "story": "B\n- 4 points from an A\n- Pulling it down: Old Packet (5/10)"},
+        ]}
+        notes = run_page(PAGE_VM, {"html": HTML, "up": up})["notes"]
+        self.assertEqual(notes, ["Grade notes", "From grades posted through Oct 21", "Algebra Fixture", "A",
+                                 "Biggest risk", "Next quiz (about 10 pts): 7+ keeps the A", "English Fixture", "B",
+                                 "4 points from an A", "Pulling it down: Old Packet (5/10)"])
 
 
 if __name__ == "__main__":

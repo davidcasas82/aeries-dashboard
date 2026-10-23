@@ -1612,6 +1612,17 @@
             line-height: 1.45;
         }
         .glance-local-story { margin: 8px 0 0; color: var(--g-ink); }
+        .glance-insight-letter { color: var(--g-ink); font-size: var(--g-fs-note); font-weight: 750; }
+        .glance-insight-letter::before { content: "\00b7"; margin-right: 8px; color: var(--g-faint); }
+        .glance-insight-bullets {
+            margin: 3px 0 0;
+            padding-left: 18px;
+            color: var(--g-muted);
+            font-size: var(--g-fs-sub);
+            line-height: 1.45;
+        }
+        .glance-local-story .glance-insight-bullets { margin: 0; color: var(--g-ink); }
+        .glance-insight-bullets li { overflow-wrap: anywhere; }
         .glance-bands {
             display: flex;
             flex-direction: column;
@@ -2179,7 +2190,7 @@
                 <p class="glance-drawer-kicker" id="glanceDrawerKicker">Verified detail</p>
                 <h2 id="glanceDrawerTitle">Item details</h2>
                 <p class="glance-drawer-class" id="glanceDrawerClass"></p>
-                <p class="glance-local-story" id="glanceLocalStory" hidden></p>
+                <div class="glance-local-story" id="glanceLocalStory" hidden></div>
             </div>
             <button class="glance-close" id="glanceClose" type="button" aria-label="Close details">×</button>
         </div>
@@ -4899,6 +4910,34 @@
             return el;
         }
 
+        // The writer's note (insights_writer.note_text): the shown letter alone on the first line, then one
+        // "- " line per bullet. Anything else is a story written before bullets: null, shown as its sentences.
+        function parseLocalNote(story) {
+            const lines = String(story || '').split('\n');
+            if (!/^[ABCDF]$/.test(lines[0])) return null;
+            const bullets = lines.slice(1).map(l => (l.startsWith('- ') ? l.slice(2).trim() : ''));
+            if (bullets.some(b => !b)) return null;
+            return { letter: lines[0], bullets };
+        }
+
+        function localNoteBody(story, note) {
+            if (!note) return textEl('p', 'glance-insight-story', story);
+            const list = document.createElement('ul');
+            list.className = 'glance-insight-bullets';
+            note.bullets.forEach(b => list.appendChild(textEl('li', '', b)));
+            return list;
+        }
+
+        // The class's note in the detail drawer: its bullets, or an older story's sentences.
+        function fillLocalStory(el, story) {
+            el.replaceChildren();
+            const note = parseLocalNote(story);
+            const shown = note ? note.bullets.length > 0 : Boolean(story);
+            if (note && shown) el.appendChild(localNoteBody(story, note));
+            else if (shown) el.textContent = story;
+            el.hidden = !shown;
+        }
+
         function buildLocalInsights(up, courses) {
             const picks = matchLocalStories(up.stories, courses);
             const section = document.createElement('section');
@@ -4934,10 +4973,14 @@
                 row.className = 'glance-insight-row';
                 const line = document.createElement('div');
                 line.className = 'glance-insight-head';
+                // Heading: class name, then the shown letter (a note only), then the tag. An older story has no
+                // letter, so it keeps the class name and tag over its sentences.
+                const note = parseLocalNote(story);
                 line.appendChild(textEl('span', 'glance-insight-class', course));
+                if (note) line.appendChild(textEl('span', 'glance-insight-letter', note.letter));
                 tags.forEach(([, label, tone]) => line.appendChild(textEl('span', `glance-insight-tag ${tone}`, label)));
                 row.appendChild(line);
-                row.appendChild(textEl('p', 'glance-insight-story', story));
+                if (!note || note.bullets.length) row.appendChild(localNoteBody(story, note));
                 list.appendChild(row);
             });
             if (!list.childNodes.length) list.appendChild(textEl('p', 'glance-insight-story', 'No class notes tonight.'));
@@ -4981,8 +5024,7 @@
             document.getElementById('glanceDrawerTitle').textContent = (item.drawer && item.drawer.title) || item.title || item.course;
             document.getElementById('glanceDrawerClass').textContent = (item.drawer && item.drawer.course) || item.course || '';
             const localStoryEl = document.getElementById('glanceLocalStory');
-            localStoryEl.textContent = item.local_story || '';
-            localStoryEl.hidden = !item.local_story;
+            fillLocalStory(localStoryEl, item.local_story || '');
             const work = item.drawer && Array.isArray(item.drawer.work) ? item.drawer.work : null;
             const itemDepth = document.getElementById('glanceItemDepth');
             const workList = document.getElementById('glanceWorkList');
