@@ -3238,3 +3238,68 @@ class ShownPairTests(unittest.TestCase):
                 checked["cross" if verb != "Now " else "against"] += 1
         self.assertGreater(min(checked.values()), 5, checked)
         self.assertGreater(min(checked["still"], checked["not_still"]), 30, checked)
+
+
+class NoteBulletTests(unittest.TestCase):
+    """David at 7:06 PM: each class is a heading (class, shown letter, tag) over short bullets with the same facts
+    and numbers. Bullets are built from the facts, never cut from the sentences. Synthetic data only."""
+
+    def note(self, facts, name):
+        story = w.write_class(facts, name)
+        return story["letter"], story["bullets"], w.note_text(story)
+
+    def test_bullets_keep_every_fact_in_bullet_order(self):
+        letter, bullets, text = self.note(w.attach_next_items(bio_facts(), []), "Bio")
+        self.assertEqual(letter, "B")
+        self.assertEqual(bullets, ["6 points from an A", "Pulling it down: Unit 2 Test (31/50)",
+                                   "Next test (about 50 pts): 38+ keeps the B and 46+ gets an A",
+                                   "Next homework assignment (about 10 pts): 6+ keeps the B and a perfect 10 gets an A"])
+        self.assertEqual(text, "B\n- " + "\n- ".join(bullets))
+
+    def test_a_move_is_its_own_bullet_and_still_is_gone(self):
+        self.assertEqual(self.note(w.attach_next_items(biology_facts(), []), "Biology")[:2],
+                         ("B", ["Down 1.8 since Oct 14", "Next test (about 50 pts): 27+ keeps the B"]))
+        self.assertEqual(self.note(w.attach_next_items(math_facts(), []), "Math")[:2],
+                         ("B", ["Slipped to a B since Oct 15, down 2.5", "Next test (about 50 pts): 44+ gets an A"]))
+        for facts, name in ((w.attach_next_items(bio_facts(), []), "Bio"), (biology_facts(), "Biology"),
+                            (chem_named_keep_facts(cannot_lose=True), "Chem")):
+            self.assertNotRegex(self.note(facts, name)[2], w._STILL_RE)
+
+    def test_named_items_keep_and_can_t_drop(self):
+        self.assertEqual(self.note(chem_named_keep_facts(), "Chem")[1], ["Down 1.6 since Oct 14", "Lab 9: 62+ keeps the A"])
+        self.assertEqual(self.note(chem_named_keep_facts(cannot_lose=True), "Chem")[1],
+                         ["Down 1.6 since Oct 14", "Lab 9: can't drop it below an A"])
+        facts = tag_facts(tag_class("Algebra", 87.0, needed=92.0, delta=None))
+        self.assertEqual(self.note(facts, "Algebra")[1], ["3 points from an A", "Algebra Unit Test: 92+ gets an A"])
+
+    def test_a_class_with_nothing_past_its_letter_is_the_letter_alone(self):
+        facts = [{"id": "letter:bio", "kind": "current_letter", "class": "Bio", "pct": 95.0, "letter": "A"}]
+        self.assertEqual(self.note(facts, "Bio"), ("A", [], "A"))
+
+    def test_bullets_come_from_the_facts_not_the_sentences(self):
+        facts = w.attach_next_items(bio_facts(), [])
+        idx = w.fact_index(facts)
+        lines = [{"text": "Still a B, 6 points from an A.", "cites": ["next:bio"], "code": "opening"},
+                 {"text": "x", "cites": [BIO_DRAG], "code": "drag"}]
+        garbled = [{**line, "text": "Nothing to cut up."} for line in lines]
+        self.assertEqual(w.note_bullets(lines, idx), w.note_bullets(garbled, idx))
+        self.assertEqual(w.note_bullets(garbled, idx), ["6 points from an A", "Pulling it down: Unit 2 Test (31/50)"])
+        # Order is the bullet order whatever order the lines come in; a line with no bullet is left out.
+        letter_only = {"text": "Still an A.", "cites": ["next:bio"], "code": "unknown"}
+        self.assertEqual(w.note_bullets([garbled[1], letter_only, garbled[0]], idx),
+                         ["6 points from an A", "Pulling it down: Unit 2 Test (31/50)"])
+
+    def test_publish_sends_the_note_and_an_older_story_as_it_was(self):
+        new = w.write_up({"as_of": "2026-10-22", "facts": bio_facts()})
+        old = {"as_of": "2026-10-22", "stories": [{"class": "Art", "story": "Still an A.", "cites": ["letter:art"]}]}
+        pub = w.public_write_up([new, old])
+        self.assertLessEqual(set(pub[0]["stories"][0]), {"class", "story", "cites", "tags"})
+        self.assertTrue(pub[0]["stories"][0]["story"].startswith("B\n- 6 points from an A\n- "))
+        self.assertEqual(pub[1]["stories"][0]["story"], "Still an A.")
+        # The Worker's cleanInsights (the runner's mirror) keeps the note byte for byte.
+        doc = runner.insights_doc([{"sn": "9001", **pub[0]}])
+        self.assertEqual(doc["students"]["9001"]["stories"], pub[0]["stories"])
+
+    def test_a_note_over_the_limits_is_not_published(self):
+        story = {"class": "Bio", "story": "Short.", "cites": ["next:bio"], "letter": "B", "bullets": ["x" * 600]}
+        self.assertEqual(w.public_write_up({"stories": [story]})["stories"], [])

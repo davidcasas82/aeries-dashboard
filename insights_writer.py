@@ -1823,8 +1823,9 @@ def write_class(facts, name):
 
     Every class with an opening fact (opening_fact) gets a story: the opening, then code_lines, in story
     order. A story over the publish limits sheds its drag line, then its second assumed line (_fit).
-    keep_sentence is the keep sentence as published (named or assumed), or None. The facts are put in
-    canonical order first (canonical_facts).
+    keep_sentence is the keep sentence as published (named or assumed), or None. letter and bullets are the
+    note as the page shows it (note_bullets): the shown letter for the heading and the same lines as short
+    bullets. The facts are put in canonical order first (canonical_facts).
     """
     facts = canonical_facts(facts)
     class_facts = facts_for(facts, name)
@@ -1845,12 +1846,106 @@ def write_class(facts, name):
         "class": name,
         "story": " ".join(s["text"] for s in final),
         "slotted": " ".join(s.get("slots", s["text"]) for s in final),
+        "letter": shown_letters(opening)[1],
+        "bullets": note_bullets(final, index),
         "cites": _unique([c for s in final for c in s["cites"]]),
         "keep_sentence": next((s["text"] for s in final if s.get("code") == "keep"
                                or (s.get("code") == "assumed" and any(is_keep(index.get(c) or {}) for c in s["cites"]))),
                               None),
     }
 
+
+
+# ── Bullets (code, no model) ─────────────────────────────────────────────────
+# The page shows each class as a heading (class name, shown letter, tag) over short bullets. Each bullet is
+# built from the same facts as the line it stands for, in the same words, never by cutting up a sentence.
+# The letter moved to the heading, so "Still an A." has no bullet and "Still a C, 0.5 points from a B." is
+# "0.5 points from a B". Order: the distance to the next letter, the move since last time, what's pulling it
+# down, then the next-item lines in story order. A line with nothing to say past the letter has no bullet.
+_BULLET_RANK = {"next_letter": 0, "grade_move": 1, "drag": 2}
+
+
+def say_opening_bullet(fact):
+    """The opener as a bullet, or None: "0.5 points from a B" (next_letter), "Down 1.6 since Oct 14"
+    (grade_move, same letter), or the crossing as say_opening says it without the period ("Slipped to a C
+    since Oct 14, down 1.6", "Now an A, down 1.4 since Oct 14"). A current_letter, or a letter fact whose
+    shown letter isn't the percent's, says nothing past the letter."""
+    fact = _say_fields(fact)
+    kind = fact.get("kind")
+    prior, now = shown_letters(fact)
+    if now is None:
+        return None
+    if kind == "next_letter" and fact.get("letter") == now and fact.get("next_letter") and _number(fact.get("gap")):
+        nxt = fact["next_letter"]
+        return f"{fact['gap']:g} points from {_article(nxt)} {nxt}"
+    if kind == "grade_move" and all(_number(fact.get(k)) for k in ("from_pct", "to_pct", "delta")):
+        if prior is not None and prior == now:
+            way = "Down" if fact["delta"] < 0 else "Up"
+            since = f" since {fact['since_label']}" if fact.get("since_label") else ""
+            return f"{way} {abs(fact['delta']):g}{since}"
+        said = say_opening(fact)
+        return said[:-1] if said and said.endswith(".") else said
+    return None
+
+
+def _needed_said(n, fact, points):
+    """ "38+", or "a perfect 50" when only full points will do (points only)."""
+    return f"a perfect {n}" if points and n >= fact["points"] else f"{n}+"
+
+
+def _cap(text):
+    return text[:1].upper() + text[1:] if text.startswith("next ") else text
+
+
+def _line_bullet(line, index):
+    """(rank, slot-form bullet) for one code line of the story, or None."""
+    facts = [index.get(c) or {} for c in line.get("cites") or []]
+    code = line.get("code")
+    if code == "opening" and facts:
+        text = say_opening_bullet(facts[0])
+        return (_BULLET_RANK.get(facts[0].get("kind"), 3), text) if text else None
+    if code == "drag" and facts and facts[0].get("id"):
+        return (2, f"Pulling it down: {{item:{facts[0]['id']}}}")
+    if code == "move_up" and facts and _number(facts[0].get("needed_pct")) and _number(facts[0].get("target")):
+        to = insights.letter_for(facts[0]["target"])
+        return (3, f"{{next:{facts[0]['id']}}}: {_needed_said(_spoken_needed(facts[0]), facts[0], False)} gets "
+                   f"{_article(to)} {to}")
+    if code == "keep" and facts and facts[0].get("letter"):
+        keep = facts[0]
+        if keep.get("cannot_lose"):
+            return (3, f"{{next:{keep['id']}}}: can't drop it below {_article(keep['letter'])} {keep['letter']}")
+        if _number(keep.get("needed_pct")):
+            return (3, f"{{next:{keep['id']}}}: {_spoken_needed(keep)}+ keeps the {keep['letter']}")
+        return None
+    if code == "assumed" and facts:
+        keep = next((f for f in facts if is_keep(f)), None)
+        step = next((f for f in facts if f.get("kind") == "what_if"), None)
+        lead = keep or step
+        parts = []
+        if keep:
+            parts.append(f"{_needed_said(needed_points(keep), keep, True)} keeps the {keep['letter']}")
+        if step:
+            to = insights.letter_for(step["target"])
+            parts.append(f"{_needed_said(needed_points(step), step, True)} gets {_article(to)} {to}")
+        return (3, f"{{next:{lead['id']}}} (about {lead['points']:g} pts): " + " and ".join(parts))
+    return None
+
+
+def note_bullets(final, index):
+    """The story's lines as bullets, filled ("Pulling it down: Unit 2 Test (31/50)"), in bullet order."""
+    picked = [b for b in (_line_bullet(line, index) for line in final) if b]
+    picked.sort(key=lambda b: b[0])
+    return [_cap(fill_slots(text, index)) for _rank, text in picked]
+
+
+def note_text(story):
+    """A story's text as published. The Worker keeps only class, story, cites and tags, so the note travels in
+    story: the shown letter alone on the first line, then one "- " line per bullet. A story without a letter
+    (written before bullets) publishes its sentences as they were."""
+    letter, bullets = story.get("letter"), story.get("bullets")
+    if letter not in _LETTERS or not isinstance(bullets, list):
+        return story.get("story")
+    return "\n".join([letter] + [f"- {b}" for b in bullets])
 
 # ── Tags (code, no model) ────────────────────────────────────────────────────
 # A class's tag says what its next item means: the easiest step up a letter, or the hardest score to keep the
@@ -2079,12 +2174,14 @@ def publish_write_up(local, put, env=None):
 
 
 def public_write_up(local):
-    """The write-ups as published: each story's class, text, cites and tags; no drop reasons or slots."""
+    """The write-ups as published: each story's class, note (note_text), cites and tags; no drop reasons,
+    slots or sentences. A story counts only if both its sentences and its note fit the Worker's limits."""
     def one(up):
         up = dict(up or {})
         if "stories" in up:
-            up["stories"] = [{k: s[k] for k in ("class", "story", "cites", "tags") if k in s}
-                             for s in up.get("stories") or [] if story_fits(s)]
+            stories = [{k: (note_text(s) if k == "story" else s[k]) for k in ("class", "story", "cites", "tags")
+                        if k in s} for s in up.get("stories") or [] if story_fits(s)]
+            up["stories"] = [s for s in stories if story_fits(s)]
         return up
 
     return one(local) if isinstance(local, dict) else [one(up) for up in local or []]
