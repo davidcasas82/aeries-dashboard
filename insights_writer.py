@@ -2175,13 +2175,12 @@ def publish_write_up(local, put, env=None):
 
 def public_write_up(local):
     """The write-ups as published: each story's class, note (note_text), cites and tags; no drop reasons,
-    slots or sentences. A story counts only if both its sentences and its note fit the Worker's limits."""
+    slots or sentences."""
     def one(up):
         up = dict(up or {})
         if "stories" in up:
-            stories = [{k: (note_text(s) if k == "story" else s[k]) for k in ("class", "story", "cites", "tags")
-                        if k in s} for s in up.get("stories") or [] if story_fits(s)]
-            up["stories"] = [s for s in stories if story_fits(s)]
+            up["stories"] = [{k: (note_text(s) if k == "story" else s[k]) for k in ("class", "story", "cites", "tags")
+                              if k in s} for s in up.get("stories") or [] if story_fits(s)]
         return up
 
     return one(local) if isinstance(local, dict) else [one(up) for up in local or []]

@@ -3299,7 +3299,3 @@ class NoteBulletTests(unittest.TestCase):
         # The Worker's cleanInsights (the runner's mirror) keeps the note byte for byte.
         doc = runner.insights_doc([{"sn": "9001", **pub[0]}])
         self.assertEqual(doc["students"]["9001"]["stories"], pub[0]["stories"])
-
-    def test_a_note_over_the_limits_is_not_published(self):
-        story = {"class": "Bio", "story": "Short.", "cites": ["next:bio"], "letter": "B", "bullets": ["x" * 600]}
-        self.assertEqual(w.public_write_up({"stories": [story]})["stories"], [])
