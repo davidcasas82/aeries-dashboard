@@ -1,5 +1,5 @@
 #!/bin/sh
-# Cursor beforeShellExecution hook: fail-closed deny list (v2.4).
+# Cursor beforeShellExecution hook: fail-closed deny list (v2.5).
 #
 # This is a speed bump, not a security boundary. It stops an agent from
 # casually or accidentally running launchd, sudo or power commands, and it
@@ -19,7 +19,10 @@
 #   - git (also \git, g''it, /path/git) with -c, --config-env, --upload-pack,
 #     --receive-pack or --exec anywhere in its arguments, also across a
 #     backslash-newline continuation
-#   - eval
+#   - eval, and ext:: URLs
+#   - git clone -u / --upload-pack, init/clone --template, --exec-path=<dir>
+#     or --exec-path <dir>, difftool --extcmd / -x, rebase -x / --exec, and
+#     bisect run; GIT_EXEC_PATH= and GIT_TEMPLATE_DIR= (GIT_* above)
 # Every other command (ls, git, grep, npm, ...) never reaches this script and
 # keeps Cursor's normal approval flow.
 #
@@ -481,6 +484,12 @@ def check_script(p, cd):
 # GIT_CONFIG_GLOBAL/SYSTEM/GIT_CONFIG files are parsed and their command keys
 # checked. GIT_SSH, GIT_ASKPASS, SSH_ASKPASS and core.askpass are one literal
 # path. git --upload-pack/--receive-pack/--exec (and clone -u) values are run.
+# v2.5: sh -c options in any order (bash -c -- 'x', bash -e -c 'x'); git
+# --exec-path=<dir> and GIT_EXEC_PATH=<dir> scan every file in <dir>;
+# GIT_TEMPLATE_DIR, clone/init --template and -c init.templateDir scan
+# <dir>/hooks/*; difftool/mergetool.<tool>.path (one literal path) and .cmd;
+# ext:: URLs (protocol.ext.allow) in arguments or config values; difftool
+# --extcmd/-x, rebase -x/--exec and bisect run scan the command they run.
 RUN_VARS = {"GIT_EXTERNAL_DIFF", "GIT_PAGER", "PAGER", "MANPAGER", "EDITOR", "VISUAL",
             "LESSOPEN", "LESSCLOSE", "GIT_SSH", "GIT_SSH_COMMAND", "GIT_ASKPASS",
             "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "GIT_PROXY_COMMAND", "SSH_ASKPASS"}
@@ -495,9 +504,11 @@ CMD_KEY = re.compile(
     r"|credential(?:\..+)?\.helper|alias\..+|filter\..+\.(?:clean|smudge|process)"
     r"|gpg(?:\..+)?\.program|interactive\.difffilter|hook\..+\.command"
     r"|remote\..+\.(?:uploadpack|receivepack))$")
-LITERAL_KEYS = {"core.askpass"}
+LITERAL_KEY = re.compile(r"^(?:core\.askpass|(?:diff|merge)tool\..+\.path)$")
 INCLUDE_KEY = re.compile(r"^(?:include|includeif\..+)\.path$")
-GIT_RUN_OPTS = {"--upload-pack", "--receive-pack", "--exec"}
+GIT_RUN_OPTS = {"--upload-pack", "--receive-pack", "--exec", "--extcmd"}
+# Short forms that run a command, per subcommand: clone -u, rebase -x, difftool -x.
+GIT_SHORT_RUN = {"clone": "-u", "rebase": "-x", "difftool": "-x"}
 # LESSOPEN "|" / "||" (optionally "-"), and the "!" of an alias or helper.
 LEAD = re.compile(r"^\s*(?:\|\|?-?|!)\s*")
 MAX_DEPTH = 8
@@ -585,6 +596,54 @@ def check_config_file(path, cd, what, depth):
             val = os.path.join(os.path.dirname(absp), val)
         check_config(key, val, cd, depth)
 
+def scan_dir(path, cd, what):
+    """Every file in a directory git runs programs from (hooks, exec path)."""
+    _, d = resolve(path, cd)
+    if not d or not os.path.isdir(d):
+        unreadable.append(what + " directory " + path)
+        return
+    try:
+        names = sorted(os.listdir(d))[:500]
+    except Exception:
+        unreadable.append(what + " directory " + path)
+        return
+    for name in names:
+        fp = os.path.join(d, name)
+        if os.path.isfile(fp):
+            check_script(fp, None)
+
+def scan_template(path, cd):
+    """A git template dir (GIT_TEMPLATE_DIR, --template, init.templateDir): its hooks/ get copied in and run."""
+    _, d = resolve(path, cd)
+    if not d or not os.path.isdir(d):
+        unreadable.append("git template directory " + path)
+        return
+    if os.path.isdir(os.path.join(d, "hooks")):
+        scan_dir(os.path.join(d, "hooks"), None, "git template hooks")
+
+def check_ext(url, cd, depth):
+    """An ext:: remote (protocol.ext.allow) runs its command directly: ext::cmd arg% with% space %S."""
+    body = url[len("ext::"):]
+    f = value_word(body)
+    if f:
+        deny("git ext:: URL runs a command with " + f)
+    words, cur, i = [], "", 0
+    while i < len(body):
+        ch = body[i]
+        if ch == "%" and i + 1 < len(body):
+            cur += {" ": " ", "%": "%", "s": "git-upload-pack", "S": "git-upload-pack"}.get(body[i + 1], "")
+            i += 2
+            continue
+        if ch == " ":
+            if cur:
+                words.append(cur)
+            cur, i = "", i + 1
+            continue
+        cur, i = cur + ch, i + 1
+    if cur:
+        words.append(cur)
+    scan_command(" ".join(shlex.quote(w) for w in words), cd, depth + 1, "git ext:: URL")
+
 def check_config(key, val, cd, depth):
     what = "git config " + key
     f = value_word(val)
@@ -592,16 +651,13 @@ def check_config(key, val, cd, depth):
         deny(what + " sets a value with " + f)
     if INCLUDE_KEY.match(key):
         check_config_file(val, cd, what, depth + 1)
+    elif val.strip().startswith("ext::"):
+        check_ext(val.strip(), cd, depth)
     elif key == "core.hookspath":
-        _, d = resolve(val, cd)
-        if not d or not os.path.isdir(d):
-            unreadable.append("git hooks directory " + val)
-            return
-        for name in sorted(os.listdir(d))[:200]:
-            fp = os.path.join(d, name)
-            if os.path.isfile(fp):
-                check_script(fp, None)
-    elif key in LITERAL_KEYS:
+        scan_dir(val, cd, "git hooks")
+    elif key == "init.templatedir":
+        scan_template(val, cd)
+    elif LITERAL_KEY.match(key):
         check_value(val, cd, what, depth, literal=True)
     elif key.startswith("alias.") and not val.lstrip().startswith("!"):
         check_git(tokenize(val), cd, {}, depth + 1)
@@ -617,6 +673,10 @@ def env_assignments(assigns, cd, depth):
             check_value(val, cd, name, depth, literal=name in LITERAL_VARS)
         elif name in CONFIG_FILE_VARS:
             check_config_file(val, cd, name, depth)
+        elif name == "GIT_EXEC_PATH":
+            scan_dir(val, cd, "GIT_EXEC_PATH")
+        elif name == "GIT_TEMPLATE_DIR":
+            scan_template(val, cd)
         elif name == "GIT_CONFIG_PARAMETERS":
             try:
                 items = shlex.split(val)
@@ -649,7 +709,19 @@ def check_git(args, cd, env, depth=0):
             kv, i = args[i + 1], i + 2
         elif a.startswith("--config-env="):
             a, kv, i = "--config-env", a[len("--config-env="):], i + 1
-        elif a in ("--git-dir", "--work-tree", "--namespace", "--super-prefix", "--exec-path") and i + 1 < len(args):
+        elif a.startswith("--exec-path="):
+            scan_dir(a.split("=", 1)[1], gcd, "git --exec-path")
+            i += 1
+            continue
+        elif a == "--exec-path":
+            nxt = args[i + 1] if i + 1 < len(args) else ""
+            if nxt and ("/" in nxt or nxt in (".", "..") or os.path.isdir(resolve(nxt, gcd)[1] or "")):
+                scan_dir(nxt, gcd, "git --exec-path")
+                i += 2
+            else:
+                i += 1
+            continue
+        elif a in ("--git-dir", "--work-tree", "--namespace", "--super-prefix") and i + 1 < len(args):
             i += 2
             continue
         elif a.startswith("-"):
@@ -669,16 +741,28 @@ def check_git(args, cd, env, depth=0):
             continue
         check_config(key, val, gcd, depth)
     sub, rest, k = (args[i] if i < len(args) else ""), args[i + 1:], 0
+    for a in args:
+        if a.startswith("ext::"):
+            check_ext(a, gcd, depth)
+    if sub == "bisect" and rest[:1] == ["run"]:
+        scan_command(" ".join(shlex.quote(x) for x in rest[1:]), gcd, depth + 1, "git bisect run")
+    short = GIT_SHORT_RUN.get(sub)
     while k < len(rest):
-        name, eq, v = rest[k].partition("=")
-        if rest[k] == "--":
+        a = rest[k]
+        if a == "--":
             break
-        if name in GIT_RUN_OPTS or (sub == "clone" and name == "-u"):
-            if eq:
-                check_value(v, gcd, "git " + name, depth)
-            elif k + 1 < len(rest):
-                check_value(rest[k + 1], gcd, "git " + name, depth)
-                k += 1
+        name, eq, v = a.partition("=")
+        if short and a.startswith(short) and len(a) > 2:
+            name, eq, v = short, "=", a[2:]
+        if name in GIT_RUN_OPTS or name == short or (name == "--template" and sub in ("clone", "init")):
+            if not eq:
+                if k + 1 >= len(rest):
+                    break
+                v, k = rest[k + 1], k + 1
+            if name == "--template":
+                scan_template(v, gcd)
+            else:
+                check_value(v, gcd, "git " + sub + " " + name, depth)
         k += 1
 
 def cmd_start(seg):
@@ -753,25 +837,36 @@ def scan_command(text, cd, depth=0, what=None):
             scan_command(" ".join(args), cd, depth + 1, what)
             continue
         if base in SHELLS:
-            j, target, inline_c = 0, None, None
+            # sh/bash [options] [-c] [options] [--] string-or-file: options may come
+            # before or after -c, and the first non-option word is the -c string.
+            j, target, saw_c, inline_c = 0, None, False, None
             while j < len(args):
                 a = args[j]
-                if a == "<" and j + 1 < len(args):
+                if a == "<" and j + 1 < len(args) and not saw_c:
                     target = args[j + 1]
                     break
-                if a.startswith(("-", "+")):
+                if a == "--":
+                    if j + 1 < len(args):
+                        if saw_c:
+                            inline_c = args[j + 1]
+                        else:
+                            target = args[j + 1]
+                    break
+                if a.startswith(("-", "+")) and a not in ("-", "+"):
                     if a in ("-o", "+o", "-O", "+O"):
                         j += 2
                         continue
                     if "c" in a.lstrip("-+") and not a.startswith("--"):
-                        inline_c = args[j + 1] if j + 1 < len(args) else ""
-                        break
+                        saw_c = True
                     j += 1
                     continue
-                target = a
+                if saw_c:
+                    inline_c = a
+                else:
+                    target = a
                 break
-            if inline_c is not None:
-                scan_command(inline_c, cd, depth + 1, what)
+            if saw_c:
+                scan_command(inline_c or "", cd, depth + 1, what)
             elif target:
                 check_script(target, cd)
             else:

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Tests for the Cursor deny hook (v2.4). Run from the repo root:
+# Tests for the Cursor deny hook (v2.5). Run from the repo root:
 #   sh .cursor/hooks/test-deny-dangerous-shell.sh
 # Exits nonzero if any case gets the wrong result.
 #
@@ -358,6 +358,42 @@ check ask "v2.4, \$'...' clean: printf \$'a\\x41b\\n'" "$(jc "printf \$'a\\x41b\
 printf '[include]\n\tpath = loop.cfg\n' > "$T/cfg/loop.cfg"
 check ask "v2.4, include loop stops: git -c include.path=cfg/loop.cfg log" "$(jc "git -c include.path=$T/cfg/loop.cfg log" "$R")"
 
+# --- 4e. v2.5: exec path, templates, difftool/mergetool, ext::, extcmd ----
+mkdir -p "$R/xdir" "$R/cleanx" "$R/tpl/hooks" "$R/cleantpl/hooks" "$R/notpl"
+printf '#!/bin/sh\n%s list\n' "$LC" > "$R/xdir/git-log"
+printf '#!/bin/sh\necho ok\n' > "$R/cleanx/git-foo"
+printf '#!/bin/sh\n%s list\n' "$LC" > "$R/tpl/hooks/post-checkout"
+printf '#!/bin/sh\necho ok\n' > "$R/cleantpl/hooks/post-checkout"
+chmod +x "$R/xdir/git-log" "$R/cleanx/git-foo" "$R/tpl/hooks/post-checkout" "$R/cleantpl/hooks/post-checkout"
+for cmd in 'git clone -u ./bad.sh src dst' 'git clone --upload-pack=./bad.sh src dst' \
+           'git clone --upload-pack ./bad.sh src dst' 'git clone -u./bad.sh src dst' \
+           "bash -c -- 'GIT_PAGER=./bad git log'" "sh -c -- './bad.sh'" "bash -c -x './bad.sh'" \
+           "bash --norc -c './bad.sh'" "bash -e -c './bad.sh'" "bash -o pipefail -c './bad.sh'" \
+           'git --exec-path=xdir log' 'git --exec-path xdir log' 'git --exec-path=./xdir status' \
+           'GIT_EXEC_PATH=xdir git log' 'export GIT_EXEC_PATH=./xdir; git log' \
+           'GIT_TEMPLATE_DIR=tpl git init' 'git init --template=tpl x' 'git init --template tpl x' \
+           'git clone --template=tpl src dst' 'git clone --template tpl src dst' 'git -c init.templateDir=tpl init x' \
+           'git -c difftool.x.path=./bad.sh difftool' 'git -c mergetool.x.path="./d s/bad.sh" mergetool' \
+           'git -c difftool.x.cmd=./bad.sh difftool' 'git -c mergetool.x.cmd="./bad.sh \$LOCAL" mergetool' \
+           "git -c protocol.ext.allow=always clone 'ext::sh -c ./bad.sh' dst" \
+           "git -c protocol.ext.allow=always fetch 'ext::./bad.sh %S'" \
+           "git -c protocol.ext.allow=always -c remote.origin.url='ext::./bad.sh' fetch" \
+           "GIT_ALLOW_PROTOCOL=ext git clone 'ext::./bad.sh' dst" \
+           'git difftool --extcmd=./bad.sh' 'git difftool --extcmd ./bad.sh' 'git difftool -x ./bad.sh' \
+           'git rebase -x ./bad.sh main' 'git rebase --exec ./bad.sh main' 'git rebase -x./bad.sh main' \
+           'git bisect run ./bad.sh' 'git bisect run sh ./bad.sh arg'; do
+  check deny "v2.5: $cmd" "$(jc "$cmd" "$R")"
+done
+# No false blocks: everyday commands never deny (and the matcher skips most of them, see 6).
+for cmd in 'git clone https://example.com/x.git dir' 'git init' 'git difftool' 'git rebase -i HEAD~3' \
+           'git bisect start' 'git bisect good' 'git bisect bad' 'git rebase -x ./clean.sh main' \
+           "bash -c 'echo hi'" 'git difftool -x ./clean.sh' 'git bisect run ./clean.sh' \
+           'GIT_TEMPLATE_DIR=cleantpl git init' 'GIT_TEMPLATE_DIR=notpl git init' 'git --exec-path=cleanx log' \
+           'git init --template=nodir x' 'git --exec-path' 'git --exec-path log' \
+           "git clone 'ext::./clean.sh' dst" 'git -c difftool.x.path=./clean.sh difftool'; do
+  check ask "v2.5, clean, missing or everyday: $cmd" "$(jc "$cmd" "$R")"
+done
+
 # --- 5. The hook never auto-approves ------------------------------------
 if grep -q '"allow"' "$HOOK"; then bad 'hook script contains "allow"'; else ok 'hook script never contains "allow"'; fi
 
@@ -411,6 +447,13 @@ must_match = [
     "git fetch --upload-pack=x origin", "git fetch --upload-pack x origin",
     "git push --receive-pack=x origin", "git push --receive-pack x origin", "git push --exec=x origin",
     "$'\\x6c' list", "x $'\\154'", "$'\\u006c'",
+    "git clone -u x src dst", "git clone --upload-pack=x a b", "git clone --upload-pack x a b",
+    "git clone -ux a b", "git --exec-path=x log", "git --exec-path x log", "GIT_EXEC_PATH=x git log",
+    "GIT_TEMPLATE_DIR=x git init", "git init --template=x", "git clone --template x a b",
+    "git -c init.templateDir=x init", "git -c difftool.x.path=y difftool",
+    "git -c protocol.ext.allow=always fetch", "git clone 'ext::sh -c x' d", "git fetch ext::x",
+    "git difftool --extcmd=x", "git difftool --extcmd x", "git difftool -x y", "git rebase -x y main",
+    "git rebase --exec y", "git bisect run ./y", "bash -c -- 'x'",
 ]
 must_not_match = [
     "git status", "python3 -m pytest -q", "npm test", "grep -r pseudocode notes.txt",
@@ -423,6 +466,9 @@ must_not_match = [
     "git log --oneline -n 5", "git config --get core.pager", "legit -c x", "git log | grep -c x",
     "git push origin main", "git fetch origin", "medieval x", "evaluate.py", "git --exec-path",
     "printf $'a\\tb\\n'", "echo $'it\\'s'",
+    "git clone https://example.com/x.git dir", "git init", "git difftool", "git rebase -i HEAD~3",
+    "git bisect start", "git bisect good", "git bisect bad", "git push -u origin main",
+    "git cherry-pick -x abc123", "git clean -xfd", "git init new-repo", "git clone git@example.com:a/b.git",
 ]
 for c in must_match:
     r(bool(pat.search(c)) and bool(pat.fullmatch(c)), "matcher hits      " + c.replace("\n", "\\n"))
