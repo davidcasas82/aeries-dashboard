@@ -1,17 +1,22 @@
 #!/bin/sh
 # Cursor beforeShellExecution hook: fail-closed deny list.
 #
-# Blocks agent shell commands that touch launchd, privilege escalation or
-# power state:
-#   - launchctl, sudo, reboot, shutdown, halt, pmset (as a word anywhere,
-#     including after ; && || | $( ` and env/command/exec prefixes)
-#   - anything that mentions LaunchAgents or LaunchDaemons
-# Fails closed: empty or invalid JSON, a missing or non-string "command"
-# field, or no usable python3 all result in a deny.
+# hooks.json only routes commands here when its "matcher" regex sees one of
+# launchctl, sudo, reboot, shutdown, halt, pmset, launchagents or
+# launchdaemons (any case) as a substring. Every other command never reaches
+# this script and keeps Cursor's normal approval flow.
+#
+# Decisions (this script never auto-approves anything):
+#   deny - launchctl, sudo, reboot, shutdown, halt or pmset as a word
+#          (including after ; && || | $( ` and env/command/exec prefixes),
+#          or any mention of LaunchAgents/LaunchDaemons
+#   ask  - the matcher hit but only inside another word (e.g. "asphalt"),
+#          so a human decides
+#   deny - fail closed: empty or invalid JSON, missing or non-string
+#          "command", or no usable python3
 #
 # Input (stdin):  {"command": "...", "cwd": "...", ...}
-# Output (stdout): {"permission": "allow"} or
-#                  {"permission": "deny", "user_message": ..., "agent_message": ...}
+# Output (stdout): {"permission": "deny"|"ask", "user_message": ..., "agent_message": ...}
 # To remove: delete .cursor/hooks.json and .cursor/hooks/ (or revert the commit).
 
 deny_raw() {
@@ -77,5 +82,13 @@ for v in variants:
     if LAUNCHD_DIRS.search(v):
         deny("command mentions LaunchAgents/LaunchDaemons")
 
-out({"permission": "allow"})
+# Matcher hit, but only as part of another word: let a human decide.
+out({
+    "permission": "ask",
+    "user_message": "The repo deny hook flagged this command (it contains a launchd/sudo/power word inside another word). Approve only if it is safe.",
+    "agent_message": (
+        "This command matched the deny hook's word filter but looks like a false positive, "
+        "so it needs the user's approval. Do not try to rephrase it to avoid the filter."
+    ),
+})
 PYEOF
