@@ -1,5 +1,5 @@
 #!/bin/sh
-# Tests for the Cursor deny hook (v2.2). Run from the repo root:
+# Tests for the Cursor deny hook (v2.3). Run from the repo root:
 #   sh .cursor/hooks/test-deny-dangerous-shell.sh
 # Exits nonzero if any case gets the wrong result.
 #
@@ -249,6 +249,59 @@ else
 fi
 check ask "this test file passes its own scan" "$(jc "sh $DIR/test-deny-dangerous-shell.sh" "$R")"
 
+# --- 4b. Scripts named by program-running env vars (v2.3, gap 1) -------
+mkdir -p "$R/hooks" "$R/cleanhooks"
+printf '#!/bin/sh\n%s list\n' "$LC" > "$R/hooks/pre-commit"
+printf '#!/bin/sh\necho checked\n' > "$R/cleanhooks/pre-commit"
+chmod +x "$R/hooks/pre-commit" "$R/cleanhooks/pre-commit"
+for cmd in 'GIT_EXTERNAL_DIFF=./bad.sh git diff' 'GIT_PAGER=./bad.sh git log' 'PAGER=./bad.sh man ls' \
+           'MANPAGER=./upper.sh man ls' 'EDITOR=./tools/run git commit' 'VISUAL=./bad.sh git commit' \
+           'LESSOPEN="|./bad.sh %s" less README.md' 'LESSOPEN="||./bad.sh %s" less README.md' \
+           'GIT_SSH=./bad.sh git fetch' 'GIT_SSH_COMMAND="sh ./bad.sh -x" git fetch' \
+           'GIT_SSH_COMMAND="bash -c ./bad.sh" git fetch' 'GIT_ASKPASS=./upper.sh git push' \
+           'GIT_EDITOR=./power.command git rebase -i HEAD~2' 'GIT_SEQUENCE_EDITOR=sub/agents.zsh git rebase -i HEAD~2' \
+           'SSH_ASKPASS=./bad.sh ssh host true' 'env GIT_PAGER=./bad.sh git log' 'env -i GIT_PAGER=./bad.sh git log' \
+           'export GIT_PAGER=./bad.sh; git log' 'GIT_PAGER="cd sub && ../bad.sh" git log' \
+           'GIT_PAGER="source ./bad.sh" git log' 'GIT_PAGER="FOO=1 ./bad.sh" git log' \
+           'GIT_PAGER=deploy/macos/install.sh git log' 'GIT_EXTERNAL_DIFF="sh scripts/build-home-tv-helper.sh" git diff' \
+           "GIT_PAGER=\"$LC list\" git log" "GIT_PAGER=\"'./dir with space/x.sh'\" git log"; do
+  check deny "env var script: $cmd" "$(jc "$cmd" "$R")"
+done
+check deny "env var script, relative to cwd: GIT_EXTERNAL_DIFF=../bad.sh git diff" "$(jc 'GIT_EXTERNAL_DIFF=../bad.sh git diff' "$R/sub")"
+check deny "env var script via workspace_roots: GIT_PAGER=./bad.sh git log" "$(jc 'GIT_PAGER=./bad.sh git log' '' "$R")"
+for cmd in 'GIT_PAGER=./clean.sh git log' 'GIT_EXTERNAL_DIFF=./nope.sh git diff' 'SSH_ASKPASS=./clean.sh ssh host true' \
+           'GIT_SSH_COMMAND="ssh -o BatchMode=yes -i ~/.ssh/none" git fetch' 'GIT_PAGER="less -R" git log' \
+           'LESSOPEN="|./clean.sh %s" less README.md' 'EDITOR=$X/bad.sh git commit' 'GIT_PAGER=./sub git log'; do
+  check ask "env var, clean or unreadable: $cmd" "$(jc "$cmd" "$R")"
+done
+if [ -r "$R/locked.sh" ]; then
+  echo "skip  unreadable env var script (running as a user who can read mode 000 files)"
+else
+  check ask "env var, unreadable script: GIT_PAGER=./locked.sh git log" "$(jc 'GIT_PAGER=./locked.sh git log' "$R")"
+fi
+
+# --- 4c. git -c / --config-env commands (v2.3, gap 2) -------------------
+for cmd in 'git -c core.pager=./bad.sh log' 'git -c core.Pager=./bad.sh log' 'git -c pager.log=./upper.sh log' \
+           'git -c core.editor=./tools/run commit' 'git -c sequence.editor=./bad.sh rebase -i HEAD~2' \
+           'git -c diff.external=./bad.sh diff' 'git -c diff.x.textconv=./bad.sh diff' \
+           'git -c difftool.x.cmd="sh ./bad.sh" difftool' 'git -c core.sshCommand="bash ./bad.sh" fetch' \
+           'git -c core.askPass=./bad.sh push' 'git -c core.fsmonitor=./bad.sh status' \
+           "git -c alias.x='!./bad.sh' x" "git -c credential.helper='!./bad.sh' push" \
+           'git -c alias.y="-c core.pager=./bad.sh log" y' 'git -c filter.x.smudge=./bad.sh checkout .' \
+           'git -c core.hooksPath=hooks commit -m ok' 'git -C sub -c core.pager=../bad.sh log' \
+           'git --no-pager -c core.pager=./bad.sh log' 'P=./bad.sh git --config-env=core.pager=P log' \
+           'P=./bad.sh git --config-env core.editor=P commit' 'git -c core.pager=deploy/macos/install.sh log' \
+           "git -c core.pager=\"$LC list\" log" "git -c pager.show=\"$SU less\" show" \
+           'cd sub && git -c core.pager=../bad.sh log' 'echo x; git -c core.pager=./bad.sh log'; do
+  check deny "git -c: $cmd" "$(jc "$cmd" "$R")"
+done
+for cmd in 'git -c core.pager=./clean.sh log' 'git -c core.pager=less log' 'git -c core.pager=./nope.sh log' \
+           'git -c user.name=x commit -m ok' 'git -c core.hooksPath=cleanhooks commit -m ok' \
+           'git -c core.hooksPath=nodir commit -m ok' 'git --config-env=core.pager=UNSET_VAR log' \
+           'git -c color.ui=false log' 'git -c core.quotepath=off status'; do
+  check ask "git -c, clean or unknown: $cmd" "$(jc "$cmd" "$R")"
+done
+
 # --- 5. The hook never auto-approves ------------------------------------
 if grep -q '"allow"' "$HOOK"; then bad 'hook script contains "allow"'; else ok 'hook script never contains "allow"'; fi
 
@@ -287,6 +340,11 @@ must_match = [
     'git commit -m "fix halt bug"', "git log --grep " + SU, "grep -n " + LA + " README.md",
     "GIT_PAGER=cat git log", "LESSOPEN='|x %s' less f", "env EDITOR=vim git commit",
     "x=1; GIT_EXTERNAL_DIFF=y git diff",
+    "SSH_ASKPASS=./x ssh host", "GIT_SSH_COMMAND='ssh -i k' git fetch",
+    "git -c core.pager=./x log", "git -c core.pager=less log", "git -C sub -c core.pager=less log",
+    "git --config-env=core.pager=P log", "git --config-env core.editor=E commit",
+    "/usr/bin/git -c x=y status", "cd a && git -c a=b log", "echo $(git -c a=b log)",
+    "git --no-pager -c core.pager=x log", "x; git -c alias.x='!y' x",
 ]
 must_not_match = [
     "git status", "python3 -m pytest -q", "npm test", "grep -r pseudocode notes.txt",
@@ -295,6 +353,8 @@ must_not_match = [
     "sed -i '' 's/a/b/' f.txt", "ssh host uptime", "shellcheck x.sh", "python3 scripts/x.py",
     "/usr/bin/python3 -m pytest", "git commit -m 'fix ./x.sh'", "npx vitest run",
     "cat .gitconfig", "echo $GIT_DIR", "git log --format=%H",
+    "git commit -m 'update docs'", "git commit -am wip", "git diff --cached", "git status -s",
+    "git log --oneline -n 5", "git config --get core.pager", "legit -c x", "git log | grep -c x",
 ]
 for c in must_match:
     r(bool(pat.search(c)) and bool(pat.fullmatch(c)), "matcher hits      " + c.replace("\n", "\\n"))

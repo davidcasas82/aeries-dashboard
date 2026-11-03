@@ -1,5 +1,5 @@
 #!/bin/sh
-# Cursor beforeShellExecution hook: fail-closed deny list (v2.2).
+# Cursor beforeShellExecution hook: fail-closed deny list (v2.3).
 #
 # hooks.json only routes a command here when its "matcher" regex sees:
 #   - launchctl, sudo, reboot, shutdown, halt, pmset, launchagents or
@@ -8,8 +8,10 @@
 #     anything ending .sh/.bash/.zsh/.command, sh/bash/zsh/dash/ksh, source, .
 #     (a quoted path such as "./dir with space/x.sh" counts too)
 #   - the named launchd scripts (deploy/macos/install.sh, *-tv-helper.sh)
-#   - a GIT_*, LESS*, PAGER, MANPAGER, EDITOR or VISUAL= assignment (these
-#     can make a read-only tool run a program), which then gets at least ask
+#   - a GIT_*, LESS*, PAGER, MANPAGER, EDITOR, VISUAL or SSH_ASKPASS=
+#     assignment (these can make a read-only tool run a program), which then
+#     gets at least ask
+#   - git with -c or --config-env anywhere in its arguments
 # Every other command (ls, git, grep, npm, ...) never reaches this script and
 # keeps Cursor's normal approval flow.
 #
@@ -42,6 +44,24 @@
 #          Relative paths resolve against "cd" earlier in the command, then
 #          the input "cwd", "workspace_roots", $CURSOR_PROJECT_DIR, and the
 #          hook's own working directory (the project root)
+#   deny - a program-running variable (GIT_EXTERNAL_DIFF, GIT_PAGER, PAGER,
+#          MANPAGER, EDITOR, VISUAL, LESSOPEN, LESSCLOSE, GIT_SSH,
+#          GIT_SSH_COMMAND, GIT_ASKPASS, GIT_EDITOR, GIT_SEQUENCE_EDITOR,
+#          GIT_PROXY_COMMAND, SSH_ASKPASS) set as VAR=, env VAR= or
+#          export VAR= to a command whose script file is a named launchd
+#          script or whose text has a blocked word (scanned like a run
+#          script, including sh/bash <file>, sh -c '...', source and cd in
+#          the value); a LESSOPEN "|" and an alias/helper "!" are skipped
+#   deny - git -c / --config-env setting a command key (core.pager, pager.*,
+#          core.editor, sequence.editor, diff.external, diff.*.command/
+#          textconv, difftool/mergetool.*.cmd, merge.*.driver, core.sshCommand,
+#          core.askpass, core.fsmonitor, core.gitProxy, credential*.helper,
+#          alias.*, filter.*.clean/smudge/process, gpg*.program,
+#          interactive.diffFilter, hook.*.command) to a command with a blocked
+#          word or a script that has one; core.hooksPath=<dir> scans every
+#          file in that directory. --config-env reads the variable from a
+#          VAR= set earlier in the same command, else ask. Any -c value with
+#          a blocked word still denies (v2.2)
 #   ask  - the script could not be found or read, or the script is clean, or
 #          the matcher hit only inside another word (e.g. "asphalt")
 #   deny - fail closed: empty or invalid JSON, missing or non-string
@@ -58,8 +78,10 @@
 #     are never scanned
 #   - piping into a shell (curl ... | sh) with no blocked word only gets ask
 #   - read-only tools that can still run code through config are trusted:
-#     a LESSOPEN/GIT_PAGER exported earlier or set in a profile, a git alias
-#     or a pager/diff driver in .git/config or ~/.gitconfig
+#     a LESSOPEN/GIT_PAGER exported in an earlier command or set in a profile,
+#     a git alias or a pager/diff driver in .git/config or ~/.gitconfig
+#   - a git -c command key whose value is a plain program name (less, vim,
+#     ssh) only gets ask; files that program reads are not inspected
 #   - a LaunchAgents/LaunchDaemons path built at run time (cd ~/Library &&
 #     sed -n "w Launch$X/x") or written to by a pattern-only option is missed
 #   - a word glued to a short option (git grep -Olaunchctl) is not seen
@@ -412,6 +434,131 @@ def check_script(p, cd):
         deny("script " + shown + " contains '" + m.group(0).decode("latin-1").lower() + "'")
     clean.append(shown)
 
+# --- 3. Commands run through env vars and git -c (v2.3) -------------------
+RUN_VARS = {"GIT_EXTERNAL_DIFF", "GIT_PAGER", "PAGER", "MANPAGER", "EDITOR", "VISUAL",
+            "LESSOPEN", "LESSCLOSE", "GIT_SSH", "GIT_SSH_COMMAND", "GIT_ASKPASS",
+            "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "GIT_PROXY_COMMAND", "SSH_ASKPASS"}
+EXPORTS = {"export", "declare", "typeset", "readonly", "local"}
+ASSIGN = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.S)
+CMD_KEY = re.compile(
+    r"^(?:core\.(?:pager|editor|sshcommand|askpass|fsmonitor|gitproxy)|pager\..+|sequence\.editor"
+    r"|diff\.external|diff\..+\.(?:command|textconv)|(?:diff|merge)tool\..+\.cmd|merge\..+\.driver"
+    r"|credential(?:\..+)?\.helper|alias\..+|filter\..+\.(?:clean|smudge|process)"
+    r"|gpg(?:\..+)?\.program|interactive\.difffilter|hook\..+\.command)$")
+
+def value_word(value):
+    for v in (value, IFS_RE.sub(" ", value), re.sub(r"[\"'\\]", "", value), strip_exp(re.sub(r"[\"'\\]", "", IFS_RE.sub("", value)))):
+        f = word_in(v)
+        if f:
+            return f
+    return None
+
+def check_value(value, cd, what, depth=0):
+    """A variable or git -c value that git/less/ssh runs as a command."""
+    f = value_word(value)
+    if f:
+        deny(what + " runs a command with " + f)
+    if depth > 3:
+        unreadable.append("nested command in " + what)
+        return
+    v = value.strip().lstrip("|!").strip()
+    vcd = cd
+    for seg in segments(tokenize(v)):
+        i = 0
+        while i < len(seg) and (seg[i] in PREFIXES or os.path.basename(seg[i]) in PREFIXES
+                                or ASSIGN.match(seg[i])
+                                or (i > 0 and seg[i].startswith("-") and os.path.basename(seg[i - 1]) in ("env", "nice"))):
+            m = ASSIGN.match(seg[i])
+            if m and m.group(1) in RUN_VARS:
+                check_value(m.group(2), vcd, m.group(1), depth + 1)
+            i += 1
+        if i >= len(seg):
+            continue
+        w, args = seg[i], seg[i + 1:]
+        base = os.path.basename(w)
+        for a in args:
+            if is_named(a, resolve(a, vcd)[1]):
+                deny(what + " runs launchd script " + os.path.basename(a))
+        if base == "cd":
+            _, absd = resolve(args[0] if args else home, vcd)
+            vcd = absd if absd and os.path.isdir(absd) else vcd
+        elif base in SHELLS:
+            j = 0
+            while j < len(args):
+                a = args[j]
+                if a.startswith(("-", "+")):
+                    if not a.startswith("--") and "c" in a.lstrip("-+"):
+                        if j + 1 < len(args):
+                            check_value(args[j + 1], vcd, what, depth + 1)
+                        break
+                    j += 2 if a in ("-o", "+o", "-O", "+O") else 1
+                    continue
+                check_script(args[j + 1] if a == "<" and j + 1 < len(args) else a, vcd)
+                break
+        elif base in ("source", "."):
+            if args:
+                check_script(args[0], vcd)
+        elif base == "git":
+            check_git(args, vcd, {}, depth + 1)
+        elif w.lower().endswith(SCRIPT_EXT) or "/" in w:
+            check_script(w, vcd)
+
+def check_config(key, val, cd, depth):
+    what = "git -c " + key
+    f = value_word(val)
+    if f:
+        deny(what + " sets a value with " + f)
+    if key == "core.hookspath":
+        _, d = resolve(val, cd)
+        if not d or not os.path.isdir(d):
+            unreadable.append("git hooks directory " + val)
+            return
+        for name in sorted(os.listdir(d))[:200]:
+            fp = os.path.join(d, name)
+            if os.path.isfile(fp):
+                check_script(fp, None)
+        return
+    if key.startswith("alias.") and not val.lstrip().startswith("!"):
+        check_git(tokenize(val), cd, {}, depth + 1)
+    elif CMD_KEY.match(key):
+        check_value(val, cd, what, depth)
+
+def check_git(args, cd, env, depth=0):
+    """git's global options: -C dir, -c key=value, --config-env key=VAR."""
+    if depth > 3:
+        return
+    i, gcd = 0, cd
+    while i < len(args):
+        a, kv = args[i], None
+        if a == "-C" and i + 1 < len(args):
+            _, d = resolve(args[i + 1], gcd)
+            gcd = d if d and os.path.isdir(d) else gcd
+            i += 2
+            continue
+        if a in ("-c", "--config-env") and i + 1 < len(args):
+            kv, i = args[i + 1], i + 2
+        elif a.startswith("--config-env="):
+            a, kv, i = "--config-env", a[len("--config-env="):], i + 1
+        elif a in ("--git-dir", "--work-tree", "--namespace", "--super-prefix", "--exec-path") and i + 1 < len(args):
+            i += 2
+            continue
+        elif a.startswith("-"):
+            i += 1
+            continue
+        else:
+            break
+        key, sep, val = kv.partition("=")
+        key = key.strip().lower()
+        if a == "--config-env":
+            if val in env:
+                val = env[val]
+            else:
+                unreadable.append("git --config-env value from $" + val)
+                continue
+        elif not sep:
+            continue
+        check_config(key, val, gcd, depth)
+
 for v in (v_ifs, IFS_RE.sub("", cmd)):
     cd = None
     for seg in segments(tokenize(v)):
@@ -420,10 +567,25 @@ for v in (v_ifs, IFS_RE.sub("", cmd)):
                                 or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", seg[i])
                                 or (i > 0 and seg[i].startswith("-") and os.path.basename(seg[i - 1]) in ("env", "nice"))):
             i += 1
+        env = {}
+        for tok in seg[:i]:
+            m = ASSIGN.match(tok)
+            if m:
+                env[m.group(1)] = m.group(2)
+                if m.group(1) in RUN_VARS:
+                    check_value(m.group(2), cd, m.group(1))
         if i >= len(seg):
             continue
         w, args = seg[i], seg[i + 1:]
         base = os.path.basename(w)
+        if base in EXPORTS:
+            for a in args:
+                m = ASSIGN.match(a)
+                if m and m.group(1) in RUN_VARS:
+                    check_value(m.group(2), cd, m.group(1))
+            continue
+        if base == "git":
+            check_git(args, cd, env)
         # A named launchd script anywhere in a non-read-only command: deny.
         if base not in READ_ONLY:
             for a in args:
@@ -466,8 +628,10 @@ if unreadable:
     ask("could not read script " + unreadable[0])
 if clean and not hit:
     ask("runs script " + clean[0] + "; no launchd/sudo/power words found in it")
-if re.search(r"(?:^|[\s;&|(])(?:GIT_[A-Za-z0-9_]*|LESS[A-Za-z0-9_]*|PAGER|MANPAGER|EDITOR|VISUAL)=", cmd):
+if re.search(r"(?:^|[\s;&|(])(?:GIT_[A-Za-z0-9_]*|LESS[A-Za-z0-9_]*|PAGER|MANPAGER|EDITOR|VISUAL|SSH_ASKPASS)=", cmd):
     ask("it sets a GIT_*/LESS*/PAGER/EDITOR variable that can run a program")
+if re.search(r"(?:^|[^A-Za-z0-9_-])git(?:\s[^;&|\n]*)?\s(?:-c|--config-env)(?:[\s=]|$)", cmd):
+    ask("it passes git a -c/--config-env setting that can run a program")
 if hit:
     ask("it mentions " + hit + " only as text in a read-only command")
 ask("it contains a launchd/sudo/power word inside another word, or a script-run pattern")
