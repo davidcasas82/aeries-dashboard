@@ -1,5 +1,5 @@
 #!/bin/sh
-# Cursor beforeShellExecution hook: fail-closed deny list (v2.1).
+# Cursor beforeShellExecution hook: fail-closed deny list (v2.2).
 #
 # hooks.json only routes a command here when its "matcher" regex sees:
 #   - launchctl, sudo, reboot, shutdown, halt, pmset, launchagents or
@@ -8,6 +8,8 @@
 #     anything ending .sh/.bash/.zsh/.command, sh/bash/zsh/dash/ksh, source, .
 #     (a quoted path such as "./dir with space/x.sh" counts too)
 #   - the named launchd scripts (deploy/macos/install.sh, *-tv-helper.sh)
+#   - a GIT_*, LESS*, PAGER, MANPAGER, EDITOR or VISUAL= assignment (these
+#     can make a read-only tool run a program), which then gets at least ask
 # Every other command (ls, git, grep, npm, ...) never reaches this script and
 # keeps Cursor's normal approval flow.
 #
@@ -17,7 +19,9 @@
 #          or any of those words or LaunchAgents/LaunchDaemons in the
 #          arguments of a command that is not text-only, inside $( ),
 #          backticks, <( ), sh -c or eval, in a command that pipes into a
-#          shell or xargs, or as a redirect target. Checked on the raw command
+#          shell or xargs, or as a redirect target, or in a leading VAR=
+#          or env VAR= assignment (GIT_EXTERNAL_DIFF, GIT_PAGER, LESSOPEN,
+#          ... can run their value). Checked on the raw command
 #          and on normalized copies (${IFS}/$IFS -> space; quotes and
 #          backslashes removed; ${...}, $@, $* removed), so launch""ctl,
 #          l\aunchctl and su''do are caught
@@ -25,6 +29,11 @@
 #          tool: git commit/log/grep/diff/show/blame, grep, rg, ag, cat,
 #          head, tail, less, more, wc, sed -n (no -i), ls (no LaunchAgents/
 #          LaunchDaemons path), echo/printf with no redirect
+#   deny - a read-only tool given a LaunchAgents/LaunchDaemons path (sed w,
+#          git --output=... can write there); only grep/rg/ag search
+#          patterns (pattern argument, -e/--regexp) and git log --grep/-S/-G
+#          and git grep patterns stay ask. sed scripts with w/W/e/r/R
+#          commands or a w/e s-flag, and sed -f, are not read-only
 #   deny - running a named launchd script (deploy/macos/install.sh or
 #          build-*-tv-helper.sh) by any route; only read-only tools such as
 #          cat/grep/git/ls on them get ask
@@ -48,9 +57,11 @@
 #     reach the hook; paths under /usr, /bin, /sbin, /opt/homebrew, /System
 #     are never scanned
 #   - piping into a shell (curl ... | sh) with no blocked word only gets ask
-#   - read-only tools that can still run code are trusted: GNU sed -n with
-#     an "e" command, less with a LESSOPEN preprocessor, git with an
-#     aliased or configured pager/diff driver
+#   - read-only tools that can still run code through config are trusted:
+#     a LESSOPEN/GIT_PAGER exported earlier or set in a profile, a git alias
+#     or a pager/diff driver in .git/config or ~/.gitconfig
+#   - a LaunchAgents/LaunchDaemons path built at run time (cd ~/Library &&
+#     sed -n "w Launch$X/x") or written to by a pattern-only option is missed
 #   - a word glued to a short option (git grep -Olaunchctl) is not seen
 #   - $'\x..' quoting, command substitution that builds a word, aliases and
 #     variables holding a word (C=launchctl; $C) are not decoded
@@ -227,6 +238,68 @@ GIT_TEXT = {"commit", "log", "grep", "diff", "show", "blame"}
 RUNNERS = SHELLS | {"eval", "source", ".", "xargs", "exec"}
 WRAPPERS = PREFIXES | {"xargs"}
 
+# A path that names a launchd directory as a path component.
+LAUNCHD_PATH = re.compile(r"(?:^|[/=~])launch(?:agents|daemons)(?:/|$)", re.IGNORECASE)
+GREP_VALUE_OPTS = {"-A", "-B", "-C", "-m", "-f", "--file", "--max-count", "--context",
+                   "--after-context", "--before-context", "--exclude", "--include",
+                   "--exclude-dir", "--label", "--max-depth"}
+VALUE_OPTS = {
+    "grep": GREP_VALUE_OPTS | {"-d", "-D", "--directories", "--devices"},
+    "rg": GREP_VALUE_OPTS | {"-g", "-t", "-T", "-j", "-M", "-E", "-r", "--replace", "--glob",
+                             "--iglob", "--type", "--type-not", "--threads", "--encoding",
+                             "--sort", "--sortr", "--color", "--colors", "--max-columns"},
+    "ag": GREP_VALUE_OPTS | {"-G", "--ignore", "--depth", "--file-search-regex"},
+}
+SED_CMD = re.compile(r"(?:^|[;\n{}!$0-9/,\s])\s*[wWerR](?:\s|$|;|})")
+SED_SFLAG = re.compile(r"/[gpiImM0-9]*[we](?:\s|$|;|})")
+
+def pattern_args(args, tool):
+    """Indexes of search-pattern arguments (grep/rg/ag/git grep)."""
+    idx, explicit, i, first = set(), False, 0, None
+    while i < len(args):
+        a = args[i]
+        if a == "--":
+            if first is None and i + 1 < len(args):
+                first = i + 1
+            break
+        if a in ("-e", "--regexp") and i + 1 < len(args):
+            idx.add(i + 1); explicit = True; i += 2; continue
+        if a.startswith("--regexp=") or (a.startswith("-e") and len(a) > 2 and not a.startswith("--")):
+            idx.add(i); explicit = True; i += 1; continue
+        if a in ("-f", "--file") or a.startswith("--file="):
+            explicit = True
+        if a in VALUE_OPTS.get(tool, GREP_VALUE_OPTS):
+            i += 2; continue
+        if a.startswith("-") and a != "-":
+            i += 1; continue
+        if first is None:
+            first = i
+        i += 1
+    if not explicit and first is not None:
+        idx.add(first)
+    return idx
+
+def sed_ok(args):
+    scripts, i, first = [], 0, None
+    while i < len(args):
+        a = args[i]
+        if a in ("-f", "--file") or a.startswith("--file=") or re.match(r"^-[a-zA-Z]*f", a):
+            return False
+        if a in ("-e", "--expression") and i + 1 < len(args):
+            scripts.append(args[i + 1]); i += 2; continue
+        if a.startswith("--expression="):
+            scripts.append(a.split("=", 1)[1]); i += 1; continue
+        if a in ("-l", "--line-length"):
+            i += 2; continue
+        if a.startswith("-") and a != "-":
+            i += 1; continue
+        if first is None:
+            first = a
+        i += 1
+    if not scripts and first is not None:
+        scripts.append(first)
+    return not any(SED_CMD.search(x) or SED_SFLAG.search(x) for x in scripts)
+
 def strip_exp(t):
     return re.sub(r"\$\{[^}]*\}|\$[@*]", "", t)
 
@@ -236,6 +309,25 @@ def text_only(w, args):
         return False
     if w not in TEXT_TOOLS:
         return False
+    # A launchd directory path in the arguments: deny, except search patterns.
+    safe = set()
+    if w in ("grep", "egrep", "fgrep", "rg", "ag"):
+        safe = pattern_args(args, {"egrep": "grep", "fgrep": "grep"}.get(w, w))
+    elif w == "git":
+        j = 0
+        while j < len(args) and args[j].startswith("-"):
+            j += 2 if args[j] in ("-C", "--git-dir", "--work-tree", "--namespace", "-c") else 1
+        if j < len(args) and args[j] == "grep":
+            safe = {j + 1 + k for k in pattern_args(args[j + 1:], "grep")}
+        elif j < len(args) and args[j] == "log":
+            for k in range(j + 1, len(args)):
+                a = args[k]
+                if a in ("--grep", "-S", "-G") and k + 1 < len(args):
+                    safe.add(k + 1)
+                elif a.startswith(("--grep=", "-S", "-G")):
+                    safe.add(k)
+    if any(LAUNCHD_PATH.search(a) for k, a in enumerate(args) if k not in safe):
+        return False
     if w in ("echo", "printf"):
         return not any(a.startswith((">", "&>")) for a in args)
     if w == "ls":
@@ -244,7 +336,9 @@ def text_only(w, args):
         return not any(a.startswith("--pre") for a in args)
     if w == "sed":
         quiet = any(a in ("-n", "--quiet", "--silent") or re.match(r"^-[a-zA-Z]*n[a-zA-Z]*$", a) for a in args)
-        return quiet and not any(a.startswith(("-i", "--in-place")) or re.match(r"^-[a-zA-Z]*i", a) for a in args)
+        if not quiet or any(a.startswith(("-i", "--in-place")) or re.match(r"^-[a-zA-Z]*i", a) for a in args):
+            return False
+        return sed_ok(args)
     if w == "git":
         i = 0
         while i < len(args) and args[i].startswith("-"):
@@ -278,6 +372,8 @@ if hit:
                                     or (i > 0 and seg[i].startswith("-") and os.path.basename(seg[i - 1]) in ("env", "nice", "xargs"))):
                 if os.path.basename(seg[i]) in ("xargs", "exec"):
                     runs_code = True
+                if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", seg[i]) and word_in(seg[i]):
+                    deny("command sets an environment variable to a value with " + word_in(seg[i]))
                 i += 1
             if i >= len(seg):
                 continue
@@ -370,6 +466,8 @@ if unreadable:
     ask("could not read script " + unreadable[0])
 if clean and not hit:
     ask("runs script " + clean[0] + "; no launchd/sudo/power words found in it")
+if re.search(r"(?:^|[\s;&|(])(?:GIT_[A-Za-z0-9_]*|LESS[A-Za-z0-9_]*|PAGER|MANPAGER|EDITOR|VISUAL)=", cmd):
+    ask("it sets a GIT_*/LESS*/PAGER/EDITOR variable that can run a program")
 if hit:
     ask("it mentions " + hit + " only as text in a read-only command")
 ask("it contains a launchd/sudo/power word inside another word, or a script-run pattern")

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Tests for the Cursor deny hook (v2). Run from the repo root:
+# Tests for the Cursor deny hook (v2.2). Run from the repo root:
 #   sh .cursor/hooks/test-deny-dangerous-shell.sh
 # Exits nonzero if any case gets the wrong result.
 #
@@ -142,6 +142,43 @@ c deny "git grep --open-files-in-pager=$LC pattern"
 c deny "rg --pre $LC pattern"
 c deny "$SU grep x y"
 
+# --- 2c. Code run through env vars, and writes into launchd dirs --------
+c deny "GIT_EXTERNAL_DIFF=\"$LC list\" git diff"
+c deny "GIT_PAGER=\"$LC list\" git log"
+c deny "LESSOPEN=\"|$LC list %s\" less README.md"
+c deny "sed -n \"w ~/Library/$LA/x.plist\" a"
+c deny "git log -1 --output=/Users/someone/Library/$LA/x.plist"
+c deny "git show HEAD:a --output=\$HOME/Library/$LA/x.plist"
+c deny "env GIT_PAGER=\"$SU true\" git log"
+c deny "PAGER=$RB git log"
+c deny "A=1 EDITOR=\"$PM -g\" git commit"
+c deny "git log --output=$LA/x.plist --grep x"
+c deny "cat ~/Library/$LA/x.plist"
+c deny "grep x ~/Library/$LA/x.plist"
+c deny "rg -e x /Library/$LD/"
+c deny "git grep x -- ~/Library/$LA"
+c deny "head -1 /Library/$LD/x.plist"
+c deny "sed -n '1w out.txt' $LC.txt"
+c deny "sed -n \"/$PM/e\" notes.txt"
+c deny "sed -n \"s/$SU/x/w out.txt\" notes.txt"
+c deny "sed -n -e p -e 'r extra.txt' $LC.txt"
+c deny "sed -n -f s.sed $LC.txt"
+c ask  "grep -rn $LA ."
+c ask  "grep -E $LA README.md"
+c ask  "grep -e ~/Library/$LA/ notes.txt"
+c ask  "rg --regexp=/Library/$LD/ docs"
+c ask  "ag \"Library/$LA/\" docs"
+c ask  "git log --grep=~/Library/$LA/"
+c ask  "git log -S /Library/$LD/ --oneline"
+c ask  "git grep -e /Library/$LA/ -- docs"
+c ask  "git commit -m \"document $LA plist\""
+c ask  "cat $LA.md"
+c ask  "sed -n '/error/p' $LC.txt"
+c ask  "sed -n -e '/$SU/p' -e '/wait/p' notes.txt"
+c ask  "GIT_PAGER=cat git log"
+c ask  "LESS=-R less $LC.md"
+c ask  "env EDITOR=vim git commit"
+
 # --- 3. Fail closed -------------------------------------------------------
 check deny "fail closed: empty input"     ""
 check deny "fail closed: malformed JSON"  '{"command": "x true"'
@@ -248,6 +285,8 @@ must_match = [
     "FOO=1 ./y", "env X=1 bash y", "/abs/dir/y.zsh", "./power.command", "nohup ./y &",
     "if true; then ./y; fi", '"./dir with space/x.sh"', "'./x.sh'", "x; \"./y z/w\"",
     'git commit -m "fix halt bug"', "git log --grep " + SU, "grep -n " + LA + " README.md",
+    "GIT_PAGER=cat git log", "LESSOPEN='|x %s' less f", "env EDITOR=vim git commit",
+    "x=1; GIT_EXTERNAL_DIFF=y git diff",
 ]
 must_not_match = [
     "git status", "python3 -m pytest -q", "npm test", "grep -r pseudocode notes.txt",
@@ -255,6 +294,7 @@ must_not_match = [
     "printf 'a\\nb\\n'", "echo $(date)", "cd src && npm test", "git log --oneline | head",
     "sed -i '' 's/a/b/' f.txt", "ssh host uptime", "shellcheck x.sh", "python3 scripts/x.py",
     "/usr/bin/python3 -m pytest", "git commit -m 'fix ./x.sh'", "npx vitest run",
+    "cat .gitconfig", "echo $GIT_DIR", "git log --format=%H",
 ]
 for c in must_match:
     r(bool(pat.search(c)) and bool(pat.fullmatch(c)), "matcher hits      " + c.replace("\n", "\\n"))
