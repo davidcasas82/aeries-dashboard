@@ -29,18 +29,18 @@ CALENDAR = {
 
 class StudentLogLabelTests(unittest.TestCase):
     def test_never_includes_name_or_sn(self):
-        label = scraper.student_log_label(1, {"name": "Daniel", "sn": "1087"})
+        label = scraper.student_log_label(1, {"name": "Wren Fixturekid", "sn": "9900113"})
         self.assertEqual(label, "student 1")
-        self.assertNotIn("Daniel", label)
-        self.assertNotIn("1087", label)
+        self.assertNotIn("Wren Fixturekid", label)
+        self.assertNotIn("9900113", label)
 
     def test_redact_probe_text(self):
         out = scraper.redact_probe_text(
-            "Hello Daniel SN 1087 parent@example.com",
-            {"name": "Daniel", "sn": "1087"},
+            "Hello Wren Fixturekid SN 9900113 parent@example.com",
+            {"name": "Wren Fixturekid", "sn": "9900113"},
         )
-        self.assertNotIn("Daniel", out)
-        self.assertNotIn("1087", out)
+        self.assertNotIn("Wren Fixturekid", out)
+        self.assertNotIn("9900113", out)
         self.assertIn("[redacted]", out)
 
 
