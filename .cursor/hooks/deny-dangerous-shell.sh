@@ -1,5 +1,5 @@
 #!/bin/sh
-# Cursor beforeShellExecution hook: fail-closed deny list (v2.3).
+# Cursor beforeShellExecution hook: fail-closed deny list (v2.4).
 #
 # hooks.json only routes a command here when its "matcher" regex sees:
 #   - launchctl, sudo, reboot, shutdown, halt, pmset, launchagents or
@@ -8,10 +8,13 @@
 #     anything ending .sh/.bash/.zsh/.command, sh/bash/zsh/dash/ksh, source, .
 #     (a quoted path such as "./dir with space/x.sh" counts too)
 #   - the named launchd scripts (deploy/macos/install.sh, *-tv-helper.sh)
-#   - a GIT_*, LESS*, PAGER, MANPAGER, EDITOR, VISUAL or SSH_ASKPASS=
-#     assignment (these can make a read-only tool run a program), which then
-#     gets at least ask
-#   - git with -c or --config-env anywhere in its arguments
+#   - a GIT_*, LESS*, PAGER, MANPAGER, EDITOR, VISUAL or SSH_ASKPASS= or +=
+#     assignment, also after a quote, backtick or backslash (these can make a
+#     read-only tool run a program), which then gets at least ask
+#   - git (also \git, g''it, /path/git) with -c, --config-env, --upload-pack,
+#     --receive-pack or --exec anywhere in its arguments, also across a
+#     backslash-newline continuation
+#   - eval
 # Every other command (ls, git, grep, npm, ...) never reaches this script and
 # keeps Cursor's normal approval flow.
 #
@@ -149,6 +152,8 @@ if not isinstance(payload, dict) or "command" not in payload:
 cmd = payload["command"]
 if not isinstance(cmd, str):
     deny("command field is not a string")
+# The shell drops backslash-newline before it splits words; do the same.
+cmd = re.sub(r"\\\r?\n", "", cmd)
 
 IFS_RE = re.compile(r"\$\{IFS[^}]*\}|\$IFS")
 WORDS = re.compile(
@@ -390,11 +395,11 @@ if hit:
         for seg in segs:
             i = 0
             while i < len(seg) and (strip_exp(seg[i]) in WRAPPERS or os.path.basename(seg[i]) in WRAPPERS
-                                    or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", seg[i])
+                                    or re.match(r"^[A-Za-z_][A-Za-z0-9_]*\+?=", seg[i])
                                     or (i > 0 and seg[i].startswith("-") and os.path.basename(seg[i - 1]) in ("env", "nice", "xargs"))):
                 if os.path.basename(seg[i]) in ("xargs", "exec"):
                     runs_code = True
-                if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", seg[i]) and word_in(seg[i]):
+                if re.match(r"^[A-Za-z_][A-Za-z0-9_]*\+?=", seg[i]) and word_in(seg[i]):
                     deny("command sets an environment variable to a value with " + word_in(seg[i]))
                 i += 1
             if i >= len(seg):
@@ -434,17 +439,33 @@ def check_script(p, cd):
         deny("script " + shown + " contains '" + m.group(0).decode("latin-1").lower() + "'")
     clean.append(shown)
 
-# --- 3. Commands run through env vars and git -c (v2.3) -------------------
+# --- 3. Commands run through env vars, eval, sh -c and git config (v2.4) ---
+# Backslash-newline is joined first. sh -c / bash -c / eval / env -S strings
+# are scanned like a command. GIT_CONFIG_COUNT/KEY_n/VALUE_n and
+# GIT_CONFIG_PARAMETERS count as git -c. include.path, includeIf.*.path and
+# GIT_CONFIG_GLOBAL/SYSTEM/GIT_CONFIG files are parsed and their command keys
+# checked. GIT_SSH, GIT_ASKPASS, SSH_ASKPASS and core.askpass are one literal
+# path. git --upload-pack/--receive-pack/--exec (and clone -u) values are run.
 RUN_VARS = {"GIT_EXTERNAL_DIFF", "GIT_PAGER", "PAGER", "MANPAGER", "EDITOR", "VISUAL",
             "LESSOPEN", "LESSCLOSE", "GIT_SSH", "GIT_SSH_COMMAND", "GIT_ASKPASS",
             "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "GIT_PROXY_COMMAND", "SSH_ASKPASS"}
+# Run as one program path, never split by a shell.
+LITERAL_VARS = {"GIT_SSH", "GIT_ASKPASS", "SSH_ASKPASS"}
+CONFIG_FILE_VARS = {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG"}
 EXPORTS = {"export", "declare", "typeset", "readonly", "local"}
-ASSIGN = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.S)
+ASSIGN = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\+?=(.*)$", re.S)
 CMD_KEY = re.compile(
     r"^(?:core\.(?:pager|editor|sshcommand|askpass|fsmonitor|gitproxy)|pager\..+|sequence\.editor"
     r"|diff\.external|diff\..+\.(?:command|textconv)|(?:diff|merge)tool\..+\.cmd|merge\..+\.driver"
     r"|credential(?:\..+)?\.helper|alias\..+|filter\..+\.(?:clean|smudge|process)"
-    r"|gpg(?:\..+)?\.program|interactive\.difffilter|hook\..+\.command)$")
+    r"|gpg(?:\..+)?\.program|interactive\.difffilter|hook\..+\.command"
+    r"|remote\..+\.(?:uploadpack|receivepack))$")
+LITERAL_KEYS = {"core.askpass"}
+INCLUDE_KEY = re.compile(r"^(?:include|includeif\..+)\.path$")
+GIT_RUN_OPTS = {"--upload-pack", "--receive-pack", "--exec"}
+# LESSOPEN "|" / "||" (optionally "-"), and the "!" of an alias or helper.
+LEAD = re.compile(r"^\s*(?:\|\|?-?|!)\s*")
+MAX_DEPTH = 8
 
 def value_word(value):
     for v in (value, IFS_RE.sub(" ", value), re.sub(r"[\"'\\]", "", value), strip_exp(re.sub(r"[\"'\\]", "", IFS_RE.sub("", value)))):
@@ -453,62 +474,90 @@ def value_word(value):
             return f
     return None
 
-def check_value(value, cd, what, depth=0):
-    """A variable or git -c value that git/less/ssh runs as a command."""
+def check_value(value, cd, what, depth=0, literal=False):
+    """A variable or git config value that git/less/ssh runs as a command."""
     f = value_word(value)
     if f:
         deny(what + " runs a command with " + f)
-    if depth > 3:
-        unreadable.append("nested command in " + what)
+    if literal:
+        if value.strip():
+            check_script(value.strip(), cd)
         return
-    v = value.strip().lstrip("|!").strip()
-    vcd = cd
-    for seg in segments(tokenize(v)):
-        i = 0
-        while i < len(seg) and (seg[i] in PREFIXES or os.path.basename(seg[i]) in PREFIXES
-                                or ASSIGN.match(seg[i])
-                                or (i > 0 and seg[i].startswith("-") and os.path.basename(seg[i - 1]) in ("env", "nice"))):
-            m = ASSIGN.match(seg[i])
-            if m and m.group(1) in RUN_VARS:
-                check_value(m.group(2), vcd, m.group(1), depth + 1)
-            i += 1
-        if i >= len(seg):
+    scan_command(LEAD.sub("", value), cd, depth + 1, what)
+
+def config_value(v):
+    out, q, i = [], False, 0
+    v = v.strip()
+    while i < len(v):
+        ch = v[i]
+        if ch == "\\" and i + 1 < len(v):
+            out.append({"n": "\n", "t": "\t", "b": "\b"}.get(v[i + 1], v[i + 1])); i += 2; continue
+        if ch == '"':
+            q = not q
+        elif ch in "#;" and not q:
+            break
+        else:
+            out.append(ch)
+        i += 1
+    return "".join(out).strip()
+
+def parse_config(text):
+    lines, buf = [], ""
+    for raw in text.splitlines():
+        if raw.endswith("\\") and not raw.endswith("\\\\"):
+            buf += raw[:-1]
             continue
-        w, args = seg[i], seg[i + 1:]
-        base = os.path.basename(w)
-        for a in args:
-            if is_named(a, resolve(a, vcd)[1]):
-                deny(what + " runs launchd script " + os.path.basename(a))
-        if base == "cd":
-            _, absd = resolve(args[0] if args else home, vcd)
-            vcd = absd if absd and os.path.isdir(absd) else vcd
-        elif base in SHELLS:
-            j = 0
-            while j < len(args):
-                a = args[j]
-                if a.startswith(("-", "+")):
-                    if not a.startswith("--") and "c" in a.lstrip("-+"):
-                        if j + 1 < len(args):
-                            check_value(args[j + 1], vcd, what, depth + 1)
-                        break
-                    j += 2 if a in ("-o", "+o", "-O", "+O") else 1
-                    continue
-                check_script(args[j + 1] if a == "<" and j + 1 < len(args) else a, vcd)
-                break
-        elif base in ("source", "."):
-            if args:
-                check_script(args[0], vcd)
-        elif base == "git":
-            check_git(args, vcd, {}, depth + 1)
-        elif w.lower().endswith(SCRIPT_EXT) or "/" in w:
-            check_script(w, vcd)
+        lines.append(buf + raw); buf = ""
+    if buf:
+        lines.append(buf)
+    section, items = "", []
+    for line in lines:
+        s = line.strip()
+        if not s or s[0] in "#;":
+            continue
+        m = re.match(r'^\[\s*([A-Za-z0-9.-]+)(?:\s+"((?:[^"\\]|\\.)*)")?\s*\](.*)$', s)
+        if m:
+            section = m.group(1).lower()
+            if m.group(2) is not None:
+                section += "." + re.sub(r"\\(.)", r"\1", m.group(2))
+            s = m.group(3).strip()
+            if not s or s[0] in "#;":
+                continue
+        k, sep, v = s.partition("=")
+        key = k.strip().lower()
+        if re.match(r"^[a-z][a-z0-9-]*$", key):
+            items.append(((section + "." if section else "") + key, config_value(v) if sep else ""))
+    return items
+
+def check_config_file(path, cd, what, depth):
+    if depth > MAX_DEPTH:
+        unreadable.append("deeply nested git config " + path)
+        return
+    shown, absp = resolve(path, cd)
+    if absp is None or "$" in shown:
+        unreadable.append("git config file " + shown)
+        return
+    if not os.path.isfile(absp):
+        return
+    try:
+        with open(absp, "rb") as f:
+            text = f.read(1024 * 1024).decode("utf-8", "replace")
+    except Exception:
+        unreadable.append("git config file " + shown)
+        return
+    for key, val in parse_config(text):
+        if INCLUDE_KEY.match(key) and not os.path.isabs(expand(val)):
+            val = os.path.join(os.path.dirname(absp), val)
+        check_config(key, val, cd, depth)
 
 def check_config(key, val, cd, depth):
-    what = "git -c " + key
+    what = "git config " + key
     f = value_word(val)
     if f:
         deny(what + " sets a value with " + f)
-    if key == "core.hookspath":
+    if INCLUDE_KEY.match(key):
+        check_config_file(val, cd, what, depth + 1)
+    elif key == "core.hookspath":
         _, d = resolve(val, cd)
         if not d or not os.path.isdir(d):
             unreadable.append("git hooks directory " + val)
@@ -517,15 +566,41 @@ def check_config(key, val, cd, depth):
             fp = os.path.join(d, name)
             if os.path.isfile(fp):
                 check_script(fp, None)
-        return
-    if key.startswith("alias.") and not val.lstrip().startswith("!"):
+    elif key in LITERAL_KEYS:
+        check_value(val, cd, what, depth, literal=True)
+    elif key.startswith("alias.") and not val.lstrip().startswith("!"):
         check_git(tokenize(val), cd, {}, depth + 1)
     elif CMD_KEY.match(key):
         check_value(val, cd, what, depth)
 
+def env_assignments(assigns, cd, depth):
+    """VAR=value pairs that make git, less or ssh run something."""
+    env = {}
+    for name, val in assigns:
+        env[name] = val
+        if name in RUN_VARS:
+            check_value(val, cd, name, depth, literal=name in LITERAL_VARS)
+        elif name in CONFIG_FILE_VARS:
+            check_config_file(val, cd, name, depth)
+        elif name == "GIT_CONFIG_PARAMETERS":
+            try:
+                items = shlex.split(val)
+            except ValueError:
+                unreadable.append("GIT_CONFIG_PARAMETERS value")
+                items = []
+            for it in items:
+                k, sep, v = it.partition("=")
+                if sep:
+                    check_config(k.strip().lower(), v, cd, depth)
+    for name in env:
+        m = re.match(r"^GIT_CONFIG_KEY_(\d+)$", name)
+        if m:
+            check_config(env[name].strip().lower(), env.get("GIT_CONFIG_VALUE_" + m.group(1), ""), cd, depth)
+    return env
+
 def check_git(args, cd, env, depth=0):
-    """git's global options: -C dir, -c key=value, --config-env key=VAR."""
-    if depth > 3:
+    """git's global options (-C, -c, --config-env) and commands it runs (--upload-pack, ...)."""
+    if depth > MAX_DEPTH:
         return
     i, gcd = 0, cd
     while i < len(args):
@@ -558,46 +633,92 @@ def check_git(args, cd, env, depth=0):
         elif not sep:
             continue
         check_config(key, val, gcd, depth)
+    sub, rest, k = (args[i] if i < len(args) else ""), args[i + 1:], 0
+    while k < len(rest):
+        name, eq, v = rest[k].partition("=")
+        if rest[k] == "--":
+            break
+        if name in GIT_RUN_OPTS or (sub == "clone" and name == "-u"):
+            if eq:
+                check_value(v, gcd, "git " + name, depth)
+            elif k + 1 < len(rest):
+                check_value(rest[k + 1], gcd, "git " + name, depth)
+                k += 1
+        k += 1
 
-for v in (v_ifs, IFS_RE.sub("", cmd)):
-    cd = None
-    for seg in segments(tokenize(v)):
-        i = 0
-        while i < len(seg) and (seg[i] in PREFIXES or os.path.basename(seg[i]) in PREFIXES
-                                or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", seg[i])
-                                or (i > 0 and seg[i].startswith("-") and os.path.basename(seg[i - 1]) in ("env", "nice"))):
+def cmd_start(seg):
+    """Index of the command word after wrappers, VAR= and env options; the VAR= pairs; env -S strings."""
+    i, assigns, inline = 0, [], []
+    while i < len(seg):
+        t = seg[i]
+        b = os.path.basename(t)
+        m = ASSIGN.match(t)
+        if m:
+            assigns.append((m.group(1), m.group(2))); i += 1; continue
+        if b == "env":
             i += 1
-        env = {}
-        for tok in seg[:i]:
-            m = ASSIGN.match(tok)
-            if m:
-                env[m.group(1)] = m.group(2)
-                if m.group(1) in RUN_VARS:
-                    check_value(m.group(2), cd, m.group(1))
+            while i < len(seg):
+                a = seg[i]
+                if a in ("-u", "--unset", "-C", "--chdir", "-P") and i + 1 < len(seg):
+                    i += 2; continue
+                if a in ("-S", "--split-string") and i + 1 < len(seg):
+                    inline.append(seg[i + 1]); i += 2; continue
+                if a.startswith("--split-string="):
+                    inline.append(a.split("=", 1)[1]); i += 1; continue
+                if a == "--":
+                    i += 1; break
+                if a.startswith("-"):
+                    i += 1; continue
+                break
+            continue
+        if b == "nice":
+            i += 1
+            if i < len(seg) and seg[i] == "-n":
+                i += 2
+            elif i < len(seg) and seg[i].startswith("-"):
+                i += 1
+            continue
+        if t in PREFIXES or b in PREFIXES:
+            i += 1
+            while i < len(seg) and seg[i].startswith("-") and b in ("command", "exec", "time"):
+                i += 2 if (b == "exec" and seg[i] == "-a") else 1
+            continue
+        break
+    return i, assigns, inline
+
+def scan_command(text, cd, depth=0, what=None):
+    """Scripts, env vars and git config a command (or an inline command string) runs."""
+    if depth > MAX_DEPTH:
+        unreadable.append("deeply nested command")
+        return
+    for seg in segments(tokenize(text)):
+        i, assigns, inline = cmd_start(seg)
+        env = env_assignments(assigns, cd, depth)
+        for s in inline:
+            scan_command(s, cd, depth + 1, what)
         if i >= len(seg):
             continue
         w, args = seg[i], seg[i + 1:]
         base = os.path.basename(w)
         if base in EXPORTS:
-            for a in args:
-                m = ASSIGN.match(a)
-                if m and m.group(1) in RUN_VARS:
-                    check_value(m.group(2), cd, m.group(1))
+            env_assignments([(m.group(1), m.group(2)) for m in (ASSIGN.match(a) for a in args) if m], cd, depth)
             continue
         if base == "git":
-            check_git(args, cd, env)
+            check_git(args, cd, env, depth)
         # A named launchd script anywhere in a non-read-only command: deny.
-        if base not in READ_ONLY:
+        if base not in READ_ONLY or what:
             for a in args:
                 if a not in ("<", ">", ">>") and is_named(a, resolve(a, cd)[1]):
-                    deny("runs launchd script " + os.path.basename(a))
+                    deny((what + " runs" if what else "runs") + " launchd script " + os.path.basename(a))
         if base == "cd":
-            target = args[0] if args else home
-            _, absd = resolve(target, cd)
+            _, absd = resolve(args[0] if args else home, cd)
             cd = absd if absd and os.path.isdir(absd) else cd
             continue
+        if base == "eval":
+            scan_command(" ".join(args), cd, depth + 1, what)
+            continue
         if base in SHELLS:
-            j, target = 0, None
+            j, target, inline_c = 0, None, None
             while j < len(args):
                 a = args[j]
                 if a == "<" and j + 1 < len(args):
@@ -605,17 +726,21 @@ for v in (v_ifs, IFS_RE.sub("", cmd)):
                     break
                 if a.startswith(("-", "+")):
                     if a in ("-o", "+o", "-O", "+O"):
-                        j += 1
-                    elif "c" in a.lstrip("-+") and not a.startswith("--"):
-                        break  # inline -c string: its words were checked above
+                        j += 2
+                        continue
+                    if "c" in a.lstrip("-+") and not a.startswith("--"):
+                        inline_c = args[j + 1] if j + 1 < len(args) else ""
+                        break
                     j += 1
                     continue
                 target = a
                 break
-            if target:
+            if inline_c is not None:
+                scan_command(inline_c, cd, depth + 1, what)
+            elif target:
                 check_script(target, cd)
             else:
-                unreadable.append("script read from stdin or -c")
+                unreadable.append("script read from stdin")
             continue
         if base in ("source", "."):
             if args:
@@ -624,14 +749,17 @@ for v in (v_ifs, IFS_RE.sub("", cmd)):
         if w.lower().endswith(SCRIPT_EXT) or "/" in w:
             check_script(w, cd)
 
+for v in (v_ifs, IFS_RE.sub("", cmd)):
+    scan_command(v, None)
+
 if unreadable:
     ask("could not read script " + unreadable[0])
 if clean and not hit:
     ask("runs script " + clean[0] + "; no launchd/sudo/power words found in it")
-if re.search(r"(?:^|[\s;&|(])(?:GIT_[A-Za-z0-9_]*|LESS[A-Za-z0-9_]*|PAGER|MANPAGER|EDITOR|VISUAL|SSH_ASKPASS)=", cmd):
+if re.search(r"(?:^|[\s;&|(`{\"'\\])(?:GIT_[A-Za-z0-9_]*|LESS[A-Za-z0-9_]*|PAGER|MANPAGER|EDITOR|VISUAL|SSH_ASKPASS)\+?=", cmd):
     ask("it sets a GIT_*/LESS*/PAGER/EDITOR variable that can run a program")
-if re.search(r"(?:^|[^A-Za-z0-9_-])git(?:\s[^;&|\n]*)?\s(?:-c|--config-env)(?:[\s=]|$)", cmd):
-    ask("it passes git a -c/--config-env setting that can run a program")
+if re.search(r"(?:^|[^A-Za-z0-9_-])g(?:\\|''|\"\")*i(?:\\|''|\"\")*t\b.*\s[\"']?(?:-c|--config-env|--upload-pack|--receive-pack|--exec)(?:[\"']?(?:[\s=]|$))", cmd):
+    ask("it passes git a -c/--config-env/--upload-pack setting that can run a program")
 if hit:
     ask("it mentions " + hit + " only as text in a read-only command")
 ask("it contains a launchd/sudo/power word inside another word, or a script-run pattern")

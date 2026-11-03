@@ -1,5 +1,5 @@
 #!/bin/sh
-# Tests for the Cursor deny hook (v2.3). Run from the repo root:
+# Tests for the Cursor deny hook (v2.4). Run from the repo root:
 #   sh .cursor/hooks/test-deny-dangerous-shell.sh
 # Exits nonzero if any case gets the wrong result.
 #
@@ -302,6 +302,57 @@ for cmd in 'git -c core.pager=./clean.sh log' 'git -c core.pager=less log' 'git 
   check ask "git -c, clean or unknown: $cmd" "$(jc "$cmd" "$R")"
 done
 
+# --- 4d. v2.4: continuations, inline shells, git config sources --------
+printf '#!/bin/sh\n%s list\n' "$LC" > "$R/bad"; chmod +x "$R/bad"
+mkdir -p "$R/d s" "$T/cfg"
+printf '#!/bin/sh\n%s list\n' "$LC" > "$R/d s/bad.sh"
+printf '#!/bin/sh\necho ok\n' > "$R/d s/clean.sh"; chmod +x "$R/d s/bad.sh" "$R/d s/clean.sh"
+printf '[core]\n\tpager = ./bad.sh\n' > "$R/evil.cfg"
+printf '[core]\n\tpager = less -R\n[user]\n\tname = x\n' > "$R/clean.cfg"
+printf '[core]\n\tpager = ./bad.sh\n' > "$T/cfg/evil.cfg"
+printf '[alias]\n\tx = "!./bad.sh"\n' > "$T/cfg/alias.cfg"
+printf '[include]\n\tpath = evil.cfg\n' > "$T/cfg/nest.cfg"
+printf '[includeIf "gitdir:/"]\n\tpath = alias.cfg\n' > "$T/cfg/nestif.cfg"
+NLC=$(printf 'git \\\n -c core.pager=./bad log')
+NLC2=$(printf 'git -c \\\ncore.pager=./bad log')
+NLV=$(printf 'GIT_PAGER=./bad \\\n  git log')
+for cmd in "$NLC" "$NLC2" "$NLV" \
+           "sh -c 'GIT_PAGER=./bad.sh git log'" "bash -c 'GIT_PAGER=./bad.sh git log'" \
+           "bash -lc 'git -c core.pager=./bad log'" "sh -c \"sh -c 'GIT_PAGER=./bad git log'\"" \
+           'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=./bad.sh git log' \
+           "GIT_CONFIG_PARAMETERS=\"'core.pager'='./bad.sh'\" git log" \
+           'export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=./bad.sh; git log' \
+           "git -c include.path=$T/cfg/evil.cfg log" "git -c include.path=$T/cfg/alias.cfg x" \
+           "git -c includeIf.onbranch:main.path=$T/cfg/evil.cfg log" "git -c include.path=$T/cfg/nest.cfg log" \
+           "git -c include.path=$T/cfg/nestif.cfg x" \
+           'git -c remote.origin.uploadpack=./bad.sh fetch' 'git -c remote.origin.receivepack=./bad.sh push' \
+           'GIT_SSH="./d s/bad.sh" git fetch' 'GIT_ASKPASS="./d s/bad.sh" git push' \
+           'SSH_ASKPASS="./d s/bad.sh" ssh host true' \
+           "LESSOPEN='|-./bad.sh %s' less README" "LESSOPEN='||-./bad.sh %s' less README" \
+           'GIT_PAGER+=./bad git log' 'env -u FOO GIT_PAGER=./bad git log' \
+           'env -u FOO -i - -- GIT_PAGER=./bad git log' "env 'GIT_PAGER=./bad' git log" \
+           'echo `GIT_PAGER=./bad git log`' '`GIT_PAGER=./bad git log`' \
+           '\git -c core.pager=./bad log' "g''it -c core.pager=./bad log" 'g""it -c core.pager=./bad log' \
+           "eval 'GIT_PAGER=./bad.sh git log'" 'eval git -c core.pager=./bad log' \
+           'GIT_CONFIG_GLOBAL=./evil.cfg git log' 'GIT_CONFIG_SYSTEM=./evil.cfg git log' 'GIT_CONFIG=./evil.cfg git log' \
+           'git fetch --upload-pack=./bad.sh origin' 'git fetch --upload-pack ./bad.sh origin' \
+           'git push --receive-pack=./bad.sh origin' 'git push --receive-pack ./bad.sh origin' \
+           'git ls-remote --upload-pack=./bad.sh origin' 'git clone -u ./bad.sh src dst'; do
+  check deny "v2.4: $(printf '%s' "$cmd" | tr '\n' ' ')" "$(jc "$cmd" "$R")"
+done
+for cmd in "sh -c 'GIT_PAGER=./clean.sh git log'" "sh -c 'ls'" 'eval echo hi' \
+           'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=./clean.sh git log' \
+           "GIT_CONFIG_PARAMETERS=\"'core.pager'='less'\" git log" 'git -c include.path=./clean.cfg log' \
+           'git -c include.path=./nope.cfg log' 'GIT_CONFIG_GLOBAL=./clean.cfg git log' 'GIT_CONFIG_GLOBAL=/dev/null git log' \
+           'GIT_SSH="./d s/clean.sh" git fetch' 'GIT_SSH="./d s/nope.sh" git fetch' \
+           "LESSOPEN='|-./clean.sh %s' less README" 'GIT_PAGER+=./clean.sh git log' \
+           'env -u FOO GIT_PAGER=./clean.sh git log' 'git fetch --upload-pack=./clean.sh origin' \
+           'git fetch --upload-pack=./nope.sh origin' 'git push --receive-pack ./clean.sh origin'; do
+  check ask "v2.4, clean or missing: $cmd" "$(jc "$cmd" "$R")"
+done
+printf '[include]\n\tpath = loop.cfg\n' > "$T/cfg/loop.cfg"
+check ask "v2.4, include loop stops: git -c include.path=cfg/loop.cfg log" "$(jc "git -c include.path=$T/cfg/loop.cfg log" "$R")"
+
 # --- 5. The hook never auto-approves ------------------------------------
 if grep -q '"allow"' "$HOOK"; then bad 'hook script contains "allow"'; else ok 'hook script never contains "allow"'; fi
 
@@ -345,6 +396,15 @@ must_match = [
     "git --config-env=core.pager=P log", "git --config-env core.editor=E commit",
     "/usr/bin/git -c x=y status", "cd a && git -c a=b log", "echo $(git -c a=b log)",
     "git --no-pager -c core.pager=x log", "x; git -c alias.x='!y' x",
+    "git \\\n -c core.pager=x log", "git -c \\\ncore.pager=x log", "sh -c 'GIT_PAGER=x git log'",
+    "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=x git log",
+    "GIT_CONFIG_PARAMETERS=\"'core.pager'='x'\" git log", "git -c include.path=/a/b.cfg log",
+    "git -c remote.origin.uploadpack=x fetch", 'GIT_SSH="./d s/x" git fetch', "LESSOPEN='|-x %s' less f",
+    "GIT_PAGER+=x git log", "env -u FOO GIT_PAGER=x git log", "env 'GIT_PAGER=x' git log",
+    "`GIT_PAGER=x git log`", "\\git -c a=b log", "g''it -c a=b log", 'g""it -c a=b log',
+    "eval 'GIT_PAGER=x git log'", "eval git log", "GIT_CONFIG_GLOBAL=x git log",
+    "git fetch --upload-pack=x origin", "git fetch --upload-pack x origin",
+    "git push --receive-pack=x origin", "git push --receive-pack x origin", "git push --exec=x origin",
 ]
 must_not_match = [
     "git status", "python3 -m pytest -q", "npm test", "grep -r pseudocode notes.txt",
@@ -355,6 +415,7 @@ must_not_match = [
     "cat .gitconfig", "echo $GIT_DIR", "git log --format=%H",
     "git commit -m 'update docs'", "git commit -am wip", "git diff --cached", "git status -s",
     "git log --oneline -n 5", "git config --get core.pager", "legit -c x", "git log | grep -c x",
+    "git push origin main", "git fetch origin", "medieval x", "evaluate.py", "git --exec-path",
 ]
 for c in must_match:
     r(bool(pat.search(c)) and bool(pat.fullmatch(c)), "matcher hits      " + c.replace("\n", "\\n"))
