@@ -1,21 +1,30 @@
 #!/bin/sh
-# Cursor beforeShellExecution hook: fail-closed deny list (v2).
+# Cursor beforeShellExecution hook: fail-closed deny list (v2.1).
 #
 # hooks.json only routes a command here when its "matcher" regex sees:
 #   - launchctl, sudo, reboot, shutdown, halt, pmset, launchagents or
 #     launchdaemons (any case), also with \ '' "" ${...} $@ $* between letters
 #   - a script run in command position: ./x, ../x, dir/x, ~/x, $HOME/x,
 #     anything ending .sh/.bash/.zsh/.command, sh/bash/zsh/dash/ksh, source, .
+#     (a quoted path such as "./dir with space/x.sh" counts too)
 #   - the named launchd scripts (deploy/macos/install.sh, *-tv-helper.sh)
 # Every other command (ls, git, grep, npm, ...) never reaches this script and
 # keeps Cursor's normal approval flow.
 #
 # Decisions (this script never auto-approves anything):
-#   deny - launchctl, sudo, reboot, shutdown, halt or pmset as a word, or any
-#          mention of LaunchAgents/LaunchDaemons, checked on the raw command
+#   deny - launchctl, sudo, reboot, shutdown, halt or pmset as a command
+#          (also after ; && || | and env/command/exec/nohup/xargs wrappers),
+#          or any of those words or LaunchAgents/LaunchDaemons in the
+#          arguments of a command that is not text-only, inside $( ),
+#          backticks, <( ), sh -c or eval, in a command that pipes into a
+#          shell or xargs, or as a redirect target. Checked on the raw command
 #          and on normalized copies (${IFS}/$IFS -> space; quotes and
 #          backslashes removed; ${...}, $@, $* removed), so launch""ctl,
 #          l\aunchctl and su''do are caught
+#   ask  - the word only appears as text in the arguments of a read-only
+#          tool: git commit/log/grep/diff/show/blame, grep, rg, ag, cat,
+#          head, tail, less, more, wc, sed -n (no -i), ls (no LaunchAgents/
+#          LaunchDaemons path), echo/printf with no redirect
 #   deny - running a named launchd script (deploy/macos/install.sh or
 #          build-*-tv-helper.sh) by any route; only read-only tools such as
 #          cat/grep/git/ls on them get ask
@@ -38,7 +47,11 @@
 #   - an absolute path without a script extension (/some/dir/tool) does not
 #     reach the hook; paths under /usr, /bin, /sbin, /opt/homebrew, /System
 #     are never scanned
-#   - piping into a shell (curl ... | sh) and eval only get ask
+#   - piping into a shell (curl ... | sh) with no blocked word only gets ask
+#   - read-only tools that can still run code are trusted: GNU sed -n with
+#     an "e" command, less with a LESSOPEN preprocessor, git with an
+#     aliased or configured pager/diff driver
+#   - a word glued to a short option (git grep -Olaunchctl) is not seen
 #   - $'\x..' quoting, command substitution that builds a word, aliases and
 #     variables holding a word (C=launchctl; $C) are not decoded
 #   - "ask" runs automatically when an agent uses --force or yolo mode, so
@@ -104,25 +117,13 @@ cmd = payload["command"]
 if not isinstance(cmd, str):
     deny("command field is not a string")
 
-# --- 1. Words in the command, raw and normalized ---------------------------
 IFS_RE = re.compile(r"\$\{IFS[^}]*\}|\$IFS")
-v_ifs = IFS_RE.sub(" ", cmd)
-v_strip = re.sub(r"[\"'\\]", "", v_ifs)
-v_noexp = re.sub(r"\$\{[^}]*\}|\$[@*]", "", re.sub(r"[\"'\\]", "", IFS_RE.sub("", cmd)))
-variants = [cmd, v_ifs, v_strip, v_noexp]
-
 WORDS = re.compile(
     r"(?<![A-Za-z0-9_-])(launchctl|sudo|reboot|shutdown|halt|pmset)(?![A-Za-z0-9_-])",
     re.IGNORECASE,
 )
 LAUNCHD_DIRS = re.compile(r"launch(agents|daemons)", re.IGNORECASE)
-
-for v in variants:
-    m = WORDS.search(v)
-    if m:
-        deny("command uses '" + m.group(1).lower() + "'")
-    if LAUNCHD_DIRS.search(v):
-        deny("command mentions LaunchAgents/LaunchDaemons")
+BLOCKED = {"launchctl", "sudo", "reboot", "shutdown", "halt", "pmset"}
 
 # --- 2. Scripts the command runs ------------------------------------------
 SCAN = re.compile(
@@ -194,6 +195,103 @@ def is_named(p, absp):
         if x and NAMED.search(x.replace("\\", "/")):
             return True
     return False
+
+# --- 1. Blocked words in the command ---------------------------------------
+# Normalized copies: ${IFS}/$IFS -> space; quotes and backslashes removed;
+# ${...}, $@, $* removed. So launch""ctl, l\aunchctl and su''do are caught.
+v_ifs = IFS_RE.sub(" ", cmd)
+v_strip = re.sub(r"[\"'\\]", "", v_ifs)
+v_noexp = re.sub(r"\$\{[^}]*\}|\$[@*]", "", re.sub(r"[\"'\\]", "", IFS_RE.sub("", cmd)))
+variants = [cmd, v_ifs, v_strip, v_noexp]
+
+def word_in(text):
+    m = WORDS.search(text)
+    if m:
+        return "'" + m.group(1).lower() + "'"
+    if LAUNCHD_DIRS.search(text):
+        return "LaunchAgents/LaunchDaemons"
+    return None
+
+hit = None
+for v in variants:
+    hit = hit or word_in(v)
+
+# A word hit is only text (ask) when every simple command that holds it is a
+# read-only / text-only tool and the word sits in its arguments. Anything
+# else denies: the word as a command (also after ; && || | and wrappers),
+# inside $( ), backticks or <( ), with eval / sh -c / a pipe into a shell,
+# or a redirect into LaunchAgents/LaunchDaemons.
+TEXT_TOOLS = {"grep", "egrep", "fgrep", "rg", "ag", "cat", "head", "tail", "less",
+              "more", "wc", "ls", "sed", "echo", "printf", "git"}
+GIT_TEXT = {"commit", "log", "grep", "diff", "show", "blame"}
+RUNNERS = SHELLS | {"eval", "source", ".", "xargs", "exec"}
+WRAPPERS = PREFIXES | {"xargs"}
+
+def strip_exp(t):
+    return re.sub(r"\$\{[^}]*\}|\$[@*]", "", t)
+
+def text_only(w, args):
+    redirect_to = [args[i + 1] for i, a in enumerate(args[:-1]) if a.startswith((">", "&>")) or a == ">|"]
+    if any(LAUNCHD_DIRS.search(t) for t in redirect_to):
+        return False
+    if w not in TEXT_TOOLS:
+        return False
+    if w in ("echo", "printf"):
+        return not any(a.startswith((">", "&>")) for a in args)
+    if w == "ls":
+        return not any(LAUNCHD_DIRS.search(a) for a in args)
+    if w == "rg":
+        return not any(a.startswith("--pre") for a in args)
+    if w == "sed":
+        quiet = any(a in ("-n", "--quiet", "--silent") or re.match(r"^-[a-zA-Z]*n[a-zA-Z]*$", a) for a in args)
+        return quiet and not any(a.startswith(("-i", "--in-place")) or re.match(r"^-[a-zA-Z]*i", a) for a in args)
+    if w == "git":
+        i = 0
+        while i < len(args) and args[i].startswith("-"):
+            if args[i] == "-c" or args[i].startswith("--config-env"):
+                return False
+            i += 2 if args[i] in ("-C", "--git-dir", "--work-tree", "--namespace") else 1
+        if i >= len(args) or args[i] not in GIT_TEXT:
+            return False
+        if args[i] == "grep" and any(a.startswith(("-O", "--open-files-in-pager")) for a in args):
+            return False
+        return True
+    return True
+
+if hit:
+    if "$(" in cmd or "`" in cmd or "<(" in cmd:
+        deny("command uses " + hit + " inside a command substitution")
+    for v in (cmd, IFS_RE.sub(" ", cmd), strip_exp(IFS_RE.sub("", cmd))):
+        try:
+            lx = shlex.shlex(v.replace("\n", " ; "), posix=True, punctuation_chars=True)
+            lx.whitespace_split = True
+            lx.commenters = ""
+            toks = list(lx)
+        except ValueError:
+            deny("command uses " + hit + " and could not be parsed")
+        segs = list(segments(toks))
+        runs_code = False
+        for seg in segs:
+            i = 0
+            while i < len(seg) and (strip_exp(seg[i]) in WRAPPERS or os.path.basename(seg[i]) in WRAPPERS
+                                    or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", seg[i])
+                                    or (i > 0 and seg[i].startswith("-") and os.path.basename(seg[i - 1]) in ("env", "nice", "xargs"))):
+                if os.path.basename(seg[i]) in ("xargs", "exec"):
+                    runs_code = True
+                i += 1
+            if i >= len(seg):
+                continue
+            w = os.path.basename(strip_exp(seg[i])).lower()
+            args = [strip_exp(a) for a in seg[i + 1:]]
+            if w in BLOCKED:
+                deny("command uses '" + w + "'")
+            if w in RUNNERS:
+                runs_code = True
+            found = word_in(" ".join([w] + args))
+            if found and not text_only(w, args):
+                deny("command uses " + found)
+        if runs_code:
+            deny("command uses " + hit + " and runs code through a shell, eval or xargs")
 
 unreadable = []
 clean = []
@@ -270,7 +368,9 @@ for v in (v_ifs, IFS_RE.sub("", cmd)):
 
 if unreadable:
     ask("could not read script " + unreadable[0])
-if clean:
+if clean and not hit:
     ask("runs script " + clean[0] + "; no launchd/sudo/power words found in it")
+if hit:
+    ask("it mentions " + hit + " only as text in a read-only command")
 ask("it contains a launchd/sudo/power word inside another word, or a script-run pattern")
 PYEOF
