@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/deny-dangerous-shell.sh",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ]
+  }
+}
