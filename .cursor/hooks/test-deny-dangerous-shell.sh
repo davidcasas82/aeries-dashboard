@@ -350,6 +350,11 @@ for cmd in "sh -c 'GIT_PAGER=./clean.sh git log'" "sh -c 'ls'" 'eval echo hi' \
            'git fetch --upload-pack=./nope.sh origin' 'git push --receive-pack ./clean.sh origin'; do
   check ask "v2.4, clean or missing: $cmd" "$(jc "$cmd" "$R")"
 done
+for cmd in "\$'\\x6caunchctl' list" "\$'\\154aunchctl' list" "\$'\\u006caunchctl' list" \
+           "echo x; \$'\\x73udo' true" "GIT_PAGER=\$'./b\\x61d' git log" "git -c core.pager=\$'./b\\141d' log"; do
+  check deny "v2.4, \$'...' decoded: $cmd" "$(jc "$cmd" "$R")"
+done
+check ask "v2.4, \$'...' clean: printf \$'a\\x41b\\n'" "$(jc "printf \$'a\\x41b\\n'" "$R")"
 printf '[include]\n\tpath = loop.cfg\n' > "$T/cfg/loop.cfg"
 check ask "v2.4, include loop stops: git -c include.path=cfg/loop.cfg log" "$(jc "git -c include.path=$T/cfg/loop.cfg log" "$R")"
 
@@ -405,6 +410,7 @@ must_match = [
     "eval 'GIT_PAGER=x git log'", "eval git log", "GIT_CONFIG_GLOBAL=x git log",
     "git fetch --upload-pack=x origin", "git fetch --upload-pack x origin",
     "git push --receive-pack=x origin", "git push --receive-pack x origin", "git push --exec=x origin",
+    "$'\\x6c' list", "x $'\\154'", "$'\\u006c'",
 ]
 must_not_match = [
     "git status", "python3 -m pytest -q", "npm test", "grep -r pseudocode notes.txt",
@@ -416,6 +422,7 @@ must_not_match = [
     "git commit -m 'update docs'", "git commit -am wip", "git diff --cached", "git status -s",
     "git log --oneline -n 5", "git config --get core.pager", "legit -c x", "git log | grep -c x",
     "git push origin main", "git fetch origin", "medieval x", "evaluate.py", "git --exec-path",
+    "printf $'a\\tb\\n'", "echo $'it\\'s'",
 ]
 for c in must_match:
     r(bool(pat.search(c)) and bool(pat.fullmatch(c)), "matcher hits      " + c.replace("\n", "\\n"))

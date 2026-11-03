@@ -1,6 +1,11 @@
 #!/bin/sh
 # Cursor beforeShellExecution hook: fail-closed deny list (v2.4).
 #
+# This is a speed bump, not a security boundary. It stops an agent from
+# casually or accidentally running launchd, sudo or power commands, and it
+# catches the known bypasses listed below. A determined command can still
+# get past it (see Known gaps), and "ask" is skipped in --force/yolo mode.
+#
 # hooks.json only routes a command here when its "matcher" regex sees:
 #   - launchctl, sudo, reboot, shutdown, halt, pmset, launchagents or
 #     launchdaemons (any case), also with \ '' "" ${...} $@ $* between letters
@@ -88,8 +93,8 @@
 #   - a LaunchAgents/LaunchDaemons path built at run time (cd ~/Library &&
 #     sed -n "w Launch$X/x") or written to by a pattern-only option is missed
 #   - a word glued to a short option (git grep -Olaunchctl) is not seen
-#   - $'\x..' quoting, command substitution that builds a word, aliases and
-#     variables holding a word (C=launchctl; $C) are not decoded
+#   - command substitution that builds a word, aliases and variables holding
+#     a word (C=launchctl; $C) are not decoded ($'\x..' quoting is decoded)
 #   - "ask" runs automatically when an agent uses --force or yolo mode, so
 #     only "deny" is real protection
 #
@@ -154,6 +159,36 @@ if not isinstance(cmd, str):
     deny("command field is not a string")
 # The shell drops backslash-newline before it splits words; do the same.
 cmd = re.sub(r"\\\r?\n", "", cmd)
+
+# $'...' (ANSI-C quoting): decode it, so $'\x6c...' is read as the word it spells.
+ANSI_ESC = {"n": "\n", "t": "\t", "r": "\r", "a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b",
+            "f": "\f", "v": "\v", "\\": "\\", "'": "'", '"': '"', "?": "?"}
+def ansi_c(m):
+    body, res, i = m.group(1), [], 0
+    while i < len(body):
+        ch = body[i]
+        if ch != "\\" or i + 1 >= len(body):
+            res.append(ch); i += 1; continue
+        n = body[i + 1]
+        num = None
+        if n in "xuU":
+            num = re.match(r"[0-9A-Fa-f]{1,%d}" % {"x": 2, "u": 4, "U": 8}[n], body[i + 2:])
+            base, skip = 16, 2
+        elif n in "01234567":
+            num = re.match(r"[0-7]{1,3}", body[i + 1:])
+            base, skip = 8, 1
+        if num:
+            try:
+                res.append(chr(int(num.group(0), base)))
+            except (ValueError, OverflowError):
+                res.append("?")
+            i += skip + len(num.group(0))
+        elif n in ANSI_ESC:
+            res.append(ANSI_ESC[n]); i += 2
+        else:
+            res.append("\\" + n); i += 2
+    return "'" + "".join(res).replace("'", "'\\''") + "'"
+cmd = re.sub(r"\$'((?:[^'\\]|\\.)*)'", ansi_c, cmd)
 
 IFS_RE = re.compile(r"\$\{IFS[^}]*\}|\$IFS")
 WORDS = re.compile(
