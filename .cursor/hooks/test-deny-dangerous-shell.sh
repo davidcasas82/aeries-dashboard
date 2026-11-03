@@ -1,5 +1,5 @@
 #!/bin/sh
-# Tests for the Cursor deny hook (v2.2). Run from the repo root:
+# Tests for the Cursor deny hook (v2.5). Run from the repo root:
 #   sh .cursor/hooks/test-deny-dangerous-shell.sh
 # Exits nonzero if any case gets the wrong result.
 #
@@ -249,6 +249,151 @@ else
 fi
 check ask "this test file passes its own scan" "$(jc "sh $DIR/test-deny-dangerous-shell.sh" "$R")"
 
+# --- 4b. Scripts named by program-running env vars (v2.3, gap 1) -------
+mkdir -p "$R/hooks" "$R/cleanhooks"
+printf '#!/bin/sh\n%s list\n' "$LC" > "$R/hooks/pre-commit"
+printf '#!/bin/sh\necho checked\n' > "$R/cleanhooks/pre-commit"
+chmod +x "$R/hooks/pre-commit" "$R/cleanhooks/pre-commit"
+for cmd in 'GIT_EXTERNAL_DIFF=./bad.sh git diff' 'GIT_PAGER=./bad.sh git log' 'PAGER=./bad.sh man ls' \
+           'MANPAGER=./upper.sh man ls' 'EDITOR=./tools/run git commit' 'VISUAL=./bad.sh git commit' \
+           'LESSOPEN="|./bad.sh %s" less README.md' 'LESSOPEN="||./bad.sh %s" less README.md' \
+           'GIT_SSH=./bad.sh git fetch' 'GIT_SSH_COMMAND="sh ./bad.sh -x" git fetch' \
+           'GIT_SSH_COMMAND="bash -c ./bad.sh" git fetch' 'GIT_ASKPASS=./upper.sh git push' \
+           'GIT_EDITOR=./power.command git rebase -i HEAD~2' 'GIT_SEQUENCE_EDITOR=sub/agents.zsh git rebase -i HEAD~2' \
+           'SSH_ASKPASS=./bad.sh ssh host true' 'env GIT_PAGER=./bad.sh git log' 'env -i GIT_PAGER=./bad.sh git log' \
+           'export GIT_PAGER=./bad.sh; git log' 'GIT_PAGER="cd sub && ../bad.sh" git log' \
+           'GIT_PAGER="source ./bad.sh" git log' 'GIT_PAGER="FOO=1 ./bad.sh" git log' \
+           'GIT_PAGER=deploy/macos/install.sh git log' 'GIT_EXTERNAL_DIFF="sh scripts/build-home-tv-helper.sh" git diff' \
+           "GIT_PAGER=\"$LC list\" git log" "GIT_PAGER=\"'./dir with space/x.sh'\" git log"; do
+  check deny "env var script: $cmd" "$(jc "$cmd" "$R")"
+done
+check deny "env var script, relative to cwd: GIT_EXTERNAL_DIFF=../bad.sh git diff" "$(jc 'GIT_EXTERNAL_DIFF=../bad.sh git diff' "$R/sub")"
+check deny "env var script via workspace_roots: GIT_PAGER=./bad.sh git log" "$(jc 'GIT_PAGER=./bad.sh git log' '' "$R")"
+for cmd in 'GIT_PAGER=./clean.sh git log' 'GIT_EXTERNAL_DIFF=./nope.sh git diff' 'SSH_ASKPASS=./clean.sh ssh host true' \
+           'GIT_SSH_COMMAND="ssh -o BatchMode=yes -i ~/.ssh/none" git fetch' 'GIT_PAGER="less -R" git log' \
+           'LESSOPEN="|./clean.sh %s" less README.md' 'EDITOR=$X/bad.sh git commit' 'GIT_PAGER=./sub git log'; do
+  check ask "env var, clean or unreadable: $cmd" "$(jc "$cmd" "$R")"
+done
+if [ -r "$R/locked.sh" ]; then
+  echo "skip  unreadable env var script (running as a user who can read mode 000 files)"
+else
+  check ask "env var, unreadable script: GIT_PAGER=./locked.sh git log" "$(jc 'GIT_PAGER=./locked.sh git log' "$R")"
+fi
+
+# --- 4c. git -c / --config-env commands (v2.3, gap 2) -------------------
+for cmd in 'git -c core.pager=./bad.sh log' 'git -c core.Pager=./bad.sh log' 'git -c pager.log=./upper.sh log' \
+           'git -c core.editor=./tools/run commit' 'git -c sequence.editor=./bad.sh rebase -i HEAD~2' \
+           'git -c diff.external=./bad.sh diff' 'git -c diff.x.textconv=./bad.sh diff' \
+           'git -c difftool.x.cmd="sh ./bad.sh" difftool' 'git -c core.sshCommand="bash ./bad.sh" fetch' \
+           'git -c core.askPass=./bad.sh push' 'git -c core.fsmonitor=./bad.sh status' \
+           "git -c alias.x='!./bad.sh' x" "git -c credential.helper='!./bad.sh' push" \
+           'git -c alias.y="-c core.pager=./bad.sh log" y' 'git -c filter.x.smudge=./bad.sh checkout .' \
+           'git -c core.hooksPath=hooks commit -m ok' 'git -C sub -c core.pager=../bad.sh log' \
+           'git --no-pager -c core.pager=./bad.sh log' 'P=./bad.sh git --config-env=core.pager=P log' \
+           'P=./bad.sh git --config-env core.editor=P commit' 'git -c core.pager=deploy/macos/install.sh log' \
+           "git -c core.pager=\"$LC list\" log" "git -c pager.show=\"$SU less\" show" \
+           'cd sub && git -c core.pager=../bad.sh log' 'echo x; git -c core.pager=./bad.sh log'; do
+  check deny "git -c: $cmd" "$(jc "$cmd" "$R")"
+done
+for cmd in 'git -c core.pager=./clean.sh log' 'git -c core.pager=less log' 'git -c core.pager=./nope.sh log' \
+           'git -c user.name=x commit -m ok' 'git -c core.hooksPath=cleanhooks commit -m ok' \
+           'git -c core.hooksPath=nodir commit -m ok' 'git --config-env=core.pager=UNSET_VAR log' \
+           'git -c color.ui=false log' 'git -c core.quotepath=off status'; do
+  check ask "git -c, clean or unknown: $cmd" "$(jc "$cmd" "$R")"
+done
+
+# --- 4d. v2.4: continuations, inline shells, git config sources --------
+printf '#!/bin/sh\n%s list\n' "$LC" > "$R/bad"; chmod +x "$R/bad"
+mkdir -p "$R/d s" "$T/cfg"
+printf '#!/bin/sh\n%s list\n' "$LC" > "$R/d s/bad.sh"
+printf '#!/bin/sh\necho ok\n' > "$R/d s/clean.sh"; chmod +x "$R/d s/bad.sh" "$R/d s/clean.sh"
+printf '[core]\n\tpager = ./bad.sh\n' > "$R/evil.cfg"
+printf '[core]\n\tpager = less -R\n[user]\n\tname = x\n' > "$R/clean.cfg"
+printf '[core]\n\tpager = ./bad.sh\n' > "$T/cfg/evil.cfg"
+printf '[alias]\n\tx = "!./bad.sh"\n' > "$T/cfg/alias.cfg"
+printf '[include]\n\tpath = evil.cfg\n' > "$T/cfg/nest.cfg"
+printf '[includeIf "gitdir:/"]\n\tpath = alias.cfg\n' > "$T/cfg/nestif.cfg"
+NLC=$(printf 'git \\\n -c core.pager=./bad log')
+NLC2=$(printf 'git -c \\\ncore.pager=./bad log')
+NLV=$(printf 'GIT_PAGER=./bad \\\n  git log')
+for cmd in "$NLC" "$NLC2" "$NLV" \
+           "sh -c 'GIT_PAGER=./bad.sh git log'" "bash -c 'GIT_PAGER=./bad.sh git log'" \
+           "bash -lc 'git -c core.pager=./bad log'" "sh -c \"sh -c 'GIT_PAGER=./bad git log'\"" \
+           'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=./bad.sh git log' \
+           "GIT_CONFIG_PARAMETERS=\"'core.pager'='./bad.sh'\" git log" \
+           'export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=./bad.sh; git log' \
+           "git -c include.path=$T/cfg/evil.cfg log" "git -c include.path=$T/cfg/alias.cfg x" \
+           "git -c includeIf.onbranch:main.path=$T/cfg/evil.cfg log" "git -c include.path=$T/cfg/nest.cfg log" \
+           "git -c include.path=$T/cfg/nestif.cfg x" \
+           'git -c remote.origin.uploadpack=./bad.sh fetch' 'git -c remote.origin.receivepack=./bad.sh push' \
+           'GIT_SSH="./d s/bad.sh" git fetch' 'GIT_ASKPASS="./d s/bad.sh" git push' \
+           'SSH_ASKPASS="./d s/bad.sh" ssh host true' \
+           "LESSOPEN='|-./bad.sh %s' less README" "LESSOPEN='||-./bad.sh %s' less README" \
+           'GIT_PAGER+=./bad git log' 'env -u FOO GIT_PAGER=./bad git log' \
+           'env -u FOO -i - -- GIT_PAGER=./bad git log' "env 'GIT_PAGER=./bad' git log" \
+           'echo `GIT_PAGER=./bad git log`' '`GIT_PAGER=./bad git log`' \
+           '\git -c core.pager=./bad log' "g''it -c core.pager=./bad log" 'g""it -c core.pager=./bad log' \
+           "eval 'GIT_PAGER=./bad.sh git log'" 'eval git -c core.pager=./bad log' \
+           'GIT_CONFIG_GLOBAL=./evil.cfg git log' 'GIT_CONFIG_SYSTEM=./evil.cfg git log' 'GIT_CONFIG=./evil.cfg git log' \
+           'git fetch --upload-pack=./bad.sh origin' 'git fetch --upload-pack ./bad.sh origin' \
+           'git push --receive-pack=./bad.sh origin' 'git push --receive-pack ./bad.sh origin' \
+           'git ls-remote --upload-pack=./bad.sh origin' 'git clone -u ./bad.sh src dst'; do
+  check deny "v2.4: $(printf '%s' "$cmd" | tr '\n' ' ')" "$(jc "$cmd" "$R")"
+done
+for cmd in "sh -c 'GIT_PAGER=./clean.sh git log'" "sh -c 'ls'" 'eval echo hi' \
+           'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=./clean.sh git log' \
+           "GIT_CONFIG_PARAMETERS=\"'core.pager'='less'\" git log" 'git -c include.path=./clean.cfg log' \
+           'git -c include.path=./nope.cfg log' 'GIT_CONFIG_GLOBAL=./clean.cfg git log' 'GIT_CONFIG_GLOBAL=/dev/null git log' \
+           'GIT_SSH="./d s/clean.sh" git fetch' 'GIT_SSH="./d s/nope.sh" git fetch' \
+           "LESSOPEN='|-./clean.sh %s' less README" 'GIT_PAGER+=./clean.sh git log' \
+           'env -u FOO GIT_PAGER=./clean.sh git log' 'git fetch --upload-pack=./clean.sh origin' \
+           'git fetch --upload-pack=./nope.sh origin' 'git push --receive-pack ./clean.sh origin'; do
+  check ask "v2.4, clean or missing: $cmd" "$(jc "$cmd" "$R")"
+done
+for cmd in "\$'\\x6caunchctl' list" "\$'\\154aunchctl' list" "\$'\\u006caunchctl' list" \
+           "echo x; \$'\\x73udo' true" "GIT_PAGER=\$'./b\\x61d' git log" "git -c core.pager=\$'./b\\141d' log"; do
+  check deny "v2.4, \$'...' decoded: $cmd" "$(jc "$cmd" "$R")"
+done
+check ask "v2.4, \$'...' clean: printf \$'a\\x41b\\n'" "$(jc "printf \$'a\\x41b\\n'" "$R")"
+printf '[include]\n\tpath = loop.cfg\n' > "$T/cfg/loop.cfg"
+check ask "v2.4, include loop stops: git -c include.path=cfg/loop.cfg log" "$(jc "git -c include.path=$T/cfg/loop.cfg log" "$R")"
+
+# --- 4e. v2.5: exec path, templates, difftool/mergetool, ext::, extcmd ----
+mkdir -p "$R/xdir" "$R/cleanx" "$R/tpl/hooks" "$R/cleantpl/hooks" "$R/notpl"
+printf '#!/bin/sh\n%s list\n' "$LC" > "$R/xdir/git-log"
+printf '#!/bin/sh\necho ok\n' > "$R/cleanx/git-foo"
+printf '#!/bin/sh\n%s list\n' "$LC" > "$R/tpl/hooks/post-checkout"
+printf '#!/bin/sh\necho ok\n' > "$R/cleantpl/hooks/post-checkout"
+chmod +x "$R/xdir/git-log" "$R/cleanx/git-foo" "$R/tpl/hooks/post-checkout" "$R/cleantpl/hooks/post-checkout"
+for cmd in 'git clone -u ./bad.sh src dst' 'git clone --upload-pack=./bad.sh src dst' \
+           'git clone --upload-pack ./bad.sh src dst' 'git clone -u./bad.sh src dst' \
+           "bash -c -- 'GIT_PAGER=./bad git log'" "sh -c -- './bad.sh'" "bash -c -x './bad.sh'" \
+           "bash --norc -c './bad.sh'" "bash -e -c './bad.sh'" "bash -o pipefail -c './bad.sh'" \
+           'git --exec-path=xdir log' 'git --exec-path xdir log' 'git --exec-path=./xdir status' \
+           'GIT_EXEC_PATH=xdir git log' 'export GIT_EXEC_PATH=./xdir; git log' \
+           'GIT_TEMPLATE_DIR=tpl git init' 'git init --template=tpl x' 'git init --template tpl x' \
+           'git clone --template=tpl src dst' 'git clone --template tpl src dst' 'git -c init.templateDir=tpl init x' \
+           'git -c difftool.x.path=./bad.sh difftool' 'git -c mergetool.x.path="./d s/bad.sh" mergetool' \
+           'git -c difftool.x.cmd=./bad.sh difftool' 'git -c mergetool.x.cmd="./bad.sh \$LOCAL" mergetool' \
+           "git -c protocol.ext.allow=always clone 'ext::sh -c ./bad.sh' dst" \
+           "git -c protocol.ext.allow=always fetch 'ext::./bad.sh %S'" \
+           "git -c protocol.ext.allow=always -c remote.origin.url='ext::./bad.sh' fetch" \
+           "GIT_ALLOW_PROTOCOL=ext git clone 'ext::./bad.sh' dst" \
+           'git difftool --extcmd=./bad.sh' 'git difftool --extcmd ./bad.sh' 'git difftool -x ./bad.sh' \
+           'git rebase -x ./bad.sh main' 'git rebase --exec ./bad.sh main' 'git rebase -x./bad.sh main' \
+           'git bisect run ./bad.sh' 'git bisect run sh ./bad.sh arg'; do
+  check deny "v2.5: $cmd" "$(jc "$cmd" "$R")"
+done
+# No false blocks: everyday commands never deny (and the matcher skips most of them, see 6).
+for cmd in 'git clone https://example.com/x.git dir' 'git init' 'git difftool' 'git rebase -i HEAD~3' \
+           'git bisect start' 'git bisect good' 'git bisect bad' 'git rebase -x ./clean.sh main' \
+           "bash -c 'echo hi'" 'git difftool -x ./clean.sh' 'git bisect run ./clean.sh' \
+           'GIT_TEMPLATE_DIR=cleantpl git init' 'GIT_TEMPLATE_DIR=notpl git init' 'git --exec-path=cleanx log' \
+           'git init --template=nodir x' 'git --exec-path' 'git --exec-path log' \
+           "git clone 'ext::./clean.sh' dst" 'git -c difftool.x.path=./clean.sh difftool'; do
+  check ask "v2.5, clean, missing or everyday: $cmd" "$(jc "$cmd" "$R")"
+done
+
 # --- 5. The hook never auto-approves ------------------------------------
 if grep -q '"allow"' "$HOOK"; then bad 'hook script contains "allow"'; else ok 'hook script never contains "allow"'; fi
 
@@ -287,6 +432,28 @@ must_match = [
     'git commit -m "fix halt bug"', "git log --grep " + SU, "grep -n " + LA + " README.md",
     "GIT_PAGER=cat git log", "LESSOPEN='|x %s' less f", "env EDITOR=vim git commit",
     "x=1; GIT_EXTERNAL_DIFF=y git diff",
+    "SSH_ASKPASS=./x ssh host", "GIT_SSH_COMMAND='ssh -i k' git fetch",
+    "git -c core.pager=./x log", "git -c core.pager=less log", "git -C sub -c core.pager=less log",
+    "git --config-env=core.pager=P log", "git --config-env core.editor=E commit",
+    "/usr/bin/git -c x=y status", "cd a && git -c a=b log", "echo $(git -c a=b log)",
+    "git --no-pager -c core.pager=x log", "x; git -c alias.x='!y' x",
+    "git \\\n -c core.pager=x log", "git -c \\\ncore.pager=x log", "sh -c 'GIT_PAGER=x git log'",
+    "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.pager GIT_CONFIG_VALUE_0=x git log",
+    "GIT_CONFIG_PARAMETERS=\"'core.pager'='x'\" git log", "git -c include.path=/a/b.cfg log",
+    "git -c remote.origin.uploadpack=x fetch", 'GIT_SSH="./d s/x" git fetch', "LESSOPEN='|-x %s' less f",
+    "GIT_PAGER+=x git log", "env -u FOO GIT_PAGER=x git log", "env 'GIT_PAGER=x' git log",
+    "`GIT_PAGER=x git log`", "\\git -c a=b log", "g''it -c a=b log", 'g""it -c a=b log',
+    "eval 'GIT_PAGER=x git log'", "eval git log", "GIT_CONFIG_GLOBAL=x git log",
+    "git fetch --upload-pack=x origin", "git fetch --upload-pack x origin",
+    "git push --receive-pack=x origin", "git push --receive-pack x origin", "git push --exec=x origin",
+    "$'\\x6c' list", "x $'\\154'", "$'\\u006c'",
+    "git clone -u x src dst", "git clone --upload-pack=x a b", "git clone --upload-pack x a b",
+    "git clone -ux a b", "git --exec-path=x log", "git --exec-path x log", "GIT_EXEC_PATH=x git log",
+    "GIT_TEMPLATE_DIR=x git init", "git init --template=x", "git clone --template x a b",
+    "git -c init.templateDir=x init", "git -c difftool.x.path=y difftool",
+    "git -c protocol.ext.allow=always fetch", "git clone 'ext::sh -c x' d", "git fetch ext::x",
+    "git difftool --extcmd=x", "git difftool --extcmd x", "git difftool -x y", "git rebase -x y main",
+    "git rebase --exec y", "git bisect run ./y", "bash -c -- 'x'",
 ]
 must_not_match = [
     "git status", "python3 -m pytest -q", "npm test", "grep -r pseudocode notes.txt",
@@ -295,6 +462,13 @@ must_not_match = [
     "sed -i '' 's/a/b/' f.txt", "ssh host uptime", "shellcheck x.sh", "python3 scripts/x.py",
     "/usr/bin/python3 -m pytest", "git commit -m 'fix ./x.sh'", "npx vitest run",
     "cat .gitconfig", "echo $GIT_DIR", "git log --format=%H",
+    "git commit -m 'update docs'", "git commit -am wip", "git diff --cached", "git status -s",
+    "git log --oneline -n 5", "git config --get core.pager", "legit -c x", "git log | grep -c x",
+    "git push origin main", "git fetch origin", "medieval x", "evaluate.py", "git --exec-path",
+    "printf $'a\\tb\\n'", "echo $'it\\'s'",
+    "git clone https://example.com/x.git dir", "git init", "git difftool", "git rebase -i HEAD~3",
+    "git bisect start", "git bisect good", "git bisect bad", "git push -u origin main",
+    "git cherry-pick -x abc123", "git clean -xfd", "git init new-repo", "git clone git@example.com:a/b.git",
 ]
 for c in must_match:
     r(bool(pat.search(c)) and bool(pat.fullmatch(c)), "matcher hits      " + c.replace("\n", "\\n"))
