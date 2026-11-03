@@ -1,0 +1,61 @@
+# Smoke check: deny-hook tests, offline unit tests, and the live Pages site after each Pages build.
+# No secrets, no live third-party APIs, no ingest posts.
+name: Smoke
+
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["pages-build-deployment"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Deny-hook tests
+        run: sh .cursor/hooks/test-deny-dangerous-shell.sh
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+  deployed:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE: https://davidcasas82.github.io/aeries-dashboard
+    steps:
+      - name: Check the deployed site
+        run: |
+          # check PATH STATUS TEXT: 200 must contain TEXT; 30x must redirect to a URL starting with TEXT.
+          # Retries cover CDN lag right after a deploy.
+          check() {
+            url="$BASE$1"
+            for i in 1 2 3 4 5 6; do
+              out=$(curl -sS -o body.txt --max-time 20 -w '%{http_code} %{redirect_url}' "$url" || echo "000 ")
+              code=${out%% *}; loc=${out#* }
+              if [ "$code" = "$2" ]; then
+                case "$2" in
+                  200) grep -qF -- "$3" body.txt && { echo "ok  $url $code"; return 0; } ;;
+                  *) case "$loc" in "$3"*) echo "ok  $url $code -> access login"; return 0 ;; esac ;;
+                esac
+              fi
+              echo "try $i: $url got $code"; sleep 20
+            done
+            echo "::error::$url did not return $2 with the expected content"; return 1
+          }
+          check '/' 200 'id="dashboards"'
