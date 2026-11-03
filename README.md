@@ -94,7 +94,7 @@ State lives on the SSD under `/Volumes/David C SSD/grade-insights/state/`, mode 
 
 ### Installing the launchd job
 
-Load it only after #57 is merged, both password steps are done (the parent PIN and the insights write secret are in the mini's login Keychain), and the PR that added this section is merged. Then, on the mini (the `git clone` line creates `~/code/aeries-dashboard`, the path the plist expects; skip it if that checkout already exists and `git pull` there instead):
+Load it only after #57 is merged, both password steps are done (the parent PIN and the insights write secret are in the mini's login Keychain), and the PR that added this section is merged. Then a person runs the steps below by hand in Terminal on the mini (David, or the engineer doing the install), not a Cursor agent. The repo's shell hook denies agent commands that touch a LaunchAgents path, so agents can't run the `plutil -lint` check or the `launchctl` lines; the human running the install does them and checks `plutil` prints `OK` before bootstrapping. (The `git clone` line creates `~/code/aeries-dashboard`, the path the plist expects; skip it if that checkout already exists and `git pull` there instead.)
 
 ```bash
 git clone https://github.com/davidcasas82/aeries-dashboard.git ~/code/aeries-dashboard
