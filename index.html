@@ -2244,6 +2244,17 @@
         const TOKEN_KEY = 'ad.token';
         const KEEP_KEY = 'ad.keep';
         const PRODUCTION_API = 'https://family-data.davidcasas.workers.dev';
+        // mini-tabs iframes this page. WebKit drops third-party localStorage on each
+        // launch, so that parent holds the keep-unlocked bearer and hands it back.
+        // crypto.subtle needs a secure context. GitHub Pages serves this page over HTTPS.
+        const PARENT_ORIGIN_SHA256 = 'fb9299dcecf566998624df137979dfb27bcd51af94b37ed8fddedd0384528a2d';
+        let verifiedParentOrigin = '';
+        let parentOriginTask = null;
+        let parentOriginPromise = null;
+        let parentOriginResolve = null;
+        let sawParentSource = false;
+        let parentTokenListening = false;
+        let frameLinksBound = false;
         let refreshTimer = null;
         let listenersBound = false;
         let lockBound = false;
@@ -2257,12 +2268,21 @@
             return PRODUCTION_API;
         }
 
+        function usableToken(value) {
+            return typeof value === 'string' && value.trim() !== '';
+        }
+
         function getToken() {
-            return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
+            const sessionToken = sessionStorage.getItem(TOKEN_KEY);
+            const storedToken = localStorage.getItem(TOKEN_KEY);
+            if (usableToken(sessionToken)) return sessionToken;
+            if (usableToken(storedToken)) return storedToken;
+            return '';
         }
 
         function setSession(token, keepUnlocked) {
             clearSession();
+            if (!usableToken(token)) return;
             const store = keepUnlocked ? localStorage : sessionStorage;
             store.setItem(TOKEN_KEY, token);
             localStorage.setItem(KEEP_KEY, keepUnlocked ? '1' : '0');
@@ -2271,6 +2291,133 @@
         function clearSession() {
             sessionStorage.removeItem(TOKEN_KEY);
             localStorage.removeItem(TOKEN_KEY);
+        }
+
+        function inParentFrame() {
+            return window.parent !== window;
+        }
+
+        function hintedParentOrigin() {
+            const list = location.ancestorOrigins;
+            const origin = list && list[0];
+            return typeof origin === 'string' ? origin : '';
+        }
+
+        function hexDigest(buffer) {
+            return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function originDigest(origin) {
+            if (!origin || !crypto || !crypto.subtle) return '';
+            const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(origin));
+            return hexDigest(digest);
+        }
+
+        function claimParentOrigin(origin) {
+            if (verifiedParentOrigin) return Promise.resolve(verifiedParentOrigin);
+            if (!parentOriginTask) {
+                parentOriginTask = (async () => {
+                    if (await originDigest(origin) === PARENT_ORIGIN_SHA256) verifiedParentOrigin = origin;
+                    return verifiedParentOrigin;
+                })();
+            }
+            return parentOriginTask;
+        }
+
+        function ensureParentOrigin() {
+            if (verifiedParentOrigin) return Promise.resolve(verifiedParentOrigin);
+            if (parentOriginPromise) return parentOriginPromise;
+            const hinted = hintedParentOrigin();
+            if (hinted) {
+                parentOriginPromise = claimParentOrigin(hinted);
+                return parentOriginPromise;
+            }
+            parentOriginPromise = new Promise((resolve) => {
+                parentOriginResolve = resolve;
+            });
+            return parentOriginPromise;
+        }
+
+        async function postParent(message) {
+            if (!inParentFrame()) return;
+            if (message && typeof message.token === 'string' && !usableToken(message.token)) return;
+            if (!verifiedParentOrigin) {
+                const hinted = hintedParentOrigin();
+                if (hinted) await claimParentOrigin(hinted);
+            }
+            if (!verifiedParentOrigin) return;
+            window.parent.postMessage(message, verifiedParentOrigin);
+        }
+
+        function stampFrameLink(link) {
+            if (!inParentFrame() || !link || typeof link.getAttribute !== 'function') return;
+            const href = link.getAttribute('href');
+            if (href == null || href === '' || href.charAt(0) === '#') return;
+            const current = (link.getAttribute('target') || '').toLowerCase();
+            if (current === '_top' || current === '_blank') return;
+            link.setAttribute('target', '_blank');
+            const rel = link.getAttribute('rel') || '';
+            if (!/\bnoopener\b/i.test(rel)) link.setAttribute('rel', `${rel} noopener noreferrer`.trim());
+        }
+
+        function stampFrameLinks(root) {
+            if (!inParentFrame()) return;
+            const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+            scope.querySelectorAll('a[href]').forEach(stampFrameLink);
+        }
+
+        function onFrameLinkClick(event) {
+            const node = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+            if (node) stampFrameLink(node);
+        }
+
+        function keepDashboardFrame() {
+            if (!inParentFrame() || frameLinksBound) return;
+            frameLinksBound = true;
+            document.addEventListener('click', onFrameLinkClick, true);
+            document.addEventListener('auxclick', onFrameLinkClick, true);
+            stampFrameLinks(document);
+        }
+
+        function takeParentToken(event) {
+            const data = event.data;
+            if (!data || typeof data !== 'object' || data.type !== 'ad-token') return false;
+            if (typeof data.token !== 'string' && data.token !== null) return false;
+            window.removeEventListener('message', onParentTokenMessage);
+            parentTokenListening = false;
+            if (usableToken(data.token) && !getToken()) {
+                setSession(data.token, true);
+                init();
+            }
+            return true;
+        }
+
+        function onParentTokenMessage(event) {
+            if (event.source !== window.parent) return;
+            if (!verifiedParentOrigin) {
+                if (hintedParentOrigin() || sawParentSource) return;
+                sawParentSource = true;
+                claimParentOrigin(event.origin).then((origin) => {
+                    const handled = origin && event.origin === origin && takeParentToken(event);
+                    if (!parentOriginResolve) return;
+                    const resolve = parentOriginResolve;
+                    parentOriginResolve = null;
+                    resolve(handled ? '' : origin);
+                });
+                return;
+            }
+            if (event.origin !== verifiedParentOrigin) return;
+            takeParentToken(event);
+        }
+
+        function requestParentToken() {
+            if (!inParentFrame() || parentTokenListening || getToken()) return Promise.resolve();
+            parentTokenListening = true;
+            window.addEventListener('message', onParentTokenMessage);
+            return ensureParentOrigin().then((origin) => {
+                if (!origin || getToken()) return;
+                return postParent({ type: 'ad-token-request' });
+            });
         }
 
         async function unlockWithPin(pin, keepUnlocked) {
@@ -2286,6 +2433,9 @@
                 throw err;
             }
             setSession(data.token, keepUnlocked);
+            if (keepUnlocked && usableToken(data.token)) {
+                await postParent({ type: 'ad-token-save', token: data.token });
+            }
             return data;
         }
 
@@ -2345,6 +2495,7 @@
                 const payload = await resp.json().catch(() => ({}));
                 if (resp.status === 401) {
                     clearSession();
+                    await postParent({ type: 'ad-token-clear' });
                     showLock('Your session expired. Type your PIN again.');
                     return null;
                 }
@@ -5338,6 +5489,7 @@
             updateTopBarTitle();
             syncTopBarHeight();
             window.dispatchEvent(new Event('scroll'));
+            stampFrameLinks(document);
         }
 
         function parsePeriodAttr(raw) {
@@ -5420,8 +5572,9 @@
             error.textContent = '';
         }
 
-        function lockDashboard() {
+        async function lockDashboard() {
             clearSession();
+            await postParent({ type: 'ad-token-clear' });
             currentData = null;
             showLock();
         }
@@ -5454,7 +5607,9 @@
 
         async function init() {
             setupLock();
+            keepDashboardFrame();
             if (!getToken()) {
+                requestParentToken();
                 showLock();
                 return null;
             }
