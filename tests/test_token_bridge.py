@@ -2,6 +2,8 @@
 
 The page script runs under node with the parent origin stubbed. A Chrome harness
 (tests/token_bridge_harness.mjs) iframes the real page from a different origin.
+Loopback is a secure context, so that harness still has crypto.subtle. The runtime
+suite also runs the same bridge with subtle removed.
 """
 
 import hashlib
@@ -123,6 +125,7 @@ const pending = (async () => {
     assert(/^[0-9a-f]{64}$/.test(PARENT_ORIGIN_SHA256), PARENT_ORIGIN_SHA256);
     assert(PARENT_ORIGIN_SHA256 !== EXPECTED_ORIGIN, 'the hash is not the origin');
     assert(EXPECTED_ORIGIN.indexOf('*') < 0, 'stub origin');
+    assert(!!(crypto && crypto.subtle) === SUBTLE, 'subtle presence');
 
     await scenario('request uses the parent origin and never a star', async () => {
         await requestParentToken();
@@ -349,25 +352,98 @@ const pending = (async () => {
         assert(JSON.stringify(allPosts).indexOf(PIN) < 0, 'pin leaked');
     });
 
+    if (SUBTLE) {
+        await scenario('subtle is preferred over the fallback', async () => {
+            let calls = 0;
+            const real = sha256Bytes;
+            sha256Bytes = (bytes) => {
+                calls += 1;
+                return real(bytes);
+            };
+            try {
+                await requestParentToken();
+                assert(calls === 0, 'fallback ran beside subtle');
+                assert(posts.length === 1, 'request missing');
+                assert(posts[0].targetOrigin === EXPECTED_ORIGIN && posts[0].targetOrigin !== '*', posts[0].targetOrigin);
+                deliver(EXPECTED_ORIGIN, parent, { type: 'ad-token', token: BEARER });
+                assert(getToken() === BEARER, 'bearer was not stored');
+            } finally {
+                sha256Bytes = real;
+            }
+        });
+    } else {
+        await scenario('without subtle the origin digest still matches', async () => {
+            assert(!(crypto && crypto.subtle), 'subtle still present');
+            assert(await originDigest('abc') === ABC_HASH, 'abc digest');
+            assert(await originDigest(LONG_TEXT) === LONG_HASH, 'long digest');
+            assert(await originDigest(EXPECTED_ORIGIN) === PARENT_ORIGIN_SHA256, 'origin digest');
+            assert(await originDigest('') === '', 'empty origin');
+            const unrelated = await originDigest('http://evil.example');
+            assert(unrelated !== PARENT_ORIGIN_SHA256, 'unrelated origin matched');
+            assert(/^[0-9a-f]{64}$/.test(unrelated), unrelated);
+        });
+
+        await scenario('without subtle the bearer round-trips', async () => {
+            assert(!(crypto && crypto.subtle), 'subtle still present');
+            let calls = 0;
+            const real = sha256Bytes;
+            sha256Bytes = (bytes) => {
+                calls += 1;
+                return real(bytes);
+            };
+            try {
+                await requestParentToken();
+                assert(calls > 0, 'fallback did not hash');
+                assert(posts.length === 1, 'request missing');
+                assert(posts[0].targetOrigin === EXPECTED_ORIGIN, 'target ' + posts[0].targetOrigin);
+                assert(posts[0].targetOrigin !== '*', 'wildcard target');
+                assert(JSON.stringify(posts[0].message) === JSON.stringify({ type: 'ad-token-request' }), JSON.stringify(posts[0].message));
+                deliver(EXPECTED_ORIGIN, parent, { type: 'ad-token', token: BEARER });
+                assert(getToken() === BEARER, 'bearer was not stored');
+                assert(localStorage.getItem('ad.token') === BEARER, 'localStorage');
+                assert(sessionStorage.getItem('ad.token') === null, 'sessionStorage');
+                assert(inits === 1, 'init count ' + inits);
+                posts.length = 0;
+                fetch = async () => ({ ok: true, status: 200, json: async () => ({ token: 'round-trip-bearer' }) });
+                await unlockWithPin(PIN, true);
+                assert(posts.length === 1, 'save posts ' + posts.length);
+                assert(JSON.stringify(posts[0].message) === JSON.stringify({ type: 'ad-token-save', token: 'round-trip-bearer' }), JSON.stringify(posts[0].message));
+                assert(posts[0].targetOrigin === EXPECTED_ORIGIN && posts[0].targetOrigin !== '*', posts[0].targetOrigin);
+                assert(!('pin' in posts[0].message), 'save carried a pin field');
+                assert(JSON.stringify(posts).indexOf(PIN) < 0, 'pin leaked into postMessage');
+                assert(getToken() === 'round-trip-bearer', 'stored token');
+            } finally {
+                sha256Bytes = real;
+            }
+        });
+    }
+
     const targets = [...new Set(allPosts.map((entry) => entry.targetOrigin))];
     report({
         ok: results.every((item) => item.ok) && targets.length === 1 && targets[0] === EXPECTED_ORIGIN,
         results,
         targets,
+        subtle: !!(crypto && crypto.subtle),
     });
 })();
 pending
 """
 
 
-def run_bridge(origin=STUB_ORIGIN):
+def run_bridge(origin=STUB_ORIGIN, subtle=True):
     program = r"""
 const vm = require('vm');
 const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+const hostCrypto = crypto;
 const ctx = {
     EXPECTED_ORIGIN: input.origin,
+    SUBTLE: input.subtle,
+    ABC_HASH: input.abcHash,
+    LONG_HASH: input.longHash,
+    LONG_TEXT: input.longText,
     console, JSON, Object, Array, Promise, String, Error, Date, Math, Number, Boolean, RegExp,
-    crypto, TextEncoder,
+    crypto: input.subtle ? hostCrypto : { subtle: undefined },
+    TextEncoder,
     location: { hostname: '127.0.0.1', protocol: 'http:', href: 'http://127.0.0.1/', ancestorOrigins: [] },
     document: { getElementById() { return { innerHTML: '', hidden: false, textContent: '' }; }, addEventListener() {} },
     fetch: async () => { throw new Error('fetch was not stubbed'); },
@@ -388,6 +464,12 @@ pending.then(() => {
 """
     payload = {
         "origin": origin,
+        "subtle": subtle,
+        "abcHash": hashlib.sha256(b"abc").hexdigest(),
+        "longHash": hashlib.sha256(
+            b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
+        ).hexdigest(),
+        "longText": "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
         "slice": bridge_slice(HTML, origin),
         "lock": extract(HTML, "lockDashboard"),
         "load": extract(HTML, "loadData"),
@@ -452,6 +534,19 @@ class TokenBridgeSourceTests(unittest.TestCase):
         self.assertIn("requestParentToken();", init)
         self.assertIn("if (!getToken())", init)
 
+    def test_origin_digest_falls_back_only_when_subtle_is_missing(self):
+        digest = extract(HTML, "originDigest")
+        self.assertIn("if (!origin) return '';", digest)
+        self.assertIn("if (crypto && crypto.subtle)", digest)
+        self.assertIn("crypto.subtle.digest('SHA-256', bytes)", digest)
+        self.assertIn("return hexDigest(sha256Bytes(bytes));", digest)
+        self.assertNotIn("!crypto.subtle) return ''", digest)
+        fallback = extract(HTML, "sha256Bytes")
+        self.assertNotIn("crypto", fallback)
+        self.assertNotIn("fetch(", fallback)
+        self.assertNotIn("http://", fallback)
+        self.assertNotIn("https://", fallback)
+
     def test_page_script_parses(self):
         if not shutil.which("node"):
             self.skipTest("node not installed")
@@ -474,6 +569,7 @@ class TokenBridgeRuntimeTests(unittest.TestCase):
         self.assertEqual(failed, [], failed)
         self.assertEqual(result["targets"], [STUB_ORIGIN])
         self.assertTrue(result["ok"])
+        self.assertTrue(result["subtle"])
         names = [item["name"] for item in result["results"]]
         self.assertIn("only the parent origin and parent window can supply a token", names)
         self.assertIn("request uses the parent origin and never a star", names)
@@ -481,6 +577,26 @@ class TokenBridgeRuntimeTests(unittest.TestCase):
         self.assertIn("whitespace is not a token", names)
         self.assertIn("framed links open outside the dashboard frame", names)
         self.assertIn("a direct visit does not retarget links", names)
+        self.assertIn("subtle is preferred over the fallback", names)
+
+    def test_bearer_round_trips_without_subtle(self):
+        result = run_bridge(subtle=False)
+        failed = [item for item in result["results"] if not item["ok"]]
+        self.assertEqual(failed, [], failed)
+        self.assertFalse(result["subtle"])
+        self.assertEqual(result["targets"], [STUB_ORIGIN])
+        self.assertTrue(result["ok"])
+        names = [item["name"] for item in result["results"]]
+        self.assertIn("without subtle the bearer round-trips", names)
+        self.assertIn("without subtle the origin digest still matches", names)
+        self.assertNotIn("subtle is preferred over the fallback", names)
+        self.assertIn("only the parent origin and parent window can supply a token", names)
+        self.assertIn("request uses the parent origin and never a star", names)
+        self.assertIn("keep-unlocked posts the bearer and never the pin", names)
+        self.assertIn("whitespace is not a token", names)
+        self.assertIn("a direct visit posts nothing", names)
+        self.assertIn("a hinted origin that does not hash is never used", names)
+        self.assertIn("framed links open outside the dashboard frame", names)
 
 
 @unittest.skipUnless(shutil.which("node") and shutil.which("google-chrome"), "node or chrome missing")

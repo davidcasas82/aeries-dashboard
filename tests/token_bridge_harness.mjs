@@ -532,6 +532,8 @@ async function main() {
     }))()`);
     return probe && probe.ready === "complete" ? probe : null;
   }, "origin probe");
+  // Loopback is a secure context, so this frame still has subtle. The node
+  // suite runs the same bridge with crypto.subtle removed.
   assert(originProbe.subtle === true, "crypto.subtle missing in the frame");
   assert(originProbe.ancestors && originProbe.ancestors[0] === parentOrigin, "frame did not see the parent origin");
   const standingExpr = `(() => {
