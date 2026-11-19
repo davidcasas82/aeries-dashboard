@@ -5,7 +5,7 @@
 
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -103,6 +103,112 @@ async function waitFor(fn, label, timeout = 10000) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`timeout: ${label}: ${last}`);
+}
+
+function killChild(child) {
+  try {
+    process.kill(-child.pid, "SIGKILL");
+  } catch {
+    try { child.kill("SIGKILL"); } catch { /* already gone */ }
+  }
+}
+
+function chromeLogText(chunks) {
+  return Buffer.concat(chunks).toString().trim().slice(0, 2000);
+}
+
+async function allocatePort() {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+    probe.on("error", reject);
+  });
+}
+
+// CI runners sometimes take longer than 10s to bind DevTools, or Chrome
+// writes a different port in DevToolsActivePort after the probe port is reused.
+async function startChromeWithDebugger(work, attempt) {
+  const debugPort = await allocatePort();
+  const profile = path.join(work, `profile-${attempt}`);
+  const chunks = [];
+  let exitCode = null;
+  let spawnError = null;
+  const chrome = track(spawn("google-chrome", [
+    "--headless=new",
+    "--disable-gpu",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--no-first-run",
+    "--disable-extensions",
+    `--remote-debugging-port=${debugPort}`,
+    "--remote-debugging-address=127.0.0.1",
+    "--remote-allow-origins=*",
+    `--user-data-dir=${profile}`,
+    "--site-per-process",
+    "--window-size=1400,1000",
+    "about:blank",
+  ], { detached: true, stdio: ["ignore", "pipe", "pipe"] }));
+  chrome.stdout.on("data", (chunk) => chunks.push(chunk));
+  chrome.stderr.on("data", (chunk) => chunks.push(chunk));
+  chrome.on("exit", (code, signal) => {
+    exitCode = signal ? `${code}/${signal}` : code;
+  });
+  chrome.on("error", (error) => {
+    spawnError = error;
+  });
+
+  const start = Date.now();
+  let last = "";
+  try {
+    while (Date.now() - start < 20000) {
+      if (spawnError) throw new Error(`chrome spawn failed: ${spawnError.message}`);
+      if (exitCode !== null) {
+        throw new Error(`chrome exited ${exitCode}: ${chromeLogText(chunks) || "no output"}`);
+      }
+      try {
+        let port = debugPort;
+        const portFile = path.join(profile, "DevToolsActivePort");
+        if (existsSync(portFile)) {
+          const parsed = Number(readFileSync(portFile, "utf8").split(/\r?\n/)[0]);
+          if (Number.isInteger(parsed) && parsed > 0) port = parsed;
+        }
+        const res = await fetch(`http://127.0.0.1:${port}/json/version`);
+        const version = await res.json();
+        if (version) return { chrome, version, chunks };
+        last = JSON.stringify(version);
+      } catch (error) {
+        last = error.message || String(error);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error(`timeout: chrome debugger: ${last}`);
+  } catch (error) {
+    killChild(chrome);
+    const detail = chromeLogText(chunks);
+    const suffix = detail && !String(error.message).includes(detail) ? `: ${detail}` : "";
+    throw new Error(`${error.message}${suffix}`);
+  }
+}
+
+async function launchChromeDebugger(work, attempts = 3) {
+  let lastError;
+  const chunks = [];
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const started = await startChromeWithDebugger(work, attempt);
+      chunks.push(...started.chunks);
+      if (attempt > 1) log(`chrome debugger ready on attempt ${attempt}`);
+      return { version: started.version, chunks };
+    } catch (error) {
+      lastError = error;
+      chunks.push(Buffer.from(`attempt ${attempt}: ${error.message}\n`));
+      log(`chrome debugger attempt ${attempt} failed: ${error.message}`);
+    }
+  }
+  throw lastError;
 }
 
 async function pageState(send, sessionId) {
@@ -277,37 +383,10 @@ async function main() {
   }, "fixture health");
   writeFileSync(fixtureLog, Buffer.concat(fixtureOut));
 
-  const debugPort = await new Promise((resolve, reject) => {
-    const probe = net.createServer();
-    probe.listen(0, "127.0.0.1", () => {
-      const { port } = probe.address();
-      probe.close(() => resolve(port));
-    });
-    probe.on("error", reject);
-  });
   const chromeLog = path.join(work, "chrome.log");
-  const chrome = track(spawn("google-chrome", [
-    "--headless=new",
-    "--disable-gpu",
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-    "--no-first-run",
-    "--disable-extensions",
-    `--remote-debugging-port=${debugPort}`,
-    "--remote-allow-origins=*",
-    `--user-data-dir=${path.join(work, "profile")}`,
-    "--site-per-process",
-    "--window-size=1400,1000",
-    "about:blank",
-  ], { detached: true, stdio: ["ignore", "pipe", "pipe"] }));
-  const chromeOut = [];
-  chrome.stdout.on("data", (chunk) => chromeOut.push(chunk));
-  chrome.stderr.on("data", (chunk) => chromeOut.push(chunk));
-
-  const version = await waitFor(async () => {
-    const res = await fetch(`http://127.0.0.1:${debugPort}/json/version`);
-    return res.json();
-  }, "chrome debugger");
+  const launched = await launchChromeDebugger(work);
+  const chromeOut = launched.chunks;
+  const version = launched.version;
   const cdp = connectCdp(version.webSocketDebuggerUrl);
   await cdp.opened;
   await cdp.send("Target.setDiscoverTargets", { discover: true });
