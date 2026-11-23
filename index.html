@@ -5352,7 +5352,13 @@
             dashboardsEl.addEventListener('click', (e) => {
                 const history = e.target.closest('[data-progress]');
                 if (history) {
-                    location.href = 'progress.html#' + encodeURIComponent(history.dataset.progress);
+                    const dash = history.closest('.dashboard');
+                    const idx = dash ? Number(String(dash.id || '').replace('dashboard-', '')) : activeStudentIndex;
+                    rememberStudent(idx);
+                    const student = currentData && currentData.students && currentData.students[idx];
+                    const sn = student && student.sn != null ? String(student.sn) : '';
+                    const query = sn ? '?student=' + encodeURIComponent(sn) : '';
+                    location.href = 'progress.html' + query + '#' + encodeURIComponent(history.dataset.progress);
                     return;
                 }
                 const btn = e.target.closest('[data-glance]');
@@ -5453,10 +5459,20 @@
             window.addEventListener('resize', onScroll, { passive: true });
         }
 
+        function rememberStudent(index) {
+            if (!currentData || !currentData.students) return;
+            const student = currentData.students[index];
+            const sn = student && student.sn != null ? String(student.sn) : '';
+            try { sessionStorage.setItem('ad.student', sn); } catch (e) {}
+            const link = document.getElementById('progressLink');
+            if (link && sn) link.href = 'progress.html?student=' + encodeURIComponent(sn);
+        }
+
         function switchStudent(index) {
             activeStudentIndex = index;
             document.querySelectorAll('.student-seg').forEach((t, i) => t.classList.toggle('active', i === index));
             document.querySelectorAll('.dashboard').forEach((d, i) => d.classList.toggle('active', i === index));
+            rememberStudent(index);
             updateTopBarTitle();
             window.scrollTo({ top: 0, behavior: 'smooth' });
             setTimeout(() => window.dispatchEvent(new Event('scroll')), 300);
@@ -5622,6 +5638,7 @@
 
             pickerEl.style.display = data.students.length < 2 ? 'none' : '';
             if (keepIndex >= data.students.length) activeStudentIndex = 0;
+            rememberStudent(activeStudentIndex);
             restoreExpandedRows(keepExpanded);
             if (keepExpanded.length && keepScroll > 0) window.scrollTo({ top: keepScroll, behavior: 'auto' });
             updateTopBarTitle();

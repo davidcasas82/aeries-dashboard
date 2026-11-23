@@ -172,6 +172,19 @@
                 <h2 class="section">Weak spots</h2>
                 <article class="box">${spots}<p class="miss">No topic or unit field. A title sometimes says the unit.</p></article>`;
         }
+        function selectedStudent(doc, selected) {
+            const students = (doc && doc.students) || [];
+            const want = selected == null ? '' : String(selected);
+            const hit = want ? students.find((student) => String(student && student.sn) === want) : null;
+            return hit || students[0] || null;
+        }
+        function progressMarkup(doc, insights, selected, course) {
+            const student = selectedStudent(doc, selected);
+            if (!student) return '';
+            const tags = tagsFor(insights, student.sn);
+            if (course) return renderClass(student, course, tags);
+            return renderKid(student, tags);
+        }
         function tagsFor(insights, sn) {
             const students = insights && insights.students;
             const row = students && students[String(sn)];
@@ -202,20 +215,26 @@
                 : 'Daily snapshots';
             const insights = insightsBody && (insightsBody.insights || insightsBody.doc || insightsBody);
             const marks = document.getElementById('marks');
+            const params = new URLSearchParams(location.search);
+            let selected = params.get('student') || '';
+            if (!selected) {
+                try { selected = sessionStorage.getItem('ad.student') || ''; } catch (e) { selected = ''; }
+            }
+            const student = selectedStudent(doc, selected);
             const course = decodeURIComponent((location.hash || '').replace(/^#/, ''));
             if (course) {
                 document.getElementById('title').textContent = course;
                 document.getElementById('back').textContent = 'Progress';
-                document.getElementById('back').href = 'progress.html';
-                const owner = doc.students.find((student) => (student.classes || []).some((row) => row.course === course));
-                const tags = owner ? tagsFor(insights, owner.sn) : {};
+                const home = 'progress.html' + (student && student.sn != null ? '?student=' + encodeURIComponent(student.sn) : '');
+                document.getElementById('back').href = home;
+                const tags = student ? tagsFor(insights, student.sn) : {};
                 marks.innerHTML = badges(tags[course]);
-                app.innerHTML = owner ? renderClass(owner, course, tags) : '<p class="empty">That class is not on this progress view.</p>';
+                app.innerHTML = progressMarkup(doc, insights, student && student.sn, course);
                 return;
             }
             document.getElementById('title').textContent = 'Progress';
             marks.innerHTML = '';
-            app.innerHTML = doc.students.map((student) => renderKid(student, tagsFor(insights, student.sn))).join('');
+            app.innerHTML = progressMarkup(doc, insights, student && student.sn, '');
         }
         init();
     </script>
