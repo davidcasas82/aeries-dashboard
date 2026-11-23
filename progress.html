@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#f4f1ea">
+    <title>Progress</title>
+    <style>
+        :root {
+            --bg: #f4f1ea; --ink: #1d2420; --muted: #617069; --faint: #87938d;
+            --teal: #1f5c52; --green: #2a7a5c; --amber: #8a6512; --red: #9c483b; --forest: #155c4b;
+            --shadow: 0 14px 36px rgba(35, 47, 40, .08), 0 2px 6px rgba(35, 47, 40, .04);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg); color: var(--ink);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            padding: 16px 14px 32px;
+            max-width: 430px;
+        }
+        a.back { color: var(--teal); font-size: 16px; font-weight: 650; text-decoration: none; }
+        h1 { margin-top: 2px; font-size: 28px; font-weight: 750; letter-spacing: -.04em; }
+        .range, .sum { margin-top: 4px; font-size: 15.5px; font-weight: 550; line-height: 1.4; }
+        .range { color: var(--muted); }
+        .kid { margin: 22px 0 0; font-size: 22px; font-weight: 750; letter-spacing: -.03em; }
+        h2.section { margin: 16px 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); font-weight: 800; }
+        .box, .trend {
+            background: rgba(255, 253, 250, .96);
+            border: 1px solid rgba(111, 128, 118, .22);
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+            padding: 12px 14px;
+            margin-bottom: 8px;
+        }
+        .trend { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; text-decoration: none; color: inherit; }
+        .trend.flag { border-color: rgba(156, 72, 59, .35); }
+        .course, .trend .name { font-size: 16px; font-weight: 750; }
+        .note { color: var(--muted); font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+        .grade { font-size: 20px; font-weight: 800; text-align: right; }
+        .spark { grid-row: 1 / span 2; grid-column: 2; }
+        .tag { color: var(--red); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; margin-right: 6px; }
+        .badge { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 750; }
+        .badge.win { color: var(--forest); background: #e5f2ec; }
+        .badge.risk { color: var(--amber); background: #f8efd9; }
+        .move { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 8px; }
+        .grades { font-size: 20px; font-weight: 800; letter-spacing: -.03em; }
+        .when { color: var(--muted); font-size: 13px; font-weight: 650; white-space: nowrap; }
+        .A { color: var(--teal); } .B { color: var(--green); } .C { color: var(--amber); } .D, .F { color: var(--red); }
+        .pct { color: var(--muted); font-size: 15px; font-weight: 700; margin-left: 2px; }
+        .arrow { color: var(--faint); padding: 0 3px; }
+        .hit { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-top: 1px solid rgba(111,128,118,.14); font-size: 14.5px; }
+        .hit .name { font-weight: 650; }
+        .hit .meta { font-weight: 650; white-space: nowrap; color: var(--muted); }
+        .down { color: var(--red); } .up { color: var(--forest); }
+        .miss { margin: 8px 0 2px; color: var(--amber); font-size: 14px; font-weight: 650; line-height: 1.35; }
+        .empty { color: var(--muted); margin-top: 12px; }
+        .chart { margin: 12px 0; }
+        .axis { display: flex; justify-content: space-between; color: var(--faint); font-size: 12px; font-weight: 650; }
+    </style>
+</head>
+<body>
+    <a class="back" id="back" href="index.html">Grades</a>
+    <h1 id="title">Progress</h1>
+    <div id="marks"></div>
+    <p class="range" id="range"></p>
+    <div id="app"><p class="empty">Loading…</p></div>
+    <script>
+        const TOKEN_KEY = 'ad.token';
+        const PRODUCTION_API = 'https://family-data.davidcasas.workers.dev';
+        function apiBase() {
+            if (typeof window.FAMILY_DATA_URL === 'string' && window.FAMILY_DATA_URL.trim()) {
+                return window.FAMILY_DATA_URL.replace(/\/+$/, '');
+            }
+            const host = location.hostname;
+            if (host === 'localhost' || host === '127.0.0.1') return 'http://127.0.0.1:8787';
+            return PRODUCTION_API;
+        }
+        function token() {
+            return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || '';
+        }
+        function esc(value) {
+            return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[ch]));
+        }
+        async function getJSON(path, auth) {
+            const headers = { Accept: 'application/json' };
+            if (auth) headers.Authorization = 'Bearer ' + auth;
+            const resp = await fetch(apiBase() + path, { cache: 'no-store', headers });
+            if (!resp.ok) return null;
+            return resp.json().catch(() => null);
+        }
+        function spark(series) {
+            const vals = (series || []).map((point) => Number(point.pct)).filter((n) => !Number.isNaN(n));
+            if (vals.length < 2) return '';
+            let lo = Math.min(...vals), hi = Math.max(...vals);
+            if (hi - lo < 4) { lo -= 2; hi += 2; }
+            const w = 118, h = 40, pad = 3;
+            const pts = vals.map((v, i) => {
+                const x = pad + (w - 2 * pad) * (i / (vals.length - 1));
+                const y = pad + (h - 2 * pad) * (1 - (v - lo) / (hi - lo));
+                return x.toFixed(1) + ',' + y.toFixed(1);
+            }).join(' ');
+            const color = vals[vals.length - 1] <= Math.max(...vals) - 8 ? '#9c483b'
+                : (vals[vals.length - 1] >= vals[0] + 3 ? '#155c4b' : '#1f5c52');
+            return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><polyline fill="none" stroke="${color}" stroke-width="2.25" stroke-linejoin="round" stroke-linecap="round" points="${pts}"/></svg>`;
+        }
+        function grade(letter, pct) {
+            return `<span class="${esc(letter)}">${esc(letter)}</span><span class="pct">${esc(pct)}%</span>`;
+        }
+        function impacts(move) {
+            const lines = (move.impacts || []).map((item) =>
+                `<div class="hit"><span class="name">${esc(item.title)}</span><span class="meta">${esc(item.score)} · <span class="${esc(item.direction)}">${esc(item.direction)} ${esc(item.points)}</span></span></div>`
+            ).join('');
+            const missing = move.missing ? `<p class="miss">${esc(move.missing)}</p>` : '';
+            return lines + missing;
+        }
+        function moveBlock(move) {
+            return `<div class="move"><div class="grades">${grade(move.from_letter, move.from_percent)}<span class="arrow">→</span>${grade(move.to_letter, move.to_percent)}</div><div class="when">${esc(move.when)}</div></div>${impacts(move)}`;
+        }
+        function badges(tags) {
+            return (tags || []).map((tag) => tag === 'easiest_win'
+                ? '<span class="badge win">Easiest win</span>'
+                : tag === 'biggest_risk' ? '<span class="badge risk">Biggest risk</span>' : '').join('');
+        }
+        function renderKid(student, tags) {
+            const recent = student.classes.filter((item) => (item.recent || []).length);
+            const recentHtml = recent.map((item) =>
+                `<article class="box"><div class="course">${esc(item.course)}${badges(tags[item.course])}</div>${item.recent.map(moveBlock).join('')}</article>`
+            ).join('') || '<p class="empty">Nothing changed in the last 7 days.</p>';
+            const trends = student.classes.map((item) =>
+                `<a class="trend${item.decline ? ' flag' : ''}" href="#${encodeURIComponent(item.course)}">
+                    <div class="name">${esc(item.course)}${badges(tags[item.course])}</div>
+                    <div class="grade">${grade(item.letter, item.percent)}</div>
+                    <div class="note">${item.decline ? '<span class="tag">Multi-week decline</span>' : ''}${esc(item.note || '')}</div>
+                    ${spark(item.series)}
+                </a>`
+            ).join('');
+            const earlier = student.classes.filter((item) => (item.earlier || []).length).map((item) =>
+                `<article class="box"><div class="course">${esc(item.course)}</div>${item.earlier.map(moveBlock).join('')}</article>`
+            ).join('');
+            const weak = student.classes.flatMap((item) => (item.weak_spots || [])
+                .filter((spot) => spot.counts && item.decline)
+                .slice(0, 1)
+                .map((spot) => `<div class="hit"><span class="name">${esc(item.course)} · ${esc(spot.name)}, ${esc(spot.weight)}% of the grade</span><span class="meta">${esc(spot.percent)}%</span></div>`));
+            return `<h2 class="kid">${esc(student.name)}</h2>
+                <p class="sum">${esc(student.summary)}</p>
+                <h2 class="section">Recently changed · last 7 days</h2>${recentHtml}
+                <h2 class="section">Since September</h2>${trends}
+                ${earlier ? `<h2 class="section">Earlier moves</h2>${earlier}` : ''}
+                ${weak.length ? `<h2 class="section">Weak spots</h2><article class="box">${weak.join('')}<p class="miss">Aeries stores a category, its weight, and that category’s percent. It does not store a topic or a unit. A zero-weight category does not count.</p></article>` : ''}`;
+        }
+        function renderClass(student, course, tags) {
+            const item = (student.classes || []).find((row) => row.course === course);
+            if (!item) return '<p class="empty">That class is not on this progress view.</p>';
+            const moves = [...(item.recent || []), ...(item.earlier || [])]
+                .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+            const spots = (item.weak_spots || []).map((spot) =>
+                `<div class="hit"><span class="name">${esc(spot.name)}${spot.counts ? ` · ${esc(spot.weight)}% of the grade` : ' · does not count'}</span><span class="meta">${esc(spot.percent)}%</span></div>`
+            ).join('');
+            const first = (item.series[0] || {}).date || '';
+            const last = (item.series[item.series.length - 1] || {}).date || '';
+            return `<div class="grade" style="text-align:left;font-size:34px">${grade(item.letter, item.percent)}</div>
+                ${item.decline ? '<p class="miss">Multi-week decline. More than one two-week drop, and it has not come back.</p>' : ''}
+                ${item.was_now ? `<p class="${esc(item.was_now.direction)}" style="font-weight:750;margin-top:6px">${esc(item.was_now.text)}</p>` : ''}
+                <div class="chart box">${spark(item.series).replace('class="spark"', 'class="spark" style="width:100%;height:92px"')}
+                    <div class="axis"><span>${esc(first.slice(5))}</span><span>${esc(last.slice(5))}</span></div></div>
+                <p class="range">Each line under a move is that item’s share of the class grade. Full shares exist only while the prior day’s scores were kept.</p>
+                <h2 class="section">Moves</h2>
+                ${moves.map((move) => `<article class="box">${moveBlock(move)}</article>`).join('') || '<p class="empty">No grade move on this class.</p>'}
+                <h2 class="section">Weak spots</h2>
+                <article class="box">${spots}<p class="miss">No topic or unit field. A title sometimes says the unit.</p></article>`;
+        }
+        function selectedStudent(doc, selected) {
+            const students = (doc && doc.students) || [];
+            const want = selected == null ? '' : String(selected);
+            const hit = want ? students.find((student) => String(student && student.sn) === want) : null;
+            return hit || students[0] || null;
+        }
+        function progressMarkup(doc, insights, selected, course) {
+            const student = selectedStudent(doc, selected);
+            if (!student) return '';
+            const tags = tagsFor(insights, student.sn);
+            if (course) return renderClass(student, course, tags);
+            return renderKid(student, tags);
+        }
+        function tagsFor(insights, sn) {
+            const students = insights && insights.students;
+            const row = students && students[String(sn)];
+            const tags = {};
+            ((row && row.stories) || []).forEach((story) => {
+                if (story && story.class && story.tags && story.tags.length) tags[story.class] = story.tags;
+            });
+            return tags;
+        }
+        async function init() {
+            const auth = token();
+            if (!auth) {
+                location.href = 'index.html';
+                return;
+            }
+            const [progressBody, insightsBody] = await Promise.all([
+                getJSON('/v1/docs/aeries/progress', auth),
+                getJSON('/v1/grades/insights', auth),
+            ]);
+            const doc = progressBody && (progressBody.doc || progressBody);
+            const app = document.getElementById('app');
+            if (!doc || !Array.isArray(doc.students)) {
+                app.innerHTML = '<p class="empty">Progress isn’t ready yet. It is written on the evening scrape.</p>';
+                return;
+            }
+            document.getElementById('range').textContent = doc.as_of
+                ? `Through ${doc.as_of} · daily snapshots`
+                : 'Daily snapshots';
+            const insights = insightsBody && (insightsBody.insights || insightsBody.doc || insightsBody);
+            const marks = document.getElementById('marks');
+            const params = new URLSearchParams(location.search);
+            let selected = params.get('student') || '';
+            if (!selected) {
+                try { selected = sessionStorage.getItem('ad.student') || ''; } catch (e) { selected = ''; }
+            }
+            const student = selectedStudent(doc, selected);
+            const course = decodeURIComponent((location.hash || '').replace(/^#/, ''));
+            if (course) {
+                document.getElementById('title').textContent = course;
+                document.getElementById('back').textContent = 'Progress';
+                const home = 'progress.html' + (student && student.sn != null ? '?student=' + encodeURIComponent(student.sn) : '');
+                document.getElementById('back').href = home;
+                const tags = student ? tagsFor(insights, student.sn) : {};
+                marks.innerHTML = badges(tags[course]);
+                app.innerHTML = progressMarkup(doc, insights, student && student.sn, course);
+                return;
+            }
+            document.getElementById('title').textContent = 'Progress';
+            marks.innerHTML = '';
+            app.innerHTML = progressMarkup(doc, insights, student && student.sn, '');
+        }
+        init();
+    </script>
+</body>
+</html>

@@ -69,6 +69,18 @@ class ScoredLogTests(unittest.TestCase):
             ("Algebra", "Worksheet", "2026-10-23", "evening", False),
         ])
 
+    def test_a_changed_score_keeps_the_previous_points(self):
+        doc = {}
+        first = student((1, "Algebra", [scored("Quiz 1", 8, "10/20/2026")]))
+        scraper.apply_scored_log(doc, [("student 1", "s1", first)], EVENING)
+        changed = student((1, "Algebra", [scored("Quiz 1", 6, "10/20/2026")]))
+        scraper.apply_scored_log(doc, [("student 1", "s1", changed)], NEXT_EVENING)
+        row = doc["students"]["s1"]["items"][0]
+        self.assertEqual(row["earned"], 6)
+        self.assertEqual(row["prior_earned"], 8)
+        self.assertEqual(row["prior_possible"], 10)
+        self.assertEqual(row["first_seen"], "2026-10-22")
+
     def test_rerun_of_the_same_scrape_adds_nothing(self):
         doc = {}
         day = student((1, "Algebra", [scored("Quiz 1", 8, "10/20/2026")]))

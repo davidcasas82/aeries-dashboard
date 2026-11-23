@@ -2754,6 +2754,7 @@ def save_grade_history(history):
 # ── Scored-items log (the first scrape that saw each score) ──────────────────
 
 SCORED_LOG_PATH = "/v1/docs/aeries/scored-log"
+PROGRESS_DOC_PATH = "/v1/docs/aeries/progress"
 SCORED_LOG_KEEP_DAYS = 120
 # family-data caps a doc at 900k characters. Stay well under it.
 SCORED_LOG_MAX_CHARS = 600_000
@@ -2870,7 +2871,12 @@ def update_scored_log(doc, student_key, items, now):
     for item_i, item in enumerate(items):
         if item_i in matched:
             logged = entries[matched[item_i]]
-            logged.update(title=item["title"], key=item["key"], possible=item["possible"])
+            old_earned, old_possible = logged.get("earned"), logged.get("possible")
+            new_earned, new_possible = item.get("earned"), item.get("possible")
+            if old_earned is not None and (old_earned != new_earned or old_possible != new_possible):
+                logged["prior_earned"] = old_earned
+                logged["prior_possible"] = old_possible
+            logged.update(title=item["title"], key=item["key"], possible=new_possible, earned=new_earned)
             continue
         entries.append({
             **{field: value for field, value in item.items() if value not in (None, "")},
@@ -2922,6 +2928,23 @@ def apply_scored_log(doc, fresh_students, now):
     doc["updated_at"] = now.isoformat(timespec="minutes")
     total = sum(len(entry.get("items") or []) for entry in doc["students"].values())
     return {"new": new, "dropped": dropped, "total": total}
+
+
+def publish_progress(latest_students, history, today=None):
+    """PUT the progress view as its own doc. Not part of latest."""
+    if not family_data_configured():
+        return None
+    import progress as progress_view
+
+    token = family_unlock()
+    logged = family_request("GET", SCORED_LOG_PATH, token)
+    log = logged.get("doc") if isinstance(logged.get("doc"), dict) else {}
+    doc = progress_view.build_progress(history, log, latest_students, today or pacific_today())
+    current = family_request("GET", PROGRESS_DOC_PATH, token)
+    version = int(current.get("version") or 0)
+    saved = family_request("PUT", PROGRESS_DOC_PATH, token, {"doc": doc, "version": version})
+    print(f"family-data: progress published, version {saved.get('version')}")
+    return doc
 
 
 def publish_scored_log(fresh_students, now=None):
@@ -5057,6 +5080,10 @@ def scrape_all():
         publish_scored_log(fresh_scores)
     except Exception as exc:
         print(f"::warning::scored-log not saved this run ({exc})")
+    try:
+        publish_progress(data.get("students") or [], history, pacific_today())
+    except Exception as exc:
+        print(f"::warning::progress not saved this run ({exc})")
     print(f"\nData written to {OUTPUT_FILE}")
     print(f"History written to {HISTORY_FILE}")
     print(f"Last updated: {data['last_updated']}")
