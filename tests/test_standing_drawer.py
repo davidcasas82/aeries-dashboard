@@ -51,6 +51,41 @@ class StandingDrawerSmokeTests(unittest.TestCase):
         )
 
 
+def _css_block(html, header):
+    start = html.find(header)
+    if start < 0:
+        raise AssertionError(header)
+    brace = html.find("{", start)
+    depth = 0
+    for i in range(brace, len(html)):
+        if html[i] == "{":
+            depth += 1
+        elif html[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return html[brace + 1:i]
+    raise AssertionError(f"unclosed {header}")
+
+
+class MobileDrawerSheetTests(unittest.TestCase):
+    def test_phone_sheet_is_one_tall_scroll_and_desktop_still_pins_the_header(self):
+        mobile = _css_block(HTML, "@media (max-width: 620px)")
+        drawer = _css_block(mobile, ".glance-drawer {")
+        self.assertIn("top: calc(env(safe-area-inset-top, 0px) + 12px);", drawer)
+        self.assertIn("max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 12px);", drawer)
+        self.assertIn("overflow-y: auto;", drawer)
+        self.assertNotIn("78vh", mobile)
+        self.assertIn("display: contents;", _css_block(mobile, ".glance-drawer-top {"))
+        self.assertIn("overflow: visible;", _css_block(mobile, ".glance-drawer-body {"))
+        close = _css_block(mobile, ".glance-close {")
+        self.assertIn("position: sticky;", close)
+        self.assertIn("top: 0;", close)
+        desktop_body = HTML.split("@media (max-width: 620px)")[0]
+        self.assertIn(".glance-drawer-body { overflow: auto; padding: 28px 2px 8px; }", desktop_body)
+        self.assertIn("flex-shrink: 0;", _css_block(desktop_body, ".glance-drawer-top {"))
+        self.assertNotIn("position: sticky;", _css_block(desktop_body, ".glance-close {"))
+
+
 class ProgressChipTests(unittest.TestCase):
     def test_header_control_stays_on_the_progress_page(self):
         self.assertIn(
