@@ -80,6 +80,8 @@ class MobileDrawerSheetTests(unittest.TestCase):
         close = _css_block(mobile, ".glance-close {")
         self.assertIn("position: sticky;", close)
         self.assertIn("top: 0;", close)
+        self.assertIn("grid-row: 1 / span 2;", close)
+        self.assertNotIn("1 / -1", close)
         desktop_body = HTML.split("@media (max-width: 620px)")[0]
         self.assertIn(".glance-drawer-body { overflow: auto; padding: 28px 2px 8px; }", desktop_body)
         self.assertIn("flex-shrink: 0;", _css_block(desktop_body, ".glance-drawer-top {"))
