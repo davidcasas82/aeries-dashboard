@@ -125,18 +125,14 @@
             text-overflow: ellipsis;
         }
 
-        .since-yesterday {
-            display: block;
+        .progress-link {
+            display: inline-block;
             margin-top: 2px;
-            max-width: 100%;
-            min-width: 0;
-            color: var(--text-2);
+            color: var(--teal);
             font-size: var(--fs-small);
-            font-weight: 550;
+            font-weight: 700;
             line-height: 1.35;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            text-decoration: none;
         }
 
         .since-yesterday:empty,
@@ -1528,6 +1524,16 @@
         .glance-mark.grade-f { color: var(--red); }
         .glance-mark.grade-none { color: var(--text-3); }
         .glance-pct { color: var(--g-muted); font-size: var(--g-fs-pct); font-weight: 750; }
+        .glance-was {
+            display: block;
+            margin-top: 6px;
+            font-size: 14px;
+            font-weight: 750;
+            line-height: 1.35;
+        }
+        .glance-was.down { color: #9c483b; }
+        .glance-was.up { color: #155c4b; }
+        .glance-was[hidden] { display: none; }
         .glance-counts {
             display: block;
             margin-top: auto;
@@ -2109,6 +2115,17 @@
                 align-items: center;
             }
             .glance-trend-text { display: none; }
+            .glance-was {
+                grid-column: 1 / -1;
+                grid-row: 2;
+                font-size: 13.5px;
+                font-weight: 750;
+                line-height: 1.35;
+            }
+            .glance-was.down { color: #9c483b; }
+            .glance-was.up { color: #155c4b; }
+            .glance-was[hidden] { display: none; }
+            .glance-grade:has(.glance-was:not([hidden])) .glance-counts { grid-row: 3; }
             .glance-counts { grid-column: 1 / -1; grid-row: 2; margin-top: 2px; padding-top: 0; }
             .glance-tonight-meta { padding-left: 18px; padding-right: 18px; }
             .glance-band-empty { padding-left: 18px; padding-right: 18px; }
@@ -2150,7 +2167,7 @@
         <div class="top-bar-row">
             <div class="top-bar-left">
                 <div class="top-bar-title" id="topBarTitle">Grade Dashboard</div>
-                <p class="since-yesterday" id="sinceYesterday" hidden></p>
+                <a class="progress-link" id="progressLink" href="progress.html">Progress</a>
                 <span class="last-updated" id="lastUpdated"></span>
             </div>
             <div class="top-bar-actions">
@@ -2539,6 +2556,7 @@
         let glanceLastFocus = null;
         // The mini's local write-ups from GET /v1/grades/insights, or null.
         let localInsights = null;
+        let progressDoc = null;
 
         async function loadData() {
             if (location.protocol === 'file:') {
@@ -2571,6 +2589,7 @@
                 }
                 if (!resp.ok) throw new Error(payload.error || 'No data');
                 localInsights = await loadLocalInsights(token);
+                progressDoc = await loadProgressDoc(token);
                 return payload.latest || payload;
             } catch (e) {
                 document.getElementById('dashboards').innerHTML = `
@@ -5019,10 +5038,11 @@
                     }).join(' · ')}</span>`
                     : '';
                 return `
-                <button class="glance-grade" type="button" data-glance="${esc(card.id)}" aria-label="Open detail for ${esc(card.course)}, ${esc(card.mark)}, ${esc(card.percent)}, ${esc(card.trend_text)}">
+                <button class="glance-grade" type="button" data-progress="${esc(card.course)}" aria-label="Open history for ${esc(card.course)}, ${esc(card.mark)}, ${esc(card.percent)}, ${esc(card.trend_text)}">
                     <span class="glance-course">${esc(card.course)}</span>
                     <span class="glance-mark-row"><span class="glance-mark ${esc(card.grade_class || 'grade-none')}">${esc(card.mark)}</span><span class="glance-pct">${esc(card.percent)}</span></span>
                     <span class="glance-trend ${esc(card.trend)}"><span class="glance-trend-symbol" aria-hidden="true">${esc(card.trend_symbol)}</span><span class="glance-trend-text">${esc(card.trend_text)}</span></span>
+                    <span class="glance-was" data-course="${esc(card.course)}" hidden></span>
                     ${countHtml}
                 </button>`;
             }).join('');
@@ -5033,7 +5053,7 @@
                     <div class="glance-section-head">
                         <div>
                             <h2>Current standing</h2>
-                            <p>Every class · mark, percent, seven-day trend</p>
+                            <p>Every class · mark, percent, seven-day trend. Tap a class for its history.</p>
                         </div>
                         <span class="glance-tap-note">Tap a grade for details</span>
                     </div>
@@ -5058,6 +5078,38 @@
             } catch (e) {
                 return null;
             }
+        }
+
+        async function loadProgressDoc(token) {
+            try {
+                const resp = await fetch(apiBase() + '/v1/docs/aeries/progress', {
+                    cache: 'no-store',
+                    headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
+                });
+                if (!resp.ok) return null;
+                const body = await resp.json().catch(() => ({}));
+                const doc = body && body.doc;
+                return doc && Array.isArray(doc.students) ? doc : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function applyWasNow() {
+            if (!currentData) return;
+            document.querySelectorAll('.glance-was').forEach((el) => {
+                const dash = el.closest('.dashboard');
+                const idx = dash ? Number(String(dash.id || '').replace('dashboard-', '')) : -1;
+                const student = currentData.students && currentData.students[idx];
+                const block = progressDoc && student
+                    ? (progressDoc.students || []).find((row) => row.name === student.name)
+                    : null;
+                const course = block && (block.classes || []).find((row) => row.course === el.dataset.course);
+                const line = course && course.was_now;
+                el.textContent = line && line.text ? line.text : '';
+                el.className = 'glance-was' + (line && line.direction ? ' ' + line.direction : '');
+                el.hidden = !el.textContent;
+            });
         }
 
         function localWriteUpFor(student, insights = localInsights) {
@@ -5287,6 +5339,11 @@
         function setupGlanceDrawer() {
             const dashboardsEl = document.getElementById('dashboards');
             dashboardsEl.addEventListener('click', (e) => {
+                const history = e.target.closest('[data-progress]');
+                if (history) {
+                    location.href = 'progress.html#' + encodeURIComponent(history.dataset.progress);
+                    return;
+                }
                 const btn = e.target.closest('[data-glance]');
                 if (!btn) return;
                 const dash = btn.closest('.dashboard');
@@ -5557,6 +5614,7 @@
             restoreExpandedRows(keepExpanded);
             if (keepExpanded.length && keepScroll > 0) window.scrollTo({ top: keepScroll, behavior: 'auto' });
             updateTopBarTitle();
+            applyWasNow();
             syncTopBarHeight();
             window.dispatchEvent(new Event('scroll'));
             stampFrameLinks(document);
