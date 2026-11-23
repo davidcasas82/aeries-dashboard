@@ -41,6 +41,7 @@ In CI, run the footer probe from Actions → Daily Grade Scrape → Run workflow
 
 ```bash
 python -m unittest discover -s tests -v
+npx playwright test
 ```
 
 ## Schedule
@@ -109,7 +110,7 @@ The plist expects the checkout at `~/code/aeries-dashboard` and the venv at `/Vo
 
 `scripts/grades-freshness-check.py` GETs the public stamp `https://family-data.davidcasas.workers.dev/v1/grades/freshness`. It does not read grades and does not use the PIN. A stamp more than 14 hours old is stale. A failed probe (network, timeout, non-200, bad JSON, `ok` not true, or a missing stamp) is a separate alert. Fresh exits 0 and sends nothing. This check only alerts. It does not run the grade insights runner.
 
-One alert of each kind per local day. `WEBHOOK_URL` and `WEBHOOK_KEY` live in a mode 0600 env file. The key and the webhook URL are never printed. `--dry-run` prints the JSON it would POST and sends nothing. `--test-alert` POSTs one alert whose `summary` starts with `TEST`.
+One alert of each kind per local day. `WEBHOOK_URL` and `WEBHOOK_KEY` live in a mode 0600 env file. The URL has to be `https`. A 3xx response is not followed, and that run logs `alert_sent=no` with the status. The key and the webhook URL are never printed. `--dry-run` prints the JSON it would POST and sends nothing. `--test-alert` POSTs one alert whose `summary` starts with `TEST`.
 
 Each real run appends one line to the log (`result` is `fresh`, `stale`, or `probe_broken`; `alert_sent` is `yes`, `no`, or `deduped`). The state file sits next to the log. A `--test-alert` line uses `result=test` and does not count as the weekday run.
 

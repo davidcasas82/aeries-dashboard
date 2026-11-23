@@ -8,10 +8,14 @@ import plistlib
 import re
 import socket
 import stat
+import subprocess
 import tempfile
+import threading
 import unittest
 import urllib.error
+import urllib.request
 from contextlib import redirect_stderr, redirect_stdout
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
@@ -359,6 +363,92 @@ class FreshnessTests(unittest.TestCase):
         self.assertFalse(self.state.exists())
         self.assert_no_secret(out, err, self.log.read_text())
 
+    def test_http_webhook_url_is_rejected(self):
+        self.write_env(url="http://alerts.example/hook")
+        world = self.freshness(stamp_at(NOW - timedelta(hours=15)))
+        code, out, err = self.run_check(world)
+        self.assertEqual(code, 1)
+        self.assertEqual(world.posts, [])
+        self.assertIn("alert not sent: webhook url must be https", err)
+        self.assertIn("alert_sent=no", out)
+        self.assertNotIn("http_status=", out)
+        self.assert_no_secret(out, err, self.log.read_text())
+        self.assertNotIn("http://alerts.example/hook", out + err + self.log.read_text())
+        self.assertFalse(self.state.exists())
+
+    def test_redirect_is_not_followed(self):
+        sink_hits = []
+        redirect_hits = []
+
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length") or "0")
+                if length:
+                    self.rfile.read(length)
+                self.server.hits.append(self.headers.get("Authorization"))
+                self.send_response(self.server.reply_status)
+                if self.server.location:
+                    self.send_header("Location", self.server.location)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, fmt, *args):
+                return
+
+        sink = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        sink.hits = sink_hits
+        sink.reply_status = 200
+        sink.location = None
+        redirect = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        redirect.hits = redirect_hits
+        redirect.reply_status = 302
+        redirect.location = "http://127.0.0.1:%d/landed" % sink.server_address[1]
+        threads = []
+        for server in (sink, redirect):
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            threads.append(thread)
+        self.addCleanup(sink.shutdown)
+        self.addCleanup(redirect.shutdown)
+        self.addCleanup(sink.server_close)
+        self.addCleanup(redirect.server_close)
+
+        redirect_url = "http://127.0.0.1:%d/hook" % redirect.server_address[1]
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.mod._post_json(redirect_url, {"kind": "stale", "summary": "old"}, KEY)
+        self.assertEqual(caught.exception.code, 302)
+        self.assertEqual(redirect_hits, ["Bearer " + KEY])
+        self.assertEqual(sink_hits, [])
+
+        self.write_env()
+        world = self.freshness(stamp_at(NOW - timedelta(hours=15)))
+
+        def opener(request, timeout=20):
+            if request.get_method() == "GET":
+                return world.urlopen(request, timeout)
+            local = urllib.request.Request(
+                redirect_url,
+                data=request.data,
+                method="POST",
+                headers={"Authorization": request.get_header("Authorization"), "Content-Type": "application/json"},
+            )
+            return self.mod._urlopen_no_redirect(local, timeout)
+
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            code = self.mod.main(self.args(), now=NOW, opener=opener, host="mini")
+        out, err = stdout.getvalue(), stderr.getvalue()
+        self.assertEqual(code, 1)
+        self.assertEqual(sink_hits, [])
+        self.assertEqual(redirect_hits, ["Bearer " + KEY, "Bearer " + KEY])
+        self.assertIn("alert not sent: HTTP 302", err)
+        self.assertIn("alert_sent=no http_status=302", out)
+        self.assertIn("alert_sent=no http_status=302", self.log.read_text())
+        self.assert_no_secret(out, err, self.log.read_text())
+        self.assertFalse(self.state.exists())
+
     def test_script_only_mentions_the_freshness_path(self):
         text = SCRIPT.read_text()
         self.assertEqual(set(re.findall(r"/v1/[A-Za-z0-9/_-]+", text)), {"/v1/grades/freshness"})
@@ -410,6 +500,28 @@ class PlistTests(unittest.TestCase):
         )
         mode = stat.S_IMODE(SCRIPT.stat().st_mode)
         self.assertTrue(mode & 0o111)
+
+    def test_label_program_and_weekday_interval(self):
+        plist = self.load()
+        args = plist["ProgramArguments"]
+        slots = plist["StartCalendarInterval"]
+        self.assertEqual(plist["Label"], "com.davidcasas.grades-freshness")
+        self.assertEqual(args[0], "/usr/bin/python3")
+        self.assertTrue(str(args[1]).endswith("/scripts/grades-freshness-check.py"))
+        self.assertEqual(
+            sorted((slot["Weekday"], slot["Hour"], slot["Minute"]) for slot in slots),
+            [(day, 17, 15) for day in range(1, 6)],
+        )
+
+    @unittest.skipUnless(Path("/usr/bin/plutil").is_file(), "plutil is macOS only")
+    def test_plutil_lint(self):
+        done = subprocess.run(
+            ["/usr/bin/plutil", "-lint", str(PLIST)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
 
 if __name__ == "__main__":

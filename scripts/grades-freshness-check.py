@@ -261,9 +261,12 @@ def test_payload(now, host):
     return build_payload("test", "TEST grade freshness check", None, None, None, None, now, host)
 
 
-def log_line(now, result, age, alert_sent):
+def log_line(now, result, age, alert_sent, note=None):
     stamp = as_aware(now).isoformat(timespec="seconds")
-    return f"{stamp} result={result} age_hours={format_age(age)} alert_sent={alert_sent}"
+    line = f"{stamp} result={result} age_hours={format_age(age)} alert_sent={alert_sent}"
+    if isinstance(note, str) and len(note) > 5 and note.startswith("HTTP ") and note[5:].isdigit():
+        line += " http_status=" + note[5:]
+    return line
 
 
 def exit_code(result):
@@ -298,13 +301,27 @@ def _webhook_url(path):
             url = line
     if not url:
         return None, None, "webhook url missing"
+    if not url.startswith("https://"):
+        return None, None, "webhook url must be https"
     if not key:
         return None, None, "webhook key missing"
     return url, key, None
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A 3xx is an error. The POST, including its Bearer header, is not sent again."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, msg, headers, fp)
+
+
+def _urlopen_no_redirect(request, timeout):
+    opener = urllib.request.build_opener(_NoRedirect)
+    return opener.open(request, timeout=timeout)
+
+
 def _post_json(url, payload, key, opener=None):
-    open_url = opener or _urlopen
+    open_url = opener or _urlopen_no_redirect
     body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         url,
@@ -450,6 +467,7 @@ def _note_failure(note):
 def run_check(args, now, host, log_path, state_path, env_path, opener):
     probe = fetch_freshness(now, opener)
     alert_sent = "no"
+    note = None
     payload = None
     if probe.result != "fresh":
         state = load_state(state_path)
@@ -466,10 +484,11 @@ def run_check(args, now, host, log_path, state_path, env_path, opener):
                     mark_alerted(state, probe.result, day)
                     save_state(state_path, state)
                     alert_sent = "yes"
+                    note = None
                 else:
                     alert_sent = "no"
                     _note_failure(note)
-    line = log_line(now, probe.result, probe.age, alert_sent)
+    line = log_line(now, probe.result, probe.age, alert_sent, note)
     if args.dry_run:
         _print_dry_run(payload, alert_sent, line)
         return exit_code(probe.result)
@@ -485,7 +504,7 @@ def run_test_alert(args, now, host, log_path, env_path, opener):
         _print_dry_run(payload, "yes", line)
         return 0
     sent, note = deliver(env_path, payload, opener)
-    line = log_line(now, "test", None, "yes" if sent else "no")
+    line = log_line(now, "test", None, "yes" if sent else "no", None if sent else note)
     append_log(log_path, line)
     print(line)
     if not sent:
