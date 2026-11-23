@@ -6,3 +6,7 @@ venv/
 .DS_Store
 grades_data.json
 grade_history.json
+node_modules/
+test-results/
+playwright-report/
+blob-report/
