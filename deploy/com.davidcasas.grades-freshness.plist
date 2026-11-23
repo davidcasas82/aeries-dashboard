@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Weekday grade-stamp check at 5:15 PM on the mini's clock.
+     The interpreter is /usr/bin/python3. The script is stdlib only.
+     A person copies this file into the per-user agents directory and loads it
+     after the webhook env file exists, mode 0600. An agent does not load it.
+     The script's own log and state are under Application Support. The two
+     paths below are only this job's stdout and stderr. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.davidcasas.grades-freshness</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/casasmacmini-server/code/aeries-dashboard/scripts/grades-freshness-check.py</string>
+        <string>--log</string>
+        <string>/Users/casasmacmini-server/Library/Application Support/aeries-dashboard/grades-freshness.log</string>
+        <string>--state</string>
+        <string>/Users/casasmacmini-server/Library/Application Support/aeries-dashboard/grades-freshness-state.json</string>
+        <string>--env-file</string>
+        <string>/Users/casasmacmini-server/Library/Application Support/aeries-dashboard/grades-freshness.env</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/casasmacmini-server/code/aeries-dashboard</string>
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>15</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>15</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>15</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>15</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>15</integer></dict>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
+    <key>Nice</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/casasmacmini-server/Library/Logs/grades-freshness.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/casasmacmini-server/Library/Logs/grades-freshness.err.log</string>
+</dict>
+</plist>

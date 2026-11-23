@@ -104,3 +104,39 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.davidcasas.grade-ins
 ```
 
 The plist expects the checkout at `~/code/aeries-dashboard` and the venv at `/Volumes/David C SSD/grade-insights/venv`. Logs go to `~/Library/Logs/grade-insights.log` and `grade-insights.err.log`. After the first live run, check both logs for macOS privacy (TCC) blocks on the SSD reads, such as `Operation not permitted` on a `/Volumes/David C SSD` path. If one shows up, give the venv's Python (the Homebrew python3.12 it links to) access to removable volumes, or Full Disk Access, in System Settings → Privacy & Security, and let the next start retry. To stop the trial: `launchctl bootout gui/$(id -u)/com.davidcasas.grade-insights`.
+
+## Grade freshness check
+
+`scripts/grades-freshness-check.py` GETs the public stamp `https://family-data.davidcasas.workers.dev/v1/grades/freshness`. It does not read grades and does not use the PIN. A stamp more than 14 hours old is stale. A failed probe (network, timeout, non-200, bad JSON, `ok` not true, or a missing stamp) is a separate alert. Fresh exits 0 and sends nothing. This check only alerts. It does not run the grade insights runner.
+
+One alert of each kind per local day. `WEBHOOK_URL` and `WEBHOOK_KEY` live in a mode 0600 env file. The key and the webhook URL are never printed. `--dry-run` prints the JSON it would POST and sends nothing. `--test-alert` POSTs one alert whose `summary` starts with `TEST`.
+
+Each real run appends one line to the log (`result` is `fresh`, `stale`, or `probe_broken`; `alert_sent` is `yes`, `no`, or `deduped`). The state file sits next to the log. A `--test-alert` line uses `result=test` and does not count as the weekday run.
+
+| File | Path |
+|------|------|
+| Env | `~/Library/Application Support/aeries-dashboard/grades-freshness.env` |
+| Log | `~/Library/Application Support/aeries-dashboard/grades-freshness.log` |
+| State | `~/Library/Application Support/aeries-dashboard/grades-freshness-state.json` |
+
+`deploy/com.davidcasas.grades-freshness.plist` starts that script at 5:15 PM local time, Monday through Friday. A person installs it on the mini after this change is merged. An agent does not load it. `/usr/bin/python3` is enough; there is no venv.
+
+```bash
+cd ~/code/aeries-dashboard
+git pull
+mkdir -p "$HOME/Library/Application Support/aeries-dashboard"
+umask 077
+cat > "$HOME/Library/Application Support/aeries-dashboard/grades-freshness.env" <<'EOF'
+WEBHOOK_URL=
+WEBHOOK_KEY=
+EOF
+chmod 600 "$HOME/Library/Application Support/aeries-dashboard/grades-freshness.env"
+# fill in the two values, then:
+/usr/bin/python3 "$HOME/code/aeries-dashboard/scripts/grades-freshness-check.py" --dry-run
+/usr/bin/python3 "$HOME/code/aeries-dashboard/scripts/grades-freshness-check.py" --test-alert
+cp ~/code/aeries-dashboard/deploy/com.davidcasas.grades-freshness.plist ~/Library/LaunchAgents/
+plutil -lint ~/Library/LaunchAgents/com.davidcasas.grades-freshness.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.davidcasas.grades-freshness.plist
+```
+
+`plutil` should print `OK` before the bootstrap line. The weekday log is `grades-freshness.log` above. The plist's stdout and stderr copies are `~/Library/Logs/grades-freshness.out.log` and `grades-freshness.err.log`. To stop: `launchctl bootout gui/$(id -u)/com.davidcasas.grades-freshness`.
