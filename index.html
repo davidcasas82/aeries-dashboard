@@ -126,14 +126,30 @@
         }
 
         .progress-link {
-            display: inline-block;
-            margin-top: 2px;
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            margin-top: 6px;
+            min-height: 44px;
+            padding: 0 12px 0 14px;
+            border: 1px solid var(--border-strong);
+            border-radius: 999px;
+            background: var(--surface-2);
+            box-shadow: var(--shadow-sm);
             color: var(--teal);
-            font-size: var(--fs-small);
+            font-size: var(--fs-label);
             font-weight: 700;
-            line-height: 1.35;
+            line-height: 1;
+            letter-spacing: -0.01em;
             text-decoration: none;
+            white-space: nowrap;
         }
+        .progress-link-chevron {
+            font-size: 1.35em;
+            font-weight: 650;
+            line-height: 1;
+        }
+        .progress-link:hover { background: var(--surface); }
 
         .since-yesterday:empty,
         .since-yesterday[hidden] { display: none; }
@@ -328,13 +344,25 @@
                 padding-right: 10px;
             }
 
-            .top-bar-row { gap: 8px; }
             .top-bar-actions { gap: 6px; }
 
             .student-seg {
                 max-width: 6.25rem;
                 padding: 0 8px;
             }
+
+            .top-bar-row {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                align-items: center;
+                column-gap: 8px;
+                row-gap: 2px;
+            }
+            .top-bar-left { display: contents; }
+            .top-bar-title { grid-column: 1; grid-row: 1; }
+            .top-bar-actions { grid-column: 2; grid-row: 1; }
+            .progress-link { grid-column: 1 / -1; grid-row: 2; justify-self: start; margin-top: 2px; }
+            .last-updated { grid-column: 1 / -1; grid-row: 3; }
         }
 
         /* ── Sticky tonight ── */
@@ -1834,6 +1862,19 @@
             font-size: var(--g-fs-class);
             font-weight: 700;
         }
+        .glance-history {
+            display: inline-flex;
+            align-items: center;
+            margin-top: 8px;
+            min-height: 44px;
+            color: #155c4b;
+            font-size: 16px;
+            font-weight: 750;
+            line-height: 1.2;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+        .glance-history[hidden] { display: none; }
         .glance-close {
             width: 40px;
             height: 40px;
@@ -2167,7 +2208,7 @@
         <div class="top-bar-row">
             <div class="top-bar-left">
                 <div class="top-bar-title" id="topBarTitle">Grade Dashboard</div>
-                <a class="progress-link" id="progressLink" href="progress.html">Progress</a>
+                <a class="progress-link" id="progressLink" href="progress.html">Progress &amp; history<span class="progress-link-chevron" aria-hidden="true">›</span></a>
                 <span class="last-updated" id="lastUpdated"></span>
             </div>
             <div class="top-bar-actions">
@@ -2207,6 +2248,7 @@
                 <p class="glance-drawer-kicker" id="glanceDrawerKicker">Verified detail</p>
                 <h2 id="glanceDrawerTitle">Item details</h2>
                 <p class="glance-drawer-class" id="glanceDrawerClass"></p>
+                <a class="glance-history" id="glanceHistory" href="progress.html" hidden>History</a>
                 <div class="glance-local-story" id="glanceLocalStory" hidden></div>
             </div>
             <button class="glance-close" id="glanceClose" type="button" aria-label="Close details">×</button>
@@ -5049,7 +5091,7 @@
                     ? `<span class="glance-trend ${esc(card.trend)}"><span class="glance-trend-symbol" aria-hidden="true">${esc(card.trend_symbol)}</span><span class="glance-trend-text">${esc(card.trend_text)}</span></span>`
                     : '';
                 return `
-                <button class="glance-grade" type="button" data-progress="${esc(card.course)}" aria-label="Open history for ${esc(card.course)}, ${esc(card.mark)}, ${esc(card.percent)}, ${esc(card.trend_text)}">
+                <button class="glance-grade" type="button" data-glance="${esc(card.id)}" aria-label="Open detail for ${esc(card.course)}, ${esc(card.mark)}, ${esc(card.percent)}, ${esc(card.trend_text)}">
                     <span class="glance-course">${esc(card.course)}</span>
                     <span class="glance-mark-row"><span class="glance-mark ${esc(card.grade_class || 'grade-none')}">${esc(card.mark)}</span><span class="glance-pct">${esc(card.percent)}</span></span>
                     ${trend}
@@ -5064,7 +5106,7 @@
                     <div class="glance-section-head">
                         <div>
                             <h2>Current standing</h2>
-                            <p>Every class · mark, percent, seven-day trend. Tap a class for its history.</p>
+                            <p>Every class · mark, percent, seven-day trend. Tap a class for its assignments and history.</p>
                         </div>
                         <span class="glance-tap-note">Tap a grade for details</span>
                     </div>
@@ -5291,6 +5333,12 @@
             return (g.standing || []).find(item => item.id === id) || null;
         }
 
+        function standingHistoryHref(student, course) {
+            const sn = student && student.sn != null ? String(student.sn) : '';
+            const query = sn ? '?student=' + encodeURIComponent(sn) : '';
+            return 'progress.html' + query + '#' + encodeURIComponent(course || '');
+        }
+
         function openGlanceDrawer(item, opener) {
             const drawer = document.getElementById('glanceDrawer');
             const scrim = document.getElementById('glanceScrim');
@@ -5307,6 +5355,19 @@
             }
             document.getElementById('glanceDrawerTitle').textContent = (item.drawer && item.drawer.title) || item.title || item.course;
             document.getElementById('glanceDrawerClass').textContent = (item.drawer && item.drawer.course) || item.course || '';
+            const historyLink = document.getElementById('glanceHistory');
+            if (historyLink) {
+                const dash = opener && opener.closest ? opener.closest('.dashboard') : null;
+                const idx = dash ? Number(String(dash.id || '').replace('dashboard-', '')) : activeStudentIndex;
+                const student = currentData && currentData.students && currentData.students[idx];
+                const course = item.course || (item.drawer && item.drawer.course) || '';
+                if (course) {
+                    historyLink.href = standingHistoryHref(student, course);
+                    historyLink.hidden = false;
+                } else {
+                    historyLink.hidden = true;
+                }
+            }
             const localStoryEl = document.getElementById('glanceLocalStory');
             fillLocalStory(localStoryEl, item.local_story || '');
             const work = item.drawer && Array.isArray(item.drawer.work) ? item.drawer.work : null;
