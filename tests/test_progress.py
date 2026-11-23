@@ -144,6 +144,17 @@ class ProgressTests(unittest.TestCase):
         self.assertNotIn("biggest risk", view["summary"].lower())
         self.assertNotIn("easiest win", view["summary"].lower())
 
+    def test_earlier_moves_are_newest_first(self):
+        snaps = [
+            _snap("2026-09-12", 95, "A"),
+            _snap("2026-10-01", 85, "B"),
+            _snap("2026-10-20", 75, "C"),
+            _snap("2026-11-22", 75, "C"),
+        ]
+        student = {"name": "Kid", "sn": "s1", "classes": [{"course_name": "Algebra"}], "assignments_by_class": []}
+        earlier = progress.build_student(student, snaps, [], TODAY)["classes"][0]["earlier"]
+        self.assertEqual([move["date"] for move in earlier], ["2026-10-20", "2026-10-01"])
+
 
 if __name__ == "__main__":
     unittest.main()

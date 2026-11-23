@@ -4874,6 +4874,7 @@
                 const line = glanceCountLine(counts, false);
                 const header = glanceCountLine(counts, work.length > 0);
                 const real = hasRealGrade(c, p.assignments);
+                const trShown = real ? tr : { trend: 'none', symbol: '', text: '' };
                 return {
                     id: `standing-${p.period != null ? p.period : c.course_name}`,
                     kind: 'standing',
@@ -4882,9 +4883,9 @@
                     mark: g.letter,
                     percent: g.pct || '',
                     grade_class: real ? getGradeClass(c.percent) : 'grade-none',
-                    trend: tr.trend,
-                    trend_symbol: tr.symbol,
-                    trend_text: tr.text,
+                    trend: trShown.trend,
+                    trend_symbol: trShown.symbol,
+                    trend_text: trShown.text,
                     counts,
                     count_line: line,
                     drawer: {
@@ -4895,6 +4896,13 @@
                         counts,
                     },
                 };
+            });
+            // A class with no posted grade stays on the board, after every graded class.
+            standing.sort((a, b) => {
+                const aNone = a.mark === '—';
+                const bNone = b.mark === '—';
+                if (aNone !== bNone) return aNone ? 1 : -1;
+                return (a.period ?? 99) - (b.period ?? 99);
             });
 
             const dueSoon = [];
@@ -5037,11 +5045,14 @@
                         return `<span class="${glanceCountAlert(bit) ? 'miss' : ''}">${esc(bit)}</span>`;
                     }).join(' · ')}</span>`
                     : '';
+                const trend = card.trend_symbol
+                    ? `<span class="glance-trend ${esc(card.trend)}"><span class="glance-trend-symbol" aria-hidden="true">${esc(card.trend_symbol)}</span><span class="glance-trend-text">${esc(card.trend_text)}</span></span>`
+                    : '';
                 return `
                 <button class="glance-grade" type="button" data-progress="${esc(card.course)}" aria-label="Open history for ${esc(card.course)}, ${esc(card.mark)}, ${esc(card.percent)}, ${esc(card.trend_text)}">
                     <span class="glance-course">${esc(card.course)}</span>
                     <span class="glance-mark-row"><span class="glance-mark ${esc(card.grade_class || 'grade-none')}">${esc(card.mark)}</span><span class="glance-pct">${esc(card.percent)}</span></span>
-                    <span class="glance-trend ${esc(card.trend)}"><span class="glance-trend-symbol" aria-hidden="true">${esc(card.trend_symbol)}</span><span class="glance-trend-text">${esc(card.trend_text)}</span></span>
+                    ${trend}
                     <span class="glance-was" data-course="${esc(card.course)}" hidden></span>
                     ${countHtml}
                 </button>`;

@@ -443,6 +443,7 @@ def _class_block(course, class_meta, student, points, log_rows, today):
         and (move["from_letter"] != move["to_letter"] or abs(move["to_percent"] - move["from_percent"]) >= TIMELINE_POINTS)
     ]
     recent.sort(key=lambda move: move["date"], reverse=True)
+    earlier_moves.sort(key=lambda move: move["date"], reverse=True)
     current = points[-1]
     fell_this_week = any(move["direction"] == "down" and date.fromisoformat(move["date"]) >= window for move in recent)
     rose = current["rounded"] >= points[0]["rounded"] + 3 and not flagged

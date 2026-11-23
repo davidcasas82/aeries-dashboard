@@ -62,6 +62,7 @@
 <body>
     <a class="back" id="back" href="index.html">Grades</a>
     <h1 id="title">Progress</h1>
+    <div id="marks"></div>
     <p class="range" id="range"></p>
     <div id="app"><p class="empty">Loading…</p></div>
     <script>
@@ -153,14 +154,14 @@
         function renderClass(student, course, tags) {
             const item = (student.classes || []).find((row) => row.course === course);
             if (!item) return '<p class="empty">That class is not on this progress view.</p>';
-            const moves = [...(item.recent || []), ...(item.earlier || [])];
+            const moves = [...(item.recent || []), ...(item.earlier || [])]
+                .sort((a, b) => String(b.date).localeCompare(String(a.date)));
             const spots = (item.weak_spots || []).map((spot) =>
                 `<div class="hit"><span class="name">${esc(spot.name)}${spot.counts ? ` · ${esc(spot.weight)}% of the grade` : ' · does not count'}</span><span class="meta">${esc(spot.percent)}%</span></div>`
             ).join('');
             const first = (item.series[0] || {}).date || '';
             const last = (item.series[item.series.length - 1] || {}).date || '';
-            return `<h2 class="kid">${esc(item.course)}${badges(tags[item.course])}</h2>
-                <div class="grade" style="text-align:left;font-size:34px">${grade(item.letter, item.percent)}</div>
+            return `<div class="grade" style="text-align:left;font-size:34px">${grade(item.letter, item.percent)}</div>
                 ${item.decline ? '<p class="miss">Multi-week decline. More than one two-week drop, and it has not come back.</p>' : ''}
                 ${item.was_now ? `<p class="${esc(item.was_now.direction)}" style="font-weight:750;margin-top:6px">${esc(item.was_now.text)}</p>` : ''}
                 <div class="chart box">${spark(item.series).replace('class="spark"', 'class="spark" style="width:100%;height:92px"')}
@@ -200,16 +201,20 @@
                 ? `Through ${doc.as_of} · daily snapshots`
                 : 'Daily snapshots';
             const insights = insightsBody && (insightsBody.insights || insightsBody.doc || insightsBody);
+            const marks = document.getElementById('marks');
             const course = decodeURIComponent((location.hash || '').replace(/^#/, ''));
             if (course) {
-                document.getElementById('title').textContent = 'Progress';
+                document.getElementById('title').textContent = course;
                 document.getElementById('back').textContent = 'Progress';
                 document.getElementById('back').href = 'progress.html';
                 const owner = doc.students.find((student) => (student.classes || []).some((row) => row.course === course));
                 const tags = owner ? tagsFor(insights, owner.sn) : {};
+                marks.innerHTML = badges(tags[course]);
                 app.innerHTML = owner ? renderClass(owner, course, tags) : '<p class="empty">That class is not on this progress view.</p>';
                 return;
             }
+            document.getElementById('title').textContent = 'Progress';
+            marks.innerHTML = '';
             app.innerHTML = doc.students.map((student) => renderKid(student, tagsFor(insights, student.sn))).join('');
         }
         init();
